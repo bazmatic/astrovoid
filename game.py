@@ -144,8 +144,8 @@ class Game:
         # Update ship
         self.ship.update(dt)
         
-        # Check ship-wall collision
-        if self.ship.check_wall_collision(self.maze.walls):
+        # Check ship-wall collision (use spatial grid for optimization)
+        if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
             self.scoring.record_wall_collision()
         
         # Update enemies
@@ -163,30 +163,31 @@ class Game:
                 if fired_projectile:
                     self.projectiles.append(fired_projectile)
         
-        # Update projectiles
-        for projectile in self.projectiles[:]:
+        # Update projectiles (use list comprehension instead of remove)
+        active_projectiles = []
+        for projectile in self.projectiles:
             projectile.update(dt)
             
             if not projectile.active:
-                self.projectiles.remove(projectile)
                 continue
             
-            # Check projectile-wall collision
+            # Check projectile-wall collision (use spatial grid)
             # Only player projectiles can damage walls
             if not projectile.is_enemy:
-                hit_wall = projectile.check_wall_collision(self.maze.walls)
+                hit_wall = projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
                 if hit_wall:
                     # Damage the wall (hit_wall is already a WallSegment)
                     self.maze.damage_wall(hit_wall)
             else:
                 # Enemy projectiles just deactivate on wall collision
-                projectile.check_wall_collision(self.maze.walls)
+                projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
             
             # Check enemy projectile-ship collision
             if projectile.is_enemy and projectile.active:
                 if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
                     self.scoring.record_enemy_collision()  # Apply collision penalty
-                    continue  # Skip enemy collision check for enemy projectiles
+                    # Projectile is deactivated by collision, skip adding to active list
+                    continue
             
             # Check projectile-enemy collision (only for player projectiles)
             if not projectile.is_enemy:
@@ -195,7 +196,15 @@ class Game:
                         if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
                             enemy.destroy()
                             self.scoring.record_enemy_destroyed()  # Award bonus points
+                            # Projectile is deactivated by collision, break
                             break
+            
+            # Only add to active list if projectile is still active after all collision checks
+            if projectile.active:
+                active_projectiles.append(projectile)
+        
+        # Replace projectiles list with active ones
+        self.projectiles = active_projectiles
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):

@@ -66,17 +66,26 @@ class Projectile(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List
+        walls: List,
+        spatial_grid=None
     ) -> Optional:
         """Check collision with walls.
         
         Args:
             walls: List of wall segments (WallSegment instances or tuples).
+            spatial_grid: Optional spatial grid for optimized collision detection.
             
         Returns:
             The wall segment that was hit, or None if no collision.
         """
-        for wall in walls:
+        # Use spatial grid if available, otherwise check all walls
+        walls_to_check = walls
+        if spatial_grid is not None:
+            walls_to_check = spatial_grid.get_nearby_walls(
+                (self.x, self.y), self.radius * 2.0
+            )
+        
+        for wall in walls_to_check:
             # Handle both WallSegment and tuple formats
             if hasattr(wall, 'get_segment'):
                 # WallSegment instance

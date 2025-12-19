@@ -16,6 +16,7 @@ from utils import (
     circle_line_collision_swept,
     circle_circle_collision,
     distance,
+    distance_squared,
     get_wall_normal,
     get_closest_point_on_line,
     reflect_velocity
@@ -184,13 +185,13 @@ class Ship(GameEntity, Collidable, Drawable):
                         'size': random.uniform(2, 4)
                     })
         
-        # Update existing particles
-        for particle in self.thrust_particles[:]:
+        # Update existing particles (use list comprehension instead of remove)
+        for particle in self.thrust_particles:
             particle['x'] += particle['vx'] * dt
             particle['y'] += particle['vy'] * dt
             particle['life'] -= 1
-            if particle['life'] <= 0:
-                self.thrust_particles.remove(particle)
+        # Filter out dead particles
+        self.thrust_particles = [p for p in self.thrust_particles if p['life'] > 0]
     
     def fire(self) -> Optional[Projectile]:
         """Fire a projectile.
@@ -213,7 +214,8 @@ class Ship(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List
+        walls: List,
+        spatial_grid=None
     ) -> bool:
         """Check collision with walls using continuous collision detection.
         
@@ -235,8 +237,17 @@ class Ship(GameEntity, Collidable, Drawable):
         start_pos = (self.prev_x, self.prev_y)
         end_pos = (self.x, self.y)
         
-        # Check all walls for collisions along movement path
-        for wall in walls:
+        # Use spatial grid if available, otherwise check all walls
+        walls_to_check = walls
+        if spatial_grid is not None:
+            # Get walls along the entire movement path to prevent tunneling
+            # This ensures walls near both start and end positions are checked
+            walls_to_check = spatial_grid.get_walls_along_path(
+                start_pos, end_pos, self.radius * 2.0  # Check slightly larger area
+            )
+        
+        # Check walls for collisions along movement path
+        for wall in walls_to_check:
             # Handle both WallSegment and tuple formats
             if hasattr(wall, 'get_segment'):
                 # WallSegment instance
@@ -262,7 +273,7 @@ class Ship(GameEntity, Collidable, Drawable):
         # If no collision found, also check if ship is already inside a wall
         # (can happen if ship spawns in wall or previous frame had issues)
         if earliest_collision is None:
-            for wall in walls:
+            for wall in walls_to_check:
                 # Handle both WallSegment and tuple formats
                 if hasattr(wall, 'get_segment'):
                     if not wall.active:
@@ -280,7 +291,8 @@ class Ship(GameEntity, Collidable, Drawable):
                     
                     # Calculate penetration depth
                     closest_point = get_closest_point_on_line((self.x, self.y), segment[0], segment[1])
-                    dist_to_wall = distance((self.x, self.y), closest_point)
+                    dist_to_wall_sq = distance_squared((self.x, self.y), closest_point)
+                    dist_to_wall = math.sqrt(dist_to_wall_sq)
                     penetration_depth = self.radius - dist_to_wall
                     
                     # Push back by penetration depth + safety margin
@@ -312,7 +324,8 @@ class Ship(GameEntity, Collidable, Drawable):
             
             # Calculate penetration depth (how far inside wall we are)
             closest_point = get_closest_point_on_line((self.x, self.y), collision_wall[0], collision_wall[1])
-            dist_to_wall = distance((self.x, self.y), closest_point)
+            dist_to_wall_sq = distance_squared((self.x, self.y), closest_point)
+            dist_to_wall = math.sqrt(dist_to_wall_sq)
             penetration_depth = max(0.0, self.radius - dist_to_wall)
             
             # Push ship away from wall
@@ -355,8 +368,9 @@ class Ship(GameEntity, Collidable, Drawable):
             # Push back from enemy
             dx = self.x - other_pos[0]
             dy = self.y - other_pos[1]
-            dist = distance((self.x, self.y), other_pos)
-            if dist > 0:
+            dist_sq = distance_squared((self.x, self.y), other_pos)
+            if dist_sq > 0:
+                dist = math.sqrt(dist_sq)
                 push_force = 2.0
                 self.vx += (dx / dist) * push_force
                 self.vy += (dy / dist) * push_force

@@ -31,6 +31,24 @@ def distance(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
     return math.sqrt(dx * dx + dy * dy)
 
 
+def distance_squared(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
+    """Calculate squared distance between two points (faster, no sqrt).
+    
+    Use this when comparing distances - avoids expensive sqrt() call.
+    For example: if distance_squared(p1, p2) < radius_squared:
+    
+    Args:
+        pos1: First point (x, y).
+        pos2: Second point (x, y).
+        
+    Returns:
+        Squared distance between the two points.
+    """
+    dx = pos2[0] - pos1[0]
+    dy = pos2[1] - pos1[1]
+    return dx * dx + dy * dy
+
+
 def angle_to_radians(angle: float) -> float:
     """Convert angle in degrees to radians."""
     return math.radians(angle)
@@ -255,6 +273,8 @@ def circle_line_collision_swept(
     and checking for collisions at each step. This prevents tunneling
     through walls at high speeds.
     
+    Optimized to skip expensive swept collision when movement is very slow.
+    
     Args:
         start_pos: Starting position of circle (x, y).
         end_pos: Ending position of circle (x, y).
@@ -271,12 +291,23 @@ def circle_line_collision_swept(
     # Calculate movement vector
     dx = end_pos[0] - start_pos[0]
     dy = end_pos[1] - start_pos[1]
-    movement_distance = math.sqrt(dx * dx + dy * dy)
+    movement_distance_sq = dx * dx + dy * dy
     
     # If not moving, use standard collision check
-    if movement_distance < 1e-10:
+    if movement_distance_sq < 1e-10:
         if circle_line_collision(start_pos, radius, line_start, line_end):
             return (True, 0.0, start_pos)
+        return (False, None, None)
+    
+    movement_distance = math.sqrt(movement_distance_sq)
+    
+    # Optimization: If movement is very small (less than 1/4 of radius),
+    # use simple collision check instead of expensive swept collision
+    # This avoids unnecessary subdivision for slow/stationary objects
+    if movement_distance < radius * 0.25:
+        # Just check end position - movement is too small to tunnel
+        if circle_line_collision(end_pos, radius, line_start, line_end):
+            return (True, 1.0, end_pos)
         return (False, None, None)
     
     # Determine number of steps based on speed

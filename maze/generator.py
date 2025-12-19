@@ -6,12 +6,14 @@ from typing import List, Tuple, Set, Dict
 import config
 from utils import (
     distance,
+    distance_squared,
     get_angle_to_point,
     point_in_rect,
     circle_circle_collision,
     circle_line_collision
 )
 from maze.wall_segment import WallSegment
+from utils.spatial_grid import SpatialGrid
 
 
 class Maze:
@@ -43,6 +45,14 @@ class Maze:
         
         # Convert grid to wall segments
         self.walls = self._grid_to_walls()
+        
+        # Create spatial grid for efficient collision detection
+        self.spatial_grid = SpatialGrid(
+            config.SCREEN_WIDTH,
+            config.SCREEN_HEIGHT,
+            cell_size=150.0  # Optimal cell size for this game
+        )
+        self.spatial_grid.add_walls(self.walls)
         
         # Set start and exit positions
         self.start_pos = (
@@ -226,8 +236,10 @@ class Maze:
         # Damage the wall segment
         destroyed = wall.damage()
         
-        # Remove inactive walls from the list
+        # Update spatial grid
         if destroyed:
+            self.spatial_grid.update_wall(wall)
+            # Remove inactive walls from the list
             self.walls = [w for w in self.walls if w.active]
         
         return destroyed
@@ -252,15 +264,16 @@ class Maze:
             )
             pos = (x, y)
             
-            # Check if too close to start or exit
-            if (distance(pos, self.start_pos) < min_distance or
-                distance(pos, self.exit_pos) < min_distance):
+            # Check if too close to start or exit (use squared distance for comparison)
+            min_distance_sq = min_distance * min_distance
+            if (distance_squared(pos, self.start_pos) < min_distance_sq or
+                distance_squared(pos, self.exit_pos) < min_distance_sq):
                 continue
             
             # Check if too close to other spawns
             too_close = False
             for existing_pos in positions:
-                if distance(pos, existing_pos) < min_distance:
+                if distance_squared(pos, existing_pos) < min_distance_sq:
                     too_close = True
                     break
             if too_close:

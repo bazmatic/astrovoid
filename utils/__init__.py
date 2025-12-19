@@ -7,6 +7,7 @@ and other helper functions used throughout the game.
 # Re-export all utilities for backward compatibility
 from utils.math_utils import (
     distance,
+    distance_squared,
     angle_to_radians,
     radians_to_angle,
     normalize_angle,
@@ -25,6 +26,7 @@ from utils.math_utils import (
 
 __all__ = [
     'distance',
+    'distance_squared',
     'angle_to_radians',
     'radians_to_angle',
     'normalize_angle',

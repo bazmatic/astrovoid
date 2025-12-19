@@ -6,7 +6,27 @@ gradients, glow effects, and color interpolation.
 
 import pygame
 import math
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Optional
+
+
+# Cache for glow surfaces to avoid recreating them every frame
+_glow_surface_cache: Dict[Tuple[float, float, Tuple[int, int, int], float], pygame.Surface] = {}
+
+
+def _get_cache_key(radius: float, glow_radius: float, color: Tuple[int, int, int], intensity: float) -> Tuple[float, float, Tuple[int, int, int], float]:
+    """Generate cache key for glow surface.
+    
+    Args:
+        radius: Base radius.
+        glow_radius: Glow radius.
+        color: Glow color.
+        intensity: Glow intensity.
+        
+    Returns:
+        Cache key tuple.
+    """
+    # Round values to reduce cache size (allow small variations)
+    return (round(radius, 1), round(glow_radius, 1), color, round(intensity, 2))
 
 
 def interpolate_color(
@@ -39,10 +59,10 @@ def draw_gradient_polygon(
     start_vertex: int = 0,
     end_vertex: int = -1
 ) -> None:
-    """Draw a polygon with gradient fill.
+    """Draw a polygon with gradient fill (optimized approximation).
     
-    Uses a simplified approach: draws the polygon with interpolated colors
-    along the gradient direction from start_vertex to end_vertex.
+    Uses a simplified approach: draws multiple triangles with interpolated colors
+    instead of pixel-by-pixel rendering for much better performance.
     
     Args:
         screen: The pygame Surface to draw on.
@@ -61,57 +81,29 @@ def draw_gradient_polygon(
     start_pos = vertices[start_vertex]
     end_pos = vertices[end_vertex]
     
-    # Calculate gradient direction vector
-    dx = end_pos[0] - start_pos[0]
-    dy = end_pos[1] - start_pos[1]
-    dist_total = math.sqrt(dx * dx + dy * dy) if (dx != 0 or dy != 0) else 1
-    
-    # Find bounding box
-    min_x = min(v[0] for v in vertices)
-    max_x = max(v[0] for v in vertices)
-    min_y = min(v[1] for v in vertices)
-    max_y = max(v[1] for v in vertices)
-    
-    width = int(max_x - min_x) + 2
-    height = int(max_y - min_y) + 2
-    
-    if width <= 0 or height <= 0:
-        return
-    
-    # Create surface with alpha for gradient
-    surf = pygame.Surface((width, height), pygame.SRCALPHA)
-    offset_vertices = [(v[0] - min_x, v[1] - min_y) for v in vertices]
-    offset_start = (start_pos[0] - min_x, start_pos[1] - min_y)
-    
-    # Fill polygon with gradient using point-in-polygon and gradient calculation
-    # For each pixel in bounding box, check if in polygon and calculate gradient
-    for y in range(height):
-        for x in range(width):
-            # Simple point-in-polygon test
-            inside = False
-            j = len(offset_vertices) - 1
-            for i in range(len(offset_vertices)):
-                vi = offset_vertices[i]
-                vj = offset_vertices[j]
-                if ((vi[1] > y) != (vj[1] > y)) and (x < (vj[0] - vi[0]) * (y - vi[1]) / (vj[1] - vi[1]) + vi[0]):
-                    inside = not inside
-                j = i
-            
-            if inside:
-                # Calculate gradient factor
-                px = x - offset_start[0]
-                py = y - offset_start[1]
-                if dist_total > 0:
-                    proj = (px * dx + py * dy) / (dist_total * dist_total)
-                    t = max(0.0, min(1.0, proj))
-                else:
-                    t = 0.0
-                
-                color = interpolate_color(color_start, color_end, t)
-                surf.set_at((x, y), color)
-    
-    # Draw the gradient surface
-    screen.blit(surf, (min_x, min_y))
+    # For triangles (ship), use simple gradient between vertices
+    if len(vertices) == 3:
+        # Draw filled polygon with gradient approximation using multiple triangles
+        # Split polygon into triangles from start vertex
+        v0 = vertices[start_vertex]
+        v1 = vertices[(start_vertex + 1) % len(vertices)]
+        v2 = vertices[(start_vertex + 2) % len(vertices)]
+        
+        # Draw two triangles with interpolated colors
+        # Triangle 1: v0 (start color) to v1 (mid color)
+        mid_color = interpolate_color(color_start, color_end, 0.5)
+        pygame.draw.polygon(screen, color_start, [v0, v1, v2])
+        # Draw a smaller triangle with end color for gradient effect
+        center = ((v0[0] + v1[0] + v2[0]) / 3, (v0[1] + v1[1] + v2[1]) / 3)
+        pygame.draw.polygon(screen, color_end, [
+            center,
+            ((v0[0] + v1[0]) / 2, (v0[1] + v1[1]) / 2),
+            ((v0[0] + v2[0]) / 2, (v0[1] + v2[1]) / 2)
+        ])
+    else:
+        # For other polygons, use simpler approach: draw with average color
+        avg_color = interpolate_color(color_start, color_end, 0.5)
+        pygame.draw.polygon(screen, avg_color, vertices)
 
 
 def create_glow_surface(
@@ -120,7 +112,7 @@ def create_glow_surface(
     color: Tuple[int, int, int],
     intensity: float = 0.3
 ) -> pygame.Surface:
-    """Create a glow surface for alpha blending.
+    """Create a glow surface for alpha blending (cached for performance).
     
     Args:
         radius: Base radius of the object.
@@ -131,6 +123,12 @@ def create_glow_surface(
     Returns:
         Surface with glow effect.
     """
+    # Check cache first
+    cache_key = _get_cache_key(radius, glow_radius, color, intensity)
+    if cache_key in _glow_surface_cache:
+        return _glow_surface_cache[cache_key]
+    
+    # Create new surface
     size = int((radius + glow_radius) * 2) + 4
     surf = pygame.Surface((size, size), pygame.SRCALPHA)
     
@@ -145,6 +143,10 @@ def create_glow_surface(
             glow_color = (*color, alpha)
             pygame.draw.circle(surf, glow_color, (center, center), int(layer_radius))
     
+    # Cache the surface (limit cache size to prevent memory issues)
+    if len(_glow_surface_cache) < 50:  # Limit to 50 cached surfaces
+        _glow_surface_cache[cache_key] = surf
+    
     return surf
 
 
@@ -156,7 +158,7 @@ def draw_glow_circle(
     glow_radius: float = None,
     intensity: float = 0.3
 ) -> None:
-    """Draw a circle with glow effect.
+    """Draw a circle with glow effect (uses cached glow surfaces).
     
     Args:
         screen: The pygame Surface to draw on.
@@ -169,7 +171,7 @@ def draw_glow_circle(
     if glow_radius is None:
         glow_radius = radius * 0.5
     
-    # Create glow surface
+    # Get cached glow surface
     glow_surf = create_glow_surface(radius, glow_radius, color, intensity)
     
     # Blit glow

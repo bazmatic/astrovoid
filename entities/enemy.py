@@ -14,7 +14,8 @@ from utils import (
     circle_line_collision,
     circle_circle_collision,
     get_angle_to_point,
-    distance
+    distance,
+    distance_squared
 )
 from entities.base import GameEntity
 from entities.collidable import Collidable
@@ -120,17 +121,26 @@ class Enemy(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List
+        walls: List,
+        spatial_grid=None
     ) -> bool:
         """Check collision with wall segments.
         
         Args:
             walls: List of wall segments (WallSegment instances or tuples).
+            spatial_grid: Optional spatial grid for optimized collision detection.
             
         Returns:
             True if collision occurred, False otherwise.
         """
-        for wall in walls:
+        # Use spatial grid if available, otherwise check all walls
+        walls_to_check = walls
+        if spatial_grid is not None:
+            walls_to_check = spatial_grid.get_nearby_walls(
+                (self.x, self.y), self.radius * 2.0
+            )
+        
+        for wall in walls_to_check:
             # Handle both WallSegment and tuple formats
             if hasattr(wall, 'get_segment'):
                 # WallSegment instance
@@ -181,8 +191,19 @@ class Enemy(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
+        # Check if enemy is on screen (simple bounds check for optimization)
+        screen_margin = 100  # Draw slightly off-screen for smooth transitions
+        if (self.x < -screen_margin or self.x > config.SCREEN_WIDTH + screen_margin or
+            self.y < -screen_margin or self.y > config.SCREEN_HEIGHT + screen_margin):
+            return  # Skip drawing if far off-screen
+        
+        # Cache trigonometric calculations
+        sin_pulse = math.sin(self.pulse_phase)
+        cos_pulse = math.cos(self.pulse_phase)
+        sin_pulse_2x = math.sin(self.pulse_phase * 2)
+        
         # Calculate pulsing radius and color intensity
-        pulse_factor = 1.0 + config.ENEMY_PULSE_AMPLITUDE * math.sin(self.pulse_phase)
+        pulse_factor = 1.0 + config.ENEMY_PULSE_AMPLITUDE * sin_pulse
         current_radius = self.radius * pulse_factor
         
         # Base color
@@ -196,14 +217,15 @@ class Enemy(GameEntity, Collidable, Drawable):
             turret_angle = get_angle_to_point((self.x, self.y), player_pos)
             
             # Check if ready to fire (player in range and cooldown expired)
-            dist_to_player = distance((self.x, self.y), player_pos)
-            if (dist_to_player <= config.ENEMY_FIRE_RANGE and 
+            dist_to_player_sq = distance_squared((self.x, self.y), player_pos)
+            fire_range_sq = config.ENEMY_FIRE_RANGE * config.ENEMY_FIRE_RANGE
+            if (dist_to_player_sq <= fire_range_sq and 
                 hasattr(self.strategy, 'fire_cooldown') and 
                 self.strategy.fire_cooldown <= 0):
                 is_ready_to_fire = True
         
-        # Adjust color based on pulse and alert state
-        color_intensity = 0.8 + 0.2 * (math.sin(self.pulse_phase) * 0.5 + 0.5)
+        # Adjust color based on pulse and alert state (use cached sin value)
+        color_intensity = 0.8 + 0.2 * (sin_pulse * 0.5 + 0.5)
         if self.is_alert:
             # Brighter and more intense when alert
             color_intensity = 1.0
@@ -231,24 +253,27 @@ class Enemy(GameEntity, Collidable, Drawable):
         # Draw main circle
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), int(current_radius))
         
-        # Draw border (flashing when alert)
+        # Draw border (flashing when alert, use cached sin value)
         border_color = (255, 255, 255)
         if self.is_alert:
             # Flashing border
-            flash = int(255 * (math.sin(self.pulse_phase * 2) * 0.5 + 0.5))
+            flash = int(255 * (sin_pulse_2x * 0.5 + 0.5))
             border_color = (flash, flash // 2, flash // 2)
         pygame.draw.circle(screen, border_color, (int(self.x), int(self.y)), int(current_radius), 2)
         
-        # Type-specific visuals
+        # Type-specific visuals (cache trigonometric calculations)
         if self.type == "static":
             # Angular/spiky pattern - draw radial spikes
             num_spikes = 8
+            spike_angle_base = self.pulse_phase * 10
+            spike_length = current_radius * 0.6
             for i in range(num_spikes):
-                spike_angle = (i * 360 / num_spikes) + self.pulse_phase * 10
+                spike_angle = (i * 360 / num_spikes) + spike_angle_base
                 spike_rad = angle_to_radians(spike_angle)
-                spike_length = current_radius * 0.6
-                spike_x = self.x + math.cos(spike_rad) * spike_length
-                spike_y = self.y + math.sin(spike_rad) * spike_length
+                cos_spike = math.cos(spike_rad)
+                sin_spike = math.sin(spike_rad)
+                spike_x = self.x + cos_spike * spike_length
+                spike_y = self.y + sin_spike * spike_length
                 pygame.draw.line(screen, (255, 150, 150),
                                (int(self.x), int(self.y)),
                                (int(spike_x), int(spike_y)), 2)
@@ -259,13 +284,17 @@ class Enemy(GameEntity, Collidable, Drawable):
             inner_radius = current_radius * 0.5
             pygame.draw.circle(screen, tuple(min(255, c + 30) for c in color),
                              (int(self.x), int(self.y)), int(inner_radius), 1)
-            # Draw radial lines
+            # Draw radial lines (cache calculations)
             num_lines = 4
+            line_angle_base = self.pulse_phase * 20
+            line_length = current_radius * 0.7
             for i in range(num_lines):
-                line_angle = (i * 360 / num_lines) + self.pulse_phase * 20
+                line_angle = (i * 360 / num_lines) + line_angle_base
                 line_rad = angle_to_radians(line_angle)
-                line_x = self.x + math.cos(line_rad) * current_radius * 0.7
-                line_y = self.y + math.sin(line_rad) * current_radius * 0.7
+                cos_line = math.cos(line_rad)
+                sin_line = math.sin(line_rad)
+                line_x = self.x + cos_line * line_length
+                line_y = self.y + sin_line * line_length
                 pygame.draw.line(screen, tuple(min(255, c + 20) for c in color),
                                (int(self.x), int(self.y)),
                                (int(line_x), int(line_y)), 1)
@@ -273,32 +302,36 @@ class Enemy(GameEntity, Collidable, Drawable):
             # Draw turret direction indicator (arrow pointing at player)
             if turret_angle is not None:
                 turret_rad = angle_to_radians(turret_angle)
+                cos_turret = math.cos(turret_rad)
+                sin_turret = math.sin(turret_rad)
                 
                 # Make arrow larger and more prominent
-                arrow_length = 12  # Increased from 6
-                arrow_width = 6  # Increased from 3
-                arrow_extend = 4  # Extend beyond circle edge for visibility
+                arrow_length = 12
+                arrow_width = 6
+                arrow_extend = 4
                 base_offset = arrow_length * 0.6
                 
                 # Arrow tip extends beyond circle edge for better visibility
-                arrow_tip_x = self.x + math.cos(turret_rad) * (current_radius + arrow_extend)
-                arrow_tip_y = self.y + math.sin(turret_rad) * (current_radius + arrow_extend)
+                arrow_tip_x = self.x + cos_turret * (current_radius + arrow_extend)
+                arrow_tip_y = self.y + sin_turret * (current_radius + arrow_extend)
                 
                 # Arrow base points (perpendicular to direction)
-                base_x = self.x + math.cos(turret_rad) * (current_radius - base_offset)
-                base_y = self.y + math.sin(turret_rad) * (current_radius - base_offset)
+                base_x = self.x + cos_turret * (current_radius - base_offset)
+                base_y = self.y + sin_turret * (current_radius - base_offset)
                 
-                # Perpendicular vectors for arrow base
+                # Perpendicular vectors for arrow base (cache calculations)
                 perp_rad = turret_rad + math.pi / 2
-                base1_x = base_x + math.cos(perp_rad) * arrow_width / 2
-                base1_y = base_y + math.sin(perp_rad) * arrow_width / 2
-                base2_x = base_x - math.cos(perp_rad) * arrow_width / 2
-                base2_y = base_y - math.sin(perp_rad) * arrow_width / 2
+                cos_perp = math.cos(perp_rad)
+                sin_perp = math.sin(perp_rad)
+                base1_x = base_x + cos_perp * arrow_width / 2
+                base1_y = base_y + sin_perp * arrow_width / 2
+                base2_x = base_x - cos_perp * arrow_width / 2
+                base2_y = base_y - sin_perp * arrow_width / 2
                 
                 # Draw line from center to arrow base for better visibility
                 turret_color = (255, 255, 100) if is_ready_to_fire else (255, 200, 50)
-                line_start_x = self.x + math.cos(turret_rad) * (current_radius * 0.3)
-                line_start_y = self.y + math.sin(turret_rad) * (current_radius * 0.3)
+                line_start_x = self.x + cos_turret * (current_radius * 0.3)
+                line_start_y = self.y + sin_turret * (current_radius * 0.3)
                 pygame.draw.line(
                     screen, turret_color,
                     (int(line_start_x), int(line_start_y)),
@@ -320,32 +353,36 @@ class Enemy(GameEntity, Collidable, Drawable):
                 ], 1)
         
         elif self.type == "aggressive":
-            # Jagged/warning appearance - draw warning stripes
+            # Jagged/warning appearance - draw warning stripes (cache calculations)
             num_stripes = 6
+            stripe_angle_base = self.pulse_phase * 15
             for i in range(num_stripes):
-                stripe_angle = (i * 360 / num_stripes) + self.pulse_phase * 15
+                stripe_angle = (i * 360 / num_stripes) + stripe_angle_base
                 stripe_rad = angle_to_radians(stripe_angle)
-                stripe_x1 = self.x + math.cos(stripe_rad) * current_radius * 0.3
-                stripe_y1 = self.y + math.sin(stripe_rad) * current_radius * 0.3
-                stripe_x2 = self.x + math.cos(stripe_rad) * current_radius * 0.9
-                stripe_y2 = self.y + math.sin(stripe_rad) * current_radius * 0.9
+                cos_stripe = math.cos(stripe_rad)
+                sin_stripe = math.sin(stripe_rad)
+                stripe_x1 = self.x + cos_stripe * current_radius * 0.3
+                stripe_y1 = self.y + sin_stripe * current_radius * 0.3
+                stripe_x2 = self.x + cos_stripe * current_radius * 0.9
+                stripe_y2 = self.y + sin_stripe * current_radius * 0.9
                 # Alternate colors for warning effect
-                if i % 2 == 0:
-                    stripe_color = (255, 200, 100)
-                else:
-                    stripe_color = (255, 100, 50)
+                stripe_color = (255, 200, 100) if i % 2 == 0 else (255, 100, 50)
                 pygame.draw.line(screen, stripe_color,
                                (int(stripe_x1), int(stripe_y1)),
                                (int(stripe_x2), int(stripe_y2)), 2)
         
-        # Draw geometric patterns
+        # Draw geometric patterns (cache calculations)
         # Radial lines from center (all types)
         num_radial = 6
+        radial_angle_base = self.pulse_phase * 5
+        radial_length = current_radius * 0.4
         for i in range(num_radial):
-            radial_angle = (i * 360 / num_radial) + self.pulse_phase * 5
+            radial_angle = (i * 360 / num_radial) + radial_angle_base
             radial_rad = angle_to_radians(radial_angle)
-            radial_x = self.x + math.cos(radial_rad) * current_radius * 0.4
-            radial_y = self.y + math.sin(radial_rad) * current_radius * 0.4
+            cos_radial = math.cos(radial_rad)
+            sin_radial = math.sin(radial_rad)
+            radial_x = self.x + cos_radial * radial_length
+            radial_y = self.y + sin_radial * radial_length
             pattern_color = tuple(max(0, c - 40) for c in color)
             pygame.draw.line(screen, pattern_color,
                            (int(self.x), int(self.y)),
@@ -354,8 +391,10 @@ class Enemy(GameEntity, Collidable, Drawable):
         # Draw movement direction indicator for dynamic enemies (white line)
         if self.type != "static":
             angle_rad = angle_to_radians(self.angle)
-            indicator_x = self.x + math.cos(angle_rad) * current_radius
-            indicator_y = self.y + math.sin(angle_rad) * current_radius
+            cos_angle = math.cos(angle_rad)
+            sin_angle = math.sin(angle_rad)
+            indicator_x = self.x + cos_angle * current_radius
+            indicator_y = self.y + sin_angle * current_radius
             # Always use white for movement direction indicator
             indicator_color = (255, 255, 255)
             pygame.draw.line(
