@@ -10,6 +10,7 @@ from entities.enemy import Enemy, create_enemies
 from entities.projectile import Projectile
 from scoring import ScoringSystem
 from rendering import Renderer
+from sounds import SoundManager
 
 
 class Game:
@@ -30,6 +31,7 @@ class Game:
         self.enemies: List[Enemy] = []
         self.projectiles: List[Projectile] = []
         self.scoring = ScoringSystem()
+        self.sound_manager = SoundManager()  # Game-level sound manager for enemy destruction
         
         self.running = True
         self.start_time = time.time()
@@ -195,6 +197,7 @@ class Game:
                     if enemy.active and projectile.active:
                         if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
                             enemy.destroy()
+                            self.sound_manager.play_enemy_destroy()  # Play destruction sound
                             self.scoring.record_enemy_destroyed()  # Award bonus points
                             # Projectile is deactivated by collision, break
                             break
