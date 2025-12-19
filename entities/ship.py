@@ -5,6 +5,7 @@ This module implements the Ship class for the player-controlled spacecraft.
 
 import pygame
 import math
+import random
 from typing import Tuple, List, Optional
 import config
 from utils import (
@@ -21,6 +22,7 @@ from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
 from entities.projectile import Projectile
+from rendering import visual_effects
 
 
 class Ship(GameEntity, Collidable, Drawable):
@@ -50,6 +52,9 @@ class Ship(GameEntity, Collidable, Drawable):
         self.ammo = config.INITIAL_AMMO
         self.damaged = False
         self.damage_timer = 0
+        self.glow_phase = 0.0  # For pulsing glow when damaged
+        self.thrust_particles = []  # For enhanced thrust visualization
+        self.thrusting = False  # Track when thrust is actively being applied
     
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
@@ -88,6 +93,7 @@ class Ship(GameEntity, Collidable, Drawable):
         
         # Consume fuel
         self.fuel -= config.FUEL_CONSUMPTION_PER_THRUST
+        self.thrusting = True  # Mark that thrust is active
         return True
     
     def update(self, dt: float) -> None:
@@ -96,6 +102,13 @@ class Ship(GameEntity, Collidable, Drawable):
         Args:
             dt: Delta time since last update.
         """
+        # Save thrusting state from previous frame (set by apply_thrust)
+        # This allows it to persist through the draw() call
+        was_thrusting = self.thrusting
+        
+        # Clear thrusting flag at start of update (will be set again if apply_thrust is called this frame)
+        self.thrusting = False
+        
         # Apply friction
         self.vx *= config.SHIP_FRICTION
         self.vy *= config.SHIP_FRICTION
@@ -136,6 +149,40 @@ class Ship(GameEntity, Collidable, Drawable):
             self.damage_timer -= 1
             if self.damage_timer <= 0:
                 self.damaged = False
+        
+        # Update glow phase for pulsing when damaged
+        if self.damaged:
+            self.glow_phase += 0.2
+            if self.glow_phase >= 2 * math.pi:
+                self.glow_phase -= 2 * math.pi
+        
+        # Update thrust particles (only when thrusting from previous frame)
+        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+        if was_thrusting and speed > 0.0:
+            # Add new particles based on speed
+            angle_rad = angle_to_radians(self.angle)
+            for _ in range(int(speed * 0.5)):
+                if len(self.thrust_particles) < config.THRUST_PLUME_PARTICLES * 3:
+                    particle_x = -math.cos(angle_rad) * self.radius * 0.8
+                    particle_y = -math.sin(angle_rad) * self.radius * 0.8
+                    particle_vx = -math.cos(angle_rad) * speed * 0.3
+                    particle_vy = -math.sin(angle_rad) * speed * 0.3
+                    self.thrust_particles.append({
+                        'x': particle_x,
+                        'y': particle_y,
+                        'vx': particle_vx,
+                        'vy': particle_vy,
+                        'life': config.THRUST_PLUME_LENGTH,
+                        'size': random.uniform(2, 4)
+                    })
+        
+        # Update existing particles
+        for particle in self.thrust_particles[:]:
+            particle['x'] += particle['vx'] * dt
+            particle['y'] += particle['vy'] * dt
+            particle['life'] -= 1
+            if particle['life'] <= 0:
+                self.thrust_particles.remove(particle)
     
     def fire(self) -> Optional[Projectile]:
         """Fire a projectile.
@@ -247,28 +294,128 @@ class Ship(GameEntity, Collidable, Drawable):
         return rotated_vertices
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the ship.
+        """Draw the ship with enhanced visuals.
         
         Args:
             screen: The pygame Surface to draw on.
         """
         vertices = self.get_vertices()
         
-        # Choose color based on damage state
-        color = config.COLOR_SHIP
+        # Determine colors based on damage state
         if self.damaged:
-            color = (255, 100, 100)  # Red when damaged
+            color_nose = config.COLOR_SHIP_DAMAGED_NOSE
+            color_rear = config.COLOR_SHIP_DAMAGED_REAR
+            glow_color = (255, 100, 100)
+            glow_intensity = config.SHIP_GLOW_INTENSITY * (1.0 + 0.5 * math.sin(self.glow_phase))
+        else:
+            color_nose = config.COLOR_SHIP_NOSE
+            color_rear = config.COLOR_SHIP_REAR
+            glow_color = config.COLOR_SHIP
+            glow_intensity = config.SHIP_GLOW_INTENSITY
         
-        pygame.draw.polygon(screen, color, vertices)
-        pygame.draw.polygon(screen, (255, 255, 255), vertices, 2)
+        # Draw glow effect
+        visual_effects.draw_glow_polygon(
+            screen, vertices, glow_color,
+            glow_radius=self.radius * config.SHIP_GLOW_RADIUS_MULTIPLIER,
+            intensity=glow_intensity
+        )
         
-        # Draw thrust indicator if moving forward
-        if abs(self.vx) > 0.1 or abs(self.vy) > 0.1:
+        # Draw gradient fill (nose to rear)
+        # Nose is first vertex (index 0), rear vertices are at indices 1 and 2
+        visual_effects.draw_gradient_polygon(
+            screen, vertices, color_nose, color_rear,
+            start_vertex=0, end_vertex=1
+        )
+        
+        # Draw ship details
+        # Cockpit window (small circle at front)
+        nose_vertex = vertices[0]
+        cockpit_offset = 2
+        angle_rad = angle_to_radians(self.angle)
+        cockpit_x = nose_vertex[0] - math.cos(angle_rad) * cockpit_offset
+        cockpit_y = nose_vertex[1] - math.sin(angle_rad) * cockpit_offset
+        pygame.draw.circle(screen, (200, 220, 255), (int(cockpit_x), int(cockpit_y)), 2)
+        
+        # Engine details (small rectangles at rear)
+        rear_vertices = [vertices[1], vertices[2]]
+        for rear_v in rear_vertices:
+            # Draw small rectangle perpendicular to ship direction
+            perp_angle = self.angle + 90
+            perp_rad = angle_to_radians(perp_angle)
+            engine_size = 2
+            engine_x1 = rear_v[0] + math.cos(perp_rad) * engine_size
+            engine_y1 = rear_v[1] + math.sin(perp_rad) * engine_size
+            engine_x2 = rear_v[0] - math.cos(perp_rad) * engine_size
+            engine_y2 = rear_v[1] - math.sin(perp_rad) * engine_size
+            pygame.draw.line(screen, (150, 150, 200), 
+                           (int(engine_x1), int(engine_y1)),
+                           (int(engine_x2), int(engine_y2)), 2)
+        
+        # Wing markings (subtle lines along edges)
+        if len(vertices) >= 3:
+            # Line from nose to left rear
+            pygame.draw.line(screen, (80, 120, 180), 
+                           (int(vertices[0][0]), int(vertices[0][1])),
+                           (int(vertices[1][0]), int(vertices[1][1])), 1)
+            # Line from nose to right rear
+            pygame.draw.line(screen, (80, 120, 180),
+                           (int(vertices[0][0]), int(vertices[0][1])),
+                           (int(vertices[2][0]), int(vertices[2][1])), 1)
+        
+        # Draw enhanced thrust visualization (only when actively thrusting)
+        # Check if we have active thrust particles (from previous frame's thrust)
+        # or if thrusting flag is currently set (from this frame's apply_thrust call)
+        has_thrust_effect = self.thrusting or len(self.thrust_particles) > 0
+        if has_thrust_effect:
             angle_rad = angle_to_radians(self.angle)
-            thrust_x = -math.cos(angle_rad) * self.radius * 0.8
-            thrust_y = -math.sin(angle_rad) * self.radius * 0.8
-            thrust_pos = (self.x + thrust_x, self.y + thrust_y)
-            pygame.draw.circle(screen, (255, 200, 0), (int(thrust_pos[0]), int(thrust_pos[1])), 3)
+            base_x = self.x - math.cos(angle_rad) * self.radius * 0.8
+            base_y = self.y - math.sin(angle_rad) * self.radius * 0.8
+            
+            # Calculate speed for plume length
+            speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+            
+            # Draw particle trail
+            for particle in self.thrust_particles:
+                particle_x = self.x + particle['x']
+                particle_y = self.y + particle['y']
+                life_ratio = particle['life'] / config.THRUST_PLUME_LENGTH
+                
+                # Color gradient: yellow -> orange -> red
+                if life_ratio > 0.6:
+                    color = (255, 255, 100)  # Yellow
+                elif life_ratio > 0.3:
+                    color = (255, 180, 50)   # Orange
+                else:
+                    color = (255, 100, 50)   # Red
+                
+                size = int(particle['size'] * life_ratio)
+                if size > 0:
+                    pygame.draw.circle(screen, color, 
+                                     (int(particle_x), int(particle_y)), size)
+            
+            # Draw cone-shaped thrust plume
+            plume_length = min(config.THRUST_PLUME_LENGTH, speed * 2)
+            for i in range(config.THRUST_PLUME_PARTICLES):
+                t = i / config.THRUST_PLUME_PARTICLES
+                plume_x = base_x - math.cos(angle_rad) * plume_length * t
+                plume_y = base_y - math.sin(angle_rad) * plume_length * t
+                
+                # Size decreases along plume
+                size = int(4 * (1 - t))
+                if size > 0:
+                    # Color gradient
+                    if t < 0.3:
+                        color = (255, 255, 150)  # Bright yellow
+                    elif t < 0.6:
+                        color = (255, 200, 50)   # Orange
+                    else:
+                        color = (255, 100, 0)    # Red
+                    
+                    # Add some randomness for flicker
+                    flicker = random.uniform(0.8, 1.0)
+                    flicker_color = tuple(int(c * flicker) for c in color)
+                    pygame.draw.circle(screen, flicker_color,
+                                     (int(plume_x), int(plume_y)), size)
     
     def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font) -> None:
         """Draw ship UI (fuel, ammo).

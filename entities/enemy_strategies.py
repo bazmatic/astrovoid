@@ -118,7 +118,11 @@ class AggressiveEnemyStrategy(EnemyStrategy):
     ) -> None:
         """Update aggressive enemy to chase player."""
         if not player_pos:
+            enemy.is_alert = False
             return
+        
+        # Set alert state when chasing player
+        enemy.is_alert = True
         
         # Calculate angle to player
         target_angle = get_angle_to_point((enemy.x, enemy.y), player_pos)

@@ -23,6 +23,7 @@ from entities.enemy_strategies import (
     PatrolEnemyStrategy,
     AggressiveEnemyStrategy
 )
+from rendering import visual_effects
 
 
 class Enemy(GameEntity, Collidable, Drawable):
@@ -64,6 +65,10 @@ class Enemy(GameEntity, Collidable, Drawable):
             self.angle = 0.0
         else:
             raise ValueError(f"Unknown enemy type: {enemy_type}")
+        
+        # Animation state
+        self.pulse_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
+        self.is_alert = False  # Alert state for aggressive enemies
     
     def update(
         self,
@@ -82,6 +87,14 @@ class Enemy(GameEntity, Collidable, Drawable):
             return
         
         self.strategy.update(self, dt, player_pos, walls)
+        
+        # Update pulse animation
+        pulse_speed = config.ENEMY_PULSE_SPEED
+        if self.is_alert:
+            pulse_speed *= 2.0  # Faster pulse when alert
+        self.pulse_phase += pulse_speed
+        if self.pulse_phase >= 2 * math.pi:
+            self.pulse_phase -= 2 * math.pi
     
     def check_wall_collision(
         self,
@@ -127,7 +140,7 @@ class Enemy(GameEntity, Collidable, Drawable):
         self.active = False
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the enemy on screen.
+        """Draw the enemy on screen with enhanced visuals.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -135,17 +148,115 @@ class Enemy(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
-        color = config.COLOR_ENEMY_STATIC if self.type == "static" else config.COLOR_ENEMY_DYNAMIC
-        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius)
-        pygame.draw.circle(screen, (255, 255, 255), (int(self.x), int(self.y)), self.radius, 2)
+        # Calculate pulsing radius and color intensity
+        pulse_factor = 1.0 + config.ENEMY_PULSE_AMPLITUDE * math.sin(self.pulse_phase)
+        current_radius = self.radius * pulse_factor
+        
+        # Base color
+        base_color = config.COLOR_ENEMY_STATIC if self.type == "static" else config.COLOR_ENEMY_DYNAMIC
+        
+        # Adjust color based on pulse and alert state
+        color_intensity = 0.8 + 0.2 * (math.sin(self.pulse_phase) * 0.5 + 0.5)
+        if self.is_alert:
+            # Brighter and more intense when alert
+            color_intensity = 1.0
+            base_color = tuple(min(255, int(c * 1.3)) for c in base_color)
+        
+        color = tuple(int(c * color_intensity) for c in base_color)
+        
+        # Draw glow effect (more intense when alert)
+        glow_intensity = 0.2
+        if self.is_alert:
+            glow_intensity = 0.5
+        visual_effects.draw_glow_circle(
+            screen, (self.x, self.y), current_radius, color,
+            glow_radius=current_radius * 0.3, intensity=glow_intensity
+        )
+        
+        # Draw main circle
+        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), int(current_radius))
+        
+        # Draw border (flashing when alert)
+        border_color = (255, 255, 255)
+        if self.is_alert:
+            # Flashing border
+            flash = int(255 * (math.sin(self.pulse_phase * 2) * 0.5 + 0.5))
+            border_color = (flash, flash // 2, flash // 2)
+        pygame.draw.circle(screen, border_color, (int(self.x), int(self.y)), int(current_radius), 2)
+        
+        # Type-specific visuals
+        if self.type == "static":
+            # Angular/spiky pattern - draw radial spikes
+            num_spikes = 8
+            for i in range(num_spikes):
+                spike_angle = (i * 360 / num_spikes) + self.pulse_phase * 10
+                spike_rad = angle_to_radians(spike_angle)
+                spike_length = current_radius * 0.6
+                spike_x = self.x + math.cos(spike_rad) * spike_length
+                spike_y = self.y + math.sin(spike_rad) * spike_length
+                pygame.draw.line(screen, (255, 150, 150),
+                               (int(self.x), int(self.y)),
+                               (int(spike_x), int(spike_y)), 2)
+        
+        elif self.type == "patrol":
+            # Smooth circle with concentric pattern
+            # Draw inner circle
+            inner_radius = current_radius * 0.5
+            pygame.draw.circle(screen, tuple(min(255, c + 30) for c in color),
+                             (int(self.x), int(self.y)), int(inner_radius), 1)
+            # Draw radial lines
+            num_lines = 4
+            for i in range(num_lines):
+                line_angle = (i * 360 / num_lines) + self.pulse_phase * 20
+                line_rad = angle_to_radians(line_angle)
+                line_x = self.x + math.cos(line_rad) * current_radius * 0.7
+                line_y = self.y + math.sin(line_rad) * current_radius * 0.7
+                pygame.draw.line(screen, tuple(min(255, c + 20) for c in color),
+                               (int(self.x), int(self.y)),
+                               (int(line_x), int(line_y)), 1)
+        
+        elif self.type == "aggressive":
+            # Jagged/warning appearance - draw warning stripes
+            num_stripes = 6
+            for i in range(num_stripes):
+                stripe_angle = (i * 360 / num_stripes) + self.pulse_phase * 15
+                stripe_rad = angle_to_radians(stripe_angle)
+                stripe_x1 = self.x + math.cos(stripe_rad) * current_radius * 0.3
+                stripe_y1 = self.y + math.sin(stripe_rad) * current_radius * 0.3
+                stripe_x2 = self.x + math.cos(stripe_rad) * current_radius * 0.9
+                stripe_y2 = self.y + math.sin(stripe_rad) * current_radius * 0.9
+                # Alternate colors for warning effect
+                if i % 2 == 0:
+                    stripe_color = (255, 200, 100)
+                else:
+                    stripe_color = (255, 100, 50)
+                pygame.draw.line(screen, stripe_color,
+                               (int(stripe_x1), int(stripe_y1)),
+                               (int(stripe_x2), int(stripe_y2)), 2)
+        
+        # Draw geometric patterns
+        # Radial lines from center (all types)
+        num_radial = 6
+        for i in range(num_radial):
+            radial_angle = (i * 360 / num_radial) + self.pulse_phase * 5
+            radial_rad = angle_to_radians(radial_angle)
+            radial_x = self.x + math.cos(radial_rad) * current_radius * 0.4
+            radial_y = self.y + math.sin(radial_rad) * current_radius * 0.4
+            pattern_color = tuple(max(0, c - 40) for c in color)
+            pygame.draw.line(screen, pattern_color,
+                           (int(self.x), int(self.y)),
+                           (int(radial_x), int(radial_y)), 1)
         
         # Draw direction indicator for dynamic enemies
         if self.type != "static":
             angle_rad = angle_to_radians(self.angle)
-            indicator_x = self.x + math.cos(angle_rad) * self.radius
-            indicator_y = self.y + math.sin(angle_rad) * self.radius
+            indicator_x = self.x + math.cos(angle_rad) * current_radius
+            indicator_y = self.y + math.sin(angle_rad) * current_radius
+            indicator_color = (255, 255, 255)
+            if self.is_alert:
+                indicator_color = (255, 200, 100)  # Brighter when alert
             pygame.draw.line(
-                screen, (255, 255, 255),
+                screen, indicator_color,
                 (int(self.x), int(self.y)),
                 (int(indicator_x), int(indicator_y)), 2
             )
