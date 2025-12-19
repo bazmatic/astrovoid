@@ -18,19 +18,21 @@ from entities.drawable import Drawable
 
 
 class Projectile(GameEntity, Collidable, Drawable):
-    """Represents a projectile fired from the ship.
+    """Represents a projectile fired from the ship or enemy.
     
     Attributes:
         angle: Firing angle in degrees.
         lifetime: Remaining lifetime in frames.
+        is_enemy: Whether this is an enemy projectile.
     """
     
-    def __init__(self, start_pos: Tuple[float, float], angle: float):
+    def __init__(self, start_pos: Tuple[float, float], angle: float, is_enemy: bool = False):
         """Initialize projectile at position with given angle.
         
         Args:
             start_pos: Starting position as (x, y) tuple.
             angle: Firing angle in degrees.
+            is_enemy: Whether this is an enemy projectile (default: False).
         """
         # Calculate velocity from angle
         angle_rad = angle_to_radians(angle)
@@ -40,6 +42,7 @@ class Projectile(GameEntity, Collidable, Drawable):
         super().__init__(start_pos, config.PROJECTILE_SIZE, vx, vy)
         self.angle = angle
         self.lifetime = config.PROJECTILE_LIFETIME
+        self.is_enemy = is_enemy
     
     def update(self, dt: float) -> None:
         """Update projectile position and lifetime.
@@ -113,7 +116,10 @@ class Projectile(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
-        pygame.draw.circle(screen, config.COLOR_PROJECTILE, (int(self.x), int(self.y)), self.radius)
+        # Use different color for enemy projectiles
+        color = config.COLOR_ENEMY_PROJECTILE if self.is_enemy else config.COLOR_PROJECTILE
+        
+        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius)
         # Add a small glow effect
-        pygame.draw.circle(screen, config.COLOR_PROJECTILE, (int(self.x), int(self.y)), self.radius // 2)
+        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius // 2)
 

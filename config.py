@@ -61,11 +61,20 @@ DYNAMIC_ENEMY_SIZE = 12
 ENEMY_PATROL_SPEED = 1.5
 ENEMY_AGGRESSIVE_SPEED = 2.0
 ENEMY_DAMAGE = 10
+ENEMY_STUCK_DETECTION_THRESHOLD = 0.1  # Minimum distance change to consider enemy moving
+ENEMY_SHIFT_ANGLE_MIN = 45  # Minimum angle shift in degrees (45-90 range)
+ENEMY_SHIFT_ANGLE_MAX = 90  # Maximum angle shift in degrees
+ENEMY_SHIFT_DURATION_MIN = 10  # Minimum frames to maintain shifted direction
+ENEMY_SHIFT_DURATION_MAX = 100  # Maximum frames to maintain shifted direction
+ENEMY_FIRE_INTERVAL_MIN = 60  # Minimum frames between shots (1 second at 60 FPS)
+ENEMY_FIRE_INTERVAL_MAX = 300  # Maximum frames between shots (5 seconds at 60 FPS)
+ENEMY_FIRE_RANGE = 400  # Maximum distance to player for firing (pixels)
 
 # Projectile settings
 PROJECTILE_SPEED = 10.0
 PROJECTILE_SIZE = 4
 PROJECTILE_LIFETIME = 120  # frames
+COLOR_ENEMY_PROJECTILE = (255, 100, 100)  # Red/orange color for enemy bullets
 
 # Visual effects
 SHIP_GLOW_INTENSITY = 0.3

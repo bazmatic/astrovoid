@@ -157,6 +157,11 @@ class Game:
                 # Check enemy-ship collision
                 if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius):
                     self.scoring.record_enemy_collision()
+                
+                # Check if enemy fired a projectile
+                fired_projectile = enemy.get_fired_projectile(player_pos)
+                if fired_projectile:
+                    self.projectiles.append(fired_projectile)
         
         # Update projectiles
         for projectile in self.projectiles[:]:
@@ -169,13 +174,20 @@ class Game:
             # Check projectile-wall collision
             projectile.check_wall_collision(self.maze.walls)
             
-            # Check projectile-enemy collision
-            for enemy in self.enemies:
-                if enemy.active and projectile.active:
-                    if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
-                        enemy.destroy()
-                        self.scoring.record_enemy_destroyed()  # Award bonus points
-                        break
+            # Check enemy projectile-ship collision
+            if projectile.is_enemy and projectile.active:
+                if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
+                    self.scoring.record_enemy_collision()  # Apply collision penalty
+                    continue  # Skip enemy collision check for enemy projectiles
+            
+            # Check projectile-enemy collision (only for player projectiles)
+            if not projectile.is_enemy:
+                for enemy in self.enemies:
+                    if enemy.active and projectile.active:
+                        if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
+                            enemy.destroy()
+                            self.scoring.record_enemy_destroyed()  # Award bonus points
+                            break
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
@@ -285,8 +297,9 @@ class Game:
         self.maze.draw(self.screen)
         
         # Draw enemies
+        player_pos = (self.ship.x, self.ship.y) if self.ship else None
         for enemy in self.enemies:
-            enemy.draw(self.screen)
+            enemy.draw(self.screen, player_pos)
         
         # Draw projectiles
         for projectile in self.projectiles:

@@ -7,17 +7,21 @@ following the Open/Closed Principle.
 import pygame
 import random
 import math
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, TYPE_CHECKING
 import config
 from utils import (
     angle_to_radians,
     circle_line_collision,
     circle_circle_collision,
-    get_angle_to_point
+    get_angle_to_point,
+    distance
 )
 from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
+
+if TYPE_CHECKING:
+    from entities.projectile import Projectile
 from entities.enemy_strategies import (
     StaticEnemyStrategy,
     PatrolEnemyStrategy,
@@ -96,6 +100,24 @@ class Enemy(GameEntity, Collidable, Drawable):
         if self.pulse_phase >= 2 * math.pi:
             self.pulse_phase -= 2 * math.pi
     
+    def get_fired_projectile(self, player_pos: Optional[Tuple[float, float]]) -> Optional['Projectile']:
+        """Get a projectile fired by this enemy if applicable.
+        
+        Args:
+            player_pos: Current player position.
+            
+        Returns:
+            Projectile instance if fired, None otherwise.
+        """
+        if not self.active:
+            return None
+        
+        # Check if strategy has a fire method (only patrol enemies have this)
+        if hasattr(self.strategy, 'fire'):
+            return self.strategy.fire(self, player_pos)
+        
+        return None
+    
     def check_wall_collision(
         self,
         walls: List[Tuple[Tuple[float, float], Tuple[float, float]]]
@@ -139,11 +161,12 @@ class Enemy(GameEntity, Collidable, Drawable):
         """Destroy the enemy."""
         self.active = False
     
-    def draw(self, screen: pygame.Surface) -> None:
+    def draw(self, screen: pygame.Surface, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Draw the enemy on screen with enhanced visuals.
         
         Args:
             screen: The pygame Surface to draw on.
+            player_pos: Optional player position for turret aiming and firing readiness.
         """
         if not self.active:
             return
@@ -155,6 +178,20 @@ class Enemy(GameEntity, Collidable, Drawable):
         # Base color
         base_color = config.COLOR_ENEMY_STATIC if self.type == "static" else config.COLOR_ENEMY_DYNAMIC
         
+        # For patrol enemies: check firing readiness and calculate turret angle
+        turret_angle = None
+        is_ready_to_fire = False
+        if self.type == "patrol" and player_pos is not None:
+            # Calculate turret angle (direction to player)
+            turret_angle = get_angle_to_point((self.x, self.y), player_pos)
+            
+            # Check if ready to fire (player in range and cooldown expired)
+            dist_to_player = distance((self.x, self.y), player_pos)
+            if (dist_to_player <= config.ENEMY_FIRE_RANGE and 
+                hasattr(self.strategy, 'fire_cooldown') and 
+                self.strategy.fire_cooldown <= 0):
+                is_ready_to_fire = True
+        
         # Adjust color based on pulse and alert state
         color_intensity = 0.8 + 0.2 * (math.sin(self.pulse_phase) * 0.5 + 0.5)
         if self.is_alert:
@@ -162,12 +199,20 @@ class Enemy(GameEntity, Collidable, Drawable):
             color_intensity = 1.0
             base_color = tuple(min(255, int(c * 1.3)) for c in base_color)
         
+        # Apply brightening effect for patrol enemies ready to fire
+        if is_ready_to_fire:
+            brightness_multiplier = 1.4
+            base_color = tuple(min(255, int(c * brightness_multiplier)) for c in base_color)
+            color_intensity = 1.0
+        
         color = tuple(int(c * color_intensity) for c in base_color)
         
-        # Draw glow effect (more intense when alert)
+        # Draw glow effect (more intense when alert or ready to fire)
         glow_intensity = 0.2
         if self.is_alert:
             glow_intensity = 0.5
+        if is_ready_to_fire:
+            glow_intensity = 0.7
         visual_effects.draw_glow_circle(
             screen, (self.x, self.y), current_radius, color,
             glow_radius=current_radius * 0.3, intensity=glow_intensity
@@ -214,6 +259,36 @@ class Enemy(GameEntity, Collidable, Drawable):
                 pygame.draw.line(screen, tuple(min(255, c + 20) for c in color),
                                (int(self.x), int(self.y)),
                                (int(line_x), int(line_y)), 1)
+            
+            # Draw turret direction indicator (arrow pointing at player)
+            if turret_angle is not None:
+                turret_rad = angle_to_radians(turret_angle)
+                arrow_length = 6
+                arrow_width = 3
+                base_offset = arrow_length * 0.7
+                
+                # Arrow tip at edge of circle
+                arrow_tip_x = self.x + math.cos(turret_rad) * current_radius
+                arrow_tip_y = self.y + math.sin(turret_rad) * current_radius
+                
+                # Arrow base points (perpendicular to direction)
+                base_x = self.x + math.cos(turret_rad) * (current_radius - base_offset)
+                base_y = self.y + math.sin(turret_rad) * (current_radius - base_offset)
+                
+                # Perpendicular vectors for arrow base
+                perp_rad = turret_rad + math.pi / 2
+                base1_x = base_x + math.cos(perp_rad) * arrow_width / 2
+                base1_y = base_y + math.sin(perp_rad) * arrow_width / 2
+                base2_x = base_x - math.cos(perp_rad) * arrow_width / 2
+                base2_y = base_y - math.sin(perp_rad) * arrow_width / 2
+                
+                # Draw triangle arrow (yellow/orange)
+                turret_color = (255, 200, 100) if is_ready_to_fire else (255, 150, 50)
+                pygame.draw.polygon(screen, turret_color, [
+                    (int(arrow_tip_x), int(arrow_tip_y)),
+                    (int(base1_x), int(base1_y)),
+                    (int(base2_x), int(base2_y))
+                ])
         
         elif self.type == "aggressive":
             # Jagged/warning appearance - draw warning stripes
@@ -247,14 +322,13 @@ class Enemy(GameEntity, Collidable, Drawable):
                            (int(self.x), int(self.y)),
                            (int(radial_x), int(radial_y)), 1)
         
-        # Draw direction indicator for dynamic enemies
+        # Draw movement direction indicator for dynamic enemies (white line)
         if self.type != "static":
             angle_rad = angle_to_radians(self.angle)
             indicator_x = self.x + math.cos(angle_rad) * current_radius
             indicator_y = self.y + math.sin(angle_rad) * current_radius
+            # Always use white for movement direction indicator
             indicator_color = (255, 255, 255)
-            if self.is_alert:
-                indicator_color = (255, 200, 100)  # Brighter when alert
             pygame.draw.line(
                 screen, indicator_color,
                 (int(self.x), int(self.y)),
