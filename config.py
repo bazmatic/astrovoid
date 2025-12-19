@@ -54,6 +54,7 @@ WALL_THICKNESS = 6
 # Cell size will be calculated dynamically to fill screen
 CELL_SIZE = None  # Will be calculated based on screen size
 MIN_PASSAGE_WIDTH = 3  # Wider passages (3+ cells wide)
+WALL_HIT_POINTS = 2  # Number of hits required to destroy a wall block
 
 # Enemy settings
 STATIC_ENEMY_SIZE = 15

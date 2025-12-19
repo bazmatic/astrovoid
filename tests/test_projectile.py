@@ -61,17 +61,23 @@ class TestProjectileCollision:
     
     def test_projectile_collides_with_wall(self):
         """Projectile should detect wall collision."""
+        from maze.wall_segment import WallSegment
+        import config
+        
         projectile = Projectile((100, 100), 0.0)  # Moving right
-        walls = [((150, 90), (150, 110))]  # Wall at x=150
+        walls = [WallSegment((150, 90), (150, 110), config.WALL_HIT_POINTS)]  # Wall at x=150
         
         # Move projectile to wall
         for _ in range(10):
             projectile.update(1.0)
-            if projectile.check_wall_collision(walls):
+            hit_wall = projectile.check_wall_collision(walls)
+            if hit_wall is not None:
                 break
         
         # Should have collided and deactivated
         assert projectile.active is False
+        assert hit_wall is not None
+        assert isinstance(hit_wall, WallSegment)
     
     def test_projectile_collides_with_enemy(self):
         """Projectile should detect enemy collision."""

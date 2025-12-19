@@ -213,7 +213,7 @@ class Ship(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List[Tuple[Tuple[float, float], Tuple[float, float]]]
+        walls: List
     ) -> bool:
         """Check collision with walls using continuous collision detection.
         
@@ -222,7 +222,7 @@ class Ship(GameEntity, Collidable, Drawable):
         and stops movement at that point.
         
         Args:
-            walls: List of wall line segments.
+            walls: List of wall segments (WallSegment instances or tuples).
             
         Returns:
             True if collision occurred, False otherwise.
@@ -237,9 +237,19 @@ class Ship(GameEntity, Collidable, Drawable):
         
         # Check all walls for collisions along movement path
         for wall in walls:
+            # Handle both WallSegment and tuple formats
+            if hasattr(wall, 'get_segment'):
+                # WallSegment instance
+                if not wall.active:
+                    continue
+                segment = wall.get_segment()
+            else:
+                # Tuple format (backward compatibility)
+                segment = wall
+            
             collision_detected, collision_time, collision_point = circle_line_collision_swept(
                 start_pos, end_pos, self.radius,
-                wall[0], wall[1]
+                segment[0], segment[1]
             )
             
             if collision_detected and collision_time is not None:
@@ -247,21 +257,29 @@ class Ship(GameEntity, Collidable, Drawable):
                 if collision_time < earliest_time:
                     earliest_time = collision_time
                     earliest_collision = collision_point
-                    collision_wall = wall
+                    collision_wall = segment
         
         # If no collision found, also check if ship is already inside a wall
         # (can happen if ship spawns in wall or previous frame had issues)
         if earliest_collision is None:
             for wall in walls:
+                # Handle both WallSegment and tuple formats
+                if hasattr(wall, 'get_segment'):
+                    if not wall.active:
+                        continue
+                    segment = wall.get_segment()
+                else:
+                    segment = wall
+                
                 if circle_line_collision(
                     (self.x, self.y), self.radius,
-                    wall[0], wall[1]
+                    segment[0], segment[1]
                 ):
                     # Ship is already inside wall - push out immediately
-                    normal = get_wall_normal((self.x, self.y), wall[0], wall[1])
+                    normal = get_wall_normal((self.x, self.y), segment[0], segment[1])
                     
                     # Calculate penetration depth
-                    closest_point = get_closest_point_on_line((self.x, self.y), wall[0], wall[1])
+                    closest_point = get_closest_point_on_line((self.x, self.y), segment[0], segment[1])
                     dist_to_wall = distance((self.x, self.y), closest_point)
                     penetration_depth = self.radius - dist_to_wall
                     

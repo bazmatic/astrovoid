@@ -2,7 +2,7 @@
 
 import random
 import pygame
-from typing import List, Tuple, Set
+from typing import List, Tuple, Set, Dict
 import config
 from utils import (
     distance,
@@ -11,6 +11,7 @@ from utils import (
     circle_circle_collision,
     circle_line_collision
 )
+from maze.wall_segment import WallSegment
 
 
 class Maze:
@@ -163,10 +164,13 @@ class Maze:
         
         return grid
     
-    def _grid_to_walls(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
-        """Convert grid to list of wall line segments."""
+    def _grid_to_walls(self) -> List[WallSegment]:
+        """Convert grid to list of wall line segments.
+        
+        Returns:
+            List of WallSegment instances.
+        """
         walls = []
-        wall_thickness = config.WALL_THICKNESS
         
         for y in range(self.grid_height):
             for x in range(self.grid_width):
@@ -175,26 +179,30 @@ class Maze:
                     screen_x = self.offset_x + x * self.cell_size
                     screen_y = self.offset_y + y * self.cell_size
                     
-                    # Create wall rectangle as line segments
+                    # Create wall rectangle as line segments with hit points
                     # Top edge
-                    walls.append((
+                    walls.append(WallSegment(
                         (screen_x, screen_y),
-                        (screen_x + self.cell_size, screen_y)
+                        (screen_x + self.cell_size, screen_y),
+                        config.WALL_HIT_POINTS
                     ))
                     # Right edge
-                    walls.append((
+                    walls.append(WallSegment(
                         (screen_x + self.cell_size, screen_y),
-                        (screen_x + self.cell_size, screen_y + self.cell_size)
+                        (screen_x + self.cell_size, screen_y + self.cell_size),
+                        config.WALL_HIT_POINTS
                     ))
                     # Bottom edge
-                    walls.append((
+                    walls.append(WallSegment(
                         (screen_x + self.cell_size, screen_y + self.cell_size),
-                        (screen_x, screen_y + self.cell_size)
+                        (screen_x, screen_y + self.cell_size),
+                        config.WALL_HIT_POINTS
                     ))
                     # Left edge
-                    walls.append((
+                    walls.append(WallSegment(
                         (screen_x, screen_y + self.cell_size),
-                        (screen_x, screen_y)
+                        (screen_x, screen_y),
+                        config.WALL_HIT_POINTS
                     ))
         
         return walls
@@ -202,6 +210,27 @@ class Maze:
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
         """Check if player reached the exit."""
         return circle_circle_collision(pos, radius, self.exit_pos, self.exit_radius)
+    
+    def damage_wall(self, wall: WallSegment) -> bool:
+        """Damage a wall segment. Returns True if wall was destroyed.
+        
+        Args:
+            wall: The wall segment to damage.
+            
+        Returns:
+            True if wall was destroyed (hit points reached 0), False otherwise.
+        """
+        if wall not in self.walls:
+            return False
+        
+        # Damage the wall segment
+        destroyed = wall.damage()
+        
+        # Remove inactive walls from the list
+        if destroyed:
+            self.walls = [w for w in self.walls if w.active]
+        
+        return destroyed
     
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100) -> List[Tuple[float, float]]:
         """Get valid spawn positions for enemies, avoiding walls."""
@@ -240,9 +269,11 @@ class Maze:
             # Check if position is in a wall
             in_wall = False
             for wall in self.walls:
-                if circle_line_collision(pos, 15, wall[0], wall[1]):
-                    in_wall = True
-                    break
+                if wall.active:
+                    segment = wall.get_segment()
+                    if circle_line_collision(pos, 15, segment[0], segment[1]):
+                        in_wall = True
+                        break
             if in_wall:
                 continue
             
@@ -252,20 +283,17 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        # Draw filled wall boxes
-        for y in range(self.grid_height):
-            for x in range(self.grid_width):
-                if self.grid[y][x] == 1:  # Wall cell
-                    # Convert grid coordinates to screen coordinates with offset
-                    screen_x = int(self.offset_x + x * self.cell_size)
-                    screen_y = int(self.offset_y + y * self.cell_size)
-                    
-                    # Draw filled rectangle for wall cell
-                    pygame.draw.rect(
-                        screen,
-                        config.COLOR_WALLS,
-                        (screen_x, screen_y, int(self.cell_size), int(self.cell_size))
-                    )
+        # Draw only active wall segments as individual lines
+        for wall_segment in self.walls:
+            if wall_segment.active:
+                # Draw wall segment as a line with thickness
+                pygame.draw.line(
+                    screen,
+                    config.COLOR_WALLS,
+                    (int(wall_segment.start[0]), int(wall_segment.start[1])),
+                    (int(wall_segment.end[0]), int(wall_segment.end[1])),
+                    config.WALL_THICKNESS
+                )
         
         # Draw exit marker
         pygame.draw.circle(screen, config.COLOR_EXIT, 

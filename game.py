@@ -172,7 +172,15 @@ class Game:
                 continue
             
             # Check projectile-wall collision
-            projectile.check_wall_collision(self.maze.walls)
+            # Only player projectiles can damage walls
+            if not projectile.is_enemy:
+                hit_wall = projectile.check_wall_collision(self.maze.walls)
+                if hit_wall:
+                    # Damage the wall (hit_wall is already a WallSegment)
+                    self.maze.damage_wall(hit_wall)
+            else:
+                # Enemy projectiles just deactivate on wall collision
+                projectile.check_wall_collision(self.maze.walls)
             
             # Check enemy projectile-ship collision
             if projectile.is_enemy and projectile.active:

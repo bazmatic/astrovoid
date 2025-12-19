@@ -113,7 +113,14 @@ class PatrolEnemyStrategy(EnemyStrategy):
         hit_wall = False
         if walls:
             for wall in walls:
-                if circle_line_collision((new_x, new_y), enemy.radius, wall[0], wall[1]):
+                # Handle both WallSegment and tuple formats
+                if hasattr(wall, 'get_segment'):
+                    if not wall.active:
+                        continue
+                    segment = wall.get_segment()
+                else:
+                    segment = wall
+                if circle_line_collision((new_x, new_y), enemy.radius, segment[0], segment[1]):
                     hit_wall = True
                     break
         
@@ -213,7 +220,14 @@ class AggressiveEnemyStrategy(EnemyStrategy):
             can_move = True
             if walls:
                 for wall in walls:
-                    if circle_line_collision((new_x, new_y), enemy.radius, wall[0], wall[1]):
+                    # Handle both WallSegment and tuple formats
+                    if hasattr(wall, 'get_segment'):
+                        if not wall.active:
+                            continue
+                        segment = wall.get_segment()
+                    else:
+                        segment = wall
+                    if circle_line_collision((new_x, new_y), enemy.radius, segment[0], segment[1]):
                         can_move = False
                         break
             
@@ -261,7 +275,14 @@ class AggressiveEnemyStrategy(EnemyStrategy):
             can_move = True
             if walls:
                 for wall in walls:
-                    if circle_line_collision((new_x, new_y), enemy.radius, wall[0], wall[1]):
+                    # Handle both WallSegment and tuple formats
+                    if hasattr(wall, 'get_segment'):
+                        if not wall.active:
+                            continue
+                        segment = wall.get_segment()
+                    else:
+                        segment = wall
+                    if circle_line_collision((new_x, new_y), enemy.radius, segment[0], segment[1]):
                         can_move = False
                         break
             

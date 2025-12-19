@@ -120,20 +120,30 @@ class Enemy(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List[Tuple[Tuple[float, float], Tuple[float, float]]]
+        walls: List
     ) -> bool:
         """Check collision with wall segments.
         
         Args:
-            walls: List of wall line segments.
+            walls: List of wall segments (WallSegment instances or tuples).
             
         Returns:
             True if collision occurred, False otherwise.
         """
         for wall in walls:
+            # Handle both WallSegment and tuple formats
+            if hasattr(wall, 'get_segment'):
+                # WallSegment instance
+                if not wall.active:
+                    continue
+                segment = wall.get_segment()
+            else:
+                # Tuple format (backward compatibility)
+                segment = wall
+            
             if circle_line_collision(
                 (self.x, self.y), self.radius,
-                wall[0], wall[1]
+                segment[0], segment[1]
             ):
                 return True
         return False

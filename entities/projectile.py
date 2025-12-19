@@ -5,7 +5,7 @@ This module implements the Projectile class for weapons fired by the ship.
 
 import pygame
 import math
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import config
 from utils import (
     angle_to_radians,
@@ -66,24 +66,34 @@ class Projectile(GameEntity, Collidable, Drawable):
     
     def check_wall_collision(
         self,
-        walls: List[Tuple[Tuple[float, float], Tuple[float, float]]]
-    ) -> bool:
+        walls: List
+    ) -> Optional:
         """Check collision with walls.
         
         Args:
-            walls: List of wall line segments.
+            walls: List of wall segments (WallSegment instances or tuples).
             
         Returns:
-            True if collision occurred, False otherwise.
+            The wall segment that was hit, or None if no collision.
         """
         for wall in walls:
+            # Handle both WallSegment and tuple formats
+            if hasattr(wall, 'get_segment'):
+                # WallSegment instance
+                if not wall.active:
+                    continue
+                segment = wall.get_segment()
+            else:
+                # Tuple format (backward compatibility)
+                segment = wall
+            
             if circle_line_collision(
                 (self.x, self.y), self.radius,
-                wall[0], wall[1]
+                segment[0], segment[1]
             ):
                 self.active = False
-                return True
-        return False
+                return wall
+        return None
     
     def check_circle_collision(
         self,
