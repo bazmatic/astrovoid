@@ -150,6 +150,17 @@ class Maze:
                             if distance <= clear_radius and random.random() < (1.0 - distance * 0.2):
                                 grid[check_y][check_x] = 0
         
+        # Ensure perimeter is always walls
+        # Top and bottom rows
+        for x in range(self.grid_width):
+            grid[0][x] = 1  # Top row
+            grid[self.grid_height - 1][x] = 1  # Bottom row
+        
+        # Left and right columns
+        for y in range(self.grid_height):
+            grid[y][0] = 1  # Left column
+            grid[y][self.grid_width - 1] = 1  # Right column
+        
         return grid
     
     def _grid_to_walls(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:

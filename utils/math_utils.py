@@ -21,7 +21,7 @@ Usage:
 """
 
 import math
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 def distance(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
@@ -240,4 +240,68 @@ def reflect_velocity(
     
     # Apply bounce factor to reduce energy
     return (reflected_vx * bounce_factor, reflected_vy * bounce_factor)
+
+
+def circle_line_collision_swept(
+    start_pos: Tuple[float, float],
+    end_pos: Tuple[float, float],
+    radius: float,
+    line_start: Tuple[float, float],
+    line_end: Tuple[float, float]
+) -> Tuple[bool, Optional[float], Optional[Tuple[float, float]]]:
+    """Check if a moving circle collides with a line segment.
+    
+    Uses continuous collision detection by subdividing the movement path
+    and checking for collisions at each step. This prevents tunneling
+    through walls at high speeds.
+    
+    Args:
+        start_pos: Starting position of circle (x, y).
+        end_pos: Ending position of circle (x, y).
+        radius: Circle radius.
+        line_start: Line segment start point (x, y).
+        line_end: Line segment end point (x, y).
+        
+    Returns:
+        Tuple of (collision_detected, collision_time, collision_point):
+        - collision_detected: True if collision occurred
+        - collision_time: 0.0 to 1.0 indicating where along path collision occurs (None if no collision)
+        - collision_point: (x, y) position where collision occurred (None if no collision)
+    """
+    # Calculate movement vector
+    dx = end_pos[0] - start_pos[0]
+    dy = end_pos[1] - start_pos[1]
+    movement_distance = math.sqrt(dx * dx + dy * dy)
+    
+    # If not moving, use standard collision check
+    if movement_distance < 1e-10:
+        if circle_line_collision(start_pos, radius, line_start, line_end):
+            return (True, 0.0, start_pos)
+        return (False, None, None)
+    
+    # Determine number of steps based on speed
+    # Ensure we check at least every radius distance to prevent tunneling
+    max_step_size = radius * 0.5
+    num_steps = max(1, int(movement_distance / max_step_size) + 1)
+    
+    # Normalize movement vector
+    dx_norm = dx / movement_distance
+    dy_norm = dy / movement_distance
+    step_size = movement_distance / num_steps
+    
+    # Check collision at each step along the path
+    for i in range(num_steps + 1):
+        t = i / num_steps
+        check_x = start_pos[0] + dx * t
+        check_y = start_pos[1] + dy * t
+        
+        # Check collision at this point
+        if circle_line_collision((check_x, check_y), radius, line_start, line_end):
+            # Found collision - return collision time and point
+            collision_time = t
+            collision_point = (check_x, check_y)
+            return (True, collision_time, collision_point)
+    
+    # No collision detected
+    return (False, None, None)
 

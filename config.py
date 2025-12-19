@@ -25,7 +25,7 @@ FPS = 60
 
 # Ship physics
 SHIP_SIZE = 6  # Ship radius (affects both collision and visual size)
-SHIP_ROTATION_SPEED = 3.0  # Degrees per frame (how fast the ship rotates)
+SHIP_ROTATION_SPEED = 4.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
 SHIP_MAX_SPEED = 8.0
@@ -38,7 +38,7 @@ AMMO_CONSUMPTION_PER_SHOT = 1
 
 # Scoring system (100 point maximum per level)
 MAX_LEVEL_SCORE = 100  # Maximum score per level
-TIME_PENALTY_RATE = 0.5  # Points deducted per second of elapsed time
+TIME_PENALTY_RATE = 1  # Points deducted per second of elapsed time
 COLLISION_PENALTY = 5  # Points deducted per collision (wall or enemy)
 AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
 FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
