@@ -1,0 +1,421 @@
+"""Main game loop and state management."""
+
+import pygame
+import time
+from typing import List, Optional
+import config
+from ship import Ship
+from maze import Maze
+from enemy import Enemy, create_enemies
+from projectile import Projectile
+from scoring import ScoringSystem
+
+
+class Game:
+    """Main game class managing state and game loop."""
+    
+    def __init__(self, screen: pygame.Surface):
+        """Initialize game."""
+        self.screen = screen
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(None, 36)
+        self.small_font = pygame.font.Font(None, 24)
+        
+        self.state = config.STATE_MENU
+        self.level = 1
+        self.ship: Optional[Ship] = None
+        self.maze: Optional[Maze] = None
+        self.enemies: List[Enemy] = []
+        self.projectiles: List[Projectile] = []
+        self.scoring = ScoringSystem()
+        
+        self.running = True
+        self.start_time = time.time()
+        self.level_complete_time = 0.0
+        self.level_score_breakdown = {}
+        self.completion_time_seconds = 0.0
+        self.level_score_percentage = 0.0
+    
+    def start_level(self) -> None:
+        """Start a new level."""
+        # Generate maze
+        self.maze = Maze(self.level)
+        
+        # Create ship at start position
+        self.ship = Ship(self.maze.start_pos)
+        
+        # Create enemies
+        spawn_positions = self.maze.get_valid_spawn_positions(
+            config.BASE_ENEMY_COUNT + self.level * config.ENEMY_COUNT_INCREMENT + 5
+        )
+        self.enemies = create_enemies(self.level, spawn_positions)
+        
+        # Clear projectiles
+        self.projectiles = []
+        
+        # Start scoring
+        current_time = time.time()
+        self.scoring.start_level(current_time)
+    
+    def handle_events(self) -> None:
+        """Handle pygame events."""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN:
+                if self.state == config.STATE_MENU:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        self.state = config.STATE_PLAYING
+                        self.level = 1
+                        self.start_level()
+                elif self.state == config.STATE_LEVEL_COMPLETE:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        self.level += 1
+                        self.state = config.STATE_PLAYING
+                        self.start_level()
+                elif self.state == config.STATE_GAME_OVER:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                        self.state = config.STATE_MENU
+                        self.level = 1
+                        self.scoring = ScoringSystem()
+    
+    def update(self, dt: float) -> None:
+        """Update game state."""
+        if self.state != config.STATE_PLAYING:
+            return
+        
+        if not self.ship or not self.maze:
+            return
+        
+        # Handle input
+        keys = pygame.key.get_pressed()
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            self.ship.rotate_left()
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            self.ship.rotate_right()
+        if keys[pygame.K_UP] or keys[pygame.K_w]:
+            self.ship.apply_thrust()
+        
+        # Fire projectile
+        if keys[pygame.K_SPACE]:
+            # Limit fire rate
+            if not hasattr(self, 'last_shot_time'):
+                self.last_shot_time = 0
+            current_time = pygame.time.get_ticks()
+            if current_time - self.last_shot_time > 200:  # 200ms between shots
+                projectile = self.ship.fire()
+                if projectile:
+                    self.projectiles.append(projectile)
+                    self.scoring.record_shot()
+                    self.last_shot_time = current_time
+        
+        # Update ship
+        self.ship.update(dt)
+        
+        # Check ship-wall collision
+        if self.ship.check_wall_collision(self.maze.walls):
+            self.scoring.record_wall_collision()
+        
+        # Update enemies
+        player_pos = (self.ship.x, self.ship.y) if self.ship else None
+        for enemy in self.enemies:
+            if enemy.active:
+                enemy.update(dt, player_pos, self.maze.walls)
+                
+                # Check enemy-ship collision
+                if self.ship.check_enemy_collision(enemy.get_pos(), enemy.radius):
+                    self.scoring.record_enemy_collision()
+        
+        # Update projectiles
+        for projectile in self.projectiles[:]:
+            projectile.update(dt)
+            
+            if not projectile.active:
+                self.projectiles.remove(projectile)
+                continue
+            
+            # Check projectile-wall collision
+            projectile.check_wall_collision(self.maze.walls)
+            
+            # Check projectile-enemy collision
+            for enemy in self.enemies:
+                if enemy.active and projectile.active:
+                    if projectile.check_enemy_collision(enemy.get_pos(), enemy.radius):
+                        enemy.destroy()
+                        break
+        
+        # Check exit reached
+        if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
+            self.complete_level()
+        
+        # Check game over conditions
+        if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:
+            # Out of fuel and stopped
+            pass  # Could trigger game over here if desired
+    
+    def complete_level(self) -> None:
+        """Handle level completion."""
+        current_time = time.time()
+        completion_time = self.scoring.get_current_time(current_time)
+        
+        # Calculate score
+        self.level_score_breakdown = self.scoring.calculate_level_score(
+            completion_time,
+            self.ship.fuel,
+            self.ship.ammo
+        )
+        
+        # Store completion time for display
+        self.completion_time_seconds = completion_time
+        
+        # Calculate score percentage for star rating
+        max_score = self.scoring.calculate_max_possible_score()
+        final_score = self.level_score_breakdown.get('final_score', 0)
+        self.level_score_percentage = min(1.0, max(0.0, final_score / max_score)) if max_score > 0 else 0.0
+        
+        self.level_complete_time = current_time
+        self.state = config.STATE_LEVEL_COMPLETE
+    
+    def draw(self) -> None:
+        """Draw game state."""
+        self.screen.fill(config.COLOR_BACKGROUND)
+        
+        if self.state == config.STATE_MENU:
+            self.draw_menu()
+        elif self.state == config.STATE_PLAYING:
+            self.draw_game()
+        elif self.state == config.STATE_LEVEL_COMPLETE:
+            self.draw_level_complete()
+        elif self.state == config.STATE_GAME_OVER:
+            self.draw_game_over()
+        
+        pygame.display.flip()
+    
+    def draw_menu(self) -> None:
+        """Draw main menu."""
+        title = self.font.render("ASTERDROIDS", True, config.COLOR_TEXT)
+        subtitle = self.small_font.render("A Skill-Based Space Navigation Game", True, config.COLOR_TEXT)
+        instructions = [
+            "Controls:",
+            "Arrow Keys / WASD: Rotate and Thrust",
+            "Space: Fire Weapon",
+            "",
+            "Objective:",
+            "Navigate through mazes to reach the exit",
+            "Balance speed, fuel, and ammo for high scores",
+            "",
+            "Press SPACE to Start"
+        ]
+        
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
+        self.screen.blit(title, title_rect)
+        
+        subtitle_rect = subtitle.get_rect(center=(config.SCREEN_WIDTH // 2, 200))
+        self.screen.blit(subtitle, subtitle_rect)
+        
+        y_offset = 280
+        for line in instructions:
+            text = self.small_font.render(line, True, config.COLOR_TEXT)
+            text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(text, text_rect)
+            y_offset += 30
+    
+    def draw_game(self) -> None:
+        """Draw game play screen."""
+        if not self.maze or not self.ship:
+            return
+        
+        # Draw maze
+        self.maze.draw(self.screen)
+        
+        # Draw enemies
+        for enemy in self.enemies:
+            enemy.draw(self.screen)
+        
+        # Draw projectiles
+        for projectile in self.projectiles:
+            projectile.draw(self.screen)
+        
+        # Draw ship
+        self.ship.draw(self.screen)
+        
+        # Draw UI
+        self.ship.draw_ui(self.screen, self.small_font)
+        
+        # Draw score
+        score_text = self.small_font.render(
+            f"Score: {self.scoring.get_total_score()}", 
+            True, config.COLOR_TEXT
+        )
+        self.screen.blit(score_text, (config.SCREEN_WIDTH - 200, 10))
+        
+        # Draw level
+        level_text = self.small_font.render(
+            f"Level: {self.level}", 
+            True, config.COLOR_TEXT
+        )
+        self.screen.blit(level_text, (config.SCREEN_WIDTH - 200, 40))
+        
+        # Draw time
+        current_time = time.time()
+        elapsed = self.scoring.get_current_time(current_time)
+        time_text = self.small_font.render(
+            f"Time: {elapsed:.1f}s", 
+            True, config.COLOR_TEXT
+        )
+        self.screen.blit(time_text, (config.SCREEN_WIDTH - 200, 70))
+        
+        # Draw 5-star potential score display
+        if self.ship:
+            potential = self.scoring.calculate_current_potential_score(
+                current_time,
+                self.ship.fuel,
+                self.ship.ammo
+            )
+            self.draw_star_rating(potential['score_percentage'], config.SCREEN_WIDTH - 200, 110)
+    
+    def draw_level_complete(self) -> None:
+        """Draw level complete screen."""
+        title = self.font.render("LEVEL COMPLETE!", True, config.COLOR_TEXT)
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 120))
+        self.screen.blit(title, title_rect)
+        
+        # Format time as minutes:seconds
+        minutes = int(self.completion_time_seconds // 60)
+        seconds = int(self.completion_time_seconds % 60)
+        time_text = self.small_font.render(
+            f"Time: {minutes}:{seconds:02d}",
+            True, config.COLOR_TEXT
+        )
+        time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 170))
+        self.screen.blit(time_text, time_rect)
+        
+        # Draw star rating
+        star_y = 210
+        star_x = config.SCREEN_WIDTH // 2 - (5 * 24) // 2  # Center 5 stars
+        self.draw_star_rating(self.level_score_percentage, star_x, star_y)
+        
+        y_offset = 280
+        breakdown = [
+            f"Time Score: {int(self.level_score_breakdown.get('time_score', 0))}",
+            f"Fuel Bonus: {int(self.level_score_breakdown.get('fuel_bonus', 0))}",
+            f"Ammo Bonus: {int(self.level_score_breakdown.get('ammo_bonus', 0))}",
+            f"Collision Penalty: -{int(self.level_score_breakdown.get('collision_penalty', 0))}",
+            f"Shot Penalty: -{int(self.level_score_breakdown.get('shot_penalty', 0))}",
+            "",
+            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}",
+            f"Total Score: {int(self.level_score_breakdown.get('total_score', 0))}",
+            "",
+            "Press SPACE to Continue"
+        ]
+        
+        for line in breakdown:
+            text = self.small_font.render(line, True, config.COLOR_TEXT)
+            text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(text, text_rect)
+            y_offset += 30
+    
+    def draw_star_rating(self, score_percentage: float, x: int, y: int) -> None:
+        """Draw 5 stars that fill/drain based on score percentage."""
+        import math
+        
+        star_size = 18
+        star_spacing = 24
+        star_color_full = (255, 215, 0)  # Gold
+        star_color_empty = (80, 80, 80)  # Dark gray
+        
+        for i in range(5):
+            star_x = x + i * star_spacing
+            star_y = y
+            
+            # Each star represents 20% of the score (0-20%, 20-40%, etc.)
+            star_min = i * 0.2
+            star_max = (i + 1) * 0.2
+            star_fill = 0.0
+            
+            if score_percentage >= star_max:
+                # Star is completely full
+                star_fill = 1.0
+            elif score_percentage > star_min:
+                # Star is partially filled
+                star_fill = (score_percentage - star_min) / 0.2
+            
+            # Draw star
+            self._draw_star(star_x, star_y, star_size, star_fill, star_color_full, star_color_empty)
+    
+    def _draw_star(self, x: int, y: int, size: int, fill: float, fill_color: tuple, empty_color: tuple) -> None:
+        """Draw a star with fill percentage."""
+        import math
+        
+        outer_radius = size // 2
+        inner_radius = outer_radius * 0.4
+        num_points = 5
+        
+        # Generate star points
+        points = []
+        for i in range(num_points * 2):
+            angle = (i * math.pi) / num_points - math.pi / 2
+            if i % 2 == 0:
+                radius = outer_radius
+            else:
+                radius = inner_radius
+            px = x + radius * math.cos(angle)
+            py = y + radius * math.sin(angle)
+            points.append((px, py))
+        
+        # Draw star outline
+        if len(points) > 2:
+            pygame.draw.polygon(self.screen, empty_color, points, 2)
+        
+        # Draw filled portion
+        if fill > 0.01:  # Only draw if there's meaningful fill
+            if fill >= 0.99:
+                # Fully filled
+                pygame.draw.polygon(self.screen, fill_color, points)
+            else:
+                # Partially filled - draw with reduced opacity
+                # Create a surface with alpha
+                star_surface = pygame.Surface((size * 3, size * 3), pygame.SRCALPHA)
+                offset_points = [(p[0] - x + size * 1.5, p[1] - y + size * 1.5) for p in points]
+                
+                # Draw filled star with alpha based on fill percentage
+                alpha = int(255 * fill)
+                fill_color_alpha = (*fill_color, alpha)
+                pygame.draw.polygon(star_surface, fill_color_alpha, offset_points)
+                
+                # Also draw a solid outline for the filled portion
+                pygame.draw.polygon(star_surface, fill_color, offset_points, 1)
+                
+                self.screen.blit(star_surface, (x - size * 1.5, y - size * 1.5))
+    
+    def draw_game_over(self) -> None:
+        """Draw game over screen."""
+        title = self.font.render("GAME OVER", True, config.COLOR_TEXT)
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 300))
+        self.screen.blit(title, title_rect)
+        
+        score_text = self.small_font.render(
+            f"Final Score: {self.scoring.get_total_score()}",
+            True, config.COLOR_TEXT
+        )
+        score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, 350))
+        self.screen.blit(score_text, score_rect)
+        
+        continue_text = self.small_font.render(
+            "Press SPACE to Return to Menu",
+            True, config.COLOR_TEXT
+        )
+        continue_rect = continue_text.get_rect(center=(config.SCREEN_WIDTH // 2, 400))
+        self.screen.blit(continue_text, continue_rect)
+    
+    def run(self) -> None:
+        """Main game loop."""
+        while self.running:
+            dt_ms = self.clock.tick(config.FPS)
+            # Normalize delta time: 1.0 = 60fps, scales movement for frame independence
+            dt = dt_ms / (1000.0 / config.FPS)
+            
+            self.handle_events()
+            self.update(dt)
+            self.draw()
+
