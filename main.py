@@ -1,4 +1,20 @@
-"""Main entry point for the Asteroids Maze Game."""
+"""Main entry point for the Asteroids Maze Game.
+
+This module initializes Pygame, creates the game window, and starts the main
+game loop. It serves as the application entry point.
+
+Dependencies:
+    - pygame: Graphics and game loop
+    - game: Main game coordinator
+    - config: Configuration constants
+
+Usage:
+    Run this module directly to start the game:
+        python main.py
+    
+    Or use the provided run script:
+        ./run.sh
+"""
 
 import pygame
 import sys

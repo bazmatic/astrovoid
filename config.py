@@ -1,4 +1,20 @@
-"""Game configuration and constants."""
+"""Game configuration and constants.
+
+This module centralizes all game configuration values including screen settings,
+physics parameters, resource limits, scoring weights, difficulty scaling, and
+visual settings. All constants should be defined here to make tuning easy.
+
+Dependencies:
+    - pygame: For color constants
+
+Architecture:
+    This module follows the Configuration Object pattern, providing a single
+    source of truth for all game parameters. This makes it easy to:
+    - Tune game balance
+    - Adjust difficulty
+    - Modify visual appearance
+    - Test different configurations
+"""
 
 import pygame
 

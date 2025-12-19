@@ -4,11 +4,12 @@ import pygame
 import time
 from typing import List, Optional
 import config
-from ship import Ship
+from entities.ship import Ship
 from maze import Maze
-from enemy import Enemy, create_enemies
-from projectile import Projectile
+from entities.enemy import Enemy, create_enemies
+from entities.projectile import Projectile
 from scoring import ScoringSystem
+from rendering import Renderer
 
 
 class Game:
@@ -20,6 +21,7 @@ class Game:
         self.clock = pygame.time.Clock()
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
+        self.renderer = Renderer(screen)
         
         self.state = config.STATE_MENU
         self.level = 1
@@ -153,7 +155,7 @@ class Game:
                 enemy.update(dt, player_pos, self.maze.walls)
                 
                 # Check enemy-ship collision
-                if self.ship.check_enemy_collision(enemy.get_pos(), enemy.radius):
+                if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius):
                     self.scoring.record_enemy_collision()
         
         # Update projectiles
@@ -170,7 +172,7 @@ class Game:
             # Check projectile-enemy collision
             for enemy in self.enemies:
                 if enemy.active and projectile.active:
-                    if projectile.check_enemy_collision(enemy.get_pos(), enemy.radius):
+                    if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
                         enemy.destroy()
                         self.scoring.record_enemy_destroyed()  # Award bonus points
                         break
@@ -387,79 +389,7 @@ class Game:
     
     def draw_star_rating(self, score_percentage: float, x: int, y: int) -> None:
         """Draw 5 stars that fill/drain based on score percentage."""
-        import math
-        
-        star_size = 18
-        star_spacing = 24
-        star_color_full = (255, 215, 0)  # Gold
-        star_color_empty = (80, 80, 80)  # Dark gray
-        
-        # Cap percentage at 1.0 (100%) for star display (5 stars max)
-        display_percentage = min(1.0, score_percentage)
-        
-        for i in range(5):
-            star_x = x + i * star_spacing
-            star_y = y
-            
-            # Each star represents 20% of the score (0-20%, 20-40%, etc.)
-            star_min = i * 0.2
-            star_max = (i + 1) * 0.2
-            star_fill = 0.0
-            
-            if display_percentage >= star_max:
-                # Star is completely full
-                star_fill = 1.0
-            elif display_percentage > star_min:
-                # Star is partially filled
-                star_fill = (display_percentage - star_min) / 0.2
-            
-            # Draw star
-            self._draw_star(star_x, star_y, star_size, star_fill, star_color_full, star_color_empty)
-    
-    def _draw_star(self, x: int, y: int, size: int, fill: float, fill_color: tuple, empty_color: tuple) -> None:
-        """Draw a star with fill percentage."""
-        import math
-        
-        outer_radius = size // 2
-        inner_radius = outer_radius * 0.4
-        num_points = 5
-        
-        # Generate star points
-        points = []
-        for i in range(num_points * 2):
-            angle = (i * math.pi) / num_points - math.pi / 2
-            if i % 2 == 0:
-                radius = outer_radius
-            else:
-                radius = inner_radius
-            px = x + radius * math.cos(angle)
-            py = y + radius * math.sin(angle)
-            points.append((px, py))
-        
-        # Draw star outline
-        if len(points) > 2:
-            pygame.draw.polygon(self.screen, empty_color, points, 2)
-        
-        # Draw filled portion
-        if fill > 0.01:  # Only draw if there's meaningful fill
-            if fill >= 0.99:
-                # Fully filled
-                pygame.draw.polygon(self.screen, fill_color, points)
-            else:
-                # Partially filled - draw with reduced opacity
-                # Create a surface with alpha
-                star_surface = pygame.Surface((size * 3, size * 3), pygame.SRCALPHA)
-                offset_points = [(p[0] - x + size * 1.5, p[1] - y + size * 1.5) for p in points]
-                
-                # Draw filled star with alpha based on fill percentage
-                alpha = int(255 * fill)
-                fill_color_alpha = (*fill_color, alpha)
-                pygame.draw.polygon(star_surface, fill_color_alpha, offset_points)
-                
-                # Also draw a solid outline for the filled portion
-                pygame.draw.polygon(star_surface, fill_color, offset_points, 1)
-                
-                self.screen.blit(star_surface, (x - size * 1.5, y - size * 1.5))
+        self.renderer.draw_star_rating(score_percentage, x, y)
     
     def draw_quit_confirmation(self) -> None:
         """Draw quit confirmation dialog overlay."""
