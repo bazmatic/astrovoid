@@ -112,9 +112,6 @@ def draw_gradient_polygon(
     
     # Draw the gradient surface
     screen.blit(surf, (min_x, min_y))
-    
-    # Draw outline
-    pygame.draw.polygon(screen, (255, 255, 255), vertices, 2)
 
 
 def create_glow_surface(
@@ -251,5 +248,4 @@ def draw_glow_polygon(
     
     # Draw main polygon
     pygame.draw.polygon(screen, color, vertices)
-    pygame.draw.polygon(screen, (255, 255, 255), vertices, 2)
 

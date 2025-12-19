@@ -24,7 +24,7 @@ SCREEN_HEIGHT = 800
 FPS = 60
 
 # Ship physics
-SHIP_SIZE = 6  # Ship radius (affects both collision and visual size)
+SHIP_SIZE = 8  # Ship radius (affects both collision and visual size)
 SHIP_ROTATION_SPEED = 4.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
@@ -71,8 +71,8 @@ ENEMY_FIRE_INTERVAL_MAX = 300  # Maximum frames between shots (5 seconds at 60 F
 ENEMY_FIRE_RANGE = 400  # Maximum distance to player for firing (pixels)
 
 # Projectile settings
-PROJECTILE_SPEED = 10.0
-PROJECTILE_SIZE = 4
+PROJECTILE_SPEED = 8.0
+PROJECTILE_SIZE = 3
 PROJECTILE_LIFETIME = 120  # frames
 COLOR_ENEMY_PROJECTILE = (255, 100, 100)  # Red/orange color for enemy bullets
 

@@ -263,13 +263,16 @@ class Enemy(GameEntity, Collidable, Drawable):
             # Draw turret direction indicator (arrow pointing at player)
             if turret_angle is not None:
                 turret_rad = angle_to_radians(turret_angle)
-                arrow_length = 6
-                arrow_width = 3
-                base_offset = arrow_length * 0.7
                 
-                # Arrow tip at edge of circle
-                arrow_tip_x = self.x + math.cos(turret_rad) * current_radius
-                arrow_tip_y = self.y + math.sin(turret_rad) * current_radius
+                # Make arrow larger and more prominent
+                arrow_length = 12  # Increased from 6
+                arrow_width = 6  # Increased from 3
+                arrow_extend = 4  # Extend beyond circle edge for visibility
+                base_offset = arrow_length * 0.6
+                
+                # Arrow tip extends beyond circle edge for better visibility
+                arrow_tip_x = self.x + math.cos(turret_rad) * (current_radius + arrow_extend)
+                arrow_tip_y = self.y + math.sin(turret_rad) * (current_radius + arrow_extend)
                 
                 # Arrow base points (perpendicular to direction)
                 base_x = self.x + math.cos(turret_rad) * (current_radius - base_offset)
@@ -282,13 +285,29 @@ class Enemy(GameEntity, Collidable, Drawable):
                 base2_x = base_x - math.cos(perp_rad) * arrow_width / 2
                 base2_y = base_y - math.sin(perp_rad) * arrow_width / 2
                 
-                # Draw triangle arrow (yellow/orange)
-                turret_color = (255, 200, 100) if is_ready_to_fire else (255, 150, 50)
+                # Draw line from center to arrow base for better visibility
+                turret_color = (255, 255, 100) if is_ready_to_fire else (255, 200, 50)
+                line_start_x = self.x + math.cos(turret_rad) * (current_radius * 0.3)
+                line_start_y = self.y + math.sin(turret_rad) * (current_radius * 0.3)
+                pygame.draw.line(
+                    screen, turret_color,
+                    (int(line_start_x), int(line_start_y)),
+                    (int(base_x), int(base_y)), 2
+                )
+                
+                # Draw larger triangle arrow (bright yellow/orange)
                 pygame.draw.polygon(screen, turret_color, [
                     (int(arrow_tip_x), int(arrow_tip_y)),
                     (int(base1_x), int(base1_y)),
                     (int(base2_x), int(base2_y))
                 ])
+                
+                # Draw outline for better visibility
+                pygame.draw.polygon(screen, (255, 255, 255), [
+                    (int(arrow_tip_x), int(arrow_tip_y)),
+                    (int(base1_x), int(base1_y)),
+                    (int(base2_x), int(base2_y))
+                ], 1)
         
         elif self.type == "aggressive":
             # Jagged/warning appearance - draw warning stripes
