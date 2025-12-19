@@ -68,15 +68,32 @@ class Ship:
         self.x += self.vx * dt
         self.y += self.vy * dt
         
-        # Keep ship on screen (wrap around)
-        if self.x < 0:
-            self.x = config.SCREEN_WIDTH
-        elif self.x > config.SCREEN_WIDTH:
-            self.x = 0
-        if self.y < 0:
-            self.y = config.SCREEN_HEIGHT
-        elif self.y > config.SCREEN_HEIGHT:
-            self.y = 0
+        # Bounce off screen edges
+        bounce_factor = 0.85  # Retain 85% of velocity on bounce
+        
+        # Check horizontal edges (left and right)
+        if self.x < self.radius:
+            self.x = self.radius
+            self.vx = -self.vx * bounce_factor
+            self.damaged = True
+            self.damage_timer = 30
+        elif self.x > config.SCREEN_WIDTH - self.radius:
+            self.x = config.SCREEN_WIDTH - self.radius
+            self.vx = -self.vx * bounce_factor
+            self.damaged = True
+            self.damage_timer = 30
+        
+        # Check vertical edges (top and bottom)
+        if self.y < self.radius:
+            self.y = self.radius
+            self.vy = -self.vy * bounce_factor
+            self.damaged = True
+            self.damage_timer = 30
+        elif self.y > config.SCREEN_HEIGHT - self.radius:
+            self.y = config.SCREEN_HEIGHT - self.radius
+            self.vy = -self.vy * bounce_factor
+            self.damaged = True
+            self.damage_timer = 30
         
         # Update damage timer
         if self.damaged:

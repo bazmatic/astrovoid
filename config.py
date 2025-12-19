@@ -8,7 +8,7 @@ SCREEN_HEIGHT = 800
 FPS = 60
 
 # Ship physics
-SHIP_SIZE = 10  # Ship radius (affects both collision and visual size)
+SHIP_SIZE = 6  # Ship radius (affects both collision and visual size)
 SHIP_ROTATION_SPEED = 3.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
@@ -68,4 +68,5 @@ STATE_MENU = "menu"
 STATE_PLAYING = "playing"
 STATE_LEVEL_COMPLETE = "level_complete"
 STATE_GAME_OVER = "game_over"
+STATE_QUIT_CONFIRM = "quit_confirm"
 

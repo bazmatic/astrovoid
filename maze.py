@@ -235,9 +235,20 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        # Draw walls
-        for wall in self.walls:
-            pygame.draw.line(screen, config.COLOR_WALLS, wall[0], wall[1], config.WALL_THICKNESS)
+        # Draw filled wall boxes
+        for y in range(self.grid_height):
+            for x in range(self.grid_width):
+                if self.grid[y][x] == 1:  # Wall cell
+                    # Convert grid coordinates to screen coordinates with offset
+                    screen_x = int(self.offset_x + x * self.cell_size)
+                    screen_y = int(self.offset_y + y * self.cell_size)
+                    
+                    # Draw filled rectangle for wall cell
+                    pygame.draw.rect(
+                        screen,
+                        config.COLOR_WALLS,
+                        (screen_x, screen_y, int(self.cell_size), int(self.cell_size))
+                    )
         
         # Draw exit marker
         pygame.draw.circle(screen, config.COLOR_EXIT, 

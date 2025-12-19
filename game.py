@@ -73,6 +73,19 @@ class Game:
                         self.state = config.STATE_PLAYING
                         self.level = 1
                         self.start_level()
+                elif self.state == config.STATE_PLAYING:
+                    if event.key == pygame.K_ESCAPE:
+                        # Show quit confirmation
+                        self.state = config.STATE_QUIT_CONFIRM
+                elif self.state == config.STATE_QUIT_CONFIRM:
+                    if event.key == pygame.K_y or event.key == pygame.K_RETURN:
+                        # Confirm quit - return to menu and reset progress
+                        self.state = config.STATE_MENU
+                        self.level = 1
+                        self.scoring = ScoringSystem()
+                    elif event.key == pygame.K_n or event.key == pygame.K_ESCAPE:
+                        # Cancel quit - return to playing
+                        self.state = config.STATE_PLAYING
                 elif self.state == config.STATE_LEVEL_COMPLETE:
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
                         # Continue to next level (only if level succeeded)
@@ -99,7 +112,7 @@ class Game:
     def update(self, dt: float) -> None:
         """Update game state."""
         if self.state != config.STATE_PLAYING:
-            return
+            return  # Don't update if not playing (including quit confirmation)
         
         if not self.ship or not self.maze:
             return
@@ -159,6 +172,7 @@ class Game:
                 if enemy.active and projectile.active:
                     if projectile.check_enemy_collision(enemy.get_pos(), enemy.radius):
                         enemy.destroy()
+                        self.scoring.record_enemy_destroyed()  # Award bonus points
                         break
         
         # Check exit reached
@@ -221,6 +235,9 @@ class Game:
             self.draw_menu()
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
+        elif self.state == config.STATE_QUIT_CONFIRM:
+            self.draw_game()  # Draw game in background
+            self.draw_quit_confirmation()
         elif self.state == config.STATE_LEVEL_COMPLETE:
             self.draw_level_complete()
         elif self.state == config.STATE_GAME_OVER:
@@ -345,10 +362,11 @@ class Game:
             f"Starting Score: {config.MAX_LEVEL_SCORE}",
             f"Time Penalty: -{self.level_score_breakdown.get('time_penalty', 0):.1f}",
             f"Collision Penalty: -{self.level_score_breakdown.get('collision_penalty', 0):.1f}",
+            f"Enemy Destroyed Bonus: +{self.level_score_breakdown.get('enemy_destruction_bonus', 0):.1f}",
             f"Ammo Penalty: -{self.level_score_breakdown.get('ammo_penalty', 0):.1f}",
             f"Fuel Penalty: -{self.level_score_breakdown.get('fuel_penalty', 0):.1f}",
             "",
-            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}/100",
+            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}",
             f"Total Score: {int(self.level_score_breakdown.get('total_score', 0))}",
             "",
         ]
@@ -376,6 +394,9 @@ class Game:
         star_color_full = (255, 215, 0)  # Gold
         star_color_empty = (80, 80, 80)  # Dark gray
         
+        # Cap percentage at 1.0 (100%) for star display (5 stars max)
+        display_percentage = min(1.0, score_percentage)
+        
         for i in range(5):
             star_x = x + i * star_spacing
             star_y = y
@@ -385,12 +406,12 @@ class Game:
             star_max = (i + 1) * 0.2
             star_fill = 0.0
             
-            if score_percentage >= star_max:
+            if display_percentage >= star_max:
                 # Star is completely full
                 star_fill = 1.0
-            elif score_percentage > star_min:
+            elif display_percentage > star_min:
                 # Star is partially filled
-                star_fill = (score_percentage - star_min) / 0.2
+                star_fill = (display_percentage - star_min) / 0.2
             
             # Draw star
             self._draw_star(star_x, star_y, star_size, star_fill, star_color_full, star_color_empty)
@@ -439,6 +460,49 @@ class Game:
                 pygame.draw.polygon(star_surface, fill_color, offset_points, 1)
                 
                 self.screen.blit(star_surface, (x - size * 1.5, y - size * 1.5))
+    
+    def draw_quit_confirmation(self) -> None:
+        """Draw quit confirmation dialog overlay."""
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw confirmation dialog box
+        dialog_width = 500
+        dialog_height = 200
+        dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
+        dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
+        
+        # Dialog background
+        pygame.draw.rect(self.screen, config.COLOR_UI_BG, 
+                        (dialog_x, dialog_y, dialog_width, dialog_height))
+        pygame.draw.rect(self.screen, config.COLOR_TEXT, 
+                        (dialog_x, dialog_y, dialog_width, dialog_height), 3)
+        
+        # Title
+        title = self.font.render("Quit Level?", True, config.COLOR_TEXT)
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 50))
+        self.screen.blit(title, title_rect)
+        
+        # Message
+        message = self.small_font.render(
+            "Are you sure you want to quit? Progress will be lost.",
+            True, config.COLOR_TEXT
+        )
+        message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
+        self.screen.blit(message, message_rect)
+        
+        # Options
+        yes_text = self.small_font.render("Yes (Y or Enter)", True, config.COLOR_TEXT)
+        no_text = self.small_font.render("No (N or ESC)", True, config.COLOR_TEXT)
+        
+        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 150))
+        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 150))
+        
+        self.screen.blit(yes_text, yes_rect)
+        self.screen.blit(no_text, no_rect)
     
     def draw_game_over(self) -> None:
         """Draw game over screen."""

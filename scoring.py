@@ -16,6 +16,7 @@ class ScoringSystem:
         self.wall_collisions = 0
         self.enemy_collisions = 0
         self.shots_fired = 0
+        self.enemies_destroyed = 0  # Track enemies destroyed by projectiles
     
     def start_level(self, current_time: float) -> None:
         """Start tracking a new level."""
@@ -24,6 +25,8 @@ class ScoringSystem:
         self.wall_collisions = 0
         self.enemy_collisions = 0
         self.shots_fired = 0
+        self.enemies_destroyed = 0
+        self.enemies_destroyed = 0  # Track enemies destroyed by projectiles
     
     def record_wall_collision(self) -> None:
         """Record a wall collision."""
@@ -36,6 +39,10 @@ class ScoringSystem:
     def record_shot(self) -> None:
         """Record a shot fired."""
         self.shots_fired += 1
+    
+    def record_enemy_destroyed(self) -> None:
+        """Record an enemy destroyed by projectile (awards bonus points)."""
+        self.enemies_destroyed += 1
     
     def calculate_level_score(
         self,
@@ -50,8 +57,11 @@ class ScoringSystem:
         # Time penalty (major reduction)
         time_penalty = completion_time * config.TIME_PENALTY_RATE
         
-        # Collision penalty (significant reduction per collision)
-        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.COLLISION_PENALTY
+        # Collision penalty (significant reduction per enemy collision only, not walls)
+        collision_penalty = self.enemy_collisions * config.COLLISION_PENALTY
+        
+        # Enemy destruction bonus (gain points equal to collision penalty for each enemy destroyed)
+        enemy_destruction_bonus = self.enemies_destroyed * config.COLLISION_PENALTY
         
         # Ammo penalty (minor reduction per shot)
         ammo_penalty = self.shots_fired * config.AMMO_PENALTY_RATE
@@ -60,9 +70,9 @@ class ScoringSystem:
         fuel_used = config.INITIAL_FUEL - remaining_fuel
         fuel_penalty = fuel_used * config.FUEL_PENALTY_RATE
         
-        # Calculate final score
-        final_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty
-        final_score = max(0, min(config.MAX_LEVEL_SCORE, final_score))  # Clamp between 0 and 100
+        # Calculate final score (bonus adds to score, can exceed 100)
+        final_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty + enemy_destruction_bonus
+        final_score = max(0, final_score)  # Minimum 0, but can exceed 100
         
         self.level_score = final_score
         self.total_score += final_score
@@ -70,6 +80,7 @@ class ScoringSystem:
         return {
             "time_penalty": time_penalty,
             "collision_penalty": collision_penalty,
+            "enemy_destruction_bonus": enemy_destruction_bonus,
             "ammo_penalty": ammo_penalty,
             "fuel_penalty": fuel_penalty,
             "final_score": final_score,
@@ -108,8 +119,11 @@ class ScoringSystem:
         # Time penalty (major reduction)
         time_penalty = elapsed_time * config.TIME_PENALTY_RATE
         
-        # Collision penalty (significant reduction per collision)
-        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.COLLISION_PENALTY
+        # Collision penalty (significant reduction per enemy collision only, not walls)
+        collision_penalty = self.enemy_collisions * config.COLLISION_PENALTY
+        
+        # Enemy destruction bonus (gain points equal to collision penalty for each enemy destroyed)
+        enemy_destruction_bonus = self.enemies_destroyed * config.COLLISION_PENALTY
         
         # Ammo penalty (minor reduction per shot)
         ammo_penalty = self.shots_fired * config.AMMO_PENALTY_RATE
@@ -118,17 +132,18 @@ class ScoringSystem:
         fuel_used = config.INITIAL_FUEL - remaining_fuel
         fuel_penalty = fuel_used * config.FUEL_PENALTY_RATE
         
-        # Calculate potential score if level completed now
-        potential_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty
-        potential_score = max(0, min(config.MAX_LEVEL_SCORE, potential_score))  # Clamp between 0 and 100
+        # Calculate potential score if level completed now (bonus can exceed 100)
+        potential_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty + enemy_destruction_bonus
+        potential_score = max(0, potential_score)  # Minimum 0, but can exceed 100
         
-        # Calculate score percentage (0.0 to 1.0)
+        # Calculate score percentage (0.0 to 1.0+, can exceed 100% with bonuses)
         max_score = self.calculate_max_possible_score()
-        score_percentage = min(1.0, max(0.0, potential_score / max_score)) if max_score > 0 else 0.0
+        score_percentage = max(0.0, potential_score / max_score) if max_score > 0 else 0.0
         
         return {
             "time_penalty": time_penalty,
             "collision_penalty": collision_penalty,
+            "enemy_destruction_bonus": enemy_destruction_bonus,
             "ammo_penalty": ammo_penalty,
             "fuel_penalty": fuel_penalty,
             "potential_score": potential_score,
