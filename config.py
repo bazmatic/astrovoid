@@ -103,6 +103,15 @@ COLOR_SHIP_REAR = (50, 150, 200)
 COLOR_SHIP_DAMAGED_NOSE = (255, 150, 150)
 COLOR_SHIP_DAMAGED_REAR = (200, 50, 50)
 
+# Sound settings
+SOUND_ENABLED = True
+SOUND_SAMPLE_RATE = 44100  # Standard CD quality
+THRUSTER_SOUND_VOLUME = 0.3  # Volume level for thruster (0.0 to 1.0)
+SHOOT_SOUND_VOLUME = 0.5  # Volume level for shoot sound (0.0 to 1.0)
+THRUSTER_NOISE_DURATION = 0.1  # Duration of white noise loop in seconds
+SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
+SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
+
 # Game states
 STATE_MENU = "menu"
 STATE_PLAYING = "playing"

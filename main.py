@@ -26,6 +26,15 @@ def main():
     """Initialize and run the game."""
     pygame.init()
     
+    # Initialize mixer for sound support
+    if config.SOUND_ENABLED:
+        pygame.mixer.init(
+            frequency=config.SOUND_SAMPLE_RATE,
+            size=-16,  # 16-bit signed samples
+            channels=2,  # Stereo
+            buffer=512  # Small buffer for low latency
+        )
+    
     screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
     pygame.display.set_caption("Asterdroids - Space Navigation Game")
     

@@ -43,6 +43,19 @@ class Maze:
         # Generate maze grid
         self.grid = self._generate_maze()
         
+        # Select random opposite corners for start and exit
+        corner_combinations = [
+            ((1, 1), (self.grid_width - 2, self.grid_height - 2)),  # TL -> BR
+            ((self.grid_width - 2, 1), (1, self.grid_height - 2)),  # TR -> BL
+            ((1, self.grid_height - 2), (self.grid_width - 2, 1)),  # BL -> TR
+            ((self.grid_width - 2, self.grid_height - 2), (1, 1)),  # BR -> TL
+        ]
+        start_grid, exit_grid = random.choice(corner_combinations)
+        
+        # Clear areas around selected corners to ensure they're accessible
+        self._clear_corner_area(self.grid, start_grid)
+        self._clear_corner_area(self.grid, exit_grid)
+        
         # Convert grid to wall segments
         self.walls = self._grid_to_walls()
         
@@ -54,16 +67,14 @@ class Maze:
         )
         self.spatial_grid.add_walls(self.walls)
         
-        # Set start and exit positions
+        # Set start and exit positions based on selected corners
         self.start_pos = (
-            self.offset_x + self.cell_size * 1.5,
-            self.offset_y + self.cell_size * 1.5
+            self.offset_x + start_grid[0] * self.cell_size + self.cell_size // 2,
+            self.offset_y + start_grid[1] * self.cell_size + self.cell_size // 2
         )
-        exit_grid_x = self.grid_width - 2
-        exit_grid_y = self.grid_height - 2
         self.exit_pos = (
-            self.offset_x + exit_grid_x * self.cell_size + self.cell_size // 2,
-            self.offset_y + exit_grid_y * self.cell_size + self.cell_size // 2
+            self.offset_x + exit_grid[0] * self.cell_size + self.cell_size // 2,
+            self.offset_y + exit_grid[1] * self.cell_size + self.cell_size // 2
         )
         self.exit_radius = self.cell_size // 2
     
@@ -131,17 +142,8 @@ class Maze:
                 # Backtrack
                 stack.pop()
         
-        # Ensure start and exit are clear with very wide area
-        start_clear_size = 6
-        for y in range(1, min(start_clear_size, self.grid_height - 1)):
-            for x in range(1, min(start_clear_size, self.grid_width - 1)):
-                grid[y][x] = 0
-        
-        exit_y_start = max(1, self.grid_height - start_clear_size)
-        exit_x_start = max(1, self.grid_width - start_clear_size)
-        for y in range(exit_y_start, self.grid_height - 1):
-            for x in range(exit_x_start, self.grid_width - 1):
-                grid[y][x] = 0
+        # Note: Start and exit corner clearing is now done after corner selection
+        # in __init__ to support variable corner positions
         
         # Add many more extra paths and clear large areas for much wider corridors
         for _ in range(self.level * 10):
@@ -173,6 +175,29 @@ class Maze:
             grid[y][self.grid_width - 1] = 1  # Right column
         
         return grid
+    
+    def _clear_corner_area(self, grid: List[List[int]], corner: Tuple[int, int]) -> None:
+        """Clear a wide area around a corner to ensure it's accessible.
+        
+        Args:
+            grid: The maze grid to modify.
+            corner: Grid coordinates (x, y) of the corner to clear around.
+        """
+        start_clear_size = 6
+        corner_x, corner_y = corner
+        
+        # Clear area around the corner, ensuring we stay within bounds
+        # Use similar logic to original fixed corner clearing
+        for y in range(max(1, corner_y - start_clear_size // 2), 
+                      min(corner_y + start_clear_size // 2 + 1, self.grid_height - 1)):
+            for x in range(max(1, corner_x - start_clear_size // 2),
+                          min(corner_x + start_clear_size // 2 + 1, self.grid_width - 1)):
+                grid[y][x] = 0
+        
+        # Validate that the corner itself is in a clear path cell
+        if grid[corner_y][corner_x] != 0:
+            # Force clear the corner cell if it's still a wall
+            grid[corner_y][corner_x] = 0
     
     def _grid_to_walls(self) -> List[WallSegment]:
         """Convert grid to list of wall line segments.

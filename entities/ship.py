@@ -26,6 +26,7 @@ from entities.collidable import Collidable
 from entities.drawable import Drawable
 from entities.projectile import Projectile
 from rendering import visual_effects
+from sounds import SoundManager
 
 
 class Ship(GameEntity, Collidable, Drawable):
@@ -58,8 +59,10 @@ class Ship(GameEntity, Collidable, Drawable):
         self.glow_phase = 0.0  # For pulsing glow when damaged
         self.thrust_particles = []  # For enhanced thrust visualization
         self.thrusting = False  # Track when thrust is actively being applied
+        self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
         self.prev_x = self.x  # Previous position for swept collision detection
         self.prev_y = self.y
+        self.sound_manager = SoundManager()  # Initialize sound manager
     
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
@@ -99,6 +102,10 @@ class Ship(GameEntity, Collidable, Drawable):
         # Consume fuel
         self.fuel -= config.FUEL_CONSUMPTION_PER_THRUST
         self.thrusting = True  # Mark that thrust is active
+        
+        # Start thruster sound (will only start if not already playing)
+        self.sound_manager.start_thruster()
+        
         return True
     
     def update(self, dt: float) -> None:
@@ -192,6 +199,16 @@ class Ship(GameEntity, Collidable, Drawable):
             particle['life'] -= 1
         # Filter out dead particles
         self.thrust_particles = [p for p in self.thrust_particles if p['life'] > 0]
+        
+        # Manage thruster sound: stop if we were thrusting in previous frame but apply_thrust wasn't called this frame
+        # was_thrusting indicates if apply_thrust was called in previous frame
+        # If it was True but apply_thrust wasn't called this frame (thrusting is False), stop the sound
+        if self.prev_thrusting and not was_thrusting:
+            self.sound_manager.stop_thruster()
+        
+        # Update previous thrusting state for next frame
+        # Track whether apply_thrust was called this frame (indicated by was_thrusting)
+        self.prev_thrusting = was_thrusting
     
     def fire(self) -> Optional[Projectile]:
         """Fire a projectile.
@@ -203,6 +220,9 @@ class Ship(GameEntity, Collidable, Drawable):
             return None
         
         self.ammo -= config.AMMO_CONSUMPTION_PER_SHOT
+        
+        # Play shoot sound
+        self.sound_manager.play_shoot()
         
         # Calculate projectile start position (slightly ahead of ship)
         angle_rad = angle_to_radians(self.angle)
