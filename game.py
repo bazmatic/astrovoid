@@ -35,9 +35,14 @@ class Game:
         self.level_score_breakdown = {}
         self.completion_time_seconds = 0.0
         self.level_score_percentage = 0.0
+        self.total_score_before_level = 0  # Store score before level for replay
+        self.level_succeeded = False  # Track if level was completed successfully
     
     def start_level(self) -> None:
         """Start a new level."""
+        # Store total score before starting level (for replay functionality)
+        self.total_score_before_level = self.scoring.get_total_score()
+        
         # Generate maze
         self.maze = Maze(self.level)
         
@@ -70,7 +75,19 @@ class Game:
                         self.start_level()
                 elif self.state == config.STATE_LEVEL_COMPLETE:
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                        self.level += 1
+                        # Continue to next level (only if level succeeded)
+                        if self.level_succeeded:
+                            self.level += 1
+                            self.state = config.STATE_PLAYING
+                            self.start_level()
+                        else:
+                            # If failed, replay is the only option
+                            self.scoring.total_score = self.total_score_before_level
+                            self.state = config.STATE_PLAYING
+                            self.start_level()
+                    elif event.key == pygame.K_r:
+                        # Replay current level - restore score and restart
+                        self.scoring.total_score = self.total_score_before_level
                         self.state = config.STATE_PLAYING
                         self.start_level()
                 elif self.state == config.STATE_GAME_OVER:
@@ -146,17 +163,37 @@ class Game:
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
-            self.complete_level()
+            self.complete_level(success=True)
+            return
+        
+        # Check if score has reached zero (level failed)
+        current_time = time.time()
+        potential = self.scoring.calculate_current_potential_score(
+            current_time,
+            self.ship.fuel,
+            self.ship.ammo
+        )
+        if potential['potential_score'] <= 0:
+            self.complete_level(success=False)
+            return
         
         # Check game over conditions
         if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:
             # Out of fuel and stopped
             pass  # Could trigger game over here if desired
     
-    def complete_level(self) -> None:
-        """Handle level completion."""
+    def complete_level(self, success: bool = True) -> None:
+        """Handle level completion or failure.
+        
+        Args:
+            success: True if level was completed successfully (reached exit),
+                     False if level failed (score reached zero)
+        """
         current_time = time.time()
         completion_time = self.scoring.get_current_time(current_time)
+        
+        # Store success status
+        self.level_succeeded = success
         
         # Calculate score
         self.level_score_breakdown = self.scoring.calculate_level_score(
@@ -275,8 +312,16 @@ class Game:
             self.draw_star_rating(potential['score_percentage'], config.SCREEN_WIDTH - 200, 110)
     
     def draw_level_complete(self) -> None:
-        """Draw level complete screen."""
-        title = self.font.render("LEVEL COMPLETE!", True, config.COLOR_TEXT)
+        """Draw level complete or failed screen."""
+        # Show different title based on success/failure
+        if self.level_succeeded:
+            title_text = "LEVEL COMPLETE!"
+            title_color = config.COLOR_TEXT
+        else:
+            title_text = "LEVEL FAILED"
+            title_color = (255, 100, 100)  # Red for failure
+        
+        title = self.font.render(title_text, True, title_color)
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 120))
         self.screen.blit(title, title_rect)
         
@@ -297,17 +342,24 @@ class Game:
         
         y_offset = 280
         breakdown = [
-            f"Time Score: {int(self.level_score_breakdown.get('time_score', 0))}",
-            f"Fuel Bonus: {int(self.level_score_breakdown.get('fuel_bonus', 0))}",
-            f"Ammo Bonus: {int(self.level_score_breakdown.get('ammo_bonus', 0))}",
-            f"Collision Penalty: -{int(self.level_score_breakdown.get('collision_penalty', 0))}",
-            f"Shot Penalty: -{int(self.level_score_breakdown.get('shot_penalty', 0))}",
+            f"Starting Score: {config.MAX_LEVEL_SCORE}",
+            f"Time Penalty: -{self.level_score_breakdown.get('time_penalty', 0):.1f}",
+            f"Collision Penalty: -{self.level_score_breakdown.get('collision_penalty', 0):.1f}",
+            f"Ammo Penalty: -{self.level_score_breakdown.get('ammo_penalty', 0):.1f}",
+            f"Fuel Penalty: -{self.level_score_breakdown.get('fuel_penalty', 0):.1f}",
             "",
-            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}",
+            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}/100",
             f"Total Score: {int(self.level_score_breakdown.get('total_score', 0))}",
             "",
-            "Press SPACE to Continue"
         ]
+        
+        # Add different messages based on success/failure
+        if self.level_succeeded:
+            breakdown.append("Press SPACE to Continue")
+            breakdown.append("Press R to Replay Level")
+        else:
+            breakdown.append("Score reached zero!")
+            breakdown.append("Press SPACE or R to Retry Level")
         
         for line in breakdown:
             text = self.small_font.render(line, True, config.COLOR_TEXT)

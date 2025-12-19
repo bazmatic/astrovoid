@@ -239,14 +239,6 @@ class Maze:
         for wall in self.walls:
             pygame.draw.line(screen, config.COLOR_WALLS, wall[0], wall[1], config.WALL_THICKNESS)
         
-        # Draw start marker
-        pygame.draw.circle(screen, config.COLOR_START, 
-                          (int(self.start_pos[0]), int(self.start_pos[1])), 
-                          int(self.exit_radius))
-        pygame.draw.circle(screen, config.COLOR_TEXT, 
-                          (int(self.start_pos[0]), int(self.start_pos[1])), 
-                          int(self.exit_radius), 2)
-        
         # Draw exit marker
         pygame.draw.circle(screen, config.COLOR_EXIT, 
                           (int(self.exit_pos[0]), int(self.exit_pos[1])), 

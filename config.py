@@ -20,11 +20,12 @@ INITIAL_AMMO = 50
 FUEL_CONSUMPTION_PER_THRUST = 1
 AMMO_CONSUMPTION_PER_SHOT = 1
 
-# Scoring weights
-SCORE_TIME_WEIGHT = 1000
-SCORE_FUEL_WEIGHT = 10
-SCORE_AMMO_WEIGHT = 20
-SCORE_COLLISION_PENALTY = 50
+# Scoring system (100 point maximum per level)
+MAX_LEVEL_SCORE = 100  # Maximum score per level
+TIME_PENALTY_RATE = 0.5  # Points deducted per second of elapsed time
+COLLISION_PENALTY = 5  # Points deducted per collision (wall or enemy)
+AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
+FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
 
 # Difficulty scaling
 BASE_MAZE_SIZE = 15  # Larger base maze to fill screen

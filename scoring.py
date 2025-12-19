@@ -43,35 +43,35 @@ class ScoringSystem:
         remaining_fuel: int,
         remaining_ammo: int
     ) -> Dict[str, float]:
-        """Calculate final score for completed level."""
-        # Base time score (faster = higher)
-        time_score = max(0, config.SCORE_TIME_WEIGHT - completion_time * 10)
+        """Calculate final score for completed level (0-100 scale)."""
+        # Start with maximum score
+        score = config.MAX_LEVEL_SCORE
         
-        # Fuel efficiency bonus
-        fuel_bonus = remaining_fuel * config.SCORE_FUEL_WEIGHT
+        # Time penalty (major reduction)
+        time_penalty = completion_time * config.TIME_PENALTY_RATE
         
-        # Ammo efficiency bonus
-        ammo_bonus = remaining_ammo * config.SCORE_AMMO_WEIGHT
+        # Collision penalty (significant reduction per collision)
+        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.COLLISION_PENALTY
         
-        # Collision penalties
-        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.SCORE_COLLISION_PENALTY
+        # Ammo penalty (minor reduction per shot)
+        ammo_penalty = self.shots_fired * config.AMMO_PENALTY_RATE
         
-        # Shot penalty (firing costs points)
-        shot_penalty = self.shots_fired * 5
+        # Fuel penalty (minor reduction per unit used)
+        fuel_used = config.INITIAL_FUEL - remaining_fuel
+        fuel_penalty = fuel_used * config.FUEL_PENALTY_RATE
         
-        # Final score
-        final_score = time_score + fuel_bonus + ammo_bonus - collision_penalty - shot_penalty
-        final_score = max(0, final_score)  # No negative scores
+        # Calculate final score
+        final_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty
+        final_score = max(0, min(config.MAX_LEVEL_SCORE, final_score))  # Clamp between 0 and 100
         
         self.level_score = final_score
         self.total_score += final_score
         
         return {
-            "time_score": time_score,
-            "fuel_bonus": fuel_bonus,
-            "ammo_bonus": ammo_bonus,
+            "time_penalty": time_penalty,
             "collision_penalty": collision_penalty,
-            "shot_penalty": shot_penalty,
+            "ammo_penalty": ammo_penalty,
+            "fuel_penalty": fuel_penalty,
             "final_score": final_score,
             "total_score": self.total_score
         }
@@ -90,12 +90,8 @@ class ScoringSystem:
     
     def calculate_max_possible_score(self) -> float:
         """Calculate the maximum possible score for a perfect run."""
-        # Perfect run: instant completion, full fuel, full ammo, no collisions, no shots
-        max_time_score = config.SCORE_TIME_WEIGHT
-        max_fuel_bonus = config.INITIAL_FUEL * config.SCORE_FUEL_WEIGHT
-        max_ammo_bonus = config.INITIAL_AMMO * config.SCORE_AMMO_WEIGHT
-        # No penalties
-        return max_time_score + max_fuel_bonus + max_ammo_bonus
+        # Perfect run: instant completion, no collisions, no shots, no fuel used
+        return config.MAX_LEVEL_SCORE
     
     def calculate_current_potential_score(
         self,
@@ -103,38 +99,38 @@ class ScoringSystem:
         remaining_fuel: int,
         remaining_ammo: int
     ) -> Dict[str, float]:
-        """Calculate potential score based on current performance (real-time)."""
+        """Calculate potential score based on current performance (real-time, 0-100 scale)."""
         elapsed_time = self.get_current_time(current_time)
         
-        # Base time score (faster = higher)
-        time_score = max(0, config.SCORE_TIME_WEIGHT - elapsed_time * 10)
+        # Start with maximum score
+        score = config.MAX_LEVEL_SCORE
         
-        # Fuel efficiency bonus
-        fuel_bonus = remaining_fuel * config.SCORE_FUEL_WEIGHT
+        # Time penalty (major reduction)
+        time_penalty = elapsed_time * config.TIME_PENALTY_RATE
         
-        # Ammo efficiency bonus
-        ammo_bonus = remaining_ammo * config.SCORE_AMMO_WEIGHT
+        # Collision penalty (significant reduction per collision)
+        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.COLLISION_PENALTY
         
-        # Collision penalties
-        collision_penalty = (self.wall_collisions + self.enemy_collisions) * config.SCORE_COLLISION_PENALTY
+        # Ammo penalty (minor reduction per shot)
+        ammo_penalty = self.shots_fired * config.AMMO_PENALTY_RATE
         
-        # Shot penalty (firing costs points)
-        shot_penalty = self.shots_fired * 5
+        # Fuel penalty (minor reduction per unit used)
+        fuel_used = config.INITIAL_FUEL - remaining_fuel
+        fuel_penalty = fuel_used * config.FUEL_PENALTY_RATE
         
-        # Potential score if level completed now
-        potential_score = time_score + fuel_bonus + ammo_bonus - collision_penalty - shot_penalty
-        potential_score = max(0, potential_score)  # No negative scores
+        # Calculate potential score if level completed now
+        potential_score = score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty
+        potential_score = max(0, min(config.MAX_LEVEL_SCORE, potential_score))  # Clamp between 0 and 100
         
         # Calculate score percentage (0.0 to 1.0)
         max_score = self.calculate_max_possible_score()
         score_percentage = min(1.0, max(0.0, potential_score / max_score)) if max_score > 0 else 0.0
         
         return {
-            "time_score": time_score,
-            "fuel_bonus": fuel_bonus,
-            "ammo_bonus": ammo_bonus,
+            "time_penalty": time_penalty,
             "collision_penalty": collision_penalty,
-            "shot_penalty": shot_penalty,
+            "ammo_penalty": ammo_penalty,
+            "fuel_penalty": fuel_penalty,
             "potential_score": potential_score,
             "score_percentage": score_percentage,
             "max_score": max_score
