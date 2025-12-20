@@ -742,5 +742,126 @@ class SoundManager:
             # Use channel 3 for tinkling sound
             tinkling_channel = pygame.mixer.Channel(3)
             tinkling_channel.play(sound)
+    
+    def _generate_star_lost_sound(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a sad descending tone for when a star is lost.
+        
+        Creates a melancholic descending tone that conveys loss.
+        
+        Returns:
+            pygame.mixer.Sound object with descending tone, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.5  # Half second for a clear descending tone
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Descending frequency sweep (sad, going down)
+        start_freq = 440.0  # A4 note
+        end_freq = 220.0    # A3 note (octave lower)
+        # Use exponential curve for more natural descent
+        freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+        
+        # Generate tone with slight vibrato for expressiveness
+        vibrato = 0.08 * np.sin(2 * math.pi * 4.5 * t_array)
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        
+        # Main tone with harmonics for richness
+        tone = np.sin(phase)
+        tone += 0.3 * np.sin(phase * 2)  # Second harmonic
+        tone += 0.15 * np.sin(phase * 3)  # Third harmonic
+        
+        # Envelope: quick attack, smooth decay
+        attack = np.clip(progress / 0.1, 0.0, 1.0)
+        decay = np.exp(-progress * 3.0)
+        envelope = attack * decay
+        
+        # Apply envelope and normalize
+        samples = tone * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.7)  # Moderate volume
+        return sound
+    
+    def _generate_star_gained_sound(self) -> Optional[pygame.mixer.Sound]:
+        """Generate an optimistic ascending tone for when a star is gained.
+        
+        Creates an uplifting ascending tone that conveys achievement.
+        
+        Returns:
+            pygame.mixer.Sound object with ascending tone, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.5  # Half second for a clear ascending tone
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Ascending frequency sweep (optimistic, going up)
+        start_freq = 330.0  # E4 note
+        end_freq = 495.0    # B4 note (perfect fifth up)
+        # Use exponential curve for more natural ascent
+        freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+        
+        # Generate tone with slight vibrato for expressiveness
+        vibrato = 0.06 * np.sin(2 * math.pi * 5.0 * t_array)
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        
+        # Main tone with harmonics for brightness
+        tone = np.sin(phase)
+        tone += 0.35 * np.sin(phase * 2)  # Second harmonic
+        tone += 0.18 * np.sin(phase * 3)  # Third harmonic
+        
+        # Envelope: quick attack, smooth decay with slight sustain
+        attack = np.clip(progress / 0.08, 0.0, 1.0)
+        decay = np.exp(-np.maximum(progress - 0.15, 0.0) * 2.5)
+        sustain = 0.9 - 0.3 * progress
+        envelope = attack * decay * sustain
+        
+        # Apply envelope and normalize
+        samples = tone * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.7)  # Moderate volume
+        return sound
+    
+    def play_star_lost(self) -> None:
+        """Play sad descending tone when a star is lost."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        sound = self._generate_star_lost_sound()
+        if sound:
+            # Use channel 5 for star feedback sounds
+            star_channel = pygame.mixer.Channel(5)
+            star_channel.play(sound)
+    
+    def play_star_gained(self) -> None:
+        """Play optimistic ascending tone when a star is gained."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        sound = self._generate_star_gained_sound()
+        if sound:
+            # Use channel 5 for star feedback sounds
+            star_channel = pygame.mixer.Channel(5)
+            star_channel.play(sound)
 
 

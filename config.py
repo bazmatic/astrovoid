@@ -36,7 +36,7 @@ INITIAL_FUEL = 1000
 INITIAL_AMMO = 50
 FUEL_CONSUMPTION_PER_THRUST = 1
 AMMO_CONSUMPTION_PER_SHOT = 1
-SHIELD_FUEL_CONSUMPTION_PER_FRAME = 2  # Fuel consumed per frame while shield is active
+SHIELD_FUEL_CONSUMPTION_PER_FRAME = 4  # Fuel consumed per frame while shield is active
 
 # Scoring system (100 point maximum per level)
 MAX_LEVEL_SCORE = 100  # Maximum score per level
@@ -108,6 +108,7 @@ COLOR_START = (50, 150, 255)
 EXIT_PORTAL_ATTRACTION_RADIUS = 150  # Distance at which portal starts attracting player
 EXIT_PORTAL_ATTRACTION_FORCE_MULTIPLIER = 0.5  # Attraction force as multiplier of ship thruster force (0.5 = half)
 EXIT_PORTAL_GLOW_MULTIPLIER = 2.0  # Multiplier for glow size when player is nearby
+EXIT_PORTAL_GLOW_LAYER_OFFSET = 3  # Additional radius per glow layer (creates layered glow effect)
 COLOR_TEXT = (255, 255, 255)
 COLOR_UI_BG = (20, 20, 30)
 

@@ -58,6 +58,7 @@ class Game:
         self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
         self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
         self.level_complete_quit_confirm = False  # Track quit confirmation on level complete screen
+        self.current_star_count = 0  # Track current star count (0-5) for change detection
     
     def _execute_ship_command(self, command_type: CommandType) -> None:
         """Execute a command on the player ship.
@@ -134,6 +135,9 @@ class Game:
         # Start scoring
         current_time = time.time()
         self.scoring.start_level(current_time)
+        
+        # Initialize star count tracking
+        self.current_star_count = 0
         
         # Start command recording
         self.command_recorder.start_recording()
@@ -549,6 +553,29 @@ class Game:
         if potential['potential_score'] <= 0:
             self.complete_level(success=False)
             return
+        
+        # Track star count changes for audio feedback
+        score_percentage = potential.get('score_percentage', 0.0)
+        # Calculate star count: each star is 20% (0.2), with special case for 100%
+        if score_percentage >= 1.0:
+            new_star_count = 5
+        else:
+            new_star_count = int(score_percentage * 5)
+        
+        # Detect whole star changes
+        if new_star_count < self.current_star_count:
+            # Star(s) lost - play descending tone
+            stars_lost = self.current_star_count - new_star_count
+            if stars_lost >= 1:
+                self.sound_manager.play_star_lost()
+        elif new_star_count > self.current_star_count:
+            # Star(s) gained - play ascending tone
+            stars_gained = new_star_count - self.current_star_count
+            if stars_gained >= 1:
+                self.sound_manager.play_star_gained()
+        
+        # Update tracked star count
+        self.current_star_count = new_star_count
         
         # Check game over conditions
         if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:

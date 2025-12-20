@@ -160,7 +160,7 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         
         # Draw outer glow layers
         for layer in range(3):
-            glow_radius = max_radius + (3 - layer) * 8
+            glow_radius = max_radius + (3 - layer) * config.EXIT_PORTAL_GLOW_LAYER_OFFSET
             alpha = int(80 * (1.0 - layer / 3.0))
             glow_color = (*config.COLOR_EXIT, alpha)
             glow_surf = pygame.Surface((glow_radius * 2 + 4, glow_radius * 2 + 4), pygame.SRCALPHA)
