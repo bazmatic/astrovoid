@@ -238,3 +238,4 @@ def get_enemy_strength(level: int) -> EnemyStrength:
         fire_interval_max=fire_interval_max,
         fire_range=get_enemy_fire_range(level)
     )
+

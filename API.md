@@ -248,3 +248,4 @@ for enemy in enemies:
     enemy.update(dt, player_pos=ship.get_pos(), walls=maze.walls)
 ```
 
+

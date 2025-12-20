@@ -43,6 +43,7 @@ class SoundManager:
         self.thruster_sound = self._generate_white_noise()
         self.shoot_sound = self._generate_click()
         self.enemy_destroy_sound = self._generate_enemy_destroy()
+        self.upgraded_shoot_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         
         # Set up dedicated channel for thruster (continuous sound)
         self.thruster_channel = pygame.mixer.Channel(0)
@@ -140,6 +141,78 @@ class SoundManager:
         sound = pygame.sndarray.make_sound(stereo_samples)
         return sound
     
+    def _generate_upgraded_shoot(self) -> Optional[pygame.mixer.Sound]:
+        """Generate machine gun sound for upgraded guns.
+        
+        Creates a rapid-fire machine gun effect with multiple rapid clicks.
+        
+        Returns:
+            pygame.mixer.Sound object with machine gun sound, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.06  # Short duration for rapid-fire effect (60ms)
+        num_samples = int(sample_rate * duration)
+        
+        # Machine gun: multiple rapid clicks
+        num_clicks = 4  # Number of clicks in the burst
+        click_duration = 0.008  # Each click is 8ms
+        click_samples = int(sample_rate * click_duration)
+        click_interval = num_samples // num_clicks  # Space between clicks
+        
+        samples = []
+        for i in range(num_samples):
+            sample_value = 0
+            
+            # Check if we're within any click
+            for click_idx in range(num_clicks):
+                click_start = click_idx * click_interval
+                click_end = click_start + click_samples
+                
+                if click_start <= i < click_end:
+                    # We're in a click - generate the click sound
+                    click_local_sample = i - click_start
+                    click_progress = click_local_sample / click_samples
+                    click_time = click_local_sample / sample_rate
+                    
+                    # Slight pitch variation between clicks for realism
+                    pitch_variation = 1.0 + (click_idx * 0.05)  # Slight upward pitch
+                    frequency = 2000 * pitch_variation
+                    
+                    # Generate click tone
+                    tone = math.sin(2 * math.pi * frequency * click_time)
+                    
+                    # Apply envelope: very quick attack and decay
+                    if click_progress < 0.2:
+                        # Quick attack
+                        envelope = click_progress / 0.2
+                    else:
+                        # Fast exponential decay
+                        decay_progress = (click_progress - 0.2) / 0.8
+                        envelope = math.exp(-decay_progress * 20)  # Very fast decay
+                    
+                    # Add some high-frequency content for sharpness
+                    tone += 0.3 * math.sin(2 * math.pi * frequency * 3 * click_time)
+                    
+                    sample_value += int(tone * 16383 * envelope * 0.8)  # Scale down slightly
+                    break  # Only one click active at a time
+            
+            samples.append(sample_value)
+        
+        # Convert to numpy array format
+        samples_array = np.array(samples, dtype=np.int16)
+        stereo_samples = np.zeros((num_samples, 2), dtype=np.int16)
+        stereo_samples[:, 0] = samples_array
+        stereo_samples[:, 1] = samples_array
+        
+        # Create sound from array
+        sound = pygame.sndarray.make_sound(stereo_samples)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 1.1)  # Slightly louder
+        return sound
+    
     def start_thruster(self) -> None:
         """Start playing thruster sound in a loop.
         
@@ -159,17 +232,30 @@ class SoundManager:
         
         self.thruster_channel.stop()
     
-    def play_shoot(self) -> None:
-        """Play shoot click sound once.
+    def play_shoot(self, is_upgraded: bool = False) -> None:
+        """Play shoot sound once.
         
         Uses a separate channel so it doesn't interfere with thruster sound.
+        
+        Args:
+            is_upgraded: If True, plays an enhanced shooting sound for upgraded guns.
         """
-        if not config.SOUND_ENABLED or not self.shoot_sound:
+        if not config.SOUND_ENABLED:
             return
         
         # Use channel 1 for shoot sound (channel 0 is reserved for thruster)
         shoot_channel = pygame.mixer.Channel(1)
-        shoot_channel.play(self.shoot_sound)
+        
+        if is_upgraded:
+            # Play enhanced upgraded shoot sound
+            if not hasattr(self, 'upgraded_shoot_sound') or self.upgraded_shoot_sound is None:
+                self.upgraded_shoot_sound = self._generate_upgraded_shoot()
+            if self.upgraded_shoot_sound:
+                shoot_channel.play(self.upgraded_shoot_sound)
+        else:
+            # Play normal shoot sound
+            if self.shoot_sound:
+                shoot_channel.play(self.shoot_sound)
     
     def _generate_enemy_destroy(self) -> Optional[pygame.mixer.Sound]:
         """Generate cool explosion sound for enemy destruction.
@@ -243,3 +329,5 @@ class SoundManager:
         # Use channel 2 for enemy destroy sound
         destroy_channel = pygame.mixer.Channel(2)
         destroy_channel.play(self.enemy_destroy_sound)
+
+

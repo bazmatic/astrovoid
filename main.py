@@ -38,8 +38,13 @@ def main():
             buffer=512  # Small buffer for low latency
         )
     
-    screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+    screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN)
     pygame.display.set_caption("Asterdroids - Space Navigation Game")
+    
+    # Update config with actual screen size (fullscreen may use different resolution)
+    actual_width, actual_height = screen.get_size()
+    config.SCREEN_WIDTH = actual_width
+    config.SCREEN_HEIGHT = actual_height
     
     game = Game(screen)
     game.run()

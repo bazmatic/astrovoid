@@ -121,3 +121,4 @@ class UIElementRenderer:
                 
                 screen.blit(star_surface, (x - size * 1.5, y - size * 1.5))
 
+

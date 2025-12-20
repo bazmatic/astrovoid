@@ -146,8 +146,8 @@ class Ship(RotatingThrusterShip):
                 return None
             self.ammo -= config.AMMO_CONSUMPTION_PER_SHOT
         
-        # Play shoot sound
-        self.sound_manager.play_shoot()
+        # Play shoot sound (better sound when upgraded)
+        self.sound_manager.play_shoot(is_upgraded=self.is_gun_upgraded)
         
         # Calculate projectile start position (slightly ahead of ship)
         angle_rad = angle_to_radians(self.angle)
@@ -282,18 +282,6 @@ class Ship(RotatingThrusterShip):
             else:
                 fade_factor = 1.0  # Full intensity after initial period
             self._draw_shine_effect(screen, self.x, self.y, fade_factor, self.shield_phase)
-        
-        # Draw upgrade glow effect when gun is upgraded
-        if self.is_gun_upgraded:
-            upgrade_intensity = 0.4 * (0.7 + 0.3 * math.sin(self.upgrade_glow_phase * 2))
-            visual_effects.draw_glow_circle(
-                screen,
-                (self.x, self.y),
-                self.radius * 2.0,
-                config.COLOR_UPGRADED_SHIP_GLOW,
-                glow_radius=self.radius * 1.5,
-                intensity=upgrade_intensity
-            )
         
         vertices = self.get_vertices()
         

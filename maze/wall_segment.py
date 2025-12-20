@@ -73,3 +73,4 @@ class WallSegment:
         """
         return hash((self.start, self.end))
 
+

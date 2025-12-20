@@ -90,3 +90,4 @@ class ScoreCalculator:
             return 0.0
         return max(0.0, score / max_score)
 
+

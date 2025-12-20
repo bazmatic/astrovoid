@@ -10,3 +10,4 @@ from entities.drawable import Drawable
 
 __all__ = ['GameEntity', 'Collidable', 'Drawable']
 
+

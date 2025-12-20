@@ -157,3 +157,4 @@ class TestScoreCalculator:
         percentage = ScoreCalculator.calculate_score_percentage(-10.0, 100.0)
         assert percentage == 0.0
 
+

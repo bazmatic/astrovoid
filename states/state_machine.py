@@ -120,3 +120,4 @@ class StateMachine:
         if self.current_state:
             self.current_state.handle_event(event)
 
+

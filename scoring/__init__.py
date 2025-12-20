@@ -8,3 +8,4 @@ from scoring.calculator import ScoreCalculator
 
 __all__ = ['ScoringSystem', 'ScoreCalculator']
 
+

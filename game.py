@@ -140,6 +140,9 @@ class Game:
                         self.state = config.STATE_PLAYING
                         self.level = 1
                         self.start_level()
+                    elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                        # Quit game from menu
+                        self.running = False
                 elif self.state == config.STATE_PLAYING:
                     if self.input_handler.is_controller_menu_cancel_pressed(event.button):
                         # Show quit confirmation
@@ -150,6 +153,9 @@ class Game:
                         self.state = config.STATE_MENU
                         self.level = 1
                         self.scoring = ScoringSystem()
+                    elif event.button == 1:  # B button - quit game completely
+                        # Quit game completely
+                        self.running = False
                     elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
                         # Cancel quit - return to playing
                         self.state = config.STATE_PLAYING
@@ -181,6 +187,9 @@ class Game:
                         self.state = config.STATE_PLAYING
                         self.level = 1
                         self.start_level()
+                    elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+                        # Quit game from menu
+                        self.running = False
                 elif self.state == config.STATE_PLAYING:
                     if event.key == pygame.K_ESCAPE:
                         # Show quit confirmation
@@ -191,6 +200,9 @@ class Game:
                         self.state = config.STATE_MENU
                         self.level = 1
                         self.scoring = ScoringSystem()
+                    elif event.key == pygame.K_q:
+                        # Quit game completely
+                        self.running = False
                     elif event.key == pygame.K_n or event.key == pygame.K_ESCAPE:
                         # Cancel quit - return to playing
                         self.state = config.STATE_PLAYING
@@ -518,7 +530,8 @@ class Game:
             "Navigate through mazes to reach the exit",
             "Balance speed, fuel, and ammo for high scores",
             "",
-            "Press SPACE or A Button to Start"
+            "Press SPACE or A Button to Start",
+            "Press ESC/Q or B Button to Quit"
         ]
         
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
@@ -670,7 +683,7 @@ class Game:
         
         # Draw confirmation dialog box
         dialog_width = 500
-        dialog_height = 200
+        dialog_height = 220
         dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
         dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
         
@@ -694,14 +707,17 @@ class Game:
         self.screen.blit(message, message_rect)
         
         # Options
-        yes_text = self.small_font.render("Yes (Y/Enter/A)", True, config.COLOR_TEXT)
-        no_text = self.small_font.render("No (N/ESC/B)", True, config.COLOR_TEXT)
+        yes_text = self.small_font.render("Return to Menu (Y/Enter/A)", True, config.COLOR_TEXT)
+        no_text = self.small_font.render("Cancel (N/ESC)", True, config.COLOR_TEXT)
+        quit_text = self.small_font.render("Quit Game (Q/B)", True, config.COLOR_TEXT)
         
-        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 150))
-        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 150))
+        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 130))
+        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 160))
+        quit_rect = quit_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 160))
         
         self.screen.blit(yes_text, yes_rect)
         self.screen.blit(no_text, no_rect)
+        self.screen.blit(quit_text, quit_rect)
     
     def draw_game_over(self) -> None:
         """Draw game over screen."""
