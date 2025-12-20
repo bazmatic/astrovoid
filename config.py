@@ -71,6 +71,11 @@ ENEMY_FIRE_INTERVAL_MIN = 60  # Minimum frames between shots (1 second at 60 FPS
 ENEMY_FIRE_INTERVAL_MAX = 300  # Maximum frames between shots (5 seconds at 60 FPS)
 ENEMY_FIRE_RANGE = 400  # Maximum distance to player for firing (pixels)
 
+# Replay enemy settings
+REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
+REPLAY_ENEMY_SIZE = 10  # Size/radius of replay enemy
+REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
+
 # Projectile settings
 PROJECTILE_SPEED = 8.0
 PROJECTILE_SIZE = 3
