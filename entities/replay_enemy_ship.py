@@ -83,7 +83,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         Returns:
             Maximum speed value (lower than player ship).
         """
-        return config.SHIP_MAX_SPEED * 0.3 
+        return config.SHIP_MAX_SPEED * 0.3
     
     def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Update replay enemy ship and execute replay commands.
