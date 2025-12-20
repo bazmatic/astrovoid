@@ -11,6 +11,7 @@ from entities.enemy import Enemy, create_enemies
 import level_rules
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.projectile import Projectile
+from entities.powerup_crystal import PowerupCrystal
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring import ScoringSystem
@@ -36,6 +37,7 @@ class Game:
         self.enemies: List[Enemy] = []
         self.replay_enemies: List[ReplayEnemyShip] = []
         self.projectiles: List[Projectile] = []
+        self.powerup_crystals: List[PowerupCrystal] = []
         self.scoring = ScoringSystem()
         self.sound_manager = SoundManager()  # Game-level sound manager for enemy destruction
         self.command_recorder = CommandRecorder()  # Record player commands for replay enemy
@@ -82,6 +84,8 @@ class Game:
         self.ship = Ship(self.maze.start_pos)
         # Activate shield at level start (initial activation, no fuel consumed)
         self.ship.shield_active = True
+        # Reset gun upgrade state
+        self.ship.reset_gun_upgrade()
         
         # Create enemies
         enemy_counts = level_rules.get_enemy_counts(self.level)
@@ -107,8 +111,9 @@ class Game:
                 replay_enemy.current_replay_index = 0  # Reset replay index
                 self.replay_enemies.append(replay_enemy)
         
-        # Clear projectiles
+        # Clear projectiles and crystals
         self.projectiles = []
+        self.powerup_crystals = []
         
         # Start scoring
         current_time = time.time()
@@ -259,10 +264,16 @@ class Game:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0
             current_time = pygame.time.get_ticks()
-            if current_time - self.last_shot_time > 200:  # 200ms between shots
-                projectile = self.ship.fire()
-                if projectile:
-                    self.projectiles.append(projectile)
+            # Adjust fire rate based on upgrade status
+            fire_cooldown = 200  # Default 200ms between shots
+            if self.ship.is_gun_upgraded_active():
+                fire_cooldown = int(200 / config.UPGRADED_FIRE_RATE_MULTIPLIER)  # Faster when upgraded
+            
+            if current_time - self.last_shot_time > fire_cooldown:
+                projectiles = self.ship.fire()
+                if projectiles:
+                    # fire() now returns a list (single or multiple projectiles)
+                    self.projectiles.extend(projectiles)
                     self.scoring.record_shot()
                     self.command_recorder.record_command(CommandType.FIRE)
                     self.last_shot_time = current_time
@@ -360,9 +371,16 @@ class Game:
                 for enemy in self.enemies:
                     if enemy.active and projectile.active:
                         if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
+                            enemy_pos = enemy.get_pos()
                             enemy.destroy()
                             self.sound_manager.play_enemy_destroy()  # Play destruction sound
                             self.scoring.record_enemy_destroyed()  # Award bonus points
+                            
+                            # Spawn powerup crystal with probability
+                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                                crystal = PowerupCrystal(enemy_pos)
+                                self.powerup_crystals.append(crystal)
+                            
                             # Projectile is deactivated by collision, break
                             break
                 
@@ -370,9 +388,16 @@ class Game:
                 for replay_enemy in self.replay_enemies:
                     if replay_enemy.active and projectile.active:
                         if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
+                            enemy_pos = replay_enemy.get_pos()
                             replay_enemy.active = False  # Destroy replay enemy
                             self.sound_manager.play_enemy_destroy()  # Play destruction sound
                             self.scoring.record_enemy_destroyed()  # Award bonus points
+                            
+                            # Spawn powerup crystal with probability
+                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                                crystal = PowerupCrystal(enemy_pos)
+                                self.powerup_crystals.append(crystal)
+                            
                             break  # Projectile destroyed, stop checking
             
             # Only add to active list if projectile is still active after all collision checks
@@ -381,6 +406,26 @@ class Game:
         
         # Replace projectiles list with active ones
         self.projectiles = active_projectiles
+        
+        # Update powerup crystals
+        active_crystals = []
+        for crystal in self.powerup_crystals:
+            if not crystal.active:
+                continue
+            
+            crystal.update(dt)
+            
+            # Check ship-crystal collision
+            if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
+                # Collect crystal and activate upgrade
+                self.ship.activate_gun_upgrade()
+                self.sound_manager.play_shoot()  # Use shoot sound for collection feedback
+                continue  # Don't add to active list
+            
+            if crystal.active:
+                active_crystals.append(crystal)
+        
+        self.powerup_crystals = active_crystals
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
@@ -506,6 +551,11 @@ class Game:
         for replay_enemy in self.replay_enemies:
             if replay_enemy.active:
                 replay_enemy.draw(self.screen)
+        
+        # Draw powerup crystals
+        for crystal in self.powerup_crystals:
+            if crystal.active:
+                crystal.draw(self.screen)
         
         # Draw projectiles
         for projectile in self.projectiles:

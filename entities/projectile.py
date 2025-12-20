@@ -24,25 +24,32 @@ class Projectile(GameEntity, Collidable, Drawable):
         angle: Firing angle in degrees.
         lifetime: Remaining lifetime in frames.
         is_enemy: Whether this is an enemy projectile.
+        is_upgraded: Whether this is an upgraded projectile (larger, faster).
     """
     
-    def __init__(self, start_pos: Tuple[float, float], angle: float, is_enemy: bool = False):
+    def __init__(self, start_pos: Tuple[float, float], angle: float, is_enemy: bool = False, is_upgraded: bool = False):
         """Initialize projectile at position with given angle.
         
         Args:
             start_pos: Starting position as (x, y) tuple.
             angle: Firing angle in degrees.
             is_enemy: Whether this is an enemy projectile (default: False).
+            is_upgraded: Whether this is an upgraded projectile (default: False).
         """
+        # Calculate size and speed (enhanced if upgraded)
+        size = config.PROJECTILE_SIZE * config.UPGRADED_PROJECTILE_SIZE_MULTIPLIER if is_upgraded else config.PROJECTILE_SIZE
+        speed = config.PROJECTILE_SPEED * config.UPGRADED_PROJECTILE_SPEED_MULTIPLIER if is_upgraded else config.PROJECTILE_SPEED
+        
         # Calculate velocity from angle
         angle_rad = angle_to_radians(angle)
-        vx = math.cos(angle_rad) * config.PROJECTILE_SPEED
-        vy = math.sin(angle_rad) * config.PROJECTILE_SPEED
+        vx = math.cos(angle_rad) * speed
+        vy = math.sin(angle_rad) * speed
         
-        super().__init__(start_pos, config.PROJECTILE_SIZE, vx, vy)
+        super().__init__(start_pos, size, vx, vy)
         self.angle = angle
         self.lifetime = config.PROJECTILE_LIFETIME
         self.is_enemy = is_enemy
+        self.is_upgraded = is_upgraded
     
     def update(self, dt: float) -> None:
         """Update projectile position and lifetime.
@@ -135,8 +142,13 @@ class Projectile(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
-        # Use different color for enemy projectiles
-        color = config.COLOR_ENEMY_PROJECTILE if self.is_enemy else config.COLOR_PROJECTILE
+        # Use different color based on type
+        if self.is_enemy:
+            color = config.COLOR_ENEMY_PROJECTILE
+        elif self.is_upgraded:
+            color = config.COLOR_UPGRADED_PROJECTILE
+        else:
+            color = config.COLOR_PROJECTILE
         
         # Calculate direction of travel from velocity vector
         speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
@@ -159,12 +171,25 @@ class Projectile(GameEntity, Collidable, Drawable):
         end_x = self.x + dir_x * line_length * 0.5
         end_y = self.y + dir_y * line_length * 0.5
         
-        # Draw the line with a width of 2 pixels
+        # Draw upgraded projectiles with glow effect
+        if self.is_upgraded:
+            from rendering import visual_effects
+            visual_effects.draw_glow_circle(
+                screen,
+                (self.x, self.y),
+                self.radius * 0.5,
+                color,
+                glow_radius=self.radius * 1.0,
+                intensity=0.4
+            )
+        
+        # Draw the line with width based on upgrade status
+        line_width = 3 if self.is_upgraded else 2
         pygame.draw.line(
             screen,
             color,
             (int(start_x), int(start_y)),
             (int(end_x), int(end_y)),
-            2
+            line_width
         )
 

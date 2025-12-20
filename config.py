@@ -126,6 +126,21 @@ SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
 CONTROLLER_DEADZONE = 0.2  # Deadzone threshold for analog sticks (0.0 to 1.0)
 CONTROLLER_TRIGGER_THRESHOLD = 0.0  # Threshold for trigger activation (0.0 to 1.0)
 
+# Powerup crystal settings
+POWERUP_CRYSTAL_SIZE = 6
+POWERUP_CRYSTAL_SPAWN_CHANCE = 0.3  # 30% chance to drop
+POWERUP_CRYSTAL_ROTATION_SPEED = 2.0  # Degrees per frame
+POWERUP_CRYSTAL_GLOW_INTENSITY = 0.6
+COLOR_POWERUP_CRYSTAL = (150, 100, 255)  # Purple/cyan
+
+# Gun upgrade settings
+UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # 2x faster
+UPGRADED_PROJECTILE_SPREAD_ANGLE = 15.0  # Degrees for 3-way spread
+UPGRADED_PROJECTILE_SIZE_MULTIPLIER = 1.5
+UPGRADED_PROJECTILE_SPEED_MULTIPLIER = 1.2
+COLOR_UPGRADED_PROJECTILE = (150, 220, 255)  # Bright cyan
+COLOR_UPGRADED_SHIP_GLOW = (150, 200, 255)  # Cyan glow
+
 # Game states
 STATE_MENU = "menu"
 STATE_PLAYING = "playing"
