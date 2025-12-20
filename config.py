@@ -76,7 +76,7 @@ REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = 30.0  # Degrees - enemy fires when pointing 
 
 # Replay enemy settings
 REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
-REPLAY_ENEMY_SIZE = 10  # Size/radius of replay enemy
+REPLAY_ENEMY_SIZE = 15  # Size/radius of replay enemy
 REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
 
 # Projectile settings
@@ -103,6 +103,11 @@ COLOR_ENEMY_DYNAMIC = (255, 150, 50)
 COLOR_PROJECTILE = (255, 255, 100)
 COLOR_EXIT = (50, 255, 50)
 COLOR_START = (50, 150, 255)
+
+# Exit portal settings
+EXIT_PORTAL_ATTRACTION_RADIUS = 150  # Distance at which portal starts attracting player
+EXIT_PORTAL_ATTRACTION_FORCE_MULTIPLIER = 0.5  # Attraction force as multiplier of ship thruster force (0.5 = half)
+EXIT_PORTAL_GLOW_MULTIPLIER = 2.0  # Multiplier for glow size when player is nearby
 COLOR_TEXT = (255, 255, 255)
 COLOR_UI_BG = (20, 20, 30)
 
@@ -141,8 +146,11 @@ POWERUP_FLASH_TINT_STRENGTH = 0.85  # 0-1 blend of ship colors toward white duri
 POWERUP_FLASH_GLOW_MULTIPLIER = 1.6  # Extra glow intensity while flashing
 
 # Gun upgrade settings
-UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # 2x faster
-UPGRADED_PROJECTILE_SPREAD_ANGLE = 15.0  # Degrees for 3-way spread
+POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER = 1.5  # Level 1: 1.5x faster fire rate
+POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER = 2.0  # Level 2: 2x faster fire rate
+POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER = 3.0  # Level 3: 3x faster fire rate
+UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # Deprecated: kept for backwards compatibility
+UPGRADED_PROJECTILE_SPREAD_ANGLE = 15.0  # Degrees for 3-way spread (level 2+)
 UPGRADED_PROJECTILE_SIZE_MULTIPLIER = 1.5
 UPGRADED_PROJECTILE_SPEED_MULTIPLIER = 1.2
 COLOR_UPGRADED_PROJECTILE = (150, 220, 255)  # Bright cyan

@@ -38,18 +38,19 @@ class ReplayEnemyShip(RotatingThrusterShip):
     }
     
     # Drawing constants
-    BODY_RADIUS_X_MULTIPLIER = 0.5
-    BODY_RADIUS_Y_MULTIPLIER = 0.5
-    TAIL_LENGTH_MULTIPLIER = 1
-    TAIL_START_WIDTH_MULTIPLIER = 0.6
-    TAIL_BASE_OFFSET = 0.3
-    TAIL_GLOW_INTENSITY_MULTIPLIER = 0.4
+    BODY_RADIUS_MULTIPLIER = 0.6  # Circular body (octopus head)
+    TENTACLE_COUNT = 4  # Number of tentacles
+    TENTACLE_LENGTH_MULTIPLIER = 4
+    TENTACLE_BASE_WIDTH_MULTIPLIER = 0.15
+    TENTACLE_TIP_WIDTH_MULTIPLIER = 0.05
+    TENTACLE_SPREAD_ANGLE = 140  # Degrees - how wide the tentacles spread
+    TENTACLE_GLOW_INTENSITY_MULTIPLIER = 0.3
     BODY_GLOW_INTENSITY_MULTIPLIER = 0.5
-    BODY_GLOW_RADIUS_MULTIPLIER = 0.3
-    TAIL_GLOW_RADIUS_MULTIPLIER = 0.2
-    EYE_SIZE_MULTIPLIER = 0.25
-    EYE_SPACING_MULTIPLIER = 0.5
-    EYE_FORWARD_OFFSET_MULTIPLIER = 0.6
+    BODY_GLOW_RADIUS_MULTIPLIER = 0.4
+    TENTACLE_GLOW_RADIUS_MULTIPLIER = 0.15
+    EYE_SIZE_MULTIPLIER = 0.2
+    EYE_SPACING_MULTIPLIER = 0.4
+    EYE_FORWARD_OFFSET_MULTIPLIER = 0.5
     EYE_HIGHLIGHT_OFFSET_MULTIPLIER = 0.3
     EYE_HIGHLIGHT_SIZE_RATIO = 0.3
     THRUST_BASE_OFFSET_MULTIPLIER = 0.8
@@ -69,6 +70,9 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.current_replay_index = 0  # Index of command currently being replayed
         self.fire_cooldown: int = 0  # Frames remaining until next shot
         self.next_fire_interval: int = 0  # Random interval for next shot
+        # Tentacle particle system - one list per tentacle
+        self.tentacle_particles: List[List[dict]] = [[] for _ in range(self.TENTACLE_COUNT)]
+        self.tentacle_max_particles = 30  # Max particles per tentacle
     
     @property
     def max_speed(self) -> float:
@@ -99,6 +103,8 @@ class ReplayEnemyShip(RotatingThrusterShip):
         if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
             # Not enough actions recorded yet, just update physics
             super().update(dt)
+            # Still update tentacle particles even if not replaying yet
+            self._update_tentacle_particles(dt)
             return
         
         # Execute the command at the current replay index
@@ -117,6 +123,9 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         # Update physics (movement, friction, collisions)
         super().update(dt)
+        
+        # Update tentacle particles
+        self._update_tentacle_particles(dt)
     
     def _execute_command(self, command_type: CommandType, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Execute a replay command using dispatch pattern.
@@ -190,6 +199,85 @@ class ReplayEnemyShip(RotatingThrusterShip):
             config.ENEMY_FIRE_INTERVAL_MAX
         )
         self.fire_cooldown = self.next_fire_interval
+    
+    def _update_tentacle_particles(self, dt: float) -> None:
+        """Update tentacle particle system based on movement.
+        
+        Args:
+            dt: Delta time since last update.
+        """
+        # Calculate movement direction and speed
+        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+        
+        # Calculate base positions for tentacles around the body
+        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
+        spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
+        
+        # Determine trail direction (opposite of movement, or behind facing direction if stationary)
+        if speed > 0.01:
+            # Movement direction (where we're going)
+            move_angle_rad = math.atan2(self.vy, self.vx)
+            # Trail direction (opposite of movement)
+            trail_angle_rad = move_angle_rad + math.pi
+        else:
+            # If stationary, tentacles trail behind the facing direction
+            trail_angle_rad = angle_to_radians(self.angle) + math.pi
+        
+        # Add new particles for each tentacle (always spawn, more when moving)
+        # Spawn rate increases with speed, but always spawn at least 2
+        particle_spawn_rate = max(2, int(speed * 4) + 2) if speed > 0.01 else 3
+        
+        for tentacle_idx in range(self.TENTACLE_COUNT):
+            # Calculate tentacle base angle (spread around the rear)
+            # Tentacles are positioned around the back half of the body
+            base_angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
+            tentacle_base_angle = trail_angle_rad + base_angle_offset
+            
+            # Base position for this tentacle (on the body edge)
+            base_x = math.cos(tentacle_base_angle) * body_radius
+            base_y = math.sin(tentacle_base_angle) * body_radius
+            
+            # Always ensure we have some particles - spawn more aggressively
+            particles_needed = self.tentacle_max_particles - len(self.tentacle_particles[tentacle_idx])
+            if particles_needed > 0:
+                # Add new particles (spawn multiple per frame when moving fast)
+                for _ in range(min(particle_spawn_rate, particles_needed)):
+                    # Add particle with some randomness for natural flow
+                    particle_offset_angle = tentacle_base_angle + random.uniform(-0.2, 0.2)
+                    
+                    # Particle velocity: trails behind with some drag
+                    if speed > 0.01:
+                        # When moving: particles trail behind with velocity
+                        particle_vx = -math.cos(particle_offset_angle) * speed * 0.25
+                        particle_vy = -math.sin(particle_offset_angle) * speed * 0.25
+                    else:
+                        # When stationary: particles drift slowly backward
+                        particle_vx = -math.cos(particle_offset_angle) * 1.0
+                        particle_vy = -math.sin(particle_offset_angle) * 1.0
+                    
+                    self.tentacle_particles[tentacle_idx].append({
+                        'x': base_x,  # Relative to ship position
+                        'y': base_y,
+                        'vx': particle_vx,
+                        'vy': particle_vy,
+                        'life': 60,  # Particle lifetime in frames (longer for visibility)
+                        'size': random.uniform(4.0, 6.0)  # Larger particles
+                    })
+        
+        # Update existing particles
+        for tentacle_particles in self.tentacle_particles:
+            for particle in tentacle_particles:
+                # Apply drag (particles slow down over time)
+                particle['vx'] *= 0.96
+                particle['vy'] *= 0.96
+                # Update position
+                particle['x'] += particle['vx'] * dt
+                particle['y'] += particle['vy'] * dt
+                # Decrease life
+                particle['life'] -= 1
+            
+            # Remove dead particles
+            tentacle_particles[:] = [p for p in tentacle_particles if p['life'] > 0]
     
     def _get_thrust_particle_color(self, life_ratio: float, is_plume: bool = False) -> Tuple[int, int, int]:
         """Get purple-tinted color for thrust particle based on life ratio.
@@ -322,7 +410,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         return self._check_and_fire_at_player(player_pos)
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the replay enemy ship with tadpole style.
+        """Draw the replay enemy ship as an octopus with streaming tentacles.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -338,109 +426,131 @@ class ReplayEnemyShip(RotatingThrusterShip):
         base_color = config.REPLAY_ENEMY_COLOR
         glow_color = config.REPLAY_ENEMY_COLOR
         
-        # Build tadpole shape
-        # Body: rounded oval at the front
-        body_radius_x = self.radius * self.BODY_RADIUS_X_MULTIPLIER
-        body_radius_y = self.radius * self.BODY_RADIUS_Y_MULTIPLIER
+        # Draw tentacles first (behind the body)
+        self._draw_tentacles(screen)
         
-        # Tail: tapers to a point at the back
-        tail_length = self.radius * self.TAIL_LENGTH_MULTIPLIER
-        tail_start_width = self.radius * self.TAIL_START_WIDTH_MULTIPLIER
+        # Draw body (circular octopus head)
+        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
         
-        # Create tail vertices (triangle that tapers to a point)
-        tail_points = [
-            (-body_radius_x * self.TAIL_BASE_OFFSET, -tail_start_width * 0.5),  # Top of tail base
-            (-body_radius_x * self.TAIL_BASE_OFFSET, tail_start_width * 0.5),   # Bottom of tail base
-            (-body_radius_x - tail_length, 0)                  # Tail tip (point)
-        ]
-        
-        # Rotate and translate tail points
-        tail_vertices = [
-            self._rotate_and_translate_point(point, cos_angle, sin_angle)
-            for point in tail_points
-        ]
-        
-        # Draw glow effect for tail
-        visual_effects.draw_glow_polygon(
-            screen, tail_vertices, glow_color,
-            glow_radius=self.radius * self.TAIL_GLOW_RADIUS_MULTIPLIER,
-            intensity=config.SHIP_GLOW_INTENSITY * self.TAIL_GLOW_INTENSITY_MULTIPLIER
-        )
-        
-        # Draw tail
-        pygame.draw.polygon(screen, base_color, tail_vertices)
-        pygame.draw.polygon(screen, self.OUTLINE_COLOR, tail_vertices, 1)
-        
-        # Draw body (ellipse) - need to create rotated ellipse
-        # Create a surface for the body ellipse to rotate it
-        body_surf_size = int((body_radius_x + body_radius_y) * 2) + 4
-        body_surf = pygame.Surface((body_surf_size, body_surf_size), pygame.SRCALPHA)
-        body_center_surf = body_surf_size // 2
-        
-        # Draw glow for body (circle)
+        # Draw glow for body
         visual_effects.draw_glow_circle(
-            screen, (self.x, self.y), body_radius_x, glow_color,
+            screen, (self.x, self.y), body_radius, glow_color,
             glow_radius=self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER,
             intensity=config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
         )
         
-        # Draw body ellipse on temporary surface
-        pygame.draw.ellipse(body_surf, base_color, 
-                           (body_center_surf - body_radius_x, 
-                            body_center_surf - body_radius_y,
-                            body_radius_x * 2, body_radius_y * 2))
-        pygame.draw.ellipse(body_surf, self.OUTLINE_COLOR, 
-                           (body_center_surf - body_radius_x, 
-                            body_center_surf - body_radius_y,
-                            body_radius_x * 2, body_radius_y * 2), 2)
-        
-        # Rotate the body surface
-        rotated_body = pygame.transform.rotate(body_surf, -self.angle)
-        body_rect = rotated_body.get_rect(center=(int(self.x), int(self.y)))
-        screen.blit(rotated_body, body_rect)
+        # Draw body circle
+        pygame.draw.circle(screen, base_color, (int(self.x), int(self.y)), int(body_radius))
+        pygame.draw.circle(screen, self.OUTLINE_COLOR, (int(self.x), int(self.y)), int(body_radius), 2)
         
         # Draw two red eyes at the front of the body
         eye_size = self.radius * self.EYE_SIZE_MULTIPLIER
         eye_spacing = self.radius * self.EYE_SPACING_MULTIPLIER
-        eye_forward_offset = body_radius_x * self.EYE_FORWARD_OFFSET_MULTIPLIER
+        eye_forward_offset = body_radius * self.EYE_FORWARD_OFFSET_MULTIPLIER
         
         # Draw eyes using helper method
         left_eye_pos = (eye_forward_offset, -eye_spacing * 0.5)
         right_eye_pos = (eye_forward_offset, eye_spacing * 0.5)
         self._draw_eye(screen, left_eye_pos, eye_size, cos_angle, sin_angle)
         self._draw_eye(screen, right_eye_pos, eye_size, cos_angle, sin_angle)
+    
+    def _draw_tentacles(self, screen: pygame.Surface) -> None:
+        """Draw tentacles as streaming particle trails.
         
-        # Draw thrust visualization if thrusting
-        if self.thrusting or len(self.thrust_particles) > 0:
-            base_x = self.x - math.cos(angle_rad) * self.radius * self.THRUST_BASE_OFFSET_MULTIPLIER
-            base_y = self.y - math.sin(angle_rad) * self.radius * self.THRUST_BASE_OFFSET_MULTIPLIER
+        Args:
+            screen: The pygame Surface to draw on.
+        """
+        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
+        
+        # Calculate tentacle base positions (where they attach to body)
+        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+        if speed > 0.01:
+            move_angle_rad = math.atan2(self.vy, self.vx)
+            trail_angle_rad = move_angle_rad + math.pi
+        else:
+            trail_angle_rad = angle_to_radians(self.angle) + math.pi
+        
+        spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
+        
+        # Draw each tentacle as a particle trail
+        for tentacle_idx, tentacle_particles in enumerate(self.tentacle_particles):
+            # Calculate tentacle base position (where it attaches to body)
+            base_angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
+            tentacle_base_angle = trail_angle_rad + base_angle_offset
+            base_x = self.x + math.cos(tentacle_base_angle) * body_radius
+            base_y = self.y + math.sin(tentacle_base_angle) * body_radius
             
-            # Draw particle trail
-            for particle in self.thrust_particles:
-                particle_x = self.x + particle['x']
-                particle_y = self.y + particle['y']
-                life_ratio = particle['life'] / config.THRUST_PLUME_LENGTH
+            if not tentacle_particles:
+                # Draw a short stub tentacle even if no particles yet
+                stub_length = body_radius * 0.5
+                stub_x = base_x - math.cos(tentacle_base_angle) * stub_length
+                stub_y = base_y - math.sin(tentacle_base_angle) * stub_length
+                color = (200, 140, 255)  # Bright purple
+                pygame.draw.line(screen, color, 
+                               (int(base_x), int(base_y)), 
+                               (int(stub_x), int(stub_y)), 
+                               3)
+                continue
+            
+            # Sort particles by life (oldest first for proper drawing order)
+            sorted_particles = sorted(tentacle_particles, key=lambda p: p['life'], reverse=True)
+            
+            # Draw tentacle as connected segments from body to tip
+            if len(sorted_particles) > 0:
+                # Start from body attachment point
+                prev_x = base_x
+                prev_y = base_y
                 
-                color = self._get_thrust_particle_color(life_ratio, is_plume=False)
-                size = int(particle['size'] * life_ratio)
-                if size > 0:
+                # Draw segments connecting body to particles
+                for particle in sorted_particles:
+                    particle_x = self.x + particle['x']
+                    particle_y = self.y + particle['y']
+                    life_ratio = particle['life'] / 60.0
+                    
+                    # Make tentacles much thicker and brighter
+                    # Width tapers from base (thick) to tip (thin)
+                    width = max(4, int(8 * life_ratio))  # Much thicker - 4-8 pixels
+                    
+                    # Use bright, saturated color
+                    color = self._get_tentacle_color(life_ratio)
+                    
+                    # Draw thick segment
+                    pygame.draw.line(screen, color, 
+                                   (int(prev_x), int(prev_y)), 
+                                   (int(particle_x), int(particle_y)), 
+                                   width)
+                    
+                    # Draw particle as a bright circle for extra visibility
+                    particle_size = max(3, int(6 * life_ratio))
                     pygame.draw.circle(screen, color, 
-                                     (int(particle_x), int(particle_y)), size)
+                                     (int(particle_x), int(particle_y)), 
+                                     particle_size)
+                    
+                    prev_x = particle_x
+                    prev_y = particle_y
+    
+    def _get_tentacle_color(self, life_ratio: float) -> Tuple[int, int, int]:
+        """Get color for tentacle particle based on life ratio.
+        
+        Args:
+            life_ratio: Ratio of remaining life (1.0 = full life, 0.0 = dead).
             
-            # Draw cone-shaped thrust plume
-            speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-            plume_length = min(config.THRUST_PLUME_LENGTH, speed * 2)
-            for i in range(config.THRUST_PLUME_PARTICLES):
-                t = i / config.THRUST_PLUME_PARTICLES
-                plume_x = base_x - math.cos(angle_rad) * plume_length * t
-                plume_y = base_y - math.sin(angle_rad) * plume_length * t
-                
-                size = int(4 * (1 - t))
-                if size > 0:
-                    life_ratio = 1.0 - t  # Convert t to life_ratio for color calculation
-                    color = self._get_thrust_particle_color(life_ratio, is_plume=True)
-                    pygame.draw.circle(screen, color,
-                                     (int(plume_x), int(plume_y)), size)
+        Returns:
+            RGB color tuple (bright purple/violet gradient).
+        """
+        # Bright purple/violet gradient that fades as life decreases
+        # Clamp life_ratio to valid range
+        life_ratio = max(0.0, min(1.0, life_ratio))
+        
+        # Use much brighter, more saturated colors for visibility
+        if life_ratio > 0.7:
+            return (220, 160, 255)  # Very bright purple
+        elif life_ratio > 0.4:
+            return (200, 130, 255)  # Bright purple
+        elif life_ratio > 0.2:
+            return (180, 110, 240)   # Medium purple
+        else:
+            return (160, 90, 220)  # Medium-dark purple (still visible)
     
     def on_wall_collision(self) -> None:
         """Handle wall collision - replay enemy bounces off walls.

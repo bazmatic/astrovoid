@@ -47,7 +47,7 @@ class Ship(RotatingThrusterShip):
         self.shield_active = False
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no fuel consumed during this period
-        self.is_gun_upgraded = False
+        self.gun_upgrade_level = 0  # Powerup level: 0 = base, 1 = faster fire, 2 = fan effect, 3 = super fast
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
         self.powerup_flash_phase = 0.0
@@ -99,7 +99,7 @@ class Ship(RotatingThrusterShip):
                 self.glow_phase -= 2 * math.pi
         
         # Update upgrade glow phase
-        if self.is_gun_upgraded:
+        if self.gun_upgrade_level > 0:
             self.upgrade_glow_phase += 0.15
             if self.upgrade_glow_phase >= 2 * math.pi:
                 self.upgrade_glow_phase -= 2 * math.pi
@@ -146,17 +146,17 @@ class Ship(RotatingThrusterShip):
         """Fire projectile(s).
         
         Returns:
-            List of Projectile instances if fired (single when not upgraded, 3 when upgraded),
-            None if no ammo (only when not upgraded).
+            List of Projectile instances if fired (single when level 0-1, 3 when level 2+),
+            None if no ammo (only when level 0).
         """
-        # When upgraded, unlimited ammo - skip ammo check and consumption
-        if not self.is_gun_upgraded:
+        # When upgraded (level 1+), unlimited ammo - skip ammo check and consumption
+        if self.gun_upgrade_level < 1:
             if self.ammo <= 0:
                 return None
             self.ammo -= config.AMMO_CONSUMPTION_PER_SHOT
         
-        # Play shoot sound (better sound when upgraded)
-        self.sound_manager.play_shoot(is_upgraded=self.is_gun_upgraded)
+        # Play shoot sound (better sound when level 2+)
+        self.sound_manager.play_shoot(is_upgraded=(self.gun_upgrade_level >= 2))
         
         # Calculate projectile start position (slightly ahead of ship)
         angle_rad = angle_to_radians(self.angle)
@@ -164,7 +164,8 @@ class Ship(RotatingThrusterShip):
         offset_y = math.sin(angle_rad) * (self.radius + 5)
         start_pos = (self.x + offset_x, self.y + offset_y)
         
-        if self.is_gun_upgraded:
+        # Fan effect (3-way spread) at level 2+
+        if self.gun_upgrade_level >= 2:
             # Fire 3-way spread: center, left, right
             projectiles = []
             spread_angle = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
@@ -182,8 +183,9 @@ class Ship(RotatingThrusterShip):
             
             return projectiles
         else:
-            # Single projectile
-            return [Projectile(start_pos, self.angle, is_upgraded=False)]
+            # Single projectile (level 0 or 1)
+            is_upgraded = self.gun_upgrade_level >= 1
+            return [Projectile(start_pos, self.angle, is_upgraded=is_upgraded)]
     
     def on_edge_collision(self) -> None:
         """Handle edge collision - set damage state."""
@@ -218,13 +220,15 @@ class Ship(RotatingThrusterShip):
     
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
-        self.is_gun_upgraded = True
-        self._start_powerup_flash()
-        self.sound_manager.play_powerup_activation()
+        # Increment level, capped at 3
+        if self.gun_upgrade_level < 3:
+            self.gun_upgrade_level += 1
+            self._start_powerup_flash()
+            self.sound_manager.play_powerup_activation()
     
     def reset_gun_upgrade(self) -> None:
         """Reset gun upgrade state (called on level start)."""
-        self.is_gun_upgraded = False
+        self.gun_upgrade_level = 0
         self.upgrade_glow_phase = 0.0
         self.powerup_flash_timer = 0
         self.powerup_flash_phase = 0.0
@@ -233,9 +237,17 @@ class Ship(RotatingThrusterShip):
         """Check if gun upgrade is currently active.
         
         Returns:
-            True if gun upgrade is active, False otherwise.
+            True if gun upgrade is active (level > 0), False otherwise.
         """
-        return self.is_gun_upgraded
+        return self.gun_upgrade_level > 0
+    
+    def get_gun_upgrade_level(self) -> int:
+        """Get current gun upgrade level.
+        
+        Returns:
+            Current upgrade level (0-3).
+        """
+        return self.gun_upgrade_level
     
     def _start_powerup_flash(self) -> None:
         """Trigger a brief flash effect when collecting a powerup."""
@@ -524,14 +536,14 @@ class Ship(RotatingThrusterShip):
         pygame.draw.rect(screen, config.COLOR_TEXT, (bar_x, bar_y, bar_width, bar_height), 2)
         
         # Ammo counter
-        if self.is_gun_upgraded:
+        if self.gun_upgrade_level >= 1:
             ammo_text = font.render("Ammo: UNLIMITED", True, config.COLOR_UPGRADED_SHIP_GLOW)
         else:
             ammo_text = font.render(f"Ammo: {self.ammo}", True, config.COLOR_TEXT)
         screen.blit(ammo_text, (10, 70))
         
         # Gun upgrade indicator
-        if self.is_gun_upgraded:
-            upgrade_text = font.render("GUN UPGRADED", True, config.COLOR_UPGRADED_SHIP_GLOW)
+        if self.gun_upgrade_level > 0:
+            upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)
             screen.blit(upgrade_text, (10, 100))
 

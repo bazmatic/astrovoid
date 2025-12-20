@@ -2,6 +2,7 @@
 
 import random
 import pygame
+import math
 from typing import List, Tuple, Set, Dict
 import config
 from utils import (
@@ -14,6 +15,7 @@ from utils import (
 )
 from maze.wall_segment import WallSegment
 from utils.spatial_grid import SpatialGrid
+from entities.exit import ExitPortal
 
 
 class Maze:
@@ -67,16 +69,19 @@ class Maze:
         )
         self.spatial_grid.add_walls(self.walls)
         
-        # Set start and exit positions based on selected corners
+        # Set start position based on selected corner
         self.start_pos = (
             self.offset_x + start_grid[0] * self.cell_size + self.cell_size // 2,
             self.offset_y + start_grid[1] * self.cell_size + self.cell_size // 2
         )
-        self.exit_pos = (
+        
+        # Create exit object
+        exit_pos = (
             self.offset_x + exit_grid[0] * self.cell_size + self.cell_size // 2,
             self.offset_y + exit_grid[1] * self.cell_size + self.cell_size // 2
         )
-        self.exit_radius = self.cell_size // 2
+        exit_radius = self.cell_size // 2
+        self.exit = ExitPortal(exit_pos, exit_radius)
     
     def _generate_maze(self) -> List[List[int]]:
         """Generate maze using recursive backtracking algorithm with wider passages."""
@@ -244,7 +249,7 @@ class Maze:
     
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
         """Check if player reached the exit."""
-        return circle_circle_collision(pos, radius, self.exit_pos, self.exit_radius)
+        return self.exit.check_circle_collision(pos, radius)
     
     def damage_wall(self, wall: WallSegment) -> bool:
         """Damage a wall segment. Returns True if wall was destroyed.
@@ -291,8 +296,9 @@ class Maze:
             
             # Check if too close to start or exit (use squared distance for comparison)
             min_distance_sq = min_distance * min_distance
+            exit_pos = self.exit.get_pos()
             if (distance_squared(pos, self.start_pos) < min_distance_sq or
-                distance_squared(pos, self.exit_pos) < min_distance_sq):
+                distance_squared(pos, exit_pos) < min_distance_sq):
                 continue
             
             # Check if too close to other spawns
@@ -334,10 +340,6 @@ class Maze:
                 )
         
         # Draw exit marker
-        pygame.draw.circle(screen, config.COLOR_EXIT, 
-                          (int(self.exit_pos[0]), int(self.exit_pos[1])), 
-                          int(self.exit_radius))
-        pygame.draw.circle(screen, config.COLOR_TEXT, 
-                          (int(self.exit_pos[0]), int(self.exit_pos[1])), 
-                          int(self.exit_radius), 2)
+        if self.exit.active:
+            self.exit.draw(screen)
 

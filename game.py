@@ -1,6 +1,7 @@
 """Main game loop and state management."""
 
 import pygame
+import math
 import time
 import random
 from typing import List, Optional, Tuple
@@ -295,6 +296,26 @@ class Game:
         if not self.ship or not self.maze:
             return
         
+        # Update exit animation and check player proximity
+        if self.maze.exit.active:
+            player_pos = (self.ship.x, self.ship.y) if self.ship else None
+            self.maze.exit.update(dt, player_pos)
+        
+        # Apply exit portal attraction force to ship
+        if self.ship and self.maze.exit.active:
+            attraction_force = self.maze.exit.get_attraction_force((self.ship.x, self.ship.y))
+            if attraction_force is not None:
+                # Apply attraction force to ship velocity
+                self.ship.vx += attraction_force[0]
+                self.ship.vy += attraction_force[1]
+                
+                # Limit max speed (same as thrust)
+                speed = math.sqrt(self.ship.vx * self.ship.vx + self.ship.vy * self.ship.vy)
+                if speed > self.ship.max_speed:
+                    scale = self.ship.max_speed / speed
+                    self.ship.vx *= scale
+                    self.ship.vy *= scale
+        
         # Process input and get commands
         keys = pygame.key.get_pressed()
         commands = self.input_handler.process_input(keys)
@@ -334,10 +355,15 @@ class Game:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0
             current_time = pygame.time.get_ticks()
-            # Adjust fire rate based on upgrade status
+            # Adjust fire rate based on upgrade level
             fire_cooldown = 200  # Default 200ms between shots
-            if self.ship.is_gun_upgraded_active():
-                fire_cooldown = int(200 / config.UPGRADED_FIRE_RATE_MULTIPLIER)  # Faster when upgraded
+            upgrade_level = self.ship.get_gun_upgrade_level()
+            if upgrade_level == 1:
+                fire_cooldown = int(200 / config.POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER)
+            elif upgrade_level == 2:
+                fire_cooldown = int(200 / config.POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER)
+            elif upgrade_level == 3:
+                fire_cooldown = int(200 / config.POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER)
             
             if current_time - self.last_shot_time > fire_cooldown:
                 projectiles = self.ship.fire()
@@ -503,7 +529,7 @@ class Game:
                 # Start exit explosion
                 self.exit_explosion_active = True
                 self.exit_explosion_time = 0.0
-                self.exit_explosion_pos = self.maze.exit_pos
+                self.exit_explosion_pos = self.maze.exit.get_pos()
                 # Stop all sounds
                 self.sound_manager.stop_all_sounds()
                 # Stop ship's thruster sound specifically
