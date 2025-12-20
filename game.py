@@ -207,8 +207,9 @@ class Game:
         # Update replay enemy
         # The replay enemy updates independently from the player ship.
         # It replays commands but handles collisions based on its own position/velocity state.
+        # Pass player position for NO_ACTION behavior (rotate towards player) and firing.
         if self.replay_enemy and self.replay_enemy.active:
-            self.replay_enemy.update(dt)
+            self.replay_enemy.update(dt, player_pos)
             
             # Check replay enemy-wall collision
             # This uses the replay enemy's own state (prev_x, prev_y, x, y, vx, vy)
@@ -220,6 +221,11 @@ class Game:
             # Check replay enemy-ship collision
             if self.ship.check_circle_collision(self.replay_enemy.get_pos(), self.replay_enemy.radius):
                 self.scoring.record_enemy_collision()
+            
+            # Check if replay enemy fired a projectile
+            fired_projectile = self.replay_enemy.get_fired_projectile(player_pos)
+            if fired_projectile:
+                self.projectiles.append(fired_projectile)
         
         # Update projectiles (use list comprehension instead of remove)
         active_projectiles = []

@@ -70,6 +70,7 @@ ENEMY_SHIFT_DURATION_MAX = 100  # Maximum frames to maintain shifted direction
 ENEMY_FIRE_INTERVAL_MIN = 60  # Minimum frames between shots (1 second at 60 FPS)
 ENEMY_FIRE_INTERVAL_MAX = 300  # Maximum frames between shots (5 seconds at 60 FPS)
 ENEMY_FIRE_RANGE = 400  # Maximum distance to player for firing (pixels)
+REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = 30.0  # Degrees - enemy fires when pointing within this angle of player
 
 # Replay enemy settings
 REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
