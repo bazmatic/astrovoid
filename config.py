@@ -40,7 +40,7 @@ SHIELD_FUEL_CONSUMPTION_PER_FRAME = 4  # Fuel consumed per frame while shield is
 
 # Scoring system (100 point maximum per level)
 MAX_LEVEL_SCORE = 100  # Maximum score per level
-TIME_PENALTY_RATE = 1  # Points deducted per second of elapsed time
+TIME_PENALTY_RATE = 2  # Points deducted per second of elapsed time
 COLLISION_PENALTY = 5  # Points deducted per collision (wall or enemy)
 AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
 FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
@@ -57,6 +57,7 @@ WALL_THICKNESS = 6
 CELL_SIZE = None  # Will be calculated based on screen size
 MIN_PASSAGE_WIDTH = 3  # Wider passages (3+ cells wide)
 WALL_HIT_POINTS = 2  # Number of hits required to destroy a wall block
+SHIP_SPAWN_OFFSET = 0.35  # Offset from corner cell center (0.0 = center, 0.5 = edge) - moves ship inward
 
 # Enemy settings
 STATIC_ENEMY_SIZE = 10

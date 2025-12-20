@@ -47,6 +47,7 @@ class Ship(RotatingThrusterShip):
         self.shield_active = False
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no fuel consumed during this period
+        self.game_started = False  # Flag to prevent shield timer countdown until game starts
         self.gun_upgrade_level = 0  # Powerup level: 0 = base, 1 = faster fire, 2 = fan effect, 3 = super fast
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
@@ -117,13 +118,13 @@ class Ship(RotatingThrusterShip):
             if self.shield_phase >= 2 * math.pi:
                 self.shield_phase -= 2 * math.pi
             
-            # Update initial shield timer (decreases each frame)
-            if self.shield_initial_timer > 0:
+            # Update initial shield timer (decreases each frame) - only if game has started
+            if self.game_started and self.shield_initial_timer > 0:
                 self.shield_initial_timer -= 1
                 # After initial period, automatically deactivate shield
                 if self.shield_initial_timer <= 0:
                     self.shield_active = False
-            else:
+            elif self.game_started:
                 # Consume fuel while shield is active (only after initial period)
                 self.fuel -= config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
                 
@@ -271,31 +272,39 @@ class Ship(RotatingThrusterShip):
             fade_factor: Fade factor (0.0-1.0, where 1.0 is full intensity).
             phase: Animation phase for pulsing (in radians).
         """
-        # Calculate pulse size (pulses between 1.5x and 2.5x ship radius)
-        pulse_factor = 1.5 + 0.5 * (1.0 + math.sin(phase))
-        shine_radius = self.radius * pulse_factor * 3.0  # Large radius for visibility
+        # Calculate pulse size - shield should be well outside the ship for visibility
+        # Start further out: pulse between 2.5x and 3.5x ship radius from center
+        pulse_factor = 2.5 + 0.5 * (1.0 + math.sin(phase))
+        # Shield ring starts at this radius from ship center (well outside the ship)
+        shield_inner_radius = self.radius * pulse_factor
+        shield_outer_radius = shield_inner_radius * 1.3  # Outer edge of shield ring
         
         # Calculate intensity (fades out over time, pulses)
         intensity = 0.6 * fade_factor * (0.7 + 0.3 * math.sin(phase * 2))
         
-        # Draw pulsing shine circle (bright cyan/white)
+        # Draw shield as an outer ring only - no inner circle to keep ship visible
         shine_color = (150, 220, 255)  # Bright cyan
-        visual_effects.draw_glow_circle(
-            screen,
-            (center_x, center_y),
-            shine_radius * 0.3,  # Base circle size
-            shine_color,
-            glow_radius=shine_radius * 0.7,  # Large glow radius
-            intensity=intensity
-        )
         
-        # Draw additional outer ring for extra visibility
-        ring_alpha = int(255 * intensity * 0.5)
+        # Draw outer glow ring (no solid inner circle)
+        ring_alpha = int(255 * intensity * 0.6)
         if ring_alpha > 0:
-            ring_surf = pygame.Surface((int(shine_radius * 2.5), int(shine_radius * 2.5)), pygame.SRCALPHA)
+            # Create surface for the ring
+            ring_size = int(shield_outer_radius * 2.5)
+            ring_surf = pygame.Surface((ring_size, ring_size), pygame.SRCALPHA)
             ring_center = ring_surf.get_width() // 2
             ring_color = (*shine_color, ring_alpha)
-            pygame.draw.circle(ring_surf, ring_color, (ring_center, ring_center), int(shine_radius), 3)
+            
+            # Draw the ring (hollow circle) at shield_inner_radius
+            pygame.draw.circle(ring_surf, ring_color, (ring_center, ring_center), int(shield_inner_radius), 4)
+            
+            # Add a subtle outer glow by drawing additional rings
+            for i in range(3):
+                glow_alpha = int(ring_alpha * (0.3 - i * 0.1))
+                if glow_alpha > 0:
+                    glow_radius = shield_inner_radius + (i + 1) * 2
+                    glow_color = (*shine_color, glow_alpha)
+                    pygame.draw.circle(ring_surf, glow_color, (ring_center, ring_center), int(glow_radius), 2)
+            
             screen.blit(ring_surf, (center_x - ring_center, center_y - ring_center))
     
     def draw(self, screen: pygame.Surface) -> None:

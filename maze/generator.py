@@ -69,10 +69,21 @@ class Maze:
         )
         self.spatial_grid.add_walls(self.walls)
         
-        # Set start position based on selected corner
+        # Set start position based on selected corner, offset inward from corner edge
+        # Calculate offset direction based on which corner we're in
+        offset_distance = self.cell_size * config.SHIP_SPAWN_OFFSET
+        if start_grid[0] == 1:  # Left side
+            offset_x = offset_distance
+        else:  # Right side
+            offset_x = -offset_distance
+        if start_grid[1] == 1:  # Top side
+            offset_y = offset_distance
+        else:  # Bottom side
+            offset_y = -offset_distance
+        
         self.start_pos = (
-            self.offset_x + start_grid[0] * self.cell_size + self.cell_size // 2,
-            self.offset_y + start_grid[1] * self.cell_size + self.cell_size // 2
+            self.offset_x + start_grid[0] * self.cell_size + self.cell_size // 2 + offset_x,
+            self.offset_y + start_grid[1] * self.cell_size + self.cell_size // 2 + offset_y
         )
         
         # Create exit object

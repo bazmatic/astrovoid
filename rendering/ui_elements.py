@@ -10,6 +10,107 @@ from typing import Tuple, List, Optional, Callable
 import config
 
 
+class StarIndicator:
+    """Centralized star rating indicator with change detection.
+    
+    This class encapsulates all star-related logic including:
+    - Star count calculation from score percentage
+    - Change detection for audio feedback
+    - Static and animated rendering
+    """
+    
+    @staticmethod
+    def calculate_star_count(score_percentage: float) -> int:
+        """Calculate star count (0-5) from score percentage.
+        
+        A star counts if it's at least partially filled, matching the visual representation.
+        For example, 75% shows 4 stars (3 full + 1 partially filled), so returns 4.
+        
+        Args:
+            score_percentage: Score as percentage (0.0 to 1.0+).
+            
+        Returns:
+            Number of stars (0-5). A star counts if it's at least partially filled.
+        """
+        if score_percentage >= 1.0:
+            return 5
+        
+        # Count stars that are at least partially filled
+        # Use math.ceil to round up, so any partial fill counts as a full star
+        # This matches the visual representation where a partially filled star is visible
+        return min(5, math.ceil(score_percentage * 5))
+    
+    def __init__(
+        self,
+        score_percentage: float = 0.0,
+        on_star_lost: Optional[Callable[[], None]] = None,
+        on_star_gained: Optional[Callable[[], None]] = None
+    ):
+        """Initialize star indicator.
+        
+        Args:
+            score_percentage: Initial score percentage (0.0 to 1.0+).
+            on_star_lost: Callback when a star is lost (called once per whole star lost).
+            on_star_gained: Callback when a star is gained (called once per whole star gained).
+        """
+        self._score_percentage = min(1.0, max(0.0, score_percentage))
+        self._current_star_count = StarIndicator.calculate_star_count(self._score_percentage)
+        self.on_star_lost = on_star_lost
+        self.on_star_gained = on_star_gained
+        self._has_updated = False  # Track if update() has been called at least once
+    
+    def update(self, score_percentage: float) -> None:
+        """Update star indicator with new score percentage.
+        
+        Detects whole star changes and triggers callbacks.
+        Skips callbacks on the first update after initialization/reset.
+        
+        Args:
+            score_percentage: New score percentage (0.0 to 1.0+).
+        """
+        new_percentage = min(1.0, max(0.0, score_percentage))
+        new_star_count = StarIndicator.calculate_star_count(new_percentage)
+        
+        # Only trigger callbacks after the first update (to avoid false triggers on initialization)
+        if self._has_updated:
+            # Detect whole star changes
+            if new_star_count < self._current_star_count:
+                # Star(s) lost
+                stars_lost = self._current_star_count - new_star_count
+                if stars_lost >= 1 and self.on_star_lost:
+                    self.on_star_lost()
+            elif new_star_count > self._current_star_count:
+                # Star(s) gained
+                stars_gained = new_star_count - self._current_star_count
+                if stars_gained >= 1 and self.on_star_gained:
+                    self.on_star_gained()
+        
+        # Update state
+        self._score_percentage = new_percentage
+        self._current_star_count = new_star_count
+        self._has_updated = True
+    
+    @property
+    def score_percentage(self) -> float:
+        """Get current score percentage."""
+        return self._score_percentage
+    
+    @property
+    def star_count(self) -> int:
+        """Get current star count (0-5)."""
+        return self._current_star_count
+    
+    def reset(self, score_percentage: float = 0.0) -> None:
+        """Reset indicator to initial state.
+        
+        Args:
+            score_percentage: Initial score percentage (0.0 to 1.0+).
+        """
+        self._score_percentage = min(1.0, max(0.0, score_percentage))
+        self._current_star_count = StarIndicator.calculate_star_count(self._score_percentage)
+        self._has_updated = False  # Reset flag so first update doesn't trigger callbacks
+
+
 class UIElementRenderer:
     """Utility class for rendering UI elements."""
     
@@ -231,10 +332,8 @@ class AnimatedStarRating:
         self.star_size = star_size
         self.star_spacing = star_spacing if star_spacing is not None else int(star_size * 1.2)
         
-        # Calculate number of stars earned
-        self.num_stars = int(self.score_percentage * 5)
-        if self.score_percentage >= 1.0:
-            self.num_stars = 5
+        # Calculate number of stars earned using StarIndicator
+        self.num_stars = StarIndicator.calculate_star_count(self.score_percentage)
         
         # Animation state for each star
         self.star_timers: List[float] = [0.0] * 5  # Time since each star started appearing

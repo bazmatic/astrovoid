@@ -17,7 +17,7 @@ from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring import ScoringSystem
 from rendering import Renderer
-from rendering.ui_elements import AnimatedStarRating
+from rendering.ui_elements import AnimatedStarRating, StarIndicator
 from sounds import SoundManager
 
 
@@ -58,7 +58,12 @@ class Game:
         self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
         self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
         self.level_complete_quit_confirm = False  # Track quit confirmation on level complete screen
-        self.current_star_count = 0  # Track current star count (0-5) for change detection
+        self.player_has_moved = False  # Track if player has made their first move
+        self.level_start_time = 0.0  # Time when level started (to ignore initial SPACE press)
+        self.star_indicator = StarIndicator(
+            on_star_lost=self.sound_manager.play_star_lost,
+            on_star_gained=self.sound_manager.play_star_gained
+        )
     
     def _execute_ship_command(self, command_type: CommandType) -> None:
         """Execute a command on the player ship.
@@ -104,6 +109,10 @@ class Game:
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
         
+        # Reset player movement flag - game loop won't start until first move
+        self.player_has_moved = False
+        self.ship.game_started = False  # Prevent shield timer countdown until first move
+        
         # Create enemies
         enemy_counts = level_rules.get_enemy_counts(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
@@ -135,9 +144,10 @@ class Game:
         # Start scoring
         current_time = time.time()
         self.scoring.start_level(current_time)
+        self.level_start_time = current_time  # Record level start time to ignore initial SPACE press
         
-        # Initialize star count tracking
-        self.current_star_count = 0
+        # Reset star indicator
+        self.star_indicator.reset()
         
         # Start command recording
         self.command_recorder.start_recording()
@@ -341,6 +351,32 @@ class Game:
                 if self.ship.is_shield_active():
                     self.ship.shield_active = False
         
+        # Handle fire separately (has rate limiting)
+        # Check both keyboard and controller for fire input
+        fire_key_pressed = keys[pygame.K_SPACE]
+        fire_controller_pressed = self.input_handler.is_controller_fire_pressed()
+        fire_pressed = fire_key_pressed or fire_controller_pressed
+        
+        # Detect first move - only explicit movement actions count (rotate, thrust, or fire)
+        # Shield activation does NOT count as first move
+        # Ignore fire input for a short period after level start to avoid counting menu SPACE press
+        current_time = time.time()
+        ignore_fire_input = (current_time - self.level_start_time) < 0.3  # Ignore fire for 0.3 seconds after level start
+        
+        if not self.player_has_moved:
+            # Check for explicit movement commands (not shield, not NO_ACTION)
+            has_movement = False
+            for cmd in commands:
+                if cmd in (CommandType.ROTATE_LEFT, CommandType.ROTATE_RIGHT, CommandType.APPLY_THRUST):
+                    has_movement = True
+                    break
+            
+            # Fire also counts as first move, but ignore it if we just started the level
+            if has_movement or (fire_pressed and not ignore_fire_input):
+                # First move detected - start the game loop
+                self.player_has_moved = True
+                self.ship.game_started = True  # Allow shield timer to countdown
+        
         # Execute movement commands on ship and record them
         # Filter out shield command since it's handled separately above
         for cmd in commands:
@@ -348,12 +384,6 @@ class Game:
                 continue  # Shield already handled above
             self._execute_ship_command(cmd)
             self.command_recorder.record_command(cmd)
-        
-        # Handle fire separately (has rate limiting)
-        # Check both keyboard and controller for fire input
-        fire_key_pressed = keys[pygame.K_SPACE]
-        fire_controller_pressed = self.input_handler.is_controller_fire_pressed()
-        fire_pressed = fire_key_pressed or fire_controller_pressed
         
         if fire_pressed:
             if not hasattr(self, 'last_shot_time'):
@@ -392,48 +422,50 @@ class Game:
             if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
                 self.scoring.record_wall_collision()
         
-        # Update enemies
+        # Only update enemies after player has made their first move
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
-        for enemy in self.enemies:
-            if enemy.active:
-                enemy.update(dt, player_pos, self.maze.walls)
+        if self.player_has_moved:
+            # Update enemies
+            for enemy in self.enemies:
+                if enemy.active:
+                    enemy.update(dt, player_pos, self.maze.walls)
+                    
+                    # Check enemy-ship collision (skip if shield is active)
+                    if not self.ship.is_shield_active():
+                        if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
+                            self.scoring.record_enemy_collision()
+                    
+                    # Check if enemy fired a projectile
+                    fired_projectile = enemy.get_fired_projectile(player_pos)
+                    if fired_projectile:
+                        self.projectiles.append(fired_projectile)
+            
+            # Update replay enemies
+            # Replay enemies update independently from the player ship.
+            # They replay commands but handle collisions based on their own position/velocity state.
+            # Pass player position for NO_ACTION behavior (rotate towards player) and firing.
+            for replay_enemy in self.replay_enemies:
+                if not replay_enemy.active:
+                    continue
                 
-                # Check enemy-ship collision (skip if shield is active)
+                replay_enemy.update(dt, player_pos)
+                
+                # Check replay enemy-wall collision
+                # This uses the replay enemy's own state (prev_x, prev_y, x, y, vx, vy)
+                # and is completely independent from the player ship's collisions.
+                # The replay enemy only bounces when it actually hits a wall at its position.
+                if replay_enemy.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+                    pass  # Replay enemy bounces off walls (handled in base class using its own state)
+                
+                # Check replay enemy-ship collision (skip if shield is active)
                 if not self.ship.is_shield_active():
-                    if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
+                    if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius, replay_enemy):
                         self.scoring.record_enemy_collision()
                 
-                # Check if enemy fired a projectile
-                fired_projectile = enemy.get_fired_projectile(player_pos)
+                # Check if replay enemy fired a projectile
+                fired_projectile = replay_enemy.get_fired_projectile(player_pos)
                 if fired_projectile:
                     self.projectiles.append(fired_projectile)
-        
-        # Update replay enemies
-        # Replay enemies update independently from the player ship.
-        # They replay commands but handle collisions based on their own position/velocity state.
-        # Pass player position for NO_ACTION behavior (rotate towards player) and firing.
-        for replay_enemy in self.replay_enemies:
-            if not replay_enemy.active:
-                continue
-            
-            replay_enemy.update(dt, player_pos)
-            
-            # Check replay enemy-wall collision
-            # This uses the replay enemy's own state (prev_x, prev_y, x, y, vx, vy)
-            # and is completely independent from the player ship's collisions.
-            # The replay enemy only bounces when it actually hits a wall at its position.
-            if replay_enemy.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
-                pass  # Replay enemy bounces off walls (handled in base class using its own state)
-            
-            # Check replay enemy-ship collision (skip if shield is active)
-            if not self.ship.is_shield_active():
-                if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius, replay_enemy):
-                    self.scoring.record_enemy_collision()
-            
-            # Check if replay enemy fired a projectile
-            fired_projectile = replay_enemy.get_fired_projectile(player_pos)
-            if fired_projectile:
-                self.projectiles.append(fired_projectile)
         
         # Update projectiles (use list comprehension instead of remove)
         active_projectiles = []
@@ -554,28 +586,9 @@ class Game:
             self.complete_level(success=False)
             return
         
-        # Track star count changes for audio feedback
+        # Update star indicator (handles change detection and audio feedback)
         score_percentage = potential.get('score_percentage', 0.0)
-        # Calculate star count: each star is 20% (0.2), with special case for 100%
-        if score_percentage >= 1.0:
-            new_star_count = 5
-        else:
-            new_star_count = int(score_percentage * 5)
-        
-        # Detect whole star changes
-        if new_star_count < self.current_star_count:
-            # Star(s) lost - play descending tone
-            stars_lost = self.current_star_count - new_star_count
-            if stars_lost >= 1:
-                self.sound_manager.play_star_lost()
-        elif new_star_count > self.current_star_count:
-            # Star(s) gained - play ascending tone
-            stars_gained = new_star_count - self.current_star_count
-            if stars_gained >= 1:
-                self.sound_manager.play_star_gained()
-        
-        # Update tracked star count
-        self.current_star_count = new_star_count
+        self.star_indicator.update(score_percentage)
         
         # Check game over conditions
         if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:
