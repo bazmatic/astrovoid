@@ -5,7 +5,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 ## Features
 
 - **Momentum-Based Physics**: Zero-G flight mechanics with realistic momentum and low friction
-- **Procedural Maze Generation**: Each level features a unique procedurally-generated maze
+- **Procedural Maze Generation**: Each level features a unique procedurally-generated maze. Levels are deterministic - each level number always generates the same maze layout (Level 1 = seed 1, Level 2 = seed 2, etc.)
 - **Multiple Enemy Types**:
   - Static enemies that remain stationary
   - Patrol enemies that move in straight lines
@@ -85,6 +85,15 @@ Each level has a maximum score of 100 points. Your score is reduced by:
 
 - Destroying enemies provides score bonuses
 
+### Level Completion
+
+When you complete a level, the screen displays:
+
+- **Level Number**: "LEVEL {level} COMPLETE" (e.g., "LEVEL 1 COMPLETE")
+- **Completion Time**: Shown with one decimal place (e.g., "Time: 1:23.4")
+- **Star Rating**: 5-star rating based on score percentage
+- **Score Breakdown**: Detailed breakdown of penalties and bonuses
+
 ### Resources
 
 - **Fuel**: Consumed when thrusting or using shield. Starts at 1000 units.
@@ -102,6 +111,7 @@ Each level has a maximum score of 100 points. Your score is reduced by:
 - Maze size increases with level
 - Enemy count and strength scale with level
 - Replay enemy ships appear starting at level 1, increasing in count up to level 10
+- **Deterministic Generation**: Each level uses its level number as the random seed, ensuring the same level always generates the same maze layout, enemy positions, and enemy distributions across playthroughs
 
 ## Project Structure
 
