@@ -49,6 +49,8 @@ class Ship(RotatingThrusterShip):
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no fuel consumed during this period
         self.is_gun_upgraded = False
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
+        self.powerup_flash_timer = 0  # Frames remaining for powerup flash
+        self.powerup_flash_phase = 0.0
     
     def apply_thrust(self) -> bool:
         """Apply thrust in current direction.
@@ -101,6 +103,13 @@ class Ship(RotatingThrusterShip):
             self.upgrade_glow_phase += 0.15
             if self.upgrade_glow_phase >= 2 * math.pi:
                 self.upgrade_glow_phase -= 2 * math.pi
+        
+        # Update powerup flash animation timer
+        if self.powerup_flash_timer > 0:
+            self.powerup_flash_timer -= 1
+            self.powerup_flash_phase += 0.35
+            if self.powerup_flash_phase >= 2 * math.pi:
+                self.powerup_flash_phase -= 2 * math.pi
         
         # Update shield phase and consume fuel when shield is active
         if self.shield_active:
@@ -210,11 +219,15 @@ class Ship(RotatingThrusterShip):
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
         self.is_gun_upgraded = True
+        self._start_powerup_flash()
+        self.sound_manager.play_powerup_activation()
     
     def reset_gun_upgrade(self) -> None:
         """Reset gun upgrade state (called on level start)."""
         self.is_gun_upgraded = False
         self.upgrade_glow_phase = 0.0
+        self.powerup_flash_timer = 0
+        self.powerup_flash_phase = 0.0
     
     def is_gun_upgraded_active(self) -> bool:
         """Check if gun upgrade is currently active.
@@ -223,6 +236,11 @@ class Ship(RotatingThrusterShip):
             True if gun upgrade is active, False otherwise.
         """
         return self.is_gun_upgraded
+    
+    def _start_powerup_flash(self) -> None:
+        """Trigger a brief flash effect when collecting a powerup."""
+        self.powerup_flash_timer = config.POWERUP_FLASH_DURATION_FRAMES
+        self.powerup_flash_phase = 0.0
     
     def _draw_shine_effect(
         self,
@@ -284,6 +302,9 @@ class Ship(RotatingThrusterShip):
             self._draw_shine_effect(screen, self.x, self.y, fade_factor, self.shield_phase)
         
         vertices = self.get_vertices()
+        flash_factor = 0.0
+        if self.powerup_flash_timer > 0:
+            flash_factor = self.powerup_flash_timer / float(config.POWERUP_FLASH_DURATION_FRAMES)
         
         # Determine colors based on damage state
         if self.damaged:
@@ -296,6 +317,21 @@ class Ship(RotatingThrusterShip):
             color_rear = config.COLOR_SHIP_REAR
             glow_color = config.COLOR_SHIP
             glow_intensity = config.SHIP_GLOW_INTENSITY
+        
+        if flash_factor > 0.0:
+            tint_factor = flash_factor * config.POWERUP_FLASH_TINT_STRENGTH
+            
+            def _tint(color: Tuple[int, int, int]) -> Tuple[int, int, int]:
+                return tuple(min(255, int(c + (255 - c) * tint_factor)) for c in color)
+            
+            color_nose = _tint(color_nose)
+            color_rear = _tint(color_rear)
+            glow_color = _tint(glow_color)
+            glow_intensity = max(
+                glow_intensity,
+                config.SHIP_GLOW_INTENSITY * (1.0 + config.POWERUP_FLASH_GLOW_MULTIPLIER * flash_factor)
+            )
+            self._draw_shine_effect(screen, self.x, self.y, flash_factor, self.powerup_flash_phase)
         
         # Draw glow effect
         visual_effects.draw_glow_polygon(
@@ -312,28 +348,89 @@ class Ship(RotatingThrusterShip):
         )
         
         # Draw ship details
-        # Cockpit window (small circle at front)
+        # Direction vectors used for details
         nose_vertex = vertices[0]
-        cockpit_offset = 2
         angle_rad = angle_to_radians(self.angle)
+        dir_x = math.cos(angle_rad)
+        dir_y = math.sin(angle_rad)
+        perp_x = -math.sin(angle_rad)
+        perp_y = math.cos(angle_rad)
+        
+        # Cockpit window (small circle at front)
+        cockpit_offset = 2
         cockpit_x = nose_vertex[0] - math.cos(angle_rad) * cockpit_offset
         cockpit_y = nose_vertex[1] - math.sin(angle_rad) * cockpit_offset
         pygame.draw.circle(screen, (200, 220, 255), (int(cockpit_x), int(cockpit_y)), 2)
         
-        # Engine details (small rectangles at rear)
+        # Needle-like nose tip to clearly mark the front
+        needle_length = self.radius * 0.2
+        needle_half_width = self.radius * 0.14
+        needle_tip = (nose_vertex[0] + dir_x * needle_length, nose_vertex[1] + dir_y * needle_length)
+        needle_left = (nose_vertex[0] + perp_x * needle_half_width, nose_vertex[1] + perp_y * needle_half_width)
+        needle_right = (nose_vertex[0] - perp_x * needle_half_width, nose_vertex[1] - perp_y * needle_half_width)
+        pygame.draw.polygon(
+            screen,
+            color_nose,
+            [
+                (int(needle_tip[0]), int(needle_tip[1])),
+                (int(needle_left[0]), int(needle_left[1])),
+                (int(needle_right[0]), int(needle_right[1]))
+            ]
+        )
+        pygame.draw.line(
+            screen,
+            (235, 245, 255),
+            (int(nose_vertex[0]), int(nose_vertex[1])),
+            (int(needle_tip[0]), int(needle_tip[1])),
+            1
+        )
+        
+        # Dual rear thrusters to clearly mark the back
         rear_vertices = [vertices[1], vertices[2]]
-        for rear_v in rear_vertices:
-            # Draw small rectangle perpendicular to ship direction
-            perp_angle = self.angle + 90
-            perp_rad = angle_to_radians(perp_angle)
-            engine_size = 2
-            engine_x1 = rear_v[0] + math.cos(perp_rad) * engine_size
-            engine_y1 = rear_v[1] + math.sin(perp_rad) * engine_size
-            engine_x2 = rear_v[0] - math.cos(perp_rad) * engine_size
-            engine_y2 = rear_v[1] - math.sin(perp_rad) * engine_size
-            pygame.draw.line(screen, (150, 150, 200), 
-                           (int(engine_x1), int(engine_y1)),
-                           (int(engine_x2), int(engine_y2)), 2)
+        rear_center = (
+            (rear_vertices[0][0] + rear_vertices[1][0]) * 0.5,
+            (rear_vertices[0][1] + rear_vertices[1][1]) * 0.5
+        )
+        thruster_spacing = self.radius * 0.35
+        thruster_length = self.radius * 0.1
+        thruster_width = self.radius * 0.2
+        thruster_tip_width = thruster_width * 0.3
+        thruster_color = color_rear
+        
+        for side in (-1, 1):
+            lateral_offset_x = perp_x * thruster_spacing * side
+            lateral_offset_y = perp_y * thruster_spacing * side
+            
+            front_center_x = rear_center[0] + lateral_offset_x - dir_x * self.radius * 0.1
+            front_center_y = rear_center[1] + lateral_offset_y - dir_y * self.radius * 0.1
+            back_center_x = front_center_x - dir_x * thruster_length
+            back_center_y = front_center_y - dir_y * thruster_length
+            
+            corners = [
+                (
+                    int(front_center_x + perp_x * thruster_width),
+                    int(front_center_y + perp_y * thruster_width)
+                ),
+                (
+                    int(front_center_x - perp_x * thruster_width),
+                    int(front_center_y - perp_y * thruster_width)
+                ),
+                (
+                    int(back_center_x - perp_x * thruster_tip_width),
+                    int(back_center_y - perp_y * thruster_tip_width)
+                ),
+                (
+                    int(back_center_x + perp_x * thruster_tip_width),
+                    int(back_center_y + perp_y * thruster_tip_width)
+                )
+            ]
+            
+            pygame.draw.polygon(screen, thruster_color, corners)
+            pygame.draw.polygon(screen, (230, 230, 255), corners, 1)
+            
+            # Thruster nozzle highlight
+            nozzle_tip = (back_center_x - dir_x * self.radius * 0.1, back_center_y - dir_y * self.radius * 0.1)
+            pygame.draw.circle(screen, (180, 200, 235), (int(nozzle_tip[0]), int(nozzle_tip[1])), 2)
         
         # Wing markings (subtle lines along edges)
         if len(vertices) >= 3:

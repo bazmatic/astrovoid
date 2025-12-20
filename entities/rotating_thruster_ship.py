@@ -460,11 +460,13 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         Returns:
             List of (x, y) vertex coordinates.
         """
-        # Triangle pointing right (0 degrees)
+        # Triangle pointing right (0 degrees) with near-equilateral proportions
+        half_height = self.radius * math.sqrt(3) * 0.5
+        rear_x = -self.radius * 0.5
         base_vertices = [
-            (self.radius, 0),  # Nose
-            (-self.radius * 0.7, -self.radius * 0.7),  # Left rear
-            (-self.radius * 0.7, self.radius * 0.7)   # Right rear
+            (self.radius, 0.0),           # Nose
+            (rear_x, -half_height),       # Left rear
+            (rear_x, half_height)         # Right rear
         ]
         
         # Rotate vertices around center

@@ -29,6 +29,7 @@ class SoundManager:
             self.thruster_sound: Optional[pygame.mixer.Sound] = None
             self.shoot_sound: Optional[pygame.mixer.Sound] = None
             self.enemy_destroy_sound: Optional[pygame.mixer.Sound] = None
+            self.powerup_sound: Optional[pygame.mixer.Sound] = None
             self.thruster_channel: Optional[pygame.mixer.Channel] = None
             return
         
@@ -47,6 +48,7 @@ class SoundManager:
         self.enemy_destroy_sound = None  # Generated on-demand with pitch variation
         self.exit_warble_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.upgraded_shoot_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
+        self.powerup_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.tinkling_sound_cache: Dict[float, Optional[pygame.mixer.Sound]] = {}  # Cache tinkling sounds by pitch
         
         # Set up dedicated channel for thruster (continuous sound)
@@ -213,6 +215,51 @@ class SoundManager:
             sound.set_volume(config.SHOOT_SOUND_VOLUME * 1.1)  # Slightly louder
         return sound
     
+    def _generate_powerup_phase(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a short phasing tone for powerup pickup feedback."""
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.35  # Quick and punchy
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Upward sweep with gentle curve
+        start_freq = 320.0
+        end_freq = 780.0
+        sweep = start_freq + (end_freq - start_freq) * np.power(progress, 0.7)
+        
+        # Layered LFOs for phase/chorus motion
+        lfo_primary = 0.24 * np.sin(2 * math.pi * 7.5 * t_array)
+        lfo_secondary = 0.14 * np.sin(2 * math.pi * 13.0 * t_array + 0.6)
+        instantaneous_freq = sweep * (1.0 + lfo_primary + lfo_secondary * 0.6)
+        
+        # Integrate frequency to phase
+        phase = np.cumsum(instantaneous_freq) / sample_rate * 2 * math.pi
+        
+        # Detuned voices plus shimmer
+        voice_a = np.sin(phase)
+        voice_b = np.sin(phase * 0.97 + 0.4)
+        shimmer = np.sin(phase * 1.9) * 0.28
+        signal = voice_a * 0.6 + voice_b * 0.35 + shimmer
+        
+        # Fast attack, quick decay envelope
+        attack = np.clip(progress / 0.05, 0.0, 1.0)
+        decay = np.exp(-progress * 4.2)
+        envelope = attack * decay
+        
+        # Subtle amplitude wobble to reinforce motion
+        wobble = 0.2 * np.sin(2 * math.pi * 5.0 * t_array)
+        samples = np.clip(signal * envelope * (1.0 + wobble), -1.0, 1.0)
+        
+        # Slight stereo movement
+        right = samples * (0.9 + 0.1 * np.sin(2 * math.pi * 3.0 * t_array))
+        stereo = np.stack([samples, right], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        return pygame.sndarray.make_sound(stereo_int16)
+    
     def start_thruster(self) -> None:
         """Start playing thruster sound in a loop.
         
@@ -267,6 +314,22 @@ class SoundManager:
             # Play normal shoot sound
             if self.shoot_sound:
                 shoot_channel.play(self.shoot_sound)
+    
+    def play_powerup_activation(self) -> None:
+        """Play quick phasing tone when a powerup is collected."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        if self.powerup_sound is None:
+            self.powerup_sound = self._generate_powerup_phase()
+            if self.powerup_sound:
+                self.powerup_sound.set_volume(config.POWERUP_ACTIVATION_SOUND_VOLUME)
+        
+        if not self.powerup_sound:
+            return
+        
+        powerup_channel = pygame.mixer.Channel(4)
+        powerup_channel.play(self.powerup_sound)
     
     def _generate_enemy_destroy(
         self,

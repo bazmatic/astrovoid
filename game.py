@@ -490,7 +490,6 @@ class Game:
             if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
                 # Collect crystal and activate upgrade
                 self.ship.activate_gun_upgrade()
-                self.sound_manager.play_shoot()  # Use shoot sound for collection feedback
                 continue  # Don't add to active list
             
             if crystal.active:

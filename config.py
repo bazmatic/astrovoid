@@ -119,6 +119,7 @@ THRUSTER_SOUND_VOLUME = 0.05  # Volume level for thruster (0.0 to 1.0)
 SHOOT_SOUND_VOLUME = 0.5  # Volume level for shoot sound (0.0 to 1.0)
 ENEMY_DESTROY_SOUND_VOLUME = 0.6  # Volume level for enemy destruction sound (0.0 to 1.0)
 EXIT_WARBLE_SOUND_VOLUME = 0.65  # Volume level for exit cosmic warble
+POWERUP_ACTIVATION_SOUND_VOLUME = 0.6  # Volume level for powerup pickup phase sound
 THRUSTER_NOISE_DURATION = 0.1  # Duration of white noise loop in seconds
 SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
 SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
@@ -133,8 +134,11 @@ POWERUP_CRYSTAL_SPAWN_CHANCE = 0.3  # 30% chance to drop
 POWERUP_CRYSTAL_ROTATION_SPEED = 2.0  # Degrees per frame
 POWERUP_CRYSTAL_GLOW_INTENSITY = 0.6
 COLOR_POWERUP_CRYSTAL = (150, 100, 255)  # Purple/cyan
-POWERUP_CRYSTAL_ATTRACTION_RADIUS = 150  # Distance at which crystal starts moving towards player
-POWERUP_CRYSTAL_ATTRACTION_SPEED = 3.0  # Speed at which crystal moves towards player
+POWERUP_CRYSTAL_ATTRACTION_RADIUS = 50  # Distance at which crystal starts moving towards player
+POWERUP_CRYSTAL_ATTRACTION_SPEED = 1.0  # Speed at which crystal moves towards player
+POWERUP_FLASH_DURATION_FRAMES = 18  # Frames the ship flashes when a powerup is collected
+POWERUP_FLASH_TINT_STRENGTH = 0.85  # 0-1 blend of ship colors toward white during flash
+POWERUP_FLASH_GLOW_MULTIPLIER = 1.6  # Extra glow intensity while flashing
 
 # Gun upgrade settings
 UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # 2x faster
