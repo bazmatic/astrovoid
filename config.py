@@ -132,6 +132,8 @@ POWERUP_CRYSTAL_SPAWN_CHANCE = 0.3  # 30% chance to drop
 POWERUP_CRYSTAL_ROTATION_SPEED = 2.0  # Degrees per frame
 POWERUP_CRYSTAL_GLOW_INTENSITY = 0.6
 COLOR_POWERUP_CRYSTAL = (150, 100, 255)  # Purple/cyan
+POWERUP_CRYSTAL_ATTRACTION_RADIUS = 150  # Distance at which crystal starts moving towards player
+POWERUP_CRYSTAL_ATTRACTION_SPEED = 3.0  # Speed at which crystal moves towards player
 
 # Gun upgrade settings
 UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # 2x faster
@@ -140,6 +142,14 @@ UPGRADED_PROJECTILE_SIZE_MULTIPLIER = 1.5
 UPGRADED_PROJECTILE_SPEED_MULTIPLIER = 1.2
 COLOR_UPGRADED_PROJECTILE = (150, 220, 255)  # Bright cyan
 COLOR_UPGRADED_SHIP_GLOW = (150, 200, 255)  # Cyan glow
+
+# Star animation settings
+STAR_APPEAR_DURATION = 0.4  # Seconds per star appearance animation
+STAR_TWINKLE_SPEED = 8.0  # Twinkle animation speed (radians per second)
+STAR_TWINKLE_INTENSITY = 0.3  # Twinkle brightness variation (0.0 to 1.0)
+STAR_TINKLE_BASE_PITCH = 800  # Hz for first star tinkling sound
+STAR_TINKLE_PITCH_INCREMENT = 200  # Hz increase per star
+LEVEL_COMPLETE_STAR_SIZE = 45  # Size of stars on level complete screen (pixels)
 
 # Game states
 STATE_MENU = "menu"

@@ -3,7 +3,7 @@
 import pygame
 import time
 import random
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import config
 from entities.ship import Ship
 from maze import Maze
@@ -16,6 +16,7 @@ from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring import ScoringSystem
 from rendering import Renderer
+from rendering.ui_elements import AnimatedStarRating
 from sounds import SoundManager
 
 
@@ -51,6 +52,11 @@ class Game:
         self.level_score_percentage = 0.0
         self.total_score_before_level = 0  # Store score before level for replay
         self.level_succeeded = False  # Track if level was completed successfully
+        self.exit_explosion_active = False  # Track if exit explosion is playing
+        self.exit_explosion_time = 0.0  # Time since explosion started
+        self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
+        self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
+        self.level_complete_quit_confirm = False  # Track quit confirmation on level complete screen
     
     def _execute_ship_command(self, command_type: CommandType) -> None:
         """Execute a command on the player ship.
@@ -72,6 +78,15 @@ class Game:
         """Start a new level."""
         # Store total score before starting level (for replay functionality)
         self.total_score_before_level = self.scoring.get_total_score()
+        
+        # Reset exit explosion state
+        self.exit_explosion_active = False
+        self.exit_explosion_time = 0.0
+        self.exit_explosion_pos = None
+        
+        # Reset star animation
+        self.star_animation = None
+        self.level_complete_quit_confirm = False
         
         # Set random seed based on level number for deterministic generation
         # Level 1 = seed 1, Level 2 = seed 2, etc.
@@ -144,7 +159,7 @@ class Game:
                         # Quit game from menu
                         self.running = False
                 elif self.state == config.STATE_PLAYING:
-                    if self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                    if self.input_handler.is_controller_quit_pressed(event.button):
                         # Show quit confirmation
                         self.state = config.STATE_QUIT_CONFIRM
                 elif self.state == config.STATE_QUIT_CONFIRM:
@@ -160,22 +175,36 @@ class Game:
                         # Cancel quit - return to playing
                         self.state = config.STATE_PLAYING
                 elif self.state == config.STATE_LEVEL_COMPLETE:
-                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                        # Continue to next level (only if level succeeded)
-                        if self.level_succeeded:
-                            self.level += 1
-                            self.state = config.STATE_PLAYING
-                            self.start_level()
-                        else:
-                            # If failed, replay is the only option
+                    if self.level_complete_quit_confirm:
+                        # Handle quit confirmation
+                        if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                            # Confirm quit - return to menu, keep progress
+                            self.state = config.STATE_MENU
+                            self.level_complete_quit_confirm = False
+                        elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                            # Cancel quit - return to level complete
+                            self.level_complete_quit_confirm = False
+                    else:
+                        # Normal level complete screen
+                        if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                            # Continue to next level (only if level succeeded)
+                            if self.level_succeeded:
+                                self.level += 1
+                                self.state = config.STATE_PLAYING
+                                self.start_level()
+                            else:
+                                # If failed, replay is the only option
+                                self.scoring.total_score = self.total_score_before_level
+                                self.state = config.STATE_PLAYING
+                                self.start_level()
+                        elif event.button == 1:  # B button for replay
+                            # Replay current level - restore score and restart
                             self.scoring.total_score = self.total_score_before_level
                             self.state = config.STATE_PLAYING
                             self.start_level()
-                    elif event.button == 1:  # B button for replay
-                        # Replay current level - restore score and restart
-                        self.scoring.total_score = self.total_score_before_level
-                        self.state = config.STATE_PLAYING
-                        self.start_level()
+                        elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                            # Show quit confirmation
+                            self.level_complete_quit_confirm = True
                 elif self.state == config.STATE_GAME_OVER:
                     if self.input_handler.is_controller_menu_confirm_pressed(event.button):
                         self.state = config.STATE_MENU
@@ -207,22 +236,36 @@ class Game:
                         # Cancel quit - return to playing
                         self.state = config.STATE_PLAYING
                 elif self.state == config.STATE_LEVEL_COMPLETE:
-                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                        # Continue to next level (only if level succeeded)
-                        if self.level_succeeded:
-                            self.level += 1
-                            self.state = config.STATE_PLAYING
-                            self.start_level()
-                        else:
-                            # If failed, replay is the only option
+                    if self.level_complete_quit_confirm:
+                        # Handle quit confirmation
+                        if event.key == pygame.K_y or event.key == pygame.K_RETURN:
+                            # Confirm quit - return to menu, keep progress
+                            self.state = config.STATE_MENU
+                            self.level_complete_quit_confirm = False
+                        elif event.key == pygame.K_n or event.key == pygame.K_ESCAPE:
+                            # Cancel quit - return to level complete
+                            self.level_complete_quit_confirm = False
+                    else:
+                        # Normal level complete screen
+                        if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
+                            # Continue to next level (only if level succeeded)
+                            if self.level_succeeded:
+                                self.level += 1
+                                self.state = config.STATE_PLAYING
+                                self.start_level()
+                            else:
+                                # If failed, replay is the only option
+                                self.scoring.total_score = self.total_score_before_level
+                                self.state = config.STATE_PLAYING
+                                self.start_level()
+                        elif event.key == pygame.K_r:
+                            # Replay current level - restore score and restart
                             self.scoring.total_score = self.total_score_before_level
                             self.state = config.STATE_PLAYING
                             self.start_level()
-                    elif event.key == pygame.K_r:
-                        # Replay current level - restore score and restart
-                        self.scoring.total_score = self.total_score_before_level
-                        self.state = config.STATE_PLAYING
-                        self.start_level()
+                        elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
+                            # Show quit confirmation
+                            self.level_complete_quit_confirm = True
                 elif self.state == config.STATE_GAME_OVER:
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
                         self.state = config.STATE_MENU
@@ -231,8 +274,23 @@ class Game:
     
     def update(self, dt: float) -> None:
         """Update game state."""
+        if self.state == config.STATE_LEVEL_COMPLETE:
+            # Update star animation during level complete
+            if self.star_animation:
+                self.star_animation.update(dt)
+            return
+        
         if self.state != config.STATE_PLAYING:
             return  # Don't update if not playing (including quit confirmation)
+        
+        # Update exit explosion animation
+        if self.exit_explosion_active:
+            self.exit_explosion_time += dt / 60.0  # Convert to seconds
+            # Explosion lasts 1.5 seconds, then transition to level complete
+            if self.exit_explosion_time >= 1.5:
+                self.exit_explosion_active = False
+                self.complete_level(success=True)
+                return
         
         if not self.ship or not self.maze:
             return
@@ -421,11 +479,12 @@ class Game:
         
         # Update powerup crystals
         active_crystals = []
+        player_pos = (self.ship.x, self.ship.y) if self.ship else None
         for crystal in self.powerup_crystals:
             if not crystal.active:
                 continue
             
-            crystal.update(dt)
+            crystal.update(dt, player_pos)
             
             # Check ship-crystal collision
             if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
@@ -441,8 +500,19 @@ class Game:
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
-            self.complete_level(success=True)
-            return
+            if not self.exit_explosion_active:
+                # Start exit explosion
+                self.exit_explosion_active = True
+                self.exit_explosion_time = 0.0
+                self.exit_explosion_pos = self.maze.exit_pos
+                # Stop all sounds
+                self.sound_manager.stop_all_sounds()
+                # Stop ship's thruster sound specifically
+                if self.ship:
+                    self.ship.sound_manager.stop_thruster()
+                # Play explosion sound
+                self.sound_manager.play_enemy_destroy()  # Reuse explosion sound
+            return  # Don't update game during explosion
         
         # Check if score has reached zero (level failed)
         current_time = time.time()
@@ -488,7 +558,23 @@ class Game:
         final_score = self.level_score_breakdown.get('final_score', 0)
         self.level_score_percentage = min(1.0, max(0.0, final_score / max_score)) if max_score > 0 else 0.0
         
+        # Initialize animated star rating if level succeeded
+        if success:
+            star_x = config.SCREEN_WIDTH // 2 - (5 * int(config.LEVEL_COMPLETE_STAR_SIZE * 1.2)) // 2
+            star_y = config.SCREEN_HEIGHT // 2 - 50
+            self.star_animation = AnimatedStarRating(
+                self.level_score_percentage,
+                star_x,
+                star_y,
+                star_size=config.LEVEL_COMPLETE_STAR_SIZE
+            )
+            # Set sound callback
+            self.star_animation.set_sound_callback(self.sound_manager.play_tinkling)
+        else:
+            self.star_animation = None
+        
         self.level_complete_time = current_time
+        self.level_complete_quit_confirm = False
         self.state = config.STATE_LEVEL_COMPLETE
     
     def draw(self) -> None:
@@ -499,6 +585,8 @@ class Game:
             self.draw_menu()
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
+            if self.exit_explosion_active:
+                self.draw_exit_explosion()
         elif self.state == config.STATE_QUIT_CONFIRM:
             self.draw_game()  # Draw game in background
             self.draw_quit_confirmation()
@@ -523,15 +611,15 @@ class Game:
             "Controller:",
             "  Left/Right Stick: Rotate",
             "  ZR / B: Thrust",
-            "  ZL / A: Fire",
-            "  L / R: Shield",
+            "  ZL: Fire",
+            "  A: Shield",
             "",
             "Objective:",
             "Navigate through mazes to reach the exit",
             "Balance speed, fuel, and ammo for high scores",
             "",
             "Press SPACE or A Button to Start",
-            "Press ESC/Q or B Button to Quit"
+            "Press ESC/Q or X Button to Quit"
         ]
         
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
@@ -574,11 +662,13 @@ class Game:
         for projectile in self.projectiles:
             projectile.draw(self.screen)
         
-        # Draw ship
-        self.ship.draw(self.screen)
+        # Draw ship (hide during exit explosion)
+        if not self.exit_explosion_active:
+            self.ship.draw(self.screen)
         
-        # Draw UI
-        self.ship.draw_ui(self.screen, self.small_font)
+        # Draw UI (hide during exit explosion)
+        if not self.exit_explosion_active:
+            self.ship.draw_ui(self.screen, self.small_font)
         
         # Draw score
         score_text = self.small_font.render(
@@ -613,7 +703,7 @@ class Game:
             self.draw_star_rating(potential['score_percentage'], config.SCREEN_WIDTH - 200, 110)
     
     def draw_level_complete(self) -> None:
-        """Draw level complete or failed screen."""
+        """Draw simplified level complete or failed screen."""
         # Show different title based on success/failure
         if self.level_succeeded:
             title_text = f"LEVEL {self.level} COMPLETE"
@@ -623,7 +713,7 @@ class Game:
             title_color = (255, 100, 100)  # Red for failure
         
         title = self.font.render(title_text, True, title_color)
-        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 120))
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
         self.screen.blit(title, title_rect)
         
         # Format time as minutes:seconds with one decimal place
@@ -633,45 +723,93 @@ class Game:
             f"Time: {minutes}:{seconds_with_decimal:05.1f}",
             True, config.COLOR_TEXT
         )
-        time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 170))
+        time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 200))
         self.screen.blit(time_text, time_rect)
         
-        # Draw star rating
-        star_y = 210
-        star_x = config.SCREEN_WIDTH // 2 - (5 * 24) // 2  # Center 5 stars
-        self.draw_star_rating(self.level_score_percentage, star_x, star_y)
+        # Draw animated star rating (centered, large)
+        if self.star_animation:
+            self.star_animation.draw(self.screen)
         
-        y_offset = 280
-        breakdown = [
-            f"Starting Score: {config.MAX_LEVEL_SCORE}",
-            f"Time Penalty: -{self.level_score_breakdown.get('time_penalty', 0):.1f}",
-            f"Collision Penalty: -{self.level_score_breakdown.get('collision_penalty', 0):.1f}",
-            f"Enemy Destroyed Bonus: +{self.level_score_breakdown.get('enemy_destruction_bonus', 0):.1f}",
-            f"Ammo Penalty: -{self.level_score_breakdown.get('ammo_penalty', 0):.1f}",
-            f"Fuel Penalty: -{self.level_score_breakdown.get('fuel_penalty', 0):.1f}",
-            "",
-            f"Level Score: {int(self.level_score_breakdown.get('final_score', 0))}",
-            f"Total Score: {int(self.level_score_breakdown.get('total_score', 0))}",
-            "",
-        ]
+        # Draw total score
+        total_score = int(self.level_score_breakdown.get('total_score', 0))
+        score_text = self.small_font.render(
+            f"Total Score: {total_score}",
+            True, config.COLOR_TEXT
+        )
+        score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80))
+        self.screen.blit(score_text, score_rect)
         
-        # Add different messages based on success/failure
+        # Draw action prompts
+        y_offset = config.SCREEN_HEIGHT // 2 + 130
         if self.level_succeeded:
-            breakdown.append("Press SPACE/A to Continue")
-            breakdown.append("Press R/B to Replay Level")
+            prompts = [
+                "Press SPACE/A to Continue",
+                "Press R/B to Replay Level",
+                "Press ESC/Q or X to Quit"
+            ]
         else:
-            breakdown.append("Score reached zero!")
-            breakdown.append("Press SPACE/A or R/B to Retry Level")
+            prompts = [
+                "Score reached zero!",
+                "Press SPACE/A or R/B to Retry Level",
+                "Press ESC/Q or X to Quit"
+            ]
         
-        for line in breakdown:
-            text = self.small_font.render(line, True, config.COLOR_TEXT)
+        for prompt in prompts:
+            text = self.small_font.render(prompt, True, config.COLOR_TEXT)
             text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
             self.screen.blit(text, text_rect)
             y_offset += 30
+        
+        # Draw quit confirmation overlay if active
+        if self.level_complete_quit_confirm:
+            self.draw_level_complete_quit_confirmation()
     
     def draw_star_rating(self, score_percentage: float, x: int, y: int) -> None:
         """Draw 5 stars that fill/drain based on score percentage."""
         self.renderer.draw_star_rating(score_percentage, x, y)
+    
+    def draw_level_complete_quit_confirmation(self) -> None:
+        """Draw quit confirmation dialog overlay for level complete screen."""
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        overlay.set_alpha(180)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Draw confirmation dialog box
+        dialog_width = 500
+        dialog_height = 200
+        dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
+        dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
+        
+        # Dialog background
+        pygame.draw.rect(self.screen, config.COLOR_UI_BG, 
+                        (dialog_x, dialog_y, dialog_width, dialog_height))
+        pygame.draw.rect(self.screen, config.COLOR_TEXT, 
+                        (dialog_x, dialog_y, dialog_width, dialog_height), 3)
+        
+        # Title
+        title = self.font.render("Quit to Menu?", True, config.COLOR_TEXT)
+        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 50))
+        self.screen.blit(title, title_rect)
+        
+        # Message
+        message = self.small_font.render(
+            "Progress will be saved.",
+            True, config.COLOR_TEXT
+        )
+        message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
+        self.screen.blit(message, message_rect)
+        
+        # Options
+        yes_text = self.small_font.render("Yes (Y/Enter/A)", True, config.COLOR_TEXT)
+        no_text = self.small_font.render("No (N/ESC/B)", True, config.COLOR_TEXT)
+        
+        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 150))
+        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 150))
+        
+        self.screen.blit(yes_text, yes_rect)
+        self.screen.blit(no_text, no_rect)
     
     def draw_quit_confirmation(self) -> None:
         """Draw quit confirmation dialog overlay."""
@@ -718,6 +856,81 @@ class Game:
         self.screen.blit(yes_text, yes_rect)
         self.screen.blit(no_text, no_rect)
         self.screen.blit(quit_text, quit_rect)
+    
+    def draw_exit_explosion(self) -> None:
+        """Draw spectacular exit explosion effect that fills the screen with light."""
+        if not self.exit_explosion_pos:
+            return
+        
+        # Calculate explosion progress (0.0 to 1.0)
+        progress = min(1.0, self.exit_explosion_time / 1.5)
+        
+        # Create expanding light effect
+        # Multiple expanding rings of light
+        max_radius = max(config.SCREEN_WIDTH, config.SCREEN_HEIGHT) * 1.5
+        
+        # Draw multiple expanding layers
+        for layer in range(5):
+            layer_progress = progress - (layer * 0.15)
+            if layer_progress < 0:
+                continue
+            
+            # Calculate radius for this layer
+            layer_radius = max_radius * layer_progress * (1.0 + layer * 0.2)
+            
+            # Calculate intensity (fades out as it expands)
+            intensity = 1.0 - (layer_progress * 0.8)
+            intensity = max(0.0, intensity)
+            
+            # Color varies by layer for spectacular effect
+            if layer == 0:
+                # Core: bright white/yellow
+                color = (255, 255, 200)
+            elif layer == 1:
+                # Inner: bright yellow/orange
+                color = (255, 220, 100)
+            elif layer == 2:
+                # Mid: orange/red
+                color = (255, 150, 50)
+            elif layer == 3:
+                # Outer: red/purple
+                color = (200, 100, 255)
+            else:
+                # Outermost: purple/blue
+                color = (150, 150, 255)
+            
+            # Draw expanding circle with glow
+            alpha = int(255 * intensity * 0.6)
+            if alpha > 0 and layer_radius > 0:
+                # Create surface for this layer
+                size = int(layer_radius * 2) + 100
+                if size > 0:
+                    glow_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+                    center = size // 2
+                    
+                    # Draw multiple concentric circles for smooth glow
+                    for i in range(10):
+                        circle_radius = layer_radius - (i * layer_radius / 10)
+                        if circle_radius > 0:
+                            circle_alpha = int(alpha * (1.0 - i / 10))
+                            if circle_alpha > 0:
+                                glow_color = (*color, circle_alpha)
+                                pygame.draw.circle(glow_surf, glow_color, (center, center), int(circle_radius))
+                    
+                    # Blit to screen
+                    pos_x = self.exit_explosion_pos[0] - center
+                    pos_y = self.exit_explosion_pos[1] - center
+                    self.screen.blit(glow_surf, (int(pos_x), int(pos_y)))
+        
+        # Draw bright flash overlay that fills screen
+        flash_intensity = 1.0 - progress
+        if flash_intensity > 0:
+            flash_alpha = int(255 * flash_intensity * 0.4)
+            if flash_alpha > 0:
+                flash_overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+                flash_color = (255, 255, 255, flash_alpha)
+                flash_overlay.fill(flash_color)
+                self.screen.blit(flash_overlay, (0, 0))
     
     def draw_game_over(self) -> None:
         """Draw game over screen."""

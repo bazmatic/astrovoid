@@ -169,19 +169,14 @@ class InputHandler:
         
         controller = self.controllers[0]
         num_axes = controller.get_numaxes()
-        num_buttons = controller.get_numbuttons()
         
-        # Fire: ZL (left trigger/axis 5) OR A button (button 0)
+        # Fire: ZL (left trigger/axis 5) only
         if num_axes > 5:
             left_trigger = controller.get_axis(5)
             # Triggers may range from -1.0 to 1.0 (unpressed to pressed)
             # or 0.0 to 1.0 (unpressed to pressed)
             # Check for positive values above threshold
             if left_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
-                return True
-        
-        if num_buttons > 0:
-            if controller.get_button(0):  # A button
                 return True
         
         return False
@@ -198,13 +193,9 @@ class InputHandler:
         controller = self.controllers[0]
         num_buttons = controller.get_numbuttons()
         
-        # Shield: L (left shoulder/button 4) OR R (right shoulder/button 5)
-        if num_buttons > 4:
-            if controller.get_button(4):  # L button (left shoulder)
-                return True
-        
-        if num_buttons > 5:
-            if controller.get_button(5):  # R button (right shoulder)
+        # Shield: A button (button 0)
+        if num_buttons > 0:
+            if controller.get_button(0):  # A button
                 return True
         
         return False
@@ -258,4 +249,23 @@ class InputHandler:
                 return True
         
         return False
+    
+    def is_controller_quit_pressed(self, button: int) -> bool:
+        """Check if controller quit button was pressed.
+        
+        Args:
+            button: Button ID that was pressed.
+            
+        Returns:
+            True if quit button (X) was pressed, False otherwise.
+        """
+        if not self.controllers:
+            return False
+        
+        # Quit: X button (button 2)
+        if button == 2:  # X button
+            return True
+        
+        return False
+
 

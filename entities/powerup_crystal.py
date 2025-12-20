@@ -6,7 +6,7 @@ that drop from destroyed enemies.
 
 import pygame
 import math
-from typing import Tuple
+from typing import Tuple, Optional
 import config
 from entities.base import GameEntity
 from entities.collidable import Collidable
@@ -33,14 +33,38 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         self.rotation_angle = 0.0
         self.pulse_phase = 0.0
     
-    def update(self, dt: float) -> None:
-        """Update crystal rotation and animation.
+    def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
+        """Update crystal rotation, animation, and movement towards player.
         
         Args:
             dt: Delta time since last update.
+            player_pos: Optional player position (x, y) for attraction behavior.
         """
         if not self.active:
             return
+        
+        # Check if player is within attraction radius and move towards player
+        if player_pos is not None:
+            dx = player_pos[0] - self.x
+            dy = player_pos[1] - self.y
+            distance = math.sqrt(dx * dx + dy * dy)
+            
+            if distance <= config.POWERUP_CRYSTAL_ATTRACTION_RADIUS and distance > 0:
+                # Normalize direction vector
+                dir_x = dx / distance
+                dir_y = dy / distance
+                
+                # Apply attraction velocity towards player
+                self.vx = dir_x * config.POWERUP_CRYSTAL_ATTRACTION_SPEED
+                self.vy = dir_y * config.POWERUP_CRYSTAL_ATTRACTION_SPEED
+            else:
+                # Stop moving if outside attraction radius
+                self.vx = 0.0
+                self.vy = 0.0
+        
+        # Update position based on velocity
+        self.x += self.vx * dt
+        self.y += self.vy * dt
         
         # Rotate crystal
         self.rotation_angle += config.POWERUP_CRYSTAL_ROTATION_SPEED * dt
