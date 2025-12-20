@@ -45,6 +45,7 @@ class SoundManager:
         self.thruster_sound = self._generate_white_noise()
         self.shoot_sound = self._generate_click()
         self.enemy_destroy_sound = None  # Generated on-demand with pitch variation
+        self.exit_warble_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.upgraded_shoot_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.tinkling_sound_cache: Dict[float, Optional[pygame.mixer.Sound]] = {}  # Cache tinkling sounds by pitch
         
@@ -502,6 +503,74 @@ class SoundManager:
         # Use channel 2 for enemy destroy sound
         destroy_channel = pygame.mixer.Channel(2)
         destroy_channel.play(sound)
+    
+    def _generate_exit_warble(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a cosmic warble for level exit.
+        
+        Layered sine sweeps with vibrato and gentle stereo detune for a sci-fi flare.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 1.2  # seconds
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Pitch glide up then ripple down slightly
+        base_freq = 360.0 + 520.0 * progress
+        downward_bend = 120.0 * np.square(np.maximum(progress - 0.6, 0.0))
+        freq_curve = base_freq - downward_bend
+        
+        # Vibrato and accelerating phaser LFOs (phaser rate ramps up linearly)
+        vibrato = 0.12 * np.sin(2 * math.pi * 6.5 * t_array)
+        phaser_rate = 0.8 + 1.2 * progress  # Hz ramps from 0.8 to 2.0 across duration
+        phaser_phase = np.cumsum(phaser_rate / sample_rate) * 2 * math.pi
+        phaser = 0.35 * np.sin(phaser_phase)
+        detune = 0.01
+        
+        phase_main = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        phase_detune = np.cumsum(freq_curve * (1.0 - vibrato + detune) / sample_rate) * 2 * math.pi
+        
+        # Two voices for richness
+        voice_main = np.sin(phase_main + phaser * 0.6)
+        voice_detune = np.sin(phase_detune * 0.98 + 0.4 - phaser * 0.4)
+        shimmer = np.sin(phase_main * 2.1 + phaser * 1.1) * 0.15
+        
+        # Envelope: fast rise, lingering tail
+        attack = np.clip(progress / 0.08, 0.0, 1.0)
+        decay = np.exp(-np.maximum(progress - 0.1, 0.0) * 2.7)
+        sustain = 0.9 - 0.4 * progress
+        envelope = attack * decay * sustain
+        
+        samples = (voice_main * 0.7 + voice_detune * 0.5 + shimmer) * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Stereo with phase sweep for width
+        left = samples
+        right = np.sin(phase_detune + 0.22 + phaser * 0.8) * envelope
+        right = np.clip(right, -1.0, 1.0).astype(np.float32)
+        
+        stereo = np.stack([left, right], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        return pygame.sndarray.make_sound(stereo_int16)
+    
+    def play_exit_warble(self) -> None:
+        """Play cosmic warble when player reaches the exit."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        if self.exit_warble_sound is None:
+            self.exit_warble_sound = self._generate_exit_warble()
+            if self.exit_warble_sound:
+                self.exit_warble_sound.set_volume(config.EXIT_WARBLE_SOUND_VOLUME)
+        
+        if not self.exit_warble_sound:
+            return
+        
+        exit_channel = pygame.mixer.Channel(3)
+        exit_channel.play(self.exit_warble_sound)
     
     def export_enemy_destroy_layers(
         self,

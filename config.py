@@ -118,6 +118,7 @@ SOUND_SAMPLE_RATE = 44100  # Standard CD quality
 THRUSTER_SOUND_VOLUME = 0.05  # Volume level for thruster (0.0 to 1.0)
 SHOOT_SOUND_VOLUME = 0.5  # Volume level for shoot sound (0.0 to 1.0)
 ENEMY_DESTROY_SOUND_VOLUME = 0.6  # Volume level for enemy destruction sound (0.0 to 1.0)
+EXIT_WARBLE_SOUND_VOLUME = 0.65  # Volume level for exit cosmic warble
 THRUSTER_NOISE_DURATION = 0.1  # Duration of white noise loop in seconds
 SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
 SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds

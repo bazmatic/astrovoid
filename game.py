@@ -510,8 +510,8 @@ class Game:
                 # Stop ship's thruster sound specifically
                 if self.ship:
                     self.ship.sound_manager.stop_thruster()
-                # Play explosion sound
-                self.sound_manager.play_enemy_destroy()  # Reuse explosion sound
+                # Play cosmic warble for exit
+                self.sound_manager.play_exit_warble()
             return  # Don't update game during explosion
         
         # Check if score has reached zero (level failed)
