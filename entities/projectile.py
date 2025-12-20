@@ -127,7 +127,7 @@ class Projectile(GameEntity, Collidable, Drawable):
         return False
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the projectile.
+        """Draw the projectile as a line pointing in the direction of travel.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -138,7 +138,33 @@ class Projectile(GameEntity, Collidable, Drawable):
         # Use different color for enemy projectiles
         color = config.COLOR_ENEMY_PROJECTILE if self.is_enemy else config.COLOR_PROJECTILE
         
-        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius)
-        # Add a small glow effect
-        pygame.draw.circle(screen, color, (int(self.x), int(self.y)), self.radius // 2)
+        # Calculate direction of travel from velocity vector
+        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+        if speed > 0:
+            # Normalize velocity to get direction
+            dir_x = self.vx / speed
+            dir_y = self.vy / speed
+        else:
+            # Fallback to angle if velocity is zero (shouldn't happen, but safe)
+            angle_rad = angle_to_radians(self.angle)
+            dir_x = math.cos(angle_rad)
+            dir_y = math.sin(angle_rad)
+        
+        # Line length (2-3 times the radius for visibility)
+        line_length = self.radius * 2.5
+        
+        # Calculate line endpoints
+        start_x = self.x - dir_x * line_length * 0.5
+        start_y = self.y - dir_y * line_length * 0.5
+        end_x = self.x + dir_x * line_length * 0.5
+        end_y = self.y + dir_y * line_length * 0.5
+        
+        # Draw the line with a width of 2 pixels
+        pygame.draw.line(
+            screen,
+            color,
+            (int(start_x), int(start_y)),
+            (int(end_x), int(end_y)),
+            2
+        )
 

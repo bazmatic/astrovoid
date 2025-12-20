@@ -18,13 +18,17 @@ The codebase follows SOLID principles and DRY (Don't Repeat Yourself) practices:
 ### Core Modules
 
 #### `main.py`
+
 Entry point of the application. Initializes Pygame and starts the game loop.
 
 #### `game.py`
+
 Main game coordinator class. Manages game state, level progression, and coordinates between different systems. While it still contains some state management logic, the architecture supports future extraction to a state machine.
 
 #### `config.py`
+
 Centralized configuration file containing all game constants, including:
+
 - Screen dimensions
 - Physics parameters (ship speed, rotation, thrust)
 - Resource limits (fuel, ammo)
@@ -39,10 +43,12 @@ The entity system provides a foundation for all game objects:
 #### Base Classes and Interfaces
 
 - **`base.py`**: `GameEntity` - Abstract base class for all game entities
+
   - Common properties: position, velocity, radius, active state
   - Common methods: `update()`, `draw()`, `get_pos()`
 
 - **`collidable.py`**: `Collidable` - Interface for collision detection
+
   - Methods: `check_wall_collision()`, `check_circle_collision()`
 
 - **`drawable.py`**: `Drawable` - Interface for renderable objects
@@ -51,16 +57,19 @@ The entity system provides a foundation for all game objects:
 #### Entity Implementations
 
 - **`ship.py`**: `Ship` - Player-controlled spacecraft
+
   - Inherits from `GameEntity`, `Collidable`, `Drawable`
   - Manages fuel, ammo, rotation, thrust, and collision responses
   - Zero-G physics with low friction
 
 - **`enemy.py`**: `Enemy` - Enemy entities
+
   - Uses Strategy pattern for behaviors (see `enemy_strategies.py`)
   - Supports static, patrol, and aggressive enemy types
   - Follows OCP - new enemy types can be added without modifying `Enemy`
 
 - **`enemy_strategies.py`**: Enemy behavior strategies
+
   - `StaticEnemyStrategy`: Enemies that don't move
   - `PatrolEnemyStrategy`: Enemies that patrol in straight lines
   - `AggressiveEnemyStrategy`: Enemies that chase the player
@@ -81,6 +90,7 @@ The entity system provides a foundation for all game objects:
 ### Scoring System (`scoring/`)
 
 - **`system.py`**: `ScoringSystem` - Tracks game metrics
+
   - Records collisions, shots, fuel usage, enemy destructions
   - Delegates score calculation to `ScoreCalculator`
   - Manages level and total score tracking
@@ -93,6 +103,7 @@ The entity system provides a foundation for all game objects:
 ### Rendering System (`rendering/`)
 
 - **`renderer.py`**: `Renderer` - Centralized rendering operations
+
   - Provides common drawing operations
   - Reduces code duplication
 
@@ -148,14 +159,17 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 ## Design Patterns
 
 ### Strategy Pattern
+
 - **Enemy Behaviors**: `Enemy` uses composition with `EnemyStrategy` implementations
 - **Benefits**: New enemy types can be added without modifying `Enemy` class (OCP)
 
 ### Template Method Pattern
+
 - **GameEntity**: Base class defines structure, subclasses implement specifics
 - **GameState**: Base state class defines interface, concrete states implement behavior
 
 ### Factory Pattern
+
 - **`create_enemies()`**: Factory function creates enemies based on level and spawn positions
 
 ## Extension Points
@@ -223,4 +237,3 @@ asterdroids/
 4. **Save System**: Add save/load functionality for game progress
 5. **Sound System**: Add sound effects and music
 6. **Particle Effects**: Add visual effects for explosions, thrust, etc.
-

@@ -19,13 +19,13 @@ Architecture:
 import pygame
 
 # Screen settings
-SCREEN_WIDTH = 1200
-SCREEN_HEIGHT = 800
+SCREEN_WIDTH = 1480
+SCREEN_HEIGHT = 900
 FPS = 60
 
 # Ship physics
 SHIP_SIZE = 8  # Ship radius (affects both collision and visual size)
-SHIP_ROTATION_SPEED = 4.0  # Degrees per frame (how fast the ship rotates)
+SHIP_ROTATION_SPEED = 5.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
 SHIP_MAX_SPEED = 8.0
@@ -35,6 +35,7 @@ INITIAL_FUEL = 1000
 INITIAL_AMMO = 50
 FUEL_CONSUMPTION_PER_THRUST = 1
 AMMO_CONSUMPTION_PER_SHOT = 1
+SHIELD_FUEL_CONSUMPTION_PER_FRAME = 2  # Fuel consumed per frame while shield is active
 
 # Scoring system (100 point maximum per level)
 MAX_LEVEL_SCORE = 100  # Maximum score per level
@@ -57,10 +58,10 @@ MIN_PASSAGE_WIDTH = 3  # Wider passages (3+ cells wide)
 WALL_HIT_POINTS = 2  # Number of hits required to destroy a wall block
 
 # Enemy settings
-STATIC_ENEMY_SIZE = 15
-DYNAMIC_ENEMY_SIZE = 12
-ENEMY_PATROL_SPEED = 1.5
-ENEMY_AGGRESSIVE_SPEED = 2.0
+STATIC_ENEMY_SIZE = 10
+DYNAMIC_ENEMY_SIZE = 8
+ENEMY_PATROL_SPEED = 1
+ENEMY_AGGRESSIVE_SPEED = 1.0
 ENEMY_DAMAGE = 10
 ENEMY_STUCK_DETECTION_THRESHOLD = 0.1  # Minimum distance change to consider enemy moving
 ENEMY_SHIFT_ANGLE_MIN = 45  # Minimum angle shift in degrees (45-90 range)

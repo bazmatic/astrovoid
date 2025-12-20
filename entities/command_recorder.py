@@ -16,6 +16,7 @@ class CommandType(Enum):
     ROTATE_RIGHT = "rotate_right"
     APPLY_THRUST = "apply_thrust"
     FIRE = "fire"
+    ACTIVATE_SHIELD = "activate_shield"
     NO_ACTION = "no_action"  # Recorded when player is not providing input
 
 

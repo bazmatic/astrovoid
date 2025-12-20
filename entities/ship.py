@@ -44,6 +44,9 @@ class Ship(RotatingThrusterShip):
         self.glow_phase = 0.0  # For pulsing glow when damaged
         self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
         self.sound_manager = SoundManager()  # Initialize sound manager
+        self.shield_active = False
+        self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
+        self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no fuel consumed during this period
     
     def apply_thrust(self) -> bool:
         """Apply thrust in current direction.
@@ -90,6 +93,27 @@ class Ship(RotatingThrusterShip):
             self.glow_phase += 0.2
             if self.glow_phase >= 2 * math.pi:
                 self.glow_phase -= 2 * math.pi
+        
+        # Update shield phase and consume fuel when shield is active
+        if self.shield_active:
+            self.shield_phase += 0.3  # Speed of pulse animation
+            if self.shield_phase >= 2 * math.pi:
+                self.shield_phase -= 2 * math.pi
+            
+            # Update initial shield timer (decreases each frame)
+            if self.shield_initial_timer > 0:
+                self.shield_initial_timer -= 1
+                # After initial period, automatically deactivate shield
+                if self.shield_initial_timer <= 0:
+                    self.shield_active = False
+            else:
+                # Consume fuel while shield is active (only after initial period)
+                self.fuel -= config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
+                
+                # Deactivate shield automatically when fuel reaches 0
+                if self.fuel <= 0:
+                    self.fuel = 0
+                    self.shield_active = False
         
         # Manage thruster sound: stop if we were thrusting in previous frame but apply_thrust wasn't called this frame
         # was_thrusting indicates if apply_thrust was called in previous frame
@@ -138,12 +162,81 @@ class Ship(RotatingThrusterShip):
         self.damaged = True
         self.damage_timer = 30
     
+    def activate_shield(self) -> None:
+        """Activate shield (called by game logic, not directly by player)."""
+        self.shield_active = True
+    
+    def deactivate_shield(self) -> None:
+        """Deactivate shield (called by game logic, not directly by player)."""
+        self.shield_active = False
+    
+    def is_shield_active(self) -> bool:
+        """Check if shield is currently active.
+        
+        Returns:
+            True if shield is active, False otherwise.
+        """
+        return self.shield_active
+    
+    def _draw_shine_effect(
+        self,
+        screen: pygame.Surface,
+        center_x: float,
+        center_y: float,
+        fade_factor: float,
+        phase: float
+    ) -> None:
+        """Draw a pulsing shine effect (reusable for spawn shine and shield).
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            center_x: X coordinate of the center.
+            center_y: Y coordinate of the center.
+            fade_factor: Fade factor (0.0-1.0, where 1.0 is full intensity).
+            phase: Animation phase for pulsing (in radians).
+        """
+        # Calculate pulse size (pulses between 1.5x and 2.5x ship radius)
+        pulse_factor = 1.5 + 0.5 * (1.0 + math.sin(phase))
+        shine_radius = self.radius * pulse_factor * 3.0  # Large radius for visibility
+        
+        # Calculate intensity (fades out over time, pulses)
+        intensity = 0.6 * fade_factor * (0.7 + 0.3 * math.sin(phase * 2))
+        
+        # Draw pulsing shine circle (bright cyan/white)
+        shine_color = (150, 220, 255)  # Bright cyan
+        visual_effects.draw_glow_circle(
+            screen,
+            (center_x, center_y),
+            shine_radius * 0.3,  # Base circle size
+            shine_color,
+            glow_radius=shine_radius * 0.7,  # Large glow radius
+            intensity=intensity
+        )
+        
+        # Draw additional outer ring for extra visibility
+        ring_alpha = int(255 * intensity * 0.5)
+        if ring_alpha > 0:
+            ring_surf = pygame.Surface((int(shine_radius * 2.5), int(shine_radius * 2.5)), pygame.SRCALPHA)
+            ring_center = ring_surf.get_width() // 2
+            ring_color = (*shine_color, ring_alpha)
+            pygame.draw.circle(ring_surf, ring_color, (ring_center, ring_center), int(shine_radius), 3)
+            screen.blit(ring_surf, (center_x - ring_center, center_y - ring_center))
+    
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the ship with enhanced visuals.
         
         Args:
             screen: The pygame Surface to draw on.
         """
+        # Draw shield glow effect when shield is active
+        if self.shield_active:
+            # During initial activation, fade out over time
+            if self.shield_initial_timer > 0:
+                fade_factor = self.shield_initial_timer / 60.0
+            else:
+                fade_factor = 1.0  # Full intensity after initial period
+            self._draw_shine_effect(screen, self.x, self.y, fade_factor, self.shield_phase)
+        
         vertices = self.get_vertices()
         
         # Determine colors based on damage state

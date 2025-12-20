@@ -97,8 +97,8 @@ class PatrolEnemyStrategy(EnemyStrategy):
         # Initialize next fire interval on first call if needed
         if self.next_fire_interval == 0:
             self.next_fire_interval = random.randint(
-                config.ENEMY_FIRE_INTERVAL_MIN,
-                config.ENEMY_FIRE_INTERVAL_MAX
+                enemy.fire_interval_min,
+                enemy.fire_interval_max
             )
             self.fire_cooldown = self.next_fire_interval
         
@@ -151,7 +151,7 @@ class PatrolEnemyStrategy(EnemyStrategy):
         dist_to_player = distance((enemy.x, enemy.y), player_pos)
         
         # Check if player is within firing range
-        if dist_to_player > config.ENEMY_FIRE_RANGE:
+        if dist_to_player > enemy.fire_range:
             return None
         
         # Calculate angle to player
@@ -162,8 +162,8 @@ class PatrolEnemyStrategy(EnemyStrategy):
         
         # Reset cooldown with random interval
         self.next_fire_interval = random.randint(
-            config.ENEMY_FIRE_INTERVAL_MIN,
-            config.ENEMY_FIRE_INTERVAL_MAX
+            enemy.fire_interval_min,
+            enemy.fire_interval_max
         )
         self.fire_cooldown = self.next_fire_interval
         

@@ -27,6 +27,7 @@ class InputHandler:
             (pygame.K_LEFT, pygame.K_a): CommandType.ROTATE_LEFT,
             (pygame.K_RIGHT, pygame.K_d): CommandType.ROTATE_RIGHT,
             (pygame.K_UP, pygame.K_w): CommandType.APPLY_THRUST,
+            (pygame.K_DOWN, pygame.K_s): CommandType.ACTIVATE_SHIELD,
         }
     
     def process_input(self, keys: List[bool]) -> List[CommandType]:

@@ -71,6 +71,17 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         self.prev_x = self.x  # Previous position for swept collision detection
         self.prev_y = self.y
     
+    @property
+    def max_speed(self) -> float:
+        """Get the maximum speed for this ship.
+        
+        Subclasses can override this to provide different max speeds.
+        
+        Returns:
+            Maximum speed value.
+        """
+        return config.SHIP_MAX_SPEED
+    
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
         self.angle -= config.SHIP_ROTATION_SPEED
@@ -101,8 +112,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         
         # Limit max speed
         speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-        if speed > config.SHIP_MAX_SPEED:
-            scale = config.SHIP_MAX_SPEED / speed
+        if speed > self.max_speed:
+            scale = self.max_speed / speed
             self.vx *= scale
             self.vy *= scale
         
@@ -186,6 +197,14 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
             particle['life'] -= 1
         # Filter out dead particles
         self.thrust_particles = [p for p in self.thrust_particles if p['life'] > 0]
+        
+        # Enforce maximum speed limit (after all physics updates)
+        # This ensures speed never exceeds max, regardless of collisions, bounces, etc.
+        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+        if speed > self.max_speed:
+            scale = self.max_speed / speed
+            self.vx *= scale
+            self.vy *= scale
     
     def check_wall_collision(
         self,

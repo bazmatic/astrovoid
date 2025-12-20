@@ -7,6 +7,7 @@ import config
 from entities.ship import Ship
 from maze import Maze
 from entities.enemy import Enemy, create_enemies
+import level_rules
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder, CommandType
@@ -32,7 +33,7 @@ class Game:
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
         self.enemies: List[Enemy] = []
-        self.replay_enemy: Optional[ReplayEnemyShip] = None
+        self.replay_enemies: List[ReplayEnemyShip] = []
         self.projectiles: List[Projectile] = []
         self.scoring = ScoringSystem()
         self.sound_manager = SoundManager()  # Game-level sound manager for enemy destruction
@@ -60,6 +61,8 @@ class Game:
             self.ship.rotate_right()
         elif command_type == CommandType.APPLY_THRUST:
             self.ship.apply_thrust()
+        elif command_type == CommandType.ACTIVATE_SHIELD:
+            self.ship.activate_shield()
         # NO_ACTION and FIRE are handled separately
     
     def start_level(self) -> None:
@@ -72,20 +75,32 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        # Activate shield at level start (initial activation, no fuel consumed)
+        self.ship.shield_active = True
         
         # Create enemies
+        enemy_counts = level_rules.get_enemy_counts(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            config.BASE_ENEMY_COUNT + self.level * config.ENEMY_COUNT_INCREMENT + 5
+            enemy_counts.total + enemy_counts.replay + 5  # Extra buffer for spawn positions
         )
         self.enemies = create_enemies(self.level, spawn_positions)
         
-        # Always create one replay enemy ship
-        if len(spawn_positions) > 0:
-            # Use a spawn position that's not too close to the start
-            replay_spawn = spawn_positions[0] if len(spawn_positions) > 0 else (100, 100)
-            self.replay_enemy = ReplayEnemyShip(replay_spawn, self.command_recorder)
-        else:
-            self.replay_enemy = None
+        # Create replay enemy ships
+        replay_enemy_count = enemy_counts.replay
+        self.replay_enemies = []
+        
+        if len(spawn_positions) > 0 and replay_enemy_count > 0:
+            # Use available spawn positions for replay enemies
+            # Skip positions already used by regular enemies
+            used_positions = [e.get_pos() for e in self.enemies]
+            available_positions = [pos for pos in spawn_positions if pos not in used_positions]
+            
+            # Create replay enemies at available positions
+            for i in range(min(replay_enemy_count, len(available_positions))):
+                replay_spawn = available_positions[i]
+                replay_enemy = ReplayEnemyShip(replay_spawn, self.command_recorder)
+                replay_enemy.current_replay_index = 0  # Reset replay index
+                self.replay_enemies.append(replay_enemy)
         
         # Clear projectiles
         self.projectiles = []
@@ -96,9 +111,6 @@ class Game:
         
         # Start command recording
         self.command_recorder.start_recording()
-        # Reset replay enemy's replay index when starting a new level
-        if self.replay_enemy:
-            self.replay_enemy.current_replay_index = 0
     
     def handle_events(self) -> None:
         """Handle pygame events."""
@@ -159,8 +171,25 @@ class Game:
         keys = pygame.key.get_pressed()
         commands = self.input_handler.process_input(keys)
         
+        # Handle shield activation (only active while button is held down)
+        # Shield is active only while DOWN/S is pressed (not a toggle)
+        shield_key_pressed = keys[pygame.K_DOWN] or keys[pygame.K_s]
+        # Only allow manual shield control after initial activation period
+        if self.ship.shield_initial_timer <= 0:
+            if shield_key_pressed:
+                # Key is held - activate shield
+                if not self.ship.is_shield_active():
+                    self.ship.shield_active = True
+            else:
+                # Key is not held - deactivate shield
+                if self.ship.is_shield_active():
+                    self.ship.shield_active = False
+        
         # Execute movement commands on ship and record them
+        # Filter out shield command since it's handled separately above
         for cmd in commands:
+            if cmd == CommandType.ACTIVATE_SHIELD:
+                continue  # Shield already handled above
             self._execute_ship_command(cmd)
             self.command_recorder.record_command(cmd)
         
@@ -186,8 +215,10 @@ class Game:
         self.ship.update(dt)
         
         # Check ship-wall collision (use spatial grid for optimization)
-        if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
-            self.scoring.record_wall_collision()
+        # Skip collision if shield is active
+        if not self.ship.is_shield_active():
+            if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+                self.scoring.record_wall_collision()
         
         # Update enemies
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
@@ -195,35 +226,40 @@ class Game:
             if enemy.active:
                 enemy.update(dt, player_pos, self.maze.walls)
                 
-                # Check enemy-ship collision
-                if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius):
-                    self.scoring.record_enemy_collision()
+                # Check enemy-ship collision (skip if shield is active)
+                if not self.ship.is_shield_active():
+                    if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius):
+                        self.scoring.record_enemy_collision()
                 
                 # Check if enemy fired a projectile
                 fired_projectile = enemy.get_fired_projectile(player_pos)
                 if fired_projectile:
                     self.projectiles.append(fired_projectile)
         
-        # Update replay enemy
-        # The replay enemy updates independently from the player ship.
-        # It replays commands but handles collisions based on its own position/velocity state.
+        # Update replay enemies
+        # Replay enemies update independently from the player ship.
+        # They replay commands but handle collisions based on their own position/velocity state.
         # Pass player position for NO_ACTION behavior (rotate towards player) and firing.
-        if self.replay_enemy and self.replay_enemy.active:
-            self.replay_enemy.update(dt, player_pos)
+        for replay_enemy in self.replay_enemies:
+            if not replay_enemy.active:
+                continue
+            
+            replay_enemy.update(dt, player_pos)
             
             # Check replay enemy-wall collision
             # This uses the replay enemy's own state (prev_x, prev_y, x, y, vx, vy)
             # and is completely independent from the player ship's collisions.
             # The replay enemy only bounces when it actually hits a wall at its position.
-            if self.replay_enemy.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+            if replay_enemy.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
                 pass  # Replay enemy bounces off walls (handled in base class using its own state)
             
-            # Check replay enemy-ship collision
-            if self.ship.check_circle_collision(self.replay_enemy.get_pos(), self.replay_enemy.radius):
-                self.scoring.record_enemy_collision()
+            # Check replay enemy-ship collision (skip if shield is active)
+            if not self.ship.is_shield_active():
+                if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
+                    self.scoring.record_enemy_collision()
             
             # Check if replay enemy fired a projectile
-            fired_projectile = self.replay_enemy.get_fired_projectile(player_pos)
+            fired_projectile = replay_enemy.get_fired_projectile(player_pos)
             if fired_projectile:
                 self.projectiles.append(fired_projectile)
         
@@ -246,12 +282,13 @@ class Game:
                 # Enemy projectiles just deactivate on wall collision
                 projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
             
-            # Check enemy projectile-ship collision
+            # Check enemy projectile-ship collision (skip if shield is active)
             if projectile.is_enemy and projectile.active:
-                if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
-                    self.scoring.record_enemy_collision()  # Apply collision penalty
-                    # Projectile is deactivated by collision, skip adding to active list
-                    continue
+                if not self.ship.is_shield_active():
+                    if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
+                        self.scoring.record_enemy_collision()  # Apply collision penalty
+                        # Projectile is deactivated by collision, skip adding to active list
+                        continue
             
             # Check projectile-enemy collision (only for player projectiles)
             if not projectile.is_enemy:
@@ -265,11 +302,13 @@ class Game:
                             break
                 
                 # Check projectile-replay enemy collision
-                if self.replay_enemy and self.replay_enemy.active and projectile.active:
-                    if projectile.check_circle_collision(self.replay_enemy.get_pos(), self.replay_enemy.radius):
-                        self.replay_enemy.active = False  # Destroy replay enemy
-                        self.sound_manager.play_enemy_destroy()  # Play destruction sound
-                        self.scoring.record_enemy_destroyed()  # Award bonus points
+                for replay_enemy in self.replay_enemies:
+                    if replay_enemy.active and projectile.active:
+                        if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
+                            replay_enemy.active = False  # Destroy replay enemy
+                            self.sound_manager.play_enemy_destroy()  # Play destruction sound
+                            self.scoring.record_enemy_destroyed()  # Award bonus points
+                            break  # Projectile destroyed, stop checking
             
             # Only add to active list if projectile is still active after all collision checks
             if projectile.active:
@@ -390,9 +429,10 @@ class Game:
         for enemy in self.enemies:
             enemy.draw(self.screen, player_pos)
         
-        # Draw replay enemy
-        if self.replay_enemy and self.replay_enemy.active:
-            self.replay_enemy.draw(self.screen)
+        # Draw replay enemies
+        for replay_enemy in self.replay_enemies:
+            if replay_enemy.active:
+                replay_enemy.draw(self.screen)
         
         # Draw projectiles
         for projectile in self.projectiles:

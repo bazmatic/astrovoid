@@ -37,6 +37,26 @@ class ReplayEnemyShip(RotatingThrusterShip):
         # NO_ACTION is handled separately to rotate towards player
     }
     
+    # Drawing constants
+    BODY_RADIUS_X_MULTIPLIER = 0.5
+    BODY_RADIUS_Y_MULTIPLIER = 0.5
+    TAIL_LENGTH_MULTIPLIER = 1
+    TAIL_START_WIDTH_MULTIPLIER = 0.6
+    TAIL_BASE_OFFSET = 0.3
+    TAIL_GLOW_INTENSITY_MULTIPLIER = 0.4
+    BODY_GLOW_INTENSITY_MULTIPLIER = 0.5
+    BODY_GLOW_RADIUS_MULTIPLIER = 0.3
+    TAIL_GLOW_RADIUS_MULTIPLIER = 0.2
+    EYE_SIZE_MULTIPLIER = 0.25
+    EYE_SPACING_MULTIPLIER = 0.5
+    EYE_FORWARD_OFFSET_MULTIPLIER = 0.6
+    EYE_HIGHLIGHT_OFFSET_MULTIPLIER = 0.3
+    EYE_HIGHLIGHT_SIZE_RATIO = 0.3
+    THRUST_BASE_OFFSET_MULTIPLIER = 0.8
+    OUTLINE_COLOR = (200, 150, 255)
+    EYE_COLOR = (255, 0, 0)
+    EYE_HIGHLIGHT_COLOR = (255, 150, 150)
+    
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize replay enemy ship.
         
@@ -49,6 +69,17 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.current_replay_index = 0  # Index of command currently being replayed
         self.fire_cooldown: int = 0  # Frames remaining until next shot
         self.next_fire_interval: int = 0  # Random interval for next shot
+    
+    @property
+    def max_speed(self) -> float:
+        """Get the maximum speed for the replay enemy ship.
+        
+        Replay enemy ships have a lower max speed than the player ship.
+        
+        Returns:
+            Maximum speed value (lower than player ship).
+        """
+        return config.SHIP_MAX_SPEED * 0.3 
     
     def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Update replay enemy ship and execute replay commands.
@@ -82,16 +113,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
             self.current_replay_index = (self.current_replay_index + 1) % len(replay_commands)
         
         # Update fire cooldown
-        if self.fire_cooldown > 0:
-            self.fire_cooldown -= 1
-        
-        # Initialize next fire interval on first call if needed
-        if self.next_fire_interval == 0:
-            self.next_fire_interval = random.randint(
-                config.ENEMY_FIRE_INTERVAL_MIN,
-                config.ENEMY_FIRE_INTERVAL_MAX
-            )
-            self.fire_cooldown = self.next_fire_interval
+        self._update_fire_cooldown()
         
         # Update physics (movement, friction, collisions)
         super().update(dt)
@@ -116,6 +138,113 @@ class ReplayEnemyShip(RotatingThrusterShip):
             handler_method = getattr(self, handler_name)
             handler_method()
     
+    def _normalize_angle_diff(self, angle_diff: float) -> float:
+        """Normalize angle difference to -180 to 180 range.
+        
+        Args:
+            angle_diff: Raw angle difference in degrees.
+            
+        Returns:
+            Normalized angle difference in -180 to 180 range.
+        """
+        if angle_diff > 180:
+            angle_diff -= 360
+        elif angle_diff < -180:
+            angle_diff += 360
+        return angle_diff
+    
+    def _rotate_and_translate_point(
+        self, 
+        point: Tuple[float, float], 
+        cos_angle: float, 
+        sin_angle: float
+    ) -> Tuple[int, int]:
+        """Rotate and translate a point relative to ship position.
+        
+        Args:
+            point: Relative point (x, y) in ship's local coordinate system.
+            cos_angle: Cosine of ship's angle.
+            sin_angle: Sine of ship's angle.
+            
+        Returns:
+            Translated screen coordinates as (x, y) tuple.
+        """
+        px, py = point
+        rx = px * cos_angle - py * sin_angle
+        ry = px * sin_angle + py * cos_angle
+        return (int(self.x + rx), int(self.y + ry))
+    
+    def _update_fire_cooldown(self) -> None:
+        """Update fire cooldown timer and initialize if needed."""
+        if self.fire_cooldown > 0:
+            self.fire_cooldown -= 1
+        
+        # Initialize next fire interval on first call if needed
+        if self.next_fire_interval == 0:
+            self._reset_fire_cooldown()
+    
+    def _reset_fire_cooldown(self) -> None:
+        """Reset fire cooldown with a random interval."""
+        self.next_fire_interval = random.randint(
+            config.ENEMY_FIRE_INTERVAL_MIN,
+            config.ENEMY_FIRE_INTERVAL_MAX
+        )
+        self.fire_cooldown = self.next_fire_interval
+    
+    def _get_thrust_particle_color(self, life_ratio: float, is_plume: bool = False) -> Tuple[int, int, int]:
+        """Get purple-tinted color for thrust particle based on life ratio.
+        
+        Args:
+            life_ratio: Ratio of remaining life (1.0 = full life, 0.0 = dead).
+            is_plume: Whether this is for the plume (slightly different colors).
+            
+        Returns:
+            RGB color tuple.
+        """
+        if is_plume:
+            if life_ratio > 0.7:  # t < 0.3
+                return (220, 170, 255)  # Light purple
+            elif life_ratio > 0.4:  # t < 0.6
+                return (180, 120, 255)  # Medium purple
+            else:
+                return (140, 70, 255)   # Dark purple
+        else:
+            if life_ratio > 0.6:
+                return (200, 150, 255)  # Light purple
+            elif life_ratio > 0.3:
+                return (180, 100, 255)  # Medium purple
+            else:
+                return (150, 50, 255)   # Dark purple
+    
+    def _draw_eye(
+        self,
+        screen: pygame.Surface,
+        eye_pos: Tuple[float, float],
+        eye_size: float,
+        cos_angle: float,
+        sin_angle: float
+    ) -> None:
+        """Draw an eye with highlight at the specified relative position.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            eye_pos: Relative eye position (x, y) in ship's local coordinate system.
+            eye_size: Size of the eye in pixels.
+            cos_angle: Cosine of ship's angle.
+            sin_angle: Sine of ship's angle.
+        """
+        eye_x, eye_y = self._rotate_and_translate_point(eye_pos, cos_angle, sin_angle)
+        
+        # Draw eye
+        pygame.draw.circle(screen, self.EYE_COLOR, (eye_x, eye_y), int(eye_size))
+        
+        # Draw eye highlight
+        highlight_offset = eye_size * self.EYE_HIGHLIGHT_OFFSET_MULTIPLIER
+        highlight_pos = (eye_pos[0] - highlight_offset, eye_pos[1] - highlight_offset)
+        highlight_x, highlight_y = self._rotate_and_translate_point(highlight_pos, cos_angle, sin_angle)
+        pygame.draw.circle(screen, self.EYE_HIGHLIGHT_COLOR, (highlight_x, highlight_y),
+                          int(eye_size * self.EYE_HIGHLIGHT_SIZE_RATIO))
+    
     def _rotate_towards_player(self, player_pos: Tuple[float, float]) -> None:
         """Rotate towards the player ship.
         
@@ -128,12 +257,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         target_angle = get_angle_to_point((self.x, self.y), player_pos)
         
         # Calculate angle difference (normalized to -180 to 180 range)
-        angle_diff = target_angle - self.angle
-        # Normalize to shortest rotation path
-        if angle_diff > 180:
-            angle_diff -= 360
-        elif angle_diff < -180:
-            angle_diff += 360
+        angle_diff = self._normalize_angle_diff(target_angle - self.angle)
         
         # Rotate towards target angle
         # Use rotation speed to rotate closer, but don't overshoot
@@ -149,7 +273,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
             self.rotate_left()
     
     def _check_and_fire_at_player(self, player_pos: Tuple[float, float]) -> Optional[Projectile]:
-        """Check if pointing roughly at player and fire if conditions are met.
+        """Check if pointing roughly at player, apply thrust, and fire if conditions are met.
         
         Args:
             player_pos: Player position as (x, y) tuple.
@@ -157,10 +281,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
         Returns:
             Projectile instance if fired, None otherwise.
         """
-        # Check if cooldown expired
-        if self.fire_cooldown > 0:
-            return None
-        
         # Calculate distance to player
         dist_to_player = distance((self.x, self.y), player_pos)
         
@@ -172,25 +292,18 @@ class ReplayEnemyShip(RotatingThrusterShip):
         angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
         
         # Calculate angle difference (normalized to -180 to 180 range)
-        angle_diff = angle_to_player - self.angle
-        if angle_diff > 180:
-            angle_diff -= 360
-        elif angle_diff < -180:
-            angle_diff += 360
+        angle_diff = self._normalize_angle_diff(angle_to_player - self.angle)
         
         # Check if pointing roughly towards player (within tolerance)
         if abs(angle_diff) <= config.REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE:
-            # Fire projectile in current facing direction
-            projectile = Projectile((self.x, self.y), self.angle, is_enemy=True)
+            # Apply thrust when pointing at player
+            self.apply_thrust()
             
-            # Reset cooldown with random interval
-            self.next_fire_interval = random.randint(
-                config.ENEMY_FIRE_INTERVAL_MIN,
-                config.ENEMY_FIRE_INTERVAL_MAX
-            )
-            self.fire_cooldown = self.next_fire_interval
-            
-            return projectile
+            # Fire projectile if cooldown allows
+            if self.fire_cooldown <= 0:
+                projectile = Projectile((self.x, self.y), self.angle, is_enemy=True)
+                self._reset_fire_cooldown()
+                return projectile
         
         return None
     
@@ -209,7 +322,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         return self._check_and_fire_at_player(player_pos)
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the replay enemy ship with distinct visual style.
+        """Draw the replay enemy ship with tadpole style.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -217,39 +330,90 @@ class ReplayEnemyShip(RotatingThrusterShip):
         if not self.active:
             return
         
-        vertices = self.get_vertices()
+        angle_rad = angle_to_radians(self.angle)
+        cos_angle = math.cos(angle_rad)
+        sin_angle = math.sin(angle_rad)
         
-        # Use replay enemy color scheme
-        color_nose = tuple(min(255, c + 30) for c in config.REPLAY_ENEMY_COLOR)
-        color_rear = tuple(max(0, c - 30) for c in config.REPLAY_ENEMY_COLOR)
+        # Base color scheme (purple/violet for replay enemy)
+        base_color = config.REPLAY_ENEMY_COLOR
         glow_color = config.REPLAY_ENEMY_COLOR
         
-        # Draw glow effect (slightly different from player ship)
+        # Build tadpole shape
+        # Body: rounded oval at the front
+        body_radius_x = self.radius * self.BODY_RADIUS_X_MULTIPLIER
+        body_radius_y = self.radius * self.BODY_RADIUS_Y_MULTIPLIER
+        
+        # Tail: tapers to a point at the back
+        tail_length = self.radius * self.TAIL_LENGTH_MULTIPLIER
+        tail_start_width = self.radius * self.TAIL_START_WIDTH_MULTIPLIER
+        
+        # Create tail vertices (triangle that tapers to a point)
+        tail_points = [
+            (-body_radius_x * self.TAIL_BASE_OFFSET, -tail_start_width * 0.5),  # Top of tail base
+            (-body_radius_x * self.TAIL_BASE_OFFSET, tail_start_width * 0.5),   # Bottom of tail base
+            (-body_radius_x - tail_length, 0)                  # Tail tip (point)
+        ]
+        
+        # Rotate and translate tail points
+        tail_vertices = [
+            self._rotate_and_translate_point(point, cos_angle, sin_angle)
+            for point in tail_points
+        ]
+        
+        # Draw glow effect for tail
         visual_effects.draw_glow_polygon(
-            screen, vertices, glow_color,
-            glow_radius=self.radius * config.SHIP_GLOW_RADIUS_MULTIPLIER * 0.8,
-            intensity=config.SHIP_GLOW_INTENSITY * 0.7
+            screen, tail_vertices, glow_color,
+            glow_radius=self.radius * self.TAIL_GLOW_RADIUS_MULTIPLIER,
+            intensity=config.SHIP_GLOW_INTENSITY * self.TAIL_GLOW_INTENSITY_MULTIPLIER
         )
         
-        # Draw gradient fill (nose to rear)
-        visual_effects.draw_gradient_polygon(
-            screen, vertices, color_nose, color_rear,
-            start_vertex=0, end_vertex=1
+        # Draw tail
+        pygame.draw.polygon(screen, base_color, tail_vertices)
+        pygame.draw.polygon(screen, self.OUTLINE_COLOR, tail_vertices, 1)
+        
+        # Draw body (ellipse) - need to create rotated ellipse
+        # Create a surface for the body ellipse to rotate it
+        body_surf_size = int((body_radius_x + body_radius_y) * 2) + 4
+        body_surf = pygame.Surface((body_surf_size, body_surf_size), pygame.SRCALPHA)
+        body_center_surf = body_surf_size // 2
+        
+        # Draw glow for body (circle)
+        visual_effects.draw_glow_circle(
+            screen, (self.x, self.y), body_radius_x, glow_color,
+            glow_radius=self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER,
+            intensity=config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
         )
         
-        # Draw outline to distinguish from player ship
-        pygame.draw.polygon(screen, (200, 150, 255), vertices, 2)
+        # Draw body ellipse on temporary surface
+        pygame.draw.ellipse(body_surf, base_color, 
+                           (body_center_surf - body_radius_x, 
+                            body_center_surf - body_radius_y,
+                            body_radius_x * 2, body_radius_y * 2))
+        pygame.draw.ellipse(body_surf, self.OUTLINE_COLOR, 
+                           (body_center_surf - body_radius_x, 
+                            body_center_surf - body_radius_y,
+                            body_radius_x * 2, body_radius_y * 2), 2)
         
-        # Draw distinctive marker (small circle) to indicate it's a replay
-        center_x = int(self.x)
-        center_y = int(self.y)
-        pygame.draw.circle(screen, (255, 200, 255), (center_x, center_y), 3)
+        # Rotate the body surface
+        rotated_body = pygame.transform.rotate(body_surf, -self.angle)
+        body_rect = rotated_body.get_rect(center=(int(self.x), int(self.y)))
+        screen.blit(rotated_body, body_rect)
+        
+        # Draw two red eyes at the front of the body
+        eye_size = self.radius * self.EYE_SIZE_MULTIPLIER
+        eye_spacing = self.radius * self.EYE_SPACING_MULTIPLIER
+        eye_forward_offset = body_radius_x * self.EYE_FORWARD_OFFSET_MULTIPLIER
+        
+        # Draw eyes using helper method
+        left_eye_pos = (eye_forward_offset, -eye_spacing * 0.5)
+        right_eye_pos = (eye_forward_offset, eye_spacing * 0.5)
+        self._draw_eye(screen, left_eye_pos, eye_size, cos_angle, sin_angle)
+        self._draw_eye(screen, right_eye_pos, eye_size, cos_angle, sin_angle)
         
         # Draw thrust visualization if thrusting
         if self.thrusting or len(self.thrust_particles) > 0:
-            angle_rad = angle_to_radians(self.angle)
-            base_x = self.x - math.cos(angle_rad) * self.radius * 0.8
-            base_y = self.y - math.sin(angle_rad) * self.radius * 0.8
+            base_x = self.x - math.cos(angle_rad) * self.radius * self.THRUST_BASE_OFFSET_MULTIPLIER
+            base_y = self.y - math.sin(angle_rad) * self.radius * self.THRUST_BASE_OFFSET_MULTIPLIER
             
             # Draw particle trail
             for particle in self.thrust_particles:
@@ -257,14 +421,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
                 particle_y = self.y + particle['y']
                 life_ratio = particle['life'] / config.THRUST_PLUME_LENGTH
                 
-                # Purple-tinted thrust particles
-                if life_ratio > 0.6:
-                    color = (200, 150, 255)  # Light purple
-                elif life_ratio > 0.3:
-                    color = (180, 100, 255)  # Medium purple
-                else:
-                    color = (150, 50, 255)   # Dark purple
-                
+                color = self._get_thrust_particle_color(life_ratio, is_plume=False)
                 size = int(particle['size'] * life_ratio)
                 if size > 0:
                     pygame.draw.circle(screen, color, 
@@ -280,31 +437,31 @@ class ReplayEnemyShip(RotatingThrusterShip):
                 
                 size = int(4 * (1 - t))
                 if size > 0:
-                    # Purple-tinted gradient
-                    if t < 0.3:
-                        color = (220, 170, 255)  # Light purple
-                    elif t < 0.6:
-                        color = (180, 120, 255)  # Medium purple
-                    else:
-                        color = (140, 70, 255)   # Dark purple
-                    
+                    life_ratio = 1.0 - t  # Convert t to life_ratio for color calculation
+                    color = self._get_thrust_particle_color(life_ratio, is_plume=True)
                     pygame.draw.circle(screen, color,
                                      (int(plume_x), int(plume_y)), size)
     
     def on_wall_collision(self) -> None:
         """Handle wall collision - replay enemy bounces off walls.
         
-        This method is called when the replay enemy collides with a wall.
-        The bounce physics are handled by the base class. This override
-        ensures the replay enemy handles collisions independently from
-        the player ship - bounce events are physics responses, not commands.
+        This method is called by the base class when the replay enemy collides
+        with a wall. The bounce physics (velocity reflection, position correction)
+        are handled by the base class. This override is intentionally empty as
+        the replay enemy doesn't need special collision handling - it bounces
+        based on its own position/velocity state, completely independent from
+        the player ship's collisions.
         """
-        # Base class handles physics (velocity reflection, position correction)
-        # The replay enemy bounces based on its own position/velocity state,
-        # completely independent from the player ship's collisions
+        # No additional handling needed - base class handles all physics
         pass
     
     def on_circle_collision(self) -> None:
-        """Handle circle collision - replay enemy can collide with player."""
-        # Base class handles physics
+        """Handle circle collision - replay enemy can collide with player.
+        
+        This method is called by the base class when the replay enemy collides
+        with another circular entity (e.g., the player ship). The collision
+        physics (push back, velocity adjustment) are handled by the base class.
+        This override is intentionally empty as no special handling is needed.
+        """
+        # No additional handling needed - base class handles all physics
         pass

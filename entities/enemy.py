@@ -9,6 +9,7 @@ import random
 import math
 from typing import Tuple, List, Optional, TYPE_CHECKING
 import config
+import level_rules
 from utils import (
     angle_to_radians,
     circle_line_collision,
@@ -43,17 +44,22 @@ class Enemy(GameEntity, Collidable, Drawable):
         angle: Current facing angle in degrees.
     """
     
-    def __init__(self, pos: Tuple[float, float], enemy_type: str = "static"):
+    def __init__(self, pos: Tuple[float, float], enemy_type: str = "static", level: int = 1):
         """Initialize enemy at position with specified type.
         
         Args:
             pos: Initial position as (x, y) tuple.
             enemy_type: Type of enemy - "static", "patrol", or "aggressive".
+            level: Current level number (1-based) for strength scaling.
         """
         radius = config.STATIC_ENEMY_SIZE if enemy_type == "static" else config.DYNAMIC_ENEMY_SIZE
         super().__init__(pos, radius)
         
         self.type = enemy_type
+        self.level = level
+        
+        # Get level-based strength configuration
+        strength = level_rules.get_enemy_strength(level)
         
         # Set strategy based on type
         if enemy_type == "static":
@@ -62,14 +68,20 @@ class Enemy(GameEntity, Collidable, Drawable):
             self.angle = 0.0
         elif enemy_type == "patrol":
             self.strategy = PatrolEnemyStrategy()
-            self.speed = config.ENEMY_PATROL_SPEED
+            self.speed = strength.patrol_speed
             self.angle = random.uniform(0, 360)
         elif enemy_type == "aggressive":
             self.strategy = AggressiveEnemyStrategy()
-            self.speed = config.ENEMY_AGGRESSIVE_SPEED
+            self.speed = strength.aggressive_speed
             self.angle = 0.0
         else:
             raise ValueError(f"Unknown enemy type: {enemy_type}")
+        
+        # Store strength properties
+        self.damage = strength.damage
+        self.fire_interval_min = strength.fire_interval_min
+        self.fire_interval_max = strength.fire_interval_max
+        self.fire_range = strength.fire_range
         
         # Animation state
         self.pulse_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
@@ -218,7 +230,7 @@ class Enemy(GameEntity, Collidable, Drawable):
             
             # Check if ready to fire (player in range and cooldown expired)
             dist_to_player_sq = distance_squared((self.x, self.y), player_pos)
-            fire_range_sq = config.ENEMY_FIRE_RANGE * config.ENEMY_FIRE_RANGE
+            fire_range_sq = self.fire_range * self.fire_range
             if (dist_to_player_sq <= fire_range_sq and 
                 hasattr(self.strategy, 'fire_cooldown') and 
                 self.strategy.fire_cooldown <= 0):
@@ -414,39 +426,36 @@ def create_enemies(level: int, spawn_positions: List[Tuple[float, float]]) -> Li
     Returns:
         List of Enemy instances.
     """
-    enemy_count = config.BASE_ENEMY_COUNT + (level - 1) * config.ENEMY_COUNT_INCREMENT
+    # Get enemy count and distribution from level rules
+    enemy_count = level_rules.get_enemy_count(level)
     enemy_count = min(enemy_count, len(spawn_positions))
+    
+    distribution = level_rules.get_enemy_type_distribution(level, enemy_count)
     
     enemies = []
     used_positions = []
-    
-    # Determine enemy type distribution
-    static_count = max(1, enemy_count // 2)
-    dynamic_count = enemy_count - static_count
     
     # Shuffle positions
     available_positions = spawn_positions.copy()
     random.shuffle(available_positions)
     
     # Create static enemies
-    for i in range(min(static_count, len(available_positions))):
+    for i in range(min(distribution['static'], len(available_positions))):
         pos = available_positions[i]
-        enemies.append(Enemy(pos, "static"))
+        enemies.append(Enemy(pos, "static", level))
         used_positions.append(pos)
     
     # Create dynamic enemies (patrol and aggressive)
     remaining_positions = [p for p in available_positions if p not in used_positions]
-    patrol_count = dynamic_count // 2
-    aggressive_count = dynamic_count - patrol_count
     
-    for i in range(min(patrol_count, len(remaining_positions))):
+    for i in range(min(distribution['patrol'], len(remaining_positions))):
         pos = remaining_positions[i]
-        enemies.append(Enemy(pos, "patrol"))
+        enemies.append(Enemy(pos, "patrol", level))
     
     remaining_positions = [p for p in remaining_positions if p not in [e.get_pos() for e in enemies]]
-    for i in range(min(aggressive_count, len(remaining_positions))):
+    for i in range(min(distribution['aggressive'], len(remaining_positions))):
         pos = remaining_positions[i]
-        enemies.append(Enemy(pos, "aggressive"))
+        enemies.append(Enemy(pos, "aggressive", level))
     
     return enemies
 
