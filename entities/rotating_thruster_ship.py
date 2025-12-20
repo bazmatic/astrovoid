@@ -25,7 +25,8 @@ from utils import (
     distance_squared,
     get_wall_normal,
     get_closest_point_on_line,
-    reflect_velocity
+    reflect_velocity,
+    resolve_circle_collision
 )
 from entities.base import GameEntity
 from entities.collidable import Collidable
@@ -345,13 +346,19 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
     def check_circle_collision(
         self,
         other_pos: Tuple[float, float],
-        other_radius: float
+        other_radius: float,
+        other_entity: Optional[GameEntity] = None
     ) -> bool:
         """Check collision with another circular entity.
+        
+        Uses proper elastic collision physics when other_entity is provided,
+        otherwise falls back to simple push-back for backward compatibility.
         
         Args:
             other_pos: Position of the other entity (x, y).
             other_radius: Radius of the other entity.
+            other_entity: Optional GameEntity object. If provided, both objects'
+                         velocities will be updated using conservation of momentum.
             
         Returns:
             True if collision occurred, False otherwise.
@@ -360,15 +367,63 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
             (self.x, self.y), self.radius,
             other_pos, other_radius
         ):
-            # Push back from other entity
-            dx = self.x - other_pos[0]
-            dy = self.y - other_pos[1]
-            dist_sq = distance_squared((self.x, self.y), other_pos)
-            if dist_sq > 0:
-                dist = math.sqrt(dist_sq)
-                push_force = 2.0
-                self.vx += (dx / dist) * push_force
-                self.vy += (dy / dist) * push_force
+            if other_entity is not None:
+                # Use proper physics with conservation of momentum
+                # Use radius as proxy for mass (proportional to area)
+                mass1 = self.radius * self.radius
+                mass2 = other_radius * other_radius
+                
+                # Calculate new velocities and separation
+                new_vel1, new_vel2, separation = resolve_circle_collision(
+                    (self.x, self.y),
+                    (self.vx, self.vy),
+                    self.radius,
+                    mass1,
+                    other_pos,
+                    (other_entity.vx, other_entity.vy),
+                    other_radius,
+                    mass2,
+                    config.COLLISION_RESTITUTION
+                )
+                
+                # Update velocities
+                self.vx, self.vy = new_vel1
+                other_entity.vx, other_entity.vy = new_vel2
+                
+                # Separate objects to prevent overlap
+                if separation[0] != 0.0 or separation[1] != 0.0:
+                    # Apply separation to object 1 (self)
+                    self.x += separation[0]
+                    self.y += separation[1]
+                    
+                    # Calculate separation for object 2 (other_entity)
+                    # The separation vector is for object 1, which is overlap * (mass2 / total_mass)
+                    # So object 2 should move by overlap * (mass1 / total_mass) in opposite direction
+                    total_mass = mass1 + mass2
+                    if total_mass > 0:
+                        # Calculate total overlap from separation magnitude
+                        separation_mag = math.sqrt(separation[0] * separation[0] + separation[1] * separation[1])
+                        if separation_mag > 0:
+                            # separation_mag = overlap * (mass2 / total_mass)
+                            # So: overlap = separation_mag * (total_mass / mass2)
+                            total_overlap = separation_mag * (total_mass / mass2) if mass2 > 0 else separation_mag
+                            # Object 2 separation = overlap * (mass1 / total_mass)
+                            other_separation_mag = total_overlap * (mass1 / total_mass)
+                            # Normalize separation direction and apply to object 2 (opposite direction)
+                            sep_norm_x = separation[0] / separation_mag
+                            sep_norm_y = separation[1] / separation_mag
+                            other_entity.x -= sep_norm_x * other_separation_mag
+                            other_entity.y -= sep_norm_y * other_separation_mag
+            else:
+                # Backward compatibility: simple push-back
+                dx = self.x - other_pos[0]
+                dy = self.y - other_pos[1]
+                dist_sq = distance_squared((self.x, self.y), other_pos)
+                if dist_sq > 0:
+                    dist = math.sqrt(dist_sq)
+                    push_force = 2.0
+                    self.vx += (dx / dist) * push_force
+                    self.vy += (dy / dist) * push_force
             
             # Notify subclass of collision (hook for damage, sound, etc.)
             self.on_circle_collision()
@@ -431,3 +486,4 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
             screen: The pygame Surface to draw on.
         """
         pass
+

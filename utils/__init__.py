@@ -21,7 +21,8 @@ from utils.math_utils import (
     get_angle_to_point,
     get_closest_point_on_line,
     get_wall_normal,
-    reflect_velocity
+    reflect_velocity,
+    resolve_circle_collision
 )
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     'get_angle_to_point',
     'get_closest_point_on_line',
     'get_wall_normal',
-    'reflect_velocity'
+    'reflect_velocity',
+    'resolve_circle_collision'
 ]
 

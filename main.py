@@ -26,6 +26,9 @@ def main():
     """Initialize and run the game."""
     pygame.init()
     
+    # Initialize joystick support for game controllers
+    pygame.joystick.init()
+    
     # Initialize mixer for sound support
     if config.SOUND_ENABLED:
         pygame.mixer.init(

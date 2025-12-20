@@ -2,6 +2,7 @@
 
 import pygame
 import time
+import random
 from typing import List, Optional
 import config
 from entities.ship import Ship
@@ -70,6 +71,10 @@ class Game:
         # Store total score before starting level (for replay functionality)
         self.total_score_before_level = self.scoring.get_total_score()
         
+        # Set random seed based on level number for deterministic generation
+        # Level 1 = seed 1, Level 2 = seed 2, etc.
+        random.seed(self.level)
+        
         # Generate maze
         self.maze = Maze(self.level)
         
@@ -117,6 +122,54 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 self.running = False
+            elif event.type == pygame.JOYDEVICEADDED:
+                # Controller connected
+                self.input_handler.add_controller(event.device_index)
+            elif event.type == pygame.JOYDEVICEREMOVED:
+                # Controller disconnected
+                self.input_handler.remove_controller(event.device_index)
+            elif event.type == pygame.JOYBUTTONDOWN:
+                # Handle controller button presses for menu navigation
+                if self.state == config.STATE_MENU:
+                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                        self.state = config.STATE_PLAYING
+                        self.level = 1
+                        self.start_level()
+                elif self.state == config.STATE_PLAYING:
+                    if self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                        # Show quit confirmation
+                        self.state = config.STATE_QUIT_CONFIRM
+                elif self.state == config.STATE_QUIT_CONFIRM:
+                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                        # Confirm quit - return to menu and reset progress
+                        self.state = config.STATE_MENU
+                        self.level = 1
+                        self.scoring = ScoringSystem()
+                    elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
+                        # Cancel quit - return to playing
+                        self.state = config.STATE_PLAYING
+                elif self.state == config.STATE_LEVEL_COMPLETE:
+                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                        # Continue to next level (only if level succeeded)
+                        if self.level_succeeded:
+                            self.level += 1
+                            self.state = config.STATE_PLAYING
+                            self.start_level()
+                        else:
+                            # If failed, replay is the only option
+                            self.scoring.total_score = self.total_score_before_level
+                            self.state = config.STATE_PLAYING
+                            self.start_level()
+                    elif event.button == 1:  # B button for replay
+                        # Replay current level - restore score and restart
+                        self.scoring.total_score = self.total_score_before_level
+                        self.state = config.STATE_PLAYING
+                        self.start_level()
+                elif self.state == config.STATE_GAME_OVER:
+                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
+                        self.state = config.STATE_MENU
+                        self.level = 1
+                        self.scoring = ScoringSystem()
             elif event.type == pygame.KEYDOWN:
                 if self.state == config.STATE_MENU:
                     if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
@@ -172,16 +225,19 @@ class Game:
         commands = self.input_handler.process_input(keys)
         
         # Handle shield activation (only active while button is held down)
-        # Shield is active only while DOWN/S is pressed (not a toggle)
+        # Shield is active only while DOWN/S is pressed OR controller shield button (not a toggle)
         shield_key_pressed = keys[pygame.K_DOWN] or keys[pygame.K_s]
+        shield_controller_pressed = self.input_handler.is_controller_shield_pressed()
+        shield_pressed = shield_key_pressed or shield_controller_pressed
+        
         # Only allow manual shield control after initial activation period
         if self.ship.shield_initial_timer <= 0:
-            if shield_key_pressed:
-                # Key is held - activate shield
+            if shield_pressed:
+                # Key/button is held - activate shield
                 if not self.ship.is_shield_active():
                     self.ship.shield_active = True
             else:
-                # Key is not held - deactivate shield
+                # Key/button is not held - deactivate shield
                 if self.ship.is_shield_active():
                     self.ship.shield_active = False
         
@@ -194,7 +250,12 @@ class Game:
             self.command_recorder.record_command(cmd)
         
         # Handle fire separately (has rate limiting)
-        if keys[pygame.K_SPACE]:
+        # Check both keyboard and controller for fire input
+        fire_key_pressed = keys[pygame.K_SPACE]
+        fire_controller_pressed = self.input_handler.is_controller_fire_pressed()
+        fire_pressed = fire_key_pressed or fire_controller_pressed
+        
+        if fire_pressed:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0
             current_time = pygame.time.get_ticks()
@@ -208,7 +269,7 @@ class Game:
         
         # Record NO_ACTION once per loop when no input is detected
         # This allows the replay enemy to mirror periods of inactivity
-        if not commands and not keys[pygame.K_SPACE]:
+        if not commands and not fire_pressed:
             self.command_recorder.record_command(CommandType.NO_ACTION)
         
         # Update ship
@@ -228,7 +289,7 @@ class Game:
                 
                 # Check enemy-ship collision (skip if shield is active)
                 if not self.ship.is_shield_active():
-                    if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius):
+                    if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
                         self.scoring.record_enemy_collision()
                 
                 # Check if enemy fired a projectile
@@ -255,7 +316,7 @@ class Game:
             
             # Check replay enemy-ship collision (skip if shield is active)
             if not self.ship.is_shield_active():
-                if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
+                if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius, replay_enemy):
                     self.scoring.record_enemy_collision()
             
             # Check if replay enemy fired a projectile
@@ -287,6 +348,10 @@ class Game:
                 if not self.ship.is_shield_active():
                     if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
                         self.scoring.record_enemy_collision()  # Apply collision penalty
+                        # Apply small velocity impulse to ship from projectile impact
+                        # Transfer momentum in direction projectile was traveling
+                        self.ship.vx += projectile.vx * config.PROJECTILE_IMPACT_FORCE
+                        self.ship.vy += projectile.vy * config.PROJECTILE_IMPACT_FORCE
                         # Projectile is deactivated by collision, skip adding to active list
                         continue
             
@@ -393,14 +458,22 @@ class Game:
         subtitle = self.small_font.render("A Skill-Based Space Navigation Game", True, config.COLOR_TEXT)
         instructions = [
             "Controls:",
-            "Arrow Keys / WASD: Rotate and Thrust",
-            "Space: Fire Weapon",
+            "Keyboard:",
+            "  Arrow Keys / WASD: Rotate and Thrust",
+            "  Space: Fire Weapon",
+            "  Down/S: Activate Shield",
+            "",
+            "Controller:",
+            "  Left/Right Stick: Rotate",
+            "  ZR / B: Thrust",
+            "  ZL / A: Fire",
+            "  L / R: Shield",
             "",
             "Objective:",
             "Navigate through mazes to reach the exit",
             "Balance speed, fuel, and ammo for high scores",
             "",
-            "Press SPACE to Start"
+            "Press SPACE or A Button to Start"
         ]
         
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
@@ -480,7 +553,7 @@ class Game:
         """Draw level complete or failed screen."""
         # Show different title based on success/failure
         if self.level_succeeded:
-            title_text = "LEVEL COMPLETE!"
+            title_text = f"LEVEL {self.level} COMPLETE"
             title_color = config.COLOR_TEXT
         else:
             title_text = "LEVEL FAILED"
@@ -490,11 +563,11 @@ class Game:
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 120))
         self.screen.blit(title, title_rect)
         
-        # Format time as minutes:seconds
+        # Format time as minutes:seconds with one decimal place
         minutes = int(self.completion_time_seconds // 60)
-        seconds = int(self.completion_time_seconds % 60)
+        seconds_with_decimal = self.completion_time_seconds % 60
         time_text = self.small_font.render(
-            f"Time: {minutes}:{seconds:02d}",
+            f"Time: {minutes}:{seconds_with_decimal:05.1f}",
             True, config.COLOR_TEXT
         )
         time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 170))
@@ -521,11 +594,11 @@ class Game:
         
         # Add different messages based on success/failure
         if self.level_succeeded:
-            breakdown.append("Press SPACE to Continue")
-            breakdown.append("Press R to Replay Level")
+            breakdown.append("Press SPACE/A to Continue")
+            breakdown.append("Press R/B to Replay Level")
         else:
             breakdown.append("Score reached zero!")
-            breakdown.append("Press SPACE or R to Retry Level")
+            breakdown.append("Press SPACE/A or R/B to Retry Level")
         
         for line in breakdown:
             text = self.small_font.render(line, True, config.COLOR_TEXT)
@@ -571,8 +644,8 @@ class Game:
         self.screen.blit(message, message_rect)
         
         # Options
-        yes_text = self.small_font.render("Yes (Y or Enter)", True, config.COLOR_TEXT)
-        no_text = self.small_font.render("No (N or ESC)", True, config.COLOR_TEXT)
+        yes_text = self.small_font.render("Yes (Y/Enter/A)", True, config.COLOR_TEXT)
+        no_text = self.small_font.render("No (N/ESC/B)", True, config.COLOR_TEXT)
         
         yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 150))
         no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 150))
@@ -594,7 +667,7 @@ class Game:
         self.screen.blit(score_text, score_rect)
         
         continue_text = self.small_font.render(
-            "Press SPACE to Return to Menu",
+            "Press SPACE/A to Return to Menu",
             True, config.COLOR_TEXT
         )
         continue_rect = continue_text.get_rect(center=(config.SCREEN_WIDTH // 2, 400))

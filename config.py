@@ -29,6 +29,7 @@ SHIP_ROTATION_SPEED = 5.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
 SHIP_MAX_SPEED = 8.0
+COLLISION_RESTITUTION = 0.85  # Coefficient of restitution for ship-enemy collisions (0.0 = inelastic, 1.0 = elastic)
 
 # Resources
 INITIAL_FUEL = 1000
@@ -83,6 +84,7 @@ PROJECTILE_SPEED = 8.0
 PROJECTILE_SIZE = 3
 PROJECTILE_LIFETIME = 120  # frames
 COLOR_ENEMY_PROJECTILE = (255, 100, 100)  # Red/orange color for enemy bullets
+PROJECTILE_IMPACT_FORCE = 0.3  # Velocity impulse applied to ship when hit by projectile (small effect)
 
 # Visual effects
 SHIP_GLOW_INTENSITY = 0.3
@@ -119,6 +121,10 @@ ENEMY_DESTROY_SOUND_VOLUME = 0.6  # Volume level for enemy destruction sound (0.
 THRUSTER_NOISE_DURATION = 0.1  # Duration of white noise loop in seconds
 SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
 SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
+
+# Controller settings
+CONTROLLER_DEADZONE = 0.2  # Deadzone threshold for analog sticks (0.0 to 1.0)
+CONTROLLER_TRIGGER_THRESHOLD = 0.0  # Threshold for trigger activation (0.0 to 1.0)
 
 # Game states
 STATE_MENU = "menu"

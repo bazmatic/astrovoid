@@ -260,6 +260,110 @@ def reflect_velocity(
     return (reflected_vx * bounce_factor, reflected_vy * bounce_factor)
 
 
+def resolve_circle_collision(
+    pos1: Tuple[float, float],
+    vel1: Tuple[float, float],
+    radius1: float,
+    mass1: float,
+    pos2: Tuple[float, float],
+    vel2: Tuple[float, float],
+    radius2: float,
+    mass2: float,
+    restitution: float = 0.85
+) -> Tuple[Tuple[float, float], Tuple[float, float], Tuple[float, float]]:
+    """Resolve elastic collision between two circular objects.
+    
+    Implements conservation of momentum and energy with coefficient of restitution.
+    Calculates new velocities for both objects and separation vector to prevent overlap.
+    
+    Args:
+        pos1: Position of first object (x, y).
+        vel1: Velocity of first object (vx, vy).
+        radius1: Radius of first object.
+        mass1: Mass of first object (can use radius as proxy).
+        pos2: Position of second object (x, y).
+        vel2: Velocity of second object (vx, vy).
+        radius2: Radius of second object.
+        mass2: Mass of second object (can use radius as proxy).
+        restitution: Coefficient of restitution (0.0 = perfectly inelastic, 1.0 = perfectly elastic).
+                     Default 0.85 matches wall bounce factor.
+    
+    Returns:
+        Tuple of (new_vel1, new_vel2, separation_vector):
+        - new_vel1: New velocity for first object (vx, vy).
+        - new_vel2: New velocity for second object (vx, vy).
+        - separation_vector: Vector to separate objects (dx, dy) to prevent overlap.
+    """
+    # Calculate collision normal (from pos2 to pos1)
+    dx = pos1[0] - pos2[0]
+    dy = pos1[1] - pos2[1]
+    dist_sq = dx * dx + dy * dy
+    
+    # Avoid division by zero
+    if dist_sq < 1e-10:
+        # Objects are at same position - use arbitrary direction
+        normal_x, normal_y = 1.0, 0.0
+        dist = 1.0
+    else:
+        dist = math.sqrt(dist_sq)
+        normal_x = dx / dist
+        normal_y = dy / dist
+    
+    # Calculate relative velocity along collision normal
+    v1x, v1y = vel1
+    v2x, v2y = vel2
+    
+    # Relative velocity
+    rel_vx = v1x - v2x
+    rel_vy = v1y - v2y
+    
+    # Relative velocity along collision normal
+    rel_vel_normal = rel_vx * normal_x + rel_vy * normal_y
+    
+    # Don't resolve if objects are moving apart
+    if rel_vel_normal > 0:
+        # Objects are separating, return original velocities
+        return (vel1, vel2, (0.0, 0.0))
+    
+    # Calculate impulse using conservation of momentum
+    # J = -(1 + e) * (v_rel · n) / (1/m1 + 1/m2)
+    # where e is coefficient of restitution
+    reduced_mass = 1.0 / (1.0 / mass1 + 1.0 / mass2)
+    impulse_magnitude = -(1.0 + restitution) * rel_vel_normal * reduced_mass
+    
+    # Apply impulse to both objects
+    # v1' = v1 + (J / m1) * n
+    # v2' = v2 - (J / m2) * n
+    impulse_x = impulse_magnitude * normal_x
+    impulse_y = impulse_magnitude * normal_y
+    
+    new_v1x = v1x + impulse_x / mass1
+    new_v1y = v1y + impulse_y / mass1
+    new_v2x = v2x - impulse_x / mass2
+    new_v2y = v2y - impulse_y / mass2
+    
+    # Calculate separation to prevent overlap
+    overlap = (radius1 + radius2) - dist
+    if overlap > 0:
+        # Separate objects along collision normal
+        # Distribute separation based on masses (heavier object moves less)
+        total_mass = mass1 + mass2
+        separation_factor1 = mass2 / total_mass
+        separation_factor2 = mass1 / total_mass
+        
+        separation_x = normal_x * overlap * separation_factor1
+        separation_y = normal_y * overlap * separation_factor1
+    else:
+        separation_x = 0.0
+        separation_y = 0.0
+    
+    return (
+        (new_v1x, new_v1y),
+        (new_v2x, new_v2y),
+        (separation_x, separation_y)
+    )
+
+
 def circle_line_collision_swept(
     start_pos: Tuple[float, float],
     end_pos: Tuple[float, float],
