@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -46,6 +47,7 @@ class CollisionHandler:
         enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
         split_bosses: List['SplitBoss'],
+        mother_bosses: List['MotherBoss'],
         eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal']
     ) -> bool:
@@ -56,6 +58,7 @@ class CollisionHandler:
             enemies: List of regular enemies.
             replay_enemies: List of replay enemies.
             split_bosses: List of SplitBoss enemies.
+            mother_bosses: List of Mother Boss enemies.
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             
@@ -111,6 +114,28 @@ class CollisionHandler:
                     if split_boss.take_damage():
                         # SplitBoss destroyed - spawn two ReplayEnemyShip instances
                         split_boss.active = False
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn two ReplayEnemyShip instances at random nearby positions
+                        self._spawn_split_boss_children(
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals
+                        )
+                    # Note: If not destroyed, projectile still hits but boss survives
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-Mother Boss collision
+        for mother_boss in mother_bosses:
+            if mother_boss.active and projectile.active:
+                if projectile.check_circle_collision(mother_boss.get_pos(), mother_boss.radius):
+                    boss_pos = mother_boss.get_pos()
+                    boss_velocity = (mother_boss.vx, mother_boss.vy)
+                    
+                    # Take damage - returns True if destroyed
+                    if mother_boss.take_damage():
+                        # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
+                        mother_boss.active = False
                         self.sound_manager.play_enemy_destroy()
                         self.scoring.record_enemy_destroyed()
                         

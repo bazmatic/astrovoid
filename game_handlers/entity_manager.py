@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
     from entities.egg import Egg
 
 
@@ -20,6 +21,7 @@ class EntityManager:
         self.enemies: List['Enemy'] = []
         self.replay_enemies: List['ReplayEnemyShip'] = []
         self.split_bosses: List['SplitBoss'] = []
+        self.mother_bosses: List['MotherBoss'] = []
         self.eggs: List['Egg'] = []
     
     def clear_all(self) -> None:
@@ -27,6 +29,7 @@ class EntityManager:
         self.enemies.clear()
         self.replay_enemies.clear()
         self.split_bosses.clear()
+        self.mother_bosses.clear()
         self.eggs.clear()
     
     def get_all_enemy_positions(self) -> List[Tuple[float, float]]:
@@ -39,6 +42,7 @@ class EntityManager:
         positions.extend([e.get_pos() for e in self.enemies])
         positions.extend([re.get_pos() for re in self.replay_enemies])
         positions.extend([sb.get_pos() for sb in self.split_bosses])
+        positions.extend([mb.get_pos() for mb in self.mother_bosses])
         positions.extend([egg.get_pos() for egg in self.eggs])
         return positions
     
@@ -57,6 +61,9 @@ class EntityManager:
         for split_boss in self.split_bosses:
             if split_boss.active:
                 yield split_boss
+        for mother_boss in self.mother_bosses:
+            if mother_boss.active:
+                yield mother_boss
         for egg in self.eggs:
             if egg.active:
                 yield egg

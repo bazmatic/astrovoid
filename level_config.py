@@ -104,6 +104,22 @@ def get_level_split_boss_count(level: int) -> int:
     return get_split_boss_count(level)
 
 
+def get_level_mother_boss_count(level: int) -> int:
+    """Get mother boss count for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Mother boss count from config if present, otherwise default from level_rules.
+    """
+    from level_rules import get_mother_boss_count
+    config = load_level_config(level)
+    if config and 'enemies' in config and 'mother_boss' in config['enemies']:
+        return int(config['enemies']['mother_boss'])
+    return get_mother_boss_count(level)
+
+
 def get_level_egg_count(level: int) -> int:
     """Get egg count for a level.
     

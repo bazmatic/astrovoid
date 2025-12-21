@@ -92,6 +92,13 @@ SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enem
 SPLIT_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
 SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
 
+# Mother Boss settings
+MOTHER_BOSS_SIZE_MULTIPLIER = 3.0  # Triple size compared to regular ReplayEnemyShip
+MOTHER_BOSS_HIT_POINTS = 5  # Number of hits required to destroy Mother Boss
+MOTHER_BOSS_EGG_LAY_INTERVAL = 180  # Frames between egg laying (3 seconds at 60 FPS)
+MOTHER_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
+MOTHER_BOSS_SCALE_FACTOR = 0.2  # Scaling factor for continuous growth (sqrt-based)
+
 # Egg settings
 EGG_INITIAL_SIZE = 8  # Starting radius
 EGG_MAX_SIZE = 24  # Maximum radius before popping

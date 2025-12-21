@@ -163,6 +163,27 @@ def get_egg_count(level: int) -> int:
     return round(count)
 
 
+def get_mother_boss_count(level: int) -> int:
+    """Get number of Mother Boss enemies for a level.
+    
+    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
+    This provides slow, diminishing returns scaling that continues indefinitely.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Number of Mother Boss enemies (0 for tutorial levels, then continuous scaling).
+    """
+    if level <= config.TUTORIAL_LEVELS:
+        return 0
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    # Continuous scaling with square root for diminishing returns
+    count = config.MOTHER_BOSS_BASE_COUNT + config.MOTHER_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
+    return round(count)
+
+
 def get_enemy_speed(level: int, enemy_type: str) -> float:
     """Get movement speed for an enemy type at a given level.
     
