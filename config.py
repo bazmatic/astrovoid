@@ -144,8 +144,8 @@ SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
 SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
 
 # Controller settings
-CONTROLLER_DEADZONE = 0.2  # Deadzone threshold for analog sticks (0.0 to 1.0)
-CONTROLLER_TRIGGER_THRESHOLD = 0.0  # Threshold for trigger activation (0.0 to 1.0)
+CONTROLLER_DEADZONE = 0.05  # Deadzone threshold for analog sticks (0.0 to 1.0)
+CONTROLLER_TRIGGER_THRESHOLD = -0.1  # Threshold for trigger activation (negative to catch any movement)
 
 # Powerup crystal settings
 POWERUP_CRYSTAL_SIZE = 6

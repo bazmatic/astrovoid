@@ -28,6 +28,7 @@ from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
 from game_handlers.state_handlers import StateHandlerRegistry
+from utils.math_utils import get_angle_to_point
 
 
 class Game:
@@ -144,6 +145,10 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        # Set initial angle to point towards exit (opposite corner)
+        exit_pos = (self.maze.exit.x, self.maze.exit.y)
+        initial_angle = get_angle_to_point(self.maze.start_pos, exit_pos)
+        self.ship.angle = initial_angle
         # Activate shield at level start (initial activation, no fuel consumed)
         self.ship.shield_active = True
         # Reset gun upgrade state

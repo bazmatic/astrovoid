@@ -113,18 +113,18 @@ class InputHandler:
             elif stick_x > 0:
                 commands.append(CommandType.ROTATE_RIGHT)
         
-        # Process thrust: ZR (right trigger/axis 4) OR B button (button 1)
+        # Process thrust: L button (button 4) OR ZL (left trigger/axis 5)
         thrust_active = False
-        if num_axes > 4:
-            right_trigger = controller.get_axis(4)
+        if num_buttons >= 5:
+            if controller.get_button(4):  # L button
+                thrust_active = True
+        
+        if not thrust_active and num_axes >= 6:
+            left_trigger = controller.get_axis(5)
             # Triggers may range from -1.0 to 1.0 (unpressed to pressed)
             # or 0.0 to 1.0 (unpressed to pressed)
             # Check for positive values above threshold
-            if right_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
-                thrust_active = True
-        
-        if not thrust_active and num_buttons > 1:
-            if controller.get_button(1):  # B button
+            if left_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
                 thrust_active = True
         
         if thrust_active:
@@ -171,17 +171,21 @@ class InputHandler:
         num_axes = controller.get_numaxes()
         num_buttons = controller.get_numbuttons()
         
-        # Fire: ZL (left trigger/axis 5) OR Y button (button 3)
-        if num_axes > 5:
-            left_trigger = controller.get_axis(5)
+        # Fire: B button (button 1) OR R button (button 5) OR ZR (right trigger/axis 4)
+        if num_buttons >= 2:
+            if controller.get_button(1):  # B button
+                return True
+        
+        if num_buttons >= 6:
+            if controller.get_button(5):  # R button
+                return True
+        
+        if num_axes >= 5:
+            right_trigger = controller.get_axis(4)
             # Triggers may range from -1.0 to 1.0 (unpressed to pressed)
             # or 0.0 to 1.0 (unpressed to pressed)
             # Check for positive values above threshold
-            if left_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
-                return True
-        
-        if num_buttons > 3:
-            if controller.get_button(3):  # Y button
+            if right_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
                 return True
         
         return False
@@ -267,7 +271,12 @@ class InputHandler:
         if not self.controllers:
             return False
         
-        # Quit: X button (button 2)
+        # Exclude squeeze/grip buttons (typically buttons 6+)
+        # These should not trigger any actions
+        if button >= 6:
+            return False
+        
+        # Quit: X button (button 2) only
         if button == 2:  # X button
             return True
         
