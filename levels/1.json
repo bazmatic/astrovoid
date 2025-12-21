@@ -3,8 +3,10 @@
     "static": 0,
     "patrol": 0,
     "aggressive": 0,
-    "replay": 0,
-    "split_boss": 0
+    "replay": 3,
+    "split_boss": 0,
+    "mother_boss": 0,
+    "egg": 0
   },
   "seed": 100,
   "maze": {

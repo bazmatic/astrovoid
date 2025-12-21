@@ -49,6 +49,8 @@ class SoundManager:
         self.exit_warble_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.upgraded_shoot_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.powerup_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
+        self.portal_power_up_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
+        self.portal_power_down_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.tinkling_sound_cache: Dict[float, Optional[pygame.mixer.Sound]] = {}  # Cache tinkling sounds by pitch
         
         # Set up dedicated channel for thruster (continuous sound)
@@ -863,5 +865,178 @@ class SoundManager:
             # Use channel 5 for star feedback sounds
             star_channel = pygame.mixer.Channel(5)
             star_channel.play(sound)
+    
+    def _generate_portal_power_up(self) -> Optional[pygame.mixer.Sound]:
+        """Generate an ascending power-up sound for portal activation.
+        
+        Creates an optimistic, ascending tone with white noise for a whoosh effect.
+        
+        Returns:
+            pygame.mixer.Sound object with power-up sound, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.6  # Slightly longer for a satisfying power-up
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Ascending frequency sweep (optimistic, going up)
+        start_freq = 200.0  # Lower start for more impact
+        end_freq = 600.0    # Higher end for brightness
+        # Use exponential curve for more natural ascent
+        freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+        
+        # Generate tone with slight vibrato for expressiveness
+        vibrato = 0.08 * np.sin(2 * math.pi * 5.0 * t_array)
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        
+        # Main tone with harmonics for brightness
+        tone = np.sin(phase)
+        tone += 0.4 * np.sin(phase * 2)  # Second harmonic
+        tone += 0.2 * np.sin(phase * 3)  # Third harmonic
+        tone += 0.1 * np.sin(phase * 4)  # Fourth harmonic for sparkle
+        
+        # Generate white noise for whoosh effect
+        white_noise = np.random.normal(0.0, 1.0, num_samples).astype(np.float32)
+        
+        # Low-pass filter the noise to follow the frequency sweep (whoosh effect)
+        # Filter cutoff follows the frequency curve
+        noise_cutoff_base = freq_curve * 2.0  # Noise extends higher than tone
+        # Apply low-pass filtering using convolution (simple moving average)
+        # Filter width inversely related to cutoff frequency
+        filtered_noise = np.zeros(num_samples, dtype=np.float32)
+        for i in range(num_samples):
+            # Dynamic filter width based on frequency
+            filter_width = max(3, int(sample_rate / (noise_cutoff_base[i] * 4)))
+            filter_width = min(filter_width, 50)  # Cap at reasonable size
+            start_idx = max(0, i - filter_width // 2)
+            end_idx = min(num_samples, i + filter_width // 2 + 1)
+            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+        
+        # Mix tone and noise (50% tone, 50% noise for strong whoosh)
+        tone_mix = 0.5
+        noise_mix = 0.5
+        mixed = tone * tone_mix + filtered_noise * noise_mix
+        
+        # Envelope: quick attack, smooth decay with sustain
+        attack = np.clip(progress / 0.1, 0.0, 1.0)
+        decay = np.exp(-np.maximum(progress - 0.2, 0.0) * 2.0)
+        sustain = 0.95 - 0.3 * progress
+        envelope = attack * decay * sustain
+        
+        # Apply envelope and normalize
+        samples = mixed * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.POWERUP_ACTIVATION_SOUND_VOLUME * 0.9)
+        return sound
+    
+    def _generate_portal_power_down(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a descending power-down sound for portal deactivation.
+        
+        Creates a descending, deactivation tone with white noise for a whoosh effect.
+        
+        Returns:
+            pygame.mixer.Sound object with power-down sound, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.5  # Shorter for a quick deactivation
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Descending frequency sweep (going down)
+        start_freq = 500.0  # Higher start
+        end_freq = 200.0    # Lower end
+        # Use exponential curve for more natural descent
+        freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+        
+        # Generate tone with slight vibrato
+        vibrato = 0.06 * np.sin(2 * math.pi * 4.0 * t_array)
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        
+        # Main tone with fewer harmonics for a more muted sound
+        tone = np.sin(phase)
+        tone += 0.25 * np.sin(phase * 2)  # Second harmonic (reduced)
+        tone += 0.1 * np.sin(phase * 3)   # Third harmonic (reduced)
+        
+        # Generate white noise for whoosh effect
+        white_noise = np.random.normal(0.0, 1.0, num_samples).astype(np.float32)
+        
+        # Low-pass filter the noise to follow the frequency sweep (whoosh effect)
+        # Filter cutoff follows the frequency curve
+        noise_cutoff_base = freq_curve * 2.0  # Noise extends higher than tone
+        # Apply low-pass filtering using convolution (simple moving average)
+        filtered_noise = np.zeros(num_samples, dtype=np.float32)
+        for i in range(num_samples):
+            # Dynamic filter width based on frequency
+            filter_width = max(3, int(sample_rate / (noise_cutoff_base[i] * 4)))
+            filter_width = min(filter_width, 50)  # Cap at reasonable size
+            start_idx = max(0, i - filter_width // 2)
+            end_idx = min(num_samples, i + filter_width // 2 + 1)
+            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+        
+        # Mix tone and noise (50% tone, 50% noise for strong whoosh)
+        tone_mix = 0.5
+        noise_mix = 0.5
+        mixed = tone * tone_mix + filtered_noise * noise_mix
+        
+        # Envelope: quick attack, faster decay
+        attack = np.clip(progress / 0.05, 0.0, 1.0)
+        decay = np.exp(-progress * 4.0)  # Faster decay
+        envelope = attack * decay
+        
+        # Apply envelope and normalize
+        samples = mixed * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.POWERUP_ACTIVATION_SOUND_VOLUME * 0.8)
+        return sound
+    
+    def play_portal_power_up(self) -> None:
+        """Play ascending tone when portal activates."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        if self.portal_power_up_sound is None:
+            self.portal_power_up_sound = self._generate_portal_power_up()
+        
+        if not self.portal_power_up_sound:
+            return
+        
+        # Use channel 6 for portal sounds
+        portal_channel = pygame.mixer.Channel(6)
+        portal_channel.play(self.portal_power_up_sound)
+    
+    def play_portal_power_down(self) -> None:
+        """Play descending tone when portal deactivates."""
+        if not config.SOUND_ENABLED:
+            return
+        
+        if self.portal_power_down_sound is None:
+            self.portal_power_down_sound = self._generate_portal_power_down()
+        
+        if not self.portal_power_down_sound:
+            return
+        
+        # Use channel 6 for portal sounds
+        portal_channel = pygame.mixer.Channel(6)
+        portal_channel.play(self.portal_power_down_sound)
 
 

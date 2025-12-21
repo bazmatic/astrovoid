@@ -9,10 +9,14 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
+    from entities.baby import Baby
+    from entities.egg import Egg
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
     from scoring.system import ScoringSystem
+    from entities.command_recorder import CommandRecorder
 
 
 class EnemyUpdater:
@@ -134,6 +138,131 @@ class EnemyUpdater:
             
             # Check if SplitBoss fired a projectile
             fired_projectile = split_boss.get_fired_projectile(player_pos)
+            if fired_projectile:
+                projectiles.append(fired_projectile)
+    
+    def update_babies(
+        self,
+        babies: List['Baby'],
+        dt: float,
+        player_pos: Optional[Tuple[float, float]],
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        projectiles: List['Projectile']
+    ) -> None:
+        """Update Baby enemies.
+        
+        Args:
+            babies: List of Baby instances.
+            dt: Delta time since last update.
+            player_pos: Current player position.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            projectiles: List to add fired projectiles to.
+        """
+        for baby in babies:
+            if not baby.active:
+                continue
+            
+            baby.update(dt, player_pos)
+            
+            # Check baby-wall collision
+            baby.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check baby-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(baby.get_pos(), baby.radius, baby):
+                    scoring.record_enemy_collision()
+            
+            # Check if baby fired a projectile
+            fired_projectile = baby.get_fired_projectile(player_pos)
+            if fired_projectile:
+                projectiles.append(fired_projectile)
+    
+    def update_eggs(
+        self,
+        eggs: List['Egg'],
+        dt: float,
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        command_recorder: 'CommandRecorder',
+        babies: List['Baby']
+    ) -> None:
+        """Update egg enemies.
+        
+        Args:
+            eggs: List of Egg instances.
+            dt: Delta time since last update.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            command_recorder: Command recorder for spawning Baby enemies.
+            babies: List to add spawned Baby enemies to.
+        """
+        for egg in eggs:
+            if not egg.active:
+                continue
+            
+            egg.update(dt)
+            
+            # Check if egg should pop
+            if egg.should_pop():
+                egg.pop(command_recorder, babies)
+                continue
+            
+            # Check egg-wall collision (eggs are stationary, but check for consistency)
+            egg.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check egg-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(egg.get_pos(), egg.radius, egg):
+                    scoring.record_enemy_collision()
+    
+    def update_mother_bosses(
+        self,
+        mother_bosses: List['MotherBoss'],
+        dt: float,
+        player_pos: Optional[Tuple[float, float]],
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        projectiles: List['Projectile'],
+        eggs: List['Egg']
+    ) -> None:
+        """Update Mother Boss enemies.
+        
+        Args:
+            mother_bosses: List of MotherBoss instances.
+            dt: Delta time since last update.
+            player_pos: Current player position.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            projectiles: List to add fired projectiles to.
+            eggs: List to add laid eggs to.
+        """
+        for mother_boss in mother_bosses:
+            if not mother_boss.active:
+                continue
+            
+            mother_boss.update(dt, player_pos)
+            
+            # Try to lay an egg
+            mother_boss.lay_egg(eggs)
+            
+            # Check Mother Boss-wall collision
+            mother_boss.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check Mother Boss-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(mother_boss.get_pos(), mother_boss.radius, mother_boss):
+                    scoring.record_enemy_collision()
+            
+            # Check if Mother Boss fired a projectile
+            fired_projectile = mother_boss.get_fired_projectile(player_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
 

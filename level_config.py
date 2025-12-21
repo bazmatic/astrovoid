@@ -8,7 +8,7 @@ import json
 import os
 from typing import Optional, Dict
 import level_rules
-from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count
+from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count, get_egg_count
 from maze.config import MazeComplexity
 
 
@@ -74,6 +74,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
     patrol = enemies_config.get('patrol', default_counts.patrol)
     aggressive = enemies_config.get('aggressive', default_counts.aggressive)
     replay = enemies_config.get('replay', default_counts.replay)
+    egg = enemies_config.get('egg', default_counts.egg)
     
     # Calculate total from the sum of regular enemies
     total = static + patrol + aggressive
@@ -83,7 +84,8 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         static=static,
         patrol=patrol,
         aggressive=aggressive,
-        replay=replay
+        replay=replay,
+        egg=egg
     )
 
 
@@ -100,6 +102,37 @@ def get_level_split_boss_count(level: int) -> int:
     if config and 'enemies' in config and 'split_boss' in config['enemies']:
         return int(config['enemies']['split_boss'])
     return get_split_boss_count(level)
+
+
+def get_level_mother_boss_count(level: int) -> int:
+    """Get mother boss count for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Mother boss count from config if present, otherwise default from level_rules.
+    """
+    from level_rules import get_mother_boss_count
+    config = load_level_config(level)
+    if config and 'enemies' in config and 'mother_boss' in config['enemies']:
+        return int(config['enemies']['mother_boss'])
+    return get_mother_boss_count(level)
+
+
+def get_level_egg_count(level: int) -> int:
+    """Get egg count for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Egg count from config if present, otherwise default from level_rules.
+    """
+    config = load_level_config(level)
+    if config and 'enemies' in config and 'egg' in config['enemies']:
+        return int(config['enemies']['egg'])
+    return get_egg_count(level)
 
 
 def get_maze_complexity(level: int) -> Optional[MazeComplexity]:

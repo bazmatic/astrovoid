@@ -1,8 +1,8 @@
-# Asterdroids Architecture Documentation
+# ASTER VOID Architecture Documentation
 
 ## Overview
 
-Asterdroids is a skill-based space navigation game built with Pygame. The game combines classic Asteroids-style flight mechanics with procedurally-generated maze challenges. Players pilot a momentum-based spacecraft through increasingly complex mazes, balancing speed, fuel conservation, precision flying, and combat efficiency.
+ASTER VOID is a skill-based space navigation game built with Pygame. The game combines classic Asteroids-style flight mechanics with procedurally-generated maze challenges. Players pilot a momentum-based spacecraft through increasingly complex mazes, balancing speed, fuel conservation, precision flying, and combat efficiency.
 
 ## System Design
 

@@ -13,6 +13,9 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
+    from entities.baby import Baby
+    from entities.egg import Egg
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -46,6 +49,9 @@ class CollisionHandler:
         enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
         split_bosses: List['SplitBoss'],
+        mother_bosses: List['MotherBoss'],
+        babies: List['Baby'],
+        eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal']
     ) -> bool:
         """Handle collisions between a projectile and enemies.
@@ -55,6 +61,9 @@ class CollisionHandler:
             enemies: List of regular enemies.
             replay_enemies: List of replay enemies.
             split_bosses: List of SplitBoss enemies.
+            mother_bosses: List of Mother Boss enemies.
+            babies: List of Baby enemies.
+            eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             
         Returns:
@@ -71,14 +80,34 @@ class CollisionHandler:
             if enemy.active and projectile.active:
                 if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
                     enemy_pos = enemy.get_pos()
-                    enemy.destroy()
-                    self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(enemy_pos)
-                        powerup_crystals.append(crystal)
+                    # Handle static enemies with momentum system
+                    if enemy.type == "static":
+                        # Transfer momentum from projectile
+                        transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
+                        transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
+                        enemy.apply_momentum(transfer_vx, transfer_vy)
+                        
+                        # Take damage - returns True if destroyed
+                        if enemy.take_damage():
+                            enemy.destroy()
+                            self.sound_manager.play_enemy_destroy()
+                            self.scoring.record_enemy_destroyed()
+                            
+                            # Spawn powerup crystal with probability
+                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                                crystal = PowerupCrystal(enemy_pos)
+                                powerup_crystals.append(crystal)
+                    else:
+                        # Non-static enemies destroyed immediately (existing behavior)
+                        enemy.destroy()
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn powerup crystal with probability
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(enemy_pos)
+                            powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         
@@ -117,6 +146,68 @@ class CollisionHandler:
                             boss_pos, boss_velocity, replay_enemies, powerup_crystals
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-Mother Boss collision
+        for mother_boss in mother_bosses:
+            if mother_boss.active and projectile.active:
+                if projectile.check_circle_collision(mother_boss.get_pos(), mother_boss.radius):
+                    boss_pos = mother_boss.get_pos()
+                    boss_velocity = (mother_boss.vx, mother_boss.vy)
+                    
+                    # Take damage - returns True if destroyed
+                    if mother_boss.take_damage():
+                        # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
+                        mother_boss.active = False
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn two ReplayEnemyShip instances at random nearby positions
+                        self._spawn_split_boss_children(
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals
+                        )
+                    # Note: If not destroyed, projectile still hits but boss survives
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-baby collision
+        for baby in babies:
+            if baby.active and projectile.active:
+                if projectile.check_circle_collision(baby.get_pos(), baby.radius):
+                    baby_pos = baby.get_pos()
+                    baby.active = False
+                    self.sound_manager.play_enemy_destroy()
+                    self.scoring.record_enemy_destroyed()
+                    
+                    # Spawn powerup crystal with probability
+                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                        crystal = PowerupCrystal(baby_pos)
+                        powerup_crystals.append(crystal)
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-egg collision
+        for egg in eggs:
+            if egg.active and projectile.active:
+                if projectile.check_circle_collision(egg.get_pos(), egg.radius):
+                    egg_pos = egg.get_pos()
+                    
+                    # Transfer momentum from projectile
+                    transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
+                    transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
+                    egg.apply_momentum(transfer_vx, transfer_vy)
+                    
+                    # Take damage - returns True if destroyed
+                    if egg.take_damage():
+                        egg.destroy()  # Destroy egg without spawning Replay Enemies
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn powerup crystal with probability
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(egg_pos)
+                            powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         

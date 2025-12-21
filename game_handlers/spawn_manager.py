@@ -4,8 +4,10 @@ This module handles all enemy spawning logic, eliminating duplication
 in the start_level() method.
 """
 
-from typing import List, Tuple, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import List, Tuple, Callable, Optional, TYPE_CHECKING
 import random
+import level_rules
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -13,6 +15,24 @@ if TYPE_CHECKING:
     from entities.command_recorder import CommandRecorder
     from game_handlers.entity_manager import EntityManager
     from level_rules import EnemyCounts
+
+
+@dataclass
+class SpawnConfig:
+    """Configuration for spawning a type of entity.
+    
+    Attributes:
+        count: Number of entities to spawn.
+        entity_list_attr: Attribute name on EntityManager (e.g., "replay_enemies").
+        factory_func: Factory function that takes (pos, command_recorder) and returns entity.
+        requires_command_recorder: Whether command_recorder is needed for factory.
+        post_create_hook: Optional function to call after entity creation (entity) -> None.
+    """
+    count: int
+    entity_list_attr: str
+    factory_func: Callable[[Tuple[float, float], Optional['CommandRecorder']], object]
+    requires_command_recorder: bool = False
+    post_create_hook: Optional[Callable[[object], None]] = None
 
 
 class SpawnManager:
@@ -26,13 +46,76 @@ class SpawnManager:
         """
         self.entity_manager = entity_manager
     
+    def _update_available_positions(
+        self,
+        used_positions: List[Tuple[float, float]],
+        all_positions: List[Tuple[float, float]]
+    ) -> List[Tuple[float, float]]:
+        """Calculate available positions after excluding used ones.
+        
+        Args:
+            used_positions: Positions that have been used.
+            all_positions: All available spawn positions.
+            
+        Returns:
+            List of positions that are still available.
+        """
+        return [pos for pos in all_positions if pos not in used_positions]
+    
+    def _spawn_entities(
+        self,
+        config: SpawnConfig,
+        available_positions: List[Tuple[float, float]],
+        command_recorder: Optional['CommandRecorder'] = None
+    ) -> List[Tuple[float, float]]:
+        """Spawn entities based on configuration.
+        
+        Args:
+            config: Spawn configuration.
+            available_positions: Available spawn positions.
+            command_recorder: Command recorder (required if config.requires_command_recorder).
+            
+        Returns:
+            List of positions used by spawned entities.
+        """
+        if config.count <= 0 or len(available_positions) == 0:
+            return []
+        
+        # Get the entity list from entity manager
+        entity_list = getattr(self.entity_manager, config.entity_list_attr)
+        entity_list.clear()
+        
+        used_positions = []
+        spawn_count = min(config.count, len(available_positions))
+        
+        for i in range(spawn_count):
+            pos = available_positions[i]
+            
+            # Create entity using factory function
+            if config.requires_command_recorder:
+                if command_recorder is None:
+                    raise ValueError(f"command_recorder required for {config.entity_list_attr}")
+                entity = config.factory_func(pos, command_recorder)
+            else:
+                entity = config.factory_func(pos, None)
+            
+            # Apply post-create hook if provided
+            if config.post_create_hook:
+                config.post_create_hook(entity)
+            
+            entity_list.append(entity)
+            used_positions.append(pos)
+        
+        return used_positions
+    
     def spawn_all_enemies(
         self,
         level: int,
         spawn_positions: List[Tuple[float, float]],
         command_recorder: 'CommandRecorder',
         enemy_counts: 'EnemyCounts',
-        split_boss_count: int
+        split_boss_count: int,
+        mother_boss_count: int
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -42,11 +125,8 @@ class SpawnManager:
             command_recorder: Command recorder for replay enemies.
             enemy_counts: Enemy count configuration.
             split_boss_count: Number of SplitBoss enemies to spawn.
+            mother_boss_count: Number of Mother Boss enemies to spawn.
         """
-        from entities.enemy import create_enemies
-        from entities.replay_enemy_ship import ReplayEnemyShip
-        from entities.split_boss import SplitBoss
-        
         # Clear existing enemies
         self.entity_manager.clear_all()
         
@@ -56,27 +136,89 @@ class SpawnManager:
         )
         self.entity_manager.enemies.extend(new_enemies)
         
-        # Calculate used positions
+        # Track used positions
         used_positions = [e.get_pos() for e in self.entity_manager.enemies]
-        available_positions = [pos for pos in spawn_positions if pos not in used_positions]
+        available_positions = self._update_available_positions(used_positions, spawn_positions)
         
-        # Spawn replay enemies
-        self._spawn_replay_enemies(
-            enemy_counts.replay,
-            available_positions,
-            command_recorder
+        # Define spawn configurations for all enemy types
+        spawn_configs = self._create_spawn_configs(
+            enemy_counts, split_boss_count, mother_boss_count
         )
         
-        # Update used positions
-        used_positions.extend([re.get_pos() for re in self.entity_manager.replay_enemies])
-        available_positions = [pos for pos in spawn_positions if pos not in used_positions]
+        # Spawn all entities using configuration
+        for config in spawn_configs:
+            newly_used = self._spawn_entities(config, available_positions, command_recorder)
+            used_positions.extend(newly_used)
+            available_positions = self._update_available_positions(used_positions, spawn_positions)
+    
+    def _create_spawn_configs(
+        self,
+        enemy_counts: 'EnemyCounts',
+        split_boss_count: int,
+        mother_boss_count: int
+    ) -> List[SpawnConfig]:
+        """Create spawn configurations for all enemy types.
         
-        # Spawn SplitBoss enemies
-        self._spawn_split_bosses(
-            split_boss_count,
-            available_positions,
-            command_recorder
-        )
+        Args:
+            enemy_counts: Enemy count configuration.
+            split_boss_count: Number of SplitBoss enemies.
+            mother_boss_count: Number of Mother Boss enemies.
+            
+        Returns:
+            List of SpawnConfig objects.
+        """
+        from entities.replay_enemy_ship import ReplayEnemyShip
+        from entities.split_boss import SplitBoss
+        from entities.mother_boss import MotherBoss
+        from entities.egg import Egg
+        
+        def set_replay_index(entity):
+            """Post-create hook to set replay index."""
+            entity.current_replay_index = 0
+        
+        configs = []
+        
+        # Replay enemies
+        if enemy_counts.replay > 0:
+            configs.append(SpawnConfig(
+                count=enemy_counts.replay,
+                entity_list_attr="replay_enemies",
+                factory_func=lambda pos, cr: ReplayEnemyShip(pos, cr),
+                requires_command_recorder=True,
+                post_create_hook=set_replay_index
+            ))
+        
+        # SplitBoss enemies
+        if split_boss_count > 0:
+            configs.append(SpawnConfig(
+                count=split_boss_count,
+                entity_list_attr="split_bosses",
+                factory_func=lambda pos, cr: SplitBoss(pos, cr),
+                requires_command_recorder=True,
+                post_create_hook=set_replay_index
+            ))
+        
+        # Mother Boss enemies
+        if mother_boss_count > 0:
+            configs.append(SpawnConfig(
+                count=mother_boss_count,
+                entity_list_attr="mother_bosses",
+                factory_func=lambda pos, cr: MotherBoss(pos, cr),
+                requires_command_recorder=True,
+                post_create_hook=set_replay_index
+            ))
+        
+        # Egg enemies
+        if enemy_counts.egg > 0:
+            configs.append(SpawnConfig(
+                count=enemy_counts.egg,
+                entity_list_attr="eggs",
+                factory_func=lambda pos, cr: Egg(pos),
+                requires_command_recorder=False,
+                post_create_hook=None
+            ))
+        
+        return configs
     
     def _create_enemies_from_counts(
         self,
@@ -103,72 +245,26 @@ class SpawnManager:
         available_positions = spawn_positions.copy()
         random.shuffle(available_positions)
         
-        # Create static enemies
-        for i in range(min(enemy_counts.static, len(available_positions))):
-            pos = available_positions[i]
-            enemies.append(Enemy(pos, "static", level))
-            used_positions.append(pos)
+        # Define enemy type configurations
+        enemy_types = [
+            ("static", enemy_counts.static),
+            ("patrol", enemy_counts.patrol),
+            ("aggressive", enemy_counts.aggressive)
+        ]
         
-        # Create patrol enemies
-        remaining_positions = [p for p in available_positions if p not in used_positions]
-        for i in range(min(enemy_counts.patrol, len(remaining_positions))):
-            pos = remaining_positions[i]
-            enemies.append(Enemy(pos, "patrol", level))
-            used_positions.append(pos)
-        
-        # Create aggressive enemies
-        remaining_positions = [p for p in available_positions if p not in used_positions]
-        for i in range(min(enemy_counts.aggressive, len(remaining_positions))):
-            pos = remaining_positions[i]
-            enemies.append(Enemy(pos, "aggressive", level))
+        # Create enemies for each type
+        for enemy_type, count in enemy_types:
+            if count <= 0:
+                continue
+            
+            remaining_positions = self._update_available_positions(used_positions, available_positions)
+            spawn_count = min(count, len(remaining_positions))
+            
+            for i in range(spawn_count):
+                pos = remaining_positions[i]
+                enemies.append(Enemy(pos, enemy_type, level))
+                used_positions.append(pos)
         
         return enemies
     
-    def _spawn_replay_enemies(
-        self,
-        count: int,
-        available_positions: List[Tuple[float, float]],
-        command_recorder: 'CommandRecorder'
-    ) -> None:
-        """Spawn replay enemy ships.
-        
-        Args:
-            count: Number of replay enemies to spawn.
-            available_positions: Available spawn positions.
-            command_recorder: Command recorder for replay enemies.
-        """
-        from entities.replay_enemy_ship import ReplayEnemyShip
-        
-        self.entity_manager.replay_enemies.clear()
-        
-        if len(available_positions) > 0 and count > 0:
-            for i in range(min(count, len(available_positions))):
-                replay_spawn = available_positions[i]
-                replay_enemy = ReplayEnemyShip(replay_spawn, command_recorder)
-                replay_enemy.current_replay_index = 0
-                self.entity_manager.replay_enemies.append(replay_enemy)
-    
-    def _spawn_split_bosses(
-        self,
-        count: int,
-        available_positions: List[Tuple[float, float]],
-        command_recorder: 'CommandRecorder'
-    ) -> None:
-        """Spawn SplitBoss enemies.
-        
-        Args:
-            count: Number of SplitBoss enemies to spawn.
-            available_positions: Available spawn positions.
-            command_recorder: Command recorder for replay enemies.
-        """
-        from entities.split_boss import SplitBoss
-        
-        self.entity_manager.split_bosses.clear()
-        
-        if count > 0 and len(available_positions) > 0:
-            for i in range(min(count, len(available_positions))):
-                split_boss_spawn = available_positions[i]
-                split_boss = SplitBoss(split_boss_spawn, command_recorder)
-                split_boss.current_replay_index = 0
-                self.entity_manager.split_bosses.append(split_boss)
 

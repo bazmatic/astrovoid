@@ -51,7 +51,7 @@ MAZE_SIZE_INCREMENT = 2
 MAX_MAZE_SIZE = 40  # Maximum grid size (width/height in cells) to prevent excessive cells at high levels
 BASE_ENEMY_COUNT = 2
 ENEMY_COUNT_INCREMENT = 1
-TUTORIAL_LEVELS = 6  # Number of tutorial levels before difficulty scaling begins
+TUTORIAL_LEVELS = 1  # Number of tutorial levels before difficulty scaling begins
 
 # Maze settings
 WALL_THICKNESS = 6
@@ -84,6 +84,10 @@ REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/vi
 REPLAY_ENEMY_BASE_COUNT = 1  # Base count after tutorial levels
 REPLAY_ENEMY_SCALE_FACTOR = 0.5  # Scaling factor for continuous growth (sqrt-based)
 
+# Baby enemy settings
+BABY_SIZE = 15  # Size/radius of baby enemy (smaller than replay enemy)
+BABY_SPEED_MULTIPLIER = 0.1  # Speed multiplier (faster than replay enemy's 0.3)
+
 # SplitBoss settings
 SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip
 SPLIT_BOSS_HIT_POINTS = 3  # Number of hits required to destroy SplitBoss
@@ -91,6 +95,30 @@ SPLIT_BOSS_SPAWN_OFFSET_RANGE = 80  # Pixels for random spawn positions of spawn
 SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enemies
 SPLIT_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
 SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
+
+# Mother Boss settings
+MOTHER_BOSS_SIZE_MULTIPLIER = 3.0  # Triple size compared to regular ReplayEnemyShip
+MOTHER_BOSS_HIT_POINTS = 5  # Number of hits required to destroy Mother Boss
+MOTHER_BOSS_EGG_LAY_INTERVAL = 180  # Frames between egg laying (3 seconds at 60 FPS)
+MOTHER_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
+MOTHER_BOSS_SCALE_FACTOR = 0.2  # Scaling factor for continuous growth (sqrt-based)
+
+# Egg settings
+EGG_INITIAL_SIZE = 8  # Starting radius
+EGG_MAX_SIZE = 24  # Maximum radius before popping
+EGG_GROWTH_RATE_MIN = 0.003  # Minimum growth per frame (slower growth)
+EGG_GROWTH_RATE_MAX = 0.015  # Maximum growth per frame (slower growth)
+EGG_SPAWN_OFFSET_RANGE = 60  # Pixels for random spawn positions of Replay Enemies
+EGG_BASE_COUNT = 0  # Base count after tutorial levels
+EGG_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
+COLOR_EGG = (255, 200, 100)  # Visual color (yellow/orange)
+EGG_HIT_POINTS = 2  # Number of hits required to destroy an Egg
+
+# Momentum physics settings
+STATIC_ENEMY_HIT_POINTS = 2  # Number of hits required to destroy a Static enemy
+MOMENTUM_TRANSFER_FACTOR = 0.3  # Fraction of projectile velocity transferred to entity
+FRICTION_COEFFICIENT = 0.98  # Velocity decay per frame (light friction, 0.98 = 2% reduction)
+MIN_VELOCITY_THRESHOLD = 0.1  # Velocity below which entity stops completely
 
 # Projectile settings
 PROJECTILE_SPEED = 8.0
@@ -145,7 +173,7 @@ SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
 
 # Controller settings
 CONTROLLER_DEADZONE = 0.05  # Deadzone threshold for analog sticks (0.0 to 1.0)
-CONTROLLER_TRIGGER_THRESHOLD = -0.1  # Threshold for trigger activation (negative to catch any movement)
+CONTROLLER_TRIGGER_THRESHOLD = 0.3  # Threshold for trigger activation (0.0 to 1.0, requires intentional press)
 
 # Powerup crystal settings
 POWERUP_CRYSTAL_SIZE = 6
@@ -179,9 +207,40 @@ STAR_TINKLE_PITCH_INCREMENT = 200  # Hz increase per star
 LEVEL_COMPLETE_STAR_SIZE = 45  # Size of stars on level complete screen (pixels)
 
 # Game states
+STATE_SPLASH = "splash"
 STATE_MENU = "menu"
 STATE_PLAYING = "playing"
 STATE_LEVEL_COMPLETE = "level_complete"
 STATE_GAME_OVER = "game_over"
 STATE_QUIT_CONFIRM = "quit_confirm"
+
+# UI and menu settings
+# Splash screen
+SPLASH_DISPLAY_DURATION = 3.5  # Seconds to show splash before auto-advancing
+SPLASH_FADE_IN_DURATION = 1.0  # Seconds for fade-in animation
+SPLASH_FADE_OUT_DURATION = 0.8  # Seconds for fade-out animation
+
+# UI colors matching splash screen theme
+COLOR_NEON_ASTER_START = (255, 215, 0)  # Bright yellow
+COLOR_NEON_ASTER_END = (255, 140, 0)  # Orange-red
+COLOR_NEON_VOID_START = (100, 200, 255)  # Light blue/cyan
+COLOR_NEON_VOID_END = (100, 100, 255)  # Deep blue/purple
+COLOR_BUTTON_A = (50, 255, 100)  # Green for A button
+COLOR_BUTTON_B = (255, 100, 100)  # Red for B button
+COLOR_BUTTON_GLOW = (150, 220, 255)  # Cyan glow for buttons
+
+# UI animation settings
+NEON_GLOW_INTENSITY = 0.6  # Glow intensity for neon text (0.0 to 1.0)
+NEON_GLOW_PULSE_SPEED = 2.0  # Speed of glow pulsing animation
+BUTTON_GLOW_INTENSITY = 0.4  # Glow intensity for buttons
+BUTTON_GLOW_PULSE_SPEED = 3.0  # Speed of button glow pulsing
+STARFIELD_STAR_COUNT = 150  # Number of stars in animated starfield
+STARFIELD_TWINKLE_SPEED = 0.5  # Speed of star twinkling
+MENU_PARTICLE_COUNT = 30  # Number of particles in menu background
+
+# Font sizes
+FONT_SIZE_TITLE = 72
+FONT_SIZE_SUBTITLE = 32
+FONT_SIZE_BUTTON = 42
+FONT_SIZE_HINT = 24
 
