@@ -1,4 +1,4 @@
-# Asterdroids
+# ASTER VOID
 
 A skill-based space navigation game built with Pygame. Navigate procedurally-generated mazes using classic Asteroids-style momentum-based flight mechanics. Balance speed, fuel conservation, precision flying, and combat efficiency to achieve high scores.
 

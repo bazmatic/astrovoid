@@ -145,7 +145,7 @@ SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
 
 # Controller settings
 CONTROLLER_DEADZONE = 0.05  # Deadzone threshold for analog sticks (0.0 to 1.0)
-CONTROLLER_TRIGGER_THRESHOLD = -0.1  # Threshold for trigger activation (negative to catch any movement)
+CONTROLLER_TRIGGER_THRESHOLD = 0.3  # Threshold for trigger activation (0.0 to 1.0, requires intentional press)
 
 # Powerup crystal settings
 POWERUP_CRYSTAL_SIZE = 6
@@ -179,9 +179,40 @@ STAR_TINKLE_PITCH_INCREMENT = 200  # Hz increase per star
 LEVEL_COMPLETE_STAR_SIZE = 45  # Size of stars on level complete screen (pixels)
 
 # Game states
+STATE_SPLASH = "splash"
 STATE_MENU = "menu"
 STATE_PLAYING = "playing"
 STATE_LEVEL_COMPLETE = "level_complete"
 STATE_GAME_OVER = "game_over"
 STATE_QUIT_CONFIRM = "quit_confirm"
+
+# UI and menu settings
+# Splash screen
+SPLASH_DISPLAY_DURATION = 3.5  # Seconds to show splash before auto-advancing
+SPLASH_FADE_IN_DURATION = 1.0  # Seconds for fade-in animation
+SPLASH_FADE_OUT_DURATION = 0.8  # Seconds for fade-out animation
+
+# UI colors matching splash screen theme
+COLOR_NEON_ASTER_START = (255, 215, 0)  # Bright yellow
+COLOR_NEON_ASTER_END = (255, 140, 0)  # Orange-red
+COLOR_NEON_VOID_START = (100, 200, 255)  # Light blue/cyan
+COLOR_NEON_VOID_END = (100, 100, 255)  # Deep blue/purple
+COLOR_BUTTON_A = (50, 255, 100)  # Green for A button
+COLOR_BUTTON_B = (255, 100, 100)  # Red for B button
+COLOR_BUTTON_GLOW = (150, 220, 255)  # Cyan glow for buttons
+
+# UI animation settings
+NEON_GLOW_INTENSITY = 0.6  # Glow intensity for neon text (0.0 to 1.0)
+NEON_GLOW_PULSE_SPEED = 2.0  # Speed of glow pulsing animation
+BUTTON_GLOW_INTENSITY = 0.4  # Glow intensity for buttons
+BUTTON_GLOW_PULSE_SPEED = 3.0  # Speed of button glow pulsing
+STARFIELD_STAR_COUNT = 150  # Number of stars in animated starfield
+STARFIELD_TWINKLE_SPEED = 0.5  # Speed of star twinkling
+MENU_PARTICLE_COUNT = 30  # Number of particles in menu background
+
+# Font sizes
+FONT_SIZE_TITLE = 72
+FONT_SIZE_SUBTITLE = 32
+FONT_SIZE_BUTTON = 42
+FONT_SIZE_HINT = 24
 

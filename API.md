@@ -1,4 +1,4 @@
-# Asterdroids API Documentation
+# ASTER VOID API Documentation
 
 ## Public Interfaces
 

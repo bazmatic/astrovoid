@@ -1,4 +1,4 @@
-"""Main entry point for the Asteroids Maze Game.
+"""Main entry point for ASTER VOID.
 
 This module initializes Pygame, creates the game window, and starts the main
 game loop. It serves as the application entry point.
@@ -18,6 +18,7 @@ Usage:
 
 import pygame
 import sys
+import os
 from game import Game
 import config
 
@@ -38,8 +39,15 @@ def main():
             buffer=512  # Small buffer for low latency
         )
     
-    screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN)
-    pygame.display.set_caption("Asterdroids - Space Navigation Game")
+    # Check for windowed mode via environment variable
+    windowed = os.getenv('WINDOWED', '').lower() in ('1', 'true', 'yes', 'on')
+    
+    if windowed:
+        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+    else:
+        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN)
+    
+    pygame.display.set_caption("ASTER VOID - Space Navigation Game")
     
     # Update config with actual screen size (fullscreen may use different resolution)
     actual_width, actual_height = screen.get_size()

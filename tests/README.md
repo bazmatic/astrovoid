@@ -1,6 +1,6 @@
-# Unit Tests for Asterdroids
+# Unit Tests for ASTER VOID
 
-This directory contains unit tests for key functions in the Asterdroids game.
+This directory contains unit tests for key functions in the ASTER VOID game.
 
 ## Running Tests
 
