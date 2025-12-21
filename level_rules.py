@@ -358,22 +358,20 @@ def get_maze_complexity(level: int) -> MazeComplexity:
     """
     # Tutorial levels use simpler complexities
     if level <= config.TUTORIAL_LEVELS:
-        if level == 1:
-            return MazeComplexity.EMPTY
-        elif level <= 3:
-            return MazeComplexity.SIMPLE
-        else:  # levels 4-6
-            return MazeComplexity.NORMAL
+        return MazeComplexity.EMPTY
     
     # Difficulty scaling starts after tutorial levels
     effective_level = level - config.TUTORIAL_LEVELS
     
     # Scale complexity based on effective level
-    if effective_level <= 2:
+    if effective_level <= 5:
+        print(f"Level {level} is NORMAL")
         return MazeComplexity.NORMAL
-    elif effective_level <= 4:
+    elif effective_level <= 12:
+        print(f"Level {level} is COMPLEX")
         return MazeComplexity.COMPLEX
     else:
+        print(f"Level {level} is EXTREME")
         return MazeComplexity.EXTREME
 
 

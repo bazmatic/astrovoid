@@ -45,7 +45,7 @@ class EnemyStrategy(ABC):
 
 
 class StaticEnemyStrategy(EnemyStrategy):
-    """Strategy for static enemies that don't move."""
+    """Strategy for static enemies that can move when hit by projectiles."""
     
     def update(
         self,
@@ -54,8 +54,31 @@ class StaticEnemyStrategy(EnemyStrategy):
         player_pos: Optional[Tuple[float, float]],
         walls: Optional[List]
     ) -> None:
-        """Static enemies don't move, so no update needed."""
-        pass
+        """Update static enemy position based on momentum and handle wall collisions.
+        
+        Args:
+            enemy: The enemy entity to update.
+            dt: Delta time since last update.
+            player_pos: Current player position (unused for static enemies).
+            walls: List of wall segments for collision detection.
+        """
+        # Apply velocity to position
+        enemy.x += enemy.vx * dt
+        enemy.y += enemy.vy * dt
+        
+        # Apply friction
+        enemy.vx *= config.FRICTION_COEFFICIENT
+        enemy.vy *= config.FRICTION_COEFFICIENT
+        
+        # Stop if velocity is too small
+        if abs(enemy.vx) < config.MIN_VELOCITY_THRESHOLD:
+            enemy.vx = 0.0
+        if abs(enemy.vy) < config.MIN_VELOCITY_THRESHOLD:
+            enemy.vy = 0.0
+        
+        # Check wall collision (handles bouncing)
+        if walls:
+            enemy.check_wall_collision(walls)
 
 
 class PatrolEnemyStrategy(EnemyStrategy):

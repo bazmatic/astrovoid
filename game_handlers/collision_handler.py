@@ -80,14 +80,34 @@ class CollisionHandler:
             if enemy.active and projectile.active:
                 if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
                     enemy_pos = enemy.get_pos()
-                    enemy.destroy()
-                    self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(enemy_pos)
-                        powerup_crystals.append(crystal)
+                    # Handle static enemies with momentum system
+                    if enemy.type == "static":
+                        # Transfer momentum from projectile
+                        transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
+                        transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
+                        enemy.apply_momentum(transfer_vx, transfer_vy)
+                        
+                        # Take damage - returns True if destroyed
+                        if enemy.take_damage():
+                            enemy.destroy()
+                            self.sound_manager.play_enemy_destroy()
+                            self.scoring.record_enemy_destroyed()
+                            
+                            # Spawn powerup crystal with probability
+                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                                crystal = PowerupCrystal(enemy_pos)
+                                powerup_crystals.append(crystal)
+                    else:
+                        # Non-static enemies destroyed immediately (existing behavior)
+                        enemy.destroy()
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn powerup crystal with probability
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(enemy_pos)
+                            powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         
@@ -172,14 +192,22 @@ class CollisionHandler:
             if egg.active and projectile.active:
                 if projectile.check_circle_collision(egg.get_pos(), egg.radius):
                     egg_pos = egg.get_pos()
-                    egg.destroy()  # Destroy egg without spawning Replay Enemies
-                    self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(egg_pos)
-                        powerup_crystals.append(crystal)
+                    # Transfer momentum from projectile
+                    transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
+                    transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
+                    egg.apply_momentum(transfer_vx, transfer_vy)
+                    
+                    # Take damage - returns True if destroyed
+                    if egg.take_damage():
+                        egg.destroy()  # Destroy egg without spawning Replay Enemies
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        
+                        # Spawn powerup crystal with probability
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(egg_pos)
+                            powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         

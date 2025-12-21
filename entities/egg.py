@@ -58,15 +58,32 @@ class Egg(GameEntity, Collidable, Drawable):
         )
         self.has_popped = False
         self.pulse_phase = 0.0
+        # Hit points for momentum system
+        self.hit_points = config.EGG_HIT_POINTS
+        self.max_hit_points = config.EGG_HIT_POINTS
     
     def update(self, dt: float) -> None:
-        """Update egg growth and animation.
+        """Update egg growth, animation, and momentum physics.
         
         Args:
             dt: Delta time since last update.
         """
         if not self.active or self.has_popped:
             return
+        
+        # Apply velocity to position
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+        
+        # Apply friction
+        self.vx *= config.FRICTION_COEFFICIENT
+        self.vy *= config.FRICTION_COEFFICIENT
+        
+        # Stop if velocity is too small
+        if abs(self.vx) < config.MIN_VELOCITY_THRESHOLD:
+            self.vx = 0.0
+        if abs(self.vy) < config.MIN_VELOCITY_THRESHOLD:
+            self.vy = 0.0
         
         # Grow the egg
         self.current_radius += self.growth_rate
@@ -123,21 +140,104 @@ class Egg(GameEntity, Collidable, Drawable):
         """Destroy the egg (called when hit by bullet)."""
         self.active = False
     
+    def take_damage(self) -> bool:
+        """Take damage from a projectile hit.
+        
+        Returns:
+            True if egg is destroyed, False otherwise.
+        """
+        self.hit_points -= 1
+        return self.hit_points <= 0
+    
+    def apply_momentum(self, vx: float, vy: float) -> None:
+        """Apply momentum from a projectile impact.
+        
+        Args:
+            vx: X component of velocity to add.
+            vy: Y component of velocity to add.
+        """
+        self.vx += vx
+        self.vy += vy
+    
     def check_wall_collision(
         self,
         walls: List,
         spatial_grid=None
     ) -> bool:
-        """Check collision with walls (eggs are stationary, so this is mostly for consistency).
+        """Check collision with walls and bounce if moving.
         
         Args:
             walls: List of wall segments.
-            spatial_grid: Optional spatial grid (unused for eggs).
+            spatial_grid: Optional spatial grid for optimized collision detection.
             
         Returns:
-            False (eggs don't collide with walls).
+            True if collision occurred, False otherwise.
         """
-        # Eggs are stationary and don't need wall collision
+        # Only check collisions if moving
+        if abs(self.vx) < config.MIN_VELOCITY_THRESHOLD and abs(self.vy) < config.MIN_VELOCITY_THRESHOLD:
+            return False
+        
+        # Use spatial grid if available, otherwise check all walls
+        walls_to_check = walls
+        if spatial_grid is not None:
+            walls_to_check = spatial_grid.get_nearby_walls(
+                (self.x, self.y), self.radius * 2.0
+            )
+        
+        for wall in walls_to_check:
+            # Handle both WallSegment and tuple formats
+            if hasattr(wall, 'get_segment'):
+                # WallSegment instance
+                if not wall.active:
+                    continue
+                segment = wall.get_segment()
+            else:
+                # Tuple format (backward compatibility)
+                segment = wall
+            
+            if circle_line_collision(
+                (self.x, self.y), self.radius,
+                segment[0], segment[1]
+            ):
+                # Calculate wall direction vector
+                wall_start, wall_end = segment
+                wall_dx = wall_end[0] - wall_start[0]
+                wall_dy = wall_end[1] - wall_start[1]
+                wall_length = math.sqrt(wall_dx * wall_dx + wall_dy * wall_dy)
+                
+                if wall_length > 0:
+                    # Normalize wall direction
+                    wall_nx = wall_dx / wall_length
+                    wall_ny = wall_dy / wall_length
+                    
+                    # Calculate normal (perpendicular to wall, pointing away from wall)
+                    # Choose normal that points away from entity center
+                    normal_x = -wall_ny
+                    normal_y = wall_nx
+                    
+                    # Check which side of wall entity is on, flip normal if needed
+                    # Vector from wall start to entity
+                    to_entity_x = self.x - wall_start[0]
+                    to_entity_y = self.y - wall_start[1]
+                    # Dot product with normal
+                    dot_normal = to_entity_x * normal_x + to_entity_y * normal_y
+                    if dot_normal < 0:
+                        # Entity is on other side, flip normal
+                        normal_x = -normal_x
+                        normal_y = -normal_y
+                    
+                    # Reflect velocity
+                    dot = self.vx * normal_x + self.vy * normal_y
+                    self.vx -= 2 * dot * normal_x
+                    self.vy -= 2 * dot * normal_y
+                    
+                    # Move entity away from wall to prevent overlap
+                    overlap_distance = self.radius + 1.0  # Small buffer
+                    self.x += normal_x * overlap_distance
+                    self.y += normal_y * overlap_distance
+                
+                return True
+        
         return False
     
     def check_circle_collision(

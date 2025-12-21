@@ -51,7 +51,7 @@ MAZE_SIZE_INCREMENT = 2
 MAX_MAZE_SIZE = 40  # Maximum grid size (width/height in cells) to prevent excessive cells at high levels
 BASE_ENEMY_COUNT = 2
 ENEMY_COUNT_INCREMENT = 1
-TUTORIAL_LEVELS = 6  # Number of tutorial levels before difficulty scaling begins
+TUTORIAL_LEVELS = 1  # Number of tutorial levels before difficulty scaling begins
 
 # Maze settings
 WALL_THICKNESS = 6
@@ -112,6 +112,13 @@ EGG_SPAWN_OFFSET_RANGE = 60  # Pixels for random spawn positions of Replay Enemi
 EGG_BASE_COUNT = 0  # Base count after tutorial levels
 EGG_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
 COLOR_EGG = (255, 200, 100)  # Visual color (yellow/orange)
+EGG_HIT_POINTS = 2  # Number of hits required to destroy an Egg
+
+# Momentum physics settings
+STATIC_ENEMY_HIT_POINTS = 2  # Number of hits required to destroy a Static enemy
+MOMENTUM_TRANSFER_FACTOR = 0.3  # Fraction of projectile velocity transferred to entity
+FRICTION_COEFFICIENT = 0.98  # Velocity decay per frame (light friction, 0.98 = 2% reduction)
+MIN_VELOCITY_THRESHOLD = 0.1  # Velocity below which entity stops completely
 
 # Projectile settings
 PROJECTILE_SPEED = 8.0

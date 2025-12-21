@@ -504,6 +504,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
                             self.BODY_TEXTURE_LINE_COLOR,
                             points[j],
                             points[j + 1],
-                            1
+                            2
                         )
     

@@ -66,6 +66,9 @@ class Enemy(GameEntity, Collidable, Drawable):
             self.strategy = StaticEnemyStrategy()
             self.speed = 0.0
             self.angle = 0.0
+            # Hit points for momentum system
+            self.hit_points = config.STATIC_ENEMY_HIT_POINTS
+            self.max_hit_points = config.STATIC_ENEMY_HIT_POINTS
         elif enemy_type == "patrol":
             self.strategy = PatrolEnemyStrategy()
             self.speed = strength.patrol_speed
@@ -136,7 +139,7 @@ class Enemy(GameEntity, Collidable, Drawable):
         walls: List,
         spatial_grid=None
     ) -> bool:
-        """Check collision with wall segments.
+        """Check collision with wall segments and bounce if moving.
         
         Args:
             walls: List of wall segments (WallSegment instances or tuples).
@@ -145,6 +148,11 @@ class Enemy(GameEntity, Collidable, Drawable):
         Returns:
             True if collision occurred, False otherwise.
         """
+        # For static enemies, only check collisions if moving
+        if self.type == "static":
+            if abs(self.vx) < config.MIN_VELOCITY_THRESHOLD and abs(self.vy) < config.MIN_VELOCITY_THRESHOLD:
+                return False
+        
         # Use spatial grid if available, otherwise check all walls
         walls_to_check = walls
         if spatial_grid is not None:
@@ -167,6 +175,41 @@ class Enemy(GameEntity, Collidable, Drawable):
                 (self.x, self.y), self.radius,
                 segment[0], segment[1]
             ):
+                # For static enemies, bounce off walls
+                if self.type == "static":
+                    # Calculate wall direction vector
+                    wall_start, wall_end = segment
+                    wall_dx = wall_end[0] - wall_start[0]
+                    wall_dy = wall_end[1] - wall_start[1]
+                    wall_length = math.sqrt(wall_dx * wall_dx + wall_dy * wall_dy)
+                    
+                    if wall_length > 0:
+                        # Normalize wall direction
+                        wall_nx = wall_dx / wall_length
+                        wall_ny = wall_dy / wall_length
+                        
+                        # Calculate normal (perpendicular to wall, pointing away from wall)
+                        normal_x = -wall_ny
+                        normal_y = wall_nx
+                        
+                        # Check which side of wall entity is on, flip normal if needed
+                        to_entity_x = self.x - wall_start[0]
+                        to_entity_y = self.y - wall_start[1]
+                        dot_normal = to_entity_x * normal_x + to_entity_y * normal_y
+                        if dot_normal < 0:
+                            normal_x = -normal_x
+                            normal_y = -normal_y
+                        
+                        # Reflect velocity
+                        dot = self.vx * normal_x + self.vy * normal_y
+                        self.vx -= 2 * dot * normal_x
+                        self.vy -= 2 * dot * normal_y
+                        
+                        # Move entity away from wall to prevent overlap
+                        overlap_distance = self.radius + 1.0
+                        self.x += normal_x * overlap_distance
+                        self.y += normal_y * overlap_distance
+                
                 return True
         return False
     
@@ -192,6 +235,29 @@ class Enemy(GameEntity, Collidable, Drawable):
     def destroy(self) -> None:
         """Destroy the enemy."""
         self.active = False
+    
+    def take_damage(self) -> bool:
+        """Take damage from a projectile hit.
+        
+        Returns:
+            True if enemy is destroyed, False otherwise.
+        """
+        if self.type == "static":
+            self.hit_points -= 1
+            return self.hit_points <= 0
+        # Non-static enemies are destroyed immediately (existing behavior)
+        return True
+    
+    def apply_momentum(self, vx: float, vy: float) -> None:
+        """Apply momentum from a projectile impact.
+        
+        Args:
+            vx: X component of velocity to add.
+            vy: Y component of velocity to add.
+        """
+        if self.type == "static":
+            self.vx += vx
+            self.vy += vy
     
     def draw(self, screen: pygame.Surface, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Draw the enemy on screen with enhanced visuals.
