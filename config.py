@@ -92,6 +92,16 @@ SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enem
 SPLIT_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
 SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
 
+# Egg settings
+EGG_INITIAL_SIZE = 8  # Starting radius
+EGG_MAX_SIZE = 24  # Maximum radius before popping
+EGG_GROWTH_RATE_MIN = 0.003  # Minimum growth per frame (slower growth)
+EGG_GROWTH_RATE_MAX = 0.015  # Maximum growth per frame (slower growth)
+EGG_SPAWN_OFFSET_RANGE = 60  # Pixels for random spawn positions of Replay Enemies
+EGG_BASE_COUNT = 0  # Base count after tutorial levels
+EGG_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
+COLOR_EGG = (255, 200, 100)  # Visual color (yellow/orange)
+
 # Projectile settings
 PROJECTILE_SPEED = 8.0
 PROJECTILE_SIZE = 3

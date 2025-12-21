@@ -46,6 +46,7 @@ class CollisionHandler:
         enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
         split_bosses: List['SplitBoss'],
+        eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal']
     ) -> bool:
         """Handle collisions between a projectile and enemies.
@@ -55,6 +56,7 @@ class CollisionHandler:
             enemies: List of regular enemies.
             replay_enemies: List of replay enemies.
             split_bosses: List of SplitBoss enemies.
+            eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             
         Returns:
@@ -117,6 +119,22 @@ class CollisionHandler:
                             boss_pos, boss_velocity, replay_enemies, powerup_crystals
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-egg collision
+        for egg in eggs:
+            if egg.active and projectile.active:
+                if projectile.check_circle_collision(egg.get_pos(), egg.radius):
+                    egg_pos = egg.get_pos()
+                    egg.destroy()  # Destroy egg without spawning Replay Enemies
+                    self.sound_manager.play_enemy_destroy()
+                    self.scoring.record_enemy_destroyed()
+                    
+                    # Spawn powerup crystal with probability
+                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                        crystal = PowerupCrystal(egg_pos)
+                        powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         

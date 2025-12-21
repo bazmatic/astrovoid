@@ -77,6 +77,16 @@ class SpawnManager:
             available_positions,
             command_recorder
         )
+        
+        # Update used positions
+        used_positions.extend([sb.get_pos() for sb in self.entity_manager.split_bosses])
+        available_positions = [pos for pos in spawn_positions if pos not in used_positions]
+        
+        # Spawn egg enemies
+        self._spawn_eggs(
+            enemy_counts.egg,
+            available_positions
+        )
     
     def _create_enemies_from_counts(
         self,
@@ -171,4 +181,25 @@ class SpawnManager:
                 split_boss = SplitBoss(split_boss_spawn, command_recorder)
                 split_boss.current_replay_index = 0
                 self.entity_manager.split_bosses.append(split_boss)
+    
+    def _spawn_eggs(
+        self,
+        count: int,
+        available_positions: List[Tuple[float, float]]
+    ) -> None:
+        """Spawn egg enemies.
+        
+        Args:
+            count: Number of egg enemies to spawn.
+            available_positions: Available spawn positions.
+        """
+        from entities.egg import Egg
+        
+        self.entity_manager.eggs.clear()
+        
+        if count > 0 and len(available_positions) > 0:
+            for i in range(min(count, len(available_positions))):
+                egg_spawn = available_positions[i]
+                egg = Egg(egg_spawn)
+                self.entity_manager.eggs.append(egg)
 

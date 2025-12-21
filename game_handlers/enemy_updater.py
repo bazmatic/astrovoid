@@ -9,10 +9,12 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
+    from entities.egg import Egg
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
     from scoring.system import ScoringSystem
+    from entities.command_recorder import CommandRecorder
 
 
 class EnemyUpdater:
@@ -136,4 +138,84 @@ class EnemyUpdater:
             fired_projectile = split_boss.get_fired_projectile(player_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
+    
+    def update_eggs(
+        self,
+        eggs: List['Egg'],
+        dt: float,
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        command_recorder: 'CommandRecorder',
+        replay_enemies: List['ReplayEnemyShip']
+    ) -> None:
+        """Update egg enemies.
+        
+        Args:
+            eggs: List of Egg instances.
+            dt: Delta time since last update.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            command_recorder: Command recorder for spawning Replay Enemies.
+            replay_enemies: List to add spawned Replay Enemies to.
+        """
+        for egg in eggs:
+            if not egg.active:
+                continue
+            
+            egg.update(dt)
+            
+            # Check if egg should pop
+            if egg.should_pop():
+                egg.pop(command_recorder, replay_enemies)
+                continue
+            
+            # Check egg-wall collision (eggs are stationary, but check for consistency)
+            egg.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check egg-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(egg.get_pos(), egg.radius, egg):
+                    scoring.record_enemy_collision()
+    
+    def update_eggs(
+        self,
+        eggs: List['Egg'],
+        dt: float,
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        command_recorder: 'CommandRecorder',
+        replay_enemies: List['ReplayEnemyShip']
+    ) -> None:
+        """Update egg enemies.
+        
+        Args:
+            eggs: List of Egg instances.
+            dt: Delta time since last update.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            command_recorder: Command recorder for spawning Replay Enemies.
+            replay_enemies: List to add spawned Replay Enemies to.
+        """
+        for egg in eggs:
+            if not egg.active:
+                continue
+            
+            egg.update(dt)
+            
+            # Check if egg should pop
+            if egg.should_pop():
+                egg.pop(command_recorder, replay_enemies)
+                continue
+            
+            # Check egg-wall collision (eggs are stationary, but check for consistency)
+            egg.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check egg-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(egg.get_pos(), egg.radius, egg):
+                    scoring.record_enemy_collision()
 

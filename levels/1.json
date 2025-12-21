@@ -4,7 +4,8 @@
     "patrol": 0,
     "aggressive": 0,
     "replay": 0,
-    "split_boss": 0
+    "split_boss": 0,
+    "egg": 3
   },
   "seed": 100,
   "maze": {
