@@ -3,7 +3,7 @@
 import random
 import pygame
 import math
-from typing import List, Tuple, Set, Dict
+from typing import List, Tuple, Set, Dict, Optional
 import config
 from utils import (
     distance,
@@ -14,88 +14,36 @@ from utils import (
     circle_line_collision
 )
 from maze.wall_segment import WallSegment
+from maze.config import MazeComplexity, MazeGenerationConfig, MazeComplexityPresets
+from maze.positioning import MazePositionCalculator
+from maze.converter import GridToWallsConverter
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
 
 
-class Maze:
-    """Procedurally generated maze."""
+class RecursiveBacktrackingGenerator:
+    """Generates mazes using recursive backtracking algorithm."""
     
-    def __init__(self, level: int):
-        """Generate a maze for the given level."""
+    def __init__(self, config: MazeGenerationConfig, grid_width: int, grid_height: int, level: int):
+        """Initialize generator.
+        
+        Args:
+            config: Generation configuration parameters.
+            grid_width: Width of the maze grid in cells.
+            grid_height: Height of the maze grid in cells.
+            level: Current level number (used for extra paths calculation).
+        """
+        self.config = config
+        self.grid_width = grid_width
+        self.grid_height = grid_height
         self.level = level
-        self.grid_width = config.BASE_MAZE_SIZE + (level - 1) * config.MAZE_SIZE_INCREMENT
-        self.grid_height = self.grid_width
-        
-        # Calculate cell size to fill screen (leave some margin for UI)
-        # Use 90% of screen for maze area
-        available_width = config.SCREEN_WIDTH * 0.9
-        available_height = config.SCREEN_HEIGHT * 0.9
-        self.cell_size = min(
-            available_width / self.grid_width,
-            available_height / self.grid_height
-        )
-        
-        # Center the maze on screen
-        total_maze_width = self.grid_width * self.cell_size
-        total_maze_height = self.grid_height * self.cell_size
-        self.offset_x = (config.SCREEN_WIDTH - total_maze_width) / 2
-        self.offset_y = (config.SCREEN_HEIGHT - total_maze_height) / 2
-        
-        # Generate maze grid
-        self.grid = self._generate_maze()
-        
-        # Select random opposite corners for start and exit
-        corner_combinations = [
-            ((1, 1), (self.grid_width - 2, self.grid_height - 2)),  # TL -> BR
-            ((self.grid_width - 2, 1), (1, self.grid_height - 2)),  # TR -> BL
-            ((1, self.grid_height - 2), (self.grid_width - 2, 1)),  # BL -> TR
-            ((self.grid_width - 2, self.grid_height - 2), (1, 1)),  # BR -> TL
-        ]
-        start_grid, exit_grid = random.choice(corner_combinations)
-        
-        # Clear areas around selected corners to ensure they're accessible
-        self._clear_corner_area(self.grid, start_grid)
-        self._clear_corner_area(self.grid, exit_grid)
-        
-        # Convert grid to wall segments
-        self.walls = self._grid_to_walls()
-        
-        # Create spatial grid for efficient collision detection
-        self.spatial_grid = SpatialGrid(
-            config.SCREEN_WIDTH,
-            config.SCREEN_HEIGHT,
-            cell_size=150.0  # Optimal cell size for this game
-        )
-        self.spatial_grid.add_walls(self.walls)
-        
-        # Set start position based on selected corner, offset inward from corner edge
-        # Calculate offset direction based on which corner we're in
-        offset_distance = self.cell_size * config.SHIP_SPAWN_OFFSET
-        if start_grid[0] == 1:  # Left side
-            offset_x = offset_distance
-        else:  # Right side
-            offset_x = -offset_distance
-        if start_grid[1] == 1:  # Top side
-            offset_y = offset_distance
-        else:  # Bottom side
-            offset_y = -offset_distance
-        
-        self.start_pos = (
-            self.offset_x + start_grid[0] * self.cell_size + self.cell_size // 2 + offset_x,
-            self.offset_y + start_grid[1] * self.cell_size + self.cell_size // 2 + offset_y
-        )
-        
-        # Create exit object
-        exit_pos = (
-            self.offset_x + exit_grid[0] * self.cell_size + self.cell_size // 2,
-            self.offset_y + exit_grid[1] * self.cell_size + self.cell_size // 2
-        )
-        exit_radius = self.cell_size // 2
-        self.exit = ExitPortal(exit_pos, exit_radius)
     
-    def _generate_maze(self) -> List[List[int]]:
-        """Generate maze using recursive backtracking algorithm with wider passages."""
+    def generate(self) -> List[List[int]]:
+        """Generate maze grid.
+        
+        Returns:
+            2D grid where 1 = wall, 0 = path.
+        """
         # Initialize grid: 1 = wall, 0 = path
         grid = [[1 for _ in range(self.grid_width)] for _ in range(self.grid_height)]
         
@@ -103,8 +51,8 @@ class Maze:
         stack = [(1, 1)]
         grid[1][1] = 0
         
-        # Use much larger step size for very wide passages
-        step_size = 5
+        # Directions based on step size
+        step_size = self.config.step_size
         directions = [(0, step_size), (step_size, 0), (0, -step_size), (-step_size, 0)]
         
         while stack:
@@ -129,45 +77,73 @@ class Maze:
                 grid[next_y][next_x] = 0
                 # Clear the wall between cells
                 grid[wall_y][wall_x] = 0
-                # Clear a MUCH wider area around the passage (3-4 cells in each direction)
-                dx = next_x - current_x
-                dy = next_y - current_y
-                passage_width = 4  # Clear 4 cells wide on each side
-                if dx != 0:
-                    # Horizontal movement - clear wide vertical strip
-                    for offset_y in range(-passage_width, passage_width + 1):
-                        check_y = wall_y + offset_y
-                        if 0 <= check_y < self.grid_height:
-                            # Clear multiple cells horizontally too
-                            for offset_x in range(-1, 2):
-                                check_x = wall_x + offset_x
-                                if 0 <= check_x < self.grid_width:
-                                    grid[check_y][check_x] = 0
-                if dy != 0:
-                    # Vertical movement - clear wide horizontal strip
-                    for offset_x in range(-passage_width, passage_width + 1):
-                        check_x = wall_x + offset_x
-                        if 0 <= check_x < self.grid_width:
-                            # Clear multiple cells vertically too
-                            for offset_y in range(-1, 2):
-                                check_y = wall_y + offset_y
-                                if 0 <= check_y < self.grid_height:
-                                    grid[check_y][check_x] = 0
+                # Clear wider area around the passage
+                self._clear_passage(grid, current_x, current_y, next_x, next_y, wall_x, wall_y)
                 stack.append((next_x, next_y))
             else:
                 # Backtrack
                 stack.pop()
         
-        # Note: Start and exit corner clearing is now done after corner selection
-        # in __init__ to support variable corner positions
+        # Add extra paths
+        self._add_extra_paths(grid)
         
-        # Add many more extra paths and clear large areas for much wider corridors
-        for _ in range(self.level * 10):
+        # Ensure perimeter is always walls
+        self._ensure_perimeter(grid)
+        
+        return grid
+    
+    def _clear_passage(self, grid: List[List[int]], current_x: int, current_y: int,
+                       next_x: int, next_y: int, wall_x: int, wall_y: int) -> None:
+        """Clear a wide area around a passage connection.
+        
+        Args:
+            grid: The maze grid to modify.
+            current_x: Current cell X coordinate.
+            current_y: Current cell Y coordinate.
+            next_x: Next cell X coordinate.
+            next_y: Next cell Y coordinate.
+            wall_x: Wall X coordinate.
+            wall_y: Wall Y coordinate.
+        """
+        dx = next_x - current_x
+        dy = next_y - current_y
+        passage_width = self.config.passage_width
+        
+        if dx != 0:
+            # Horizontal movement - clear wide vertical strip
+            for offset_y in range(-passage_width, passage_width + 1):
+                check_y = wall_y + offset_y
+                if 0 <= check_y < self.grid_height:
+                    # Clear multiple cells horizontally too
+                    for offset_x in range(-1, 2):
+                        check_x = wall_x + offset_x
+                        if 0 <= check_x < self.grid_width:
+                            grid[check_y][check_x] = 0
+        if dy != 0:
+            # Vertical movement - clear wide horizontal strip
+            for offset_x in range(-passage_width, passage_width + 1):
+                check_x = wall_x + offset_x
+                if 0 <= check_x < self.grid_width:
+                    # Clear multiple cells vertically too
+                    for offset_y in range(-1, 2):
+                        check_y = wall_y + offset_y
+                        if 0 <= check_y < self.grid_height:
+                            grid[check_y][check_x] = 0
+    
+    def _add_extra_paths(self, grid: List[List[int]]) -> None:
+        """Add extra paths to make corridors wider.
+        
+        Args:
+            grid: The maze grid to modify.
+        """
+        num_extra_paths = self.level * self.config.extra_paths_multiplier
+        clear_radius = self.config.clear_radius
+        
+        for _ in range(num_extra_paths):
             x = random.randint(2, self.grid_width - 3)
             y = random.randint(2, self.grid_height - 3)
             if grid[y][x] == 1:
                 # Clear a large area around each removed wall
-                clear_radius = 3
                 for dy in range(-clear_radius, clear_radius + 1):
                     for dx in range(-clear_radius, clear_radius + 1):
                         check_y = y + dy
@@ -178,8 +154,13 @@ class Maze:
                             distance = abs(dx) + abs(dy)
                             if distance <= clear_radius and random.random() < (1.0 - distance * 0.2):
                                 grid[check_y][check_x] = 0
+    
+    def _ensure_perimeter(self, grid: List[List[int]]) -> None:
+        """Ensure perimeter is always walls.
         
-        # Ensure perimeter is always walls
+        Args:
+            grid: The maze grid to modify.
+        """
         # Top and bottom rows
         for x in range(self.grid_width):
             grid[0][x] = 1  # Top row
@@ -189,74 +170,95 @@ class Maze:
         for y in range(self.grid_height):
             grid[y][0] = 1  # Left column
             grid[y][self.grid_width - 1] = 1  # Right column
-        
-        return grid
     
-    def _clear_corner_area(self, grid: List[List[int]], corner: Tuple[int, int]) -> None:
+    def clear_corner_area(self, grid: List[List[int]], corner: Tuple[int, int]) -> None:
         """Clear a wide area around a corner to ensure it's accessible.
         
         Args:
             grid: The maze grid to modify.
             corner: Grid coordinates (x, y) of the corner to clear around.
         """
-        start_clear_size = 6
+        clear_size = self.config.corner_clear_size
         corner_x, corner_y = corner
         
         # Clear area around the corner, ensuring we stay within bounds
-        # Use similar logic to original fixed corner clearing
-        for y in range(max(1, corner_y - start_clear_size // 2), 
-                      min(corner_y + start_clear_size // 2 + 1, self.grid_height - 1)):
-            for x in range(max(1, corner_x - start_clear_size // 2),
-                          min(corner_x + start_clear_size // 2 + 1, self.grid_width - 1)):
+        for y in range(max(1, corner_y - clear_size // 2), 
+                      min(corner_y + clear_size // 2 + 1, self.grid_height - 1)):
+            for x in range(max(1, corner_x - clear_size // 2),
+                          min(corner_x + clear_size // 2 + 1, self.grid_width - 1)):
                 grid[y][x] = 0
         
         # Validate that the corner itself is in a clear path cell
         if grid[corner_y][corner_x] != 0:
             # Force clear the corner cell if it's still a wall
             grid[corner_y][corner_x] = 0
+
+
+class Maze:
+    """Procedurally generated maze."""
     
-    def _grid_to_walls(self) -> List[WallSegment]:
-        """Convert grid to list of wall line segments.
+    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None):
+        """Generate a maze for the given level.
         
-        Returns:
-            List of WallSegment instances.
+        Args:
+            level: Current level number (1-based).
+            complexity: Optional maze complexity level. If None, calculated from level.
         """
-        walls = []
+        self.level = level
         
-        for y in range(self.grid_height):
-            for x in range(self.grid_width):
-                if self.grid[y][x] == 1:  # Wall cell
-                    # Convert grid coordinates to screen coordinates with offset
-                    screen_x = self.offset_x + x * self.cell_size
-                    screen_y = self.offset_y + y * self.cell_size
-                    
-                    # Create wall rectangle as line segments with hit points
-                    # Top edge
-                    walls.append(WallSegment(
-                        (screen_x, screen_y),
-                        (screen_x + self.cell_size, screen_y),
-                        config.WALL_HIT_POINTS
-                    ))
-                    # Right edge
-                    walls.append(WallSegment(
-                        (screen_x + self.cell_size, screen_y),
-                        (screen_x + self.cell_size, screen_y + self.cell_size),
-                        config.WALL_HIT_POINTS
-                    ))
-                    # Bottom edge
-                    walls.append(WallSegment(
-                        (screen_x + self.cell_size, screen_y + self.cell_size),
-                        (screen_x, screen_y + self.cell_size),
-                        config.WALL_HIT_POINTS
-                    ))
-                    # Left edge
-                    walls.append(WallSegment(
-                        (screen_x, screen_y + self.cell_size),
-                        (screen_x, screen_y),
-                        config.WALL_HIT_POINTS
-                    ))
+        # Determine complexity
+        if complexity is None:
+            complexity = MazeComplexityPresets.get_complexity_from_level(level)
         
-        return walls
+        # Get generation config
+        gen_config = MazeComplexityPresets.get_config(complexity)
+        
+        # Calculate grid dimensions
+        self.grid_width = gen_config.grid_size_base + (level - 1) * gen_config.grid_size_increment
+        self.grid_height = self.grid_width
+        
+        # Create position calculator
+        self.position_calculator = MazePositionCalculator(self.grid_width, self.grid_height)
+        self.cell_size = self.position_calculator.cell_size
+        self.offset_x = self.position_calculator.offset_x
+        self.offset_y = self.position_calculator.offset_y
+        
+        # Generate maze grid
+        generator = RecursiveBacktrackingGenerator(gen_config, self.grid_width, self.grid_height, level)
+        self.grid = generator.generate()
+        
+        # Select random opposite corners for start and exit
+        corner_combinations = [
+            ((1, 1), (self.grid_width - 2, self.grid_height - 2)),  # TL -> BR
+            ((self.grid_width - 2, 1), (1, self.grid_height - 2)),  # TR -> BL
+            ((1, self.grid_height - 2), (self.grid_width - 2, 1)),  # BL -> TR
+            ((self.grid_width - 2, self.grid_height - 2), (1, 1)),  # BR -> TL
+        ]
+        start_grid, exit_grid = random.choice(corner_combinations)
+        
+        # Clear areas around selected corners to ensure they're accessible
+        generator.clear_corner_area(self.grid, start_grid)
+        generator.clear_corner_area(self.grid, exit_grid)
+        
+        # Convert grid to wall segments
+        converter = GridToWallsConverter(self.position_calculator)
+        self.walls = converter.convert(self.grid)
+        
+        # Create spatial grid for efficient collision detection
+        self.spatial_grid = SpatialGrid(
+            config.SCREEN_WIDTH,
+            config.SCREEN_HEIGHT,
+            cell_size=150.0  # Optimal cell size for this game
+        )
+        self.spatial_grid.add_walls(self.walls)
+        
+        # Set start position
+        self.start_pos = self.position_calculator.get_start_position(start_grid)
+        
+        # Create exit object
+        exit_pos = self.position_calculator.grid_center_to_screen(exit_grid[0], exit_grid[1])
+        exit_radius = self.cell_size // 2
+        self.exit = ExitPortal(exit_pos, exit_radius)
     
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
         """Check if player reached the exit."""

@@ -132,8 +132,11 @@ class Game:
         seed = level_config.get_level_seed(self.level)
         random.seed(seed)
         
+        # Get maze complexity from level config (None will use level-based default)
+        maze_complexity = level_config.get_maze_complexity(self.level)
+        
         # Generate maze
-        self.maze = Maze(self.level)
+        self.maze = Maze(self.level, complexity=maze_complexity)
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)

@@ -8,6 +8,7 @@ import json
 import os
 from typing import Optional, Dict
 from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count
+from maze.config import MazeComplexity
 
 
 def load_level_config(level: int) -> Optional[Dict]:
@@ -97,4 +98,34 @@ def get_level_split_boss_count(level: int) -> int:
     if config and 'enemies' in config and 'split_boss' in config['enemies']:
         return int(config['enemies']['split_boss'])
     return get_split_boss_count(level)
+
+
+def get_maze_complexity(level: int) -> Optional[MazeComplexity]:
+    """Get maze complexity for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        MazeComplexity from config if present, None otherwise (will use level-based default).
+    """
+    config = load_level_config(level)
+    if not config or 'maze' not in config or 'complexity' not in config['maze']:
+        return None
+    
+    complexity_str = config['maze']['complexity'].lower()
+    
+    # Map string values to enum
+    complexity_map = {
+        'simple': MazeComplexity.SIMPLE,
+        'normal': MazeComplexity.NORMAL,
+        'complex': MazeComplexity.COMPLEX,
+        'extreme': MazeComplexity.EXTREME,
+    }
+    
+    if complexity_str in complexity_map:
+        return complexity_map[complexity_str]
+    
+    # Invalid value, return None to use default
+    return None
 

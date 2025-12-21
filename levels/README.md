@@ -11,6 +11,9 @@ Each level can have its own configuration file named `{level}.json` (e.g., `1.js
 ```json
 {
   "seed": 42,
+  "maze": {
+    "complexity": "normal"
+  },
   "enemies": {
     "static": 5,
     "patrol": 3,
@@ -24,6 +27,12 @@ Each level can have its own configuration file named `{level}.json` (e.g., `1.js
 ### Fields
 
 - **seed** (optional): Random seed for level generation. If not specified, defaults to the level number.
+- **maze** (optional): Object containing maze configuration overrides.
+  - **complexity** (optional): Maze complexity level. Valid values: `"simple"`, `"normal"`, `"complex"`, `"extreme"`. If not specified, complexity is calculated from level number:
+    - Levels 1-3: `simple`
+    - Levels 4-7: `normal`
+    - Levels 8-11: `complex`
+    - Levels 12+: `extreme`
 - **enemies** (optional): Object containing enemy count overrides. If not specified, uses default calculations from `level_rules.py`.
   - **static** (optional): Number of static enemies. Defaults to calculated value.
   - **patrol** (optional): Number of patrol enemies. Defaults to calculated value.
@@ -54,9 +63,19 @@ You can specify only the fields you want to override. Unspecified fields will us
 }
 ```
 
+### Example: Override maze complexity
+
+```json
+{
+  "maze": {
+    "complexity": "extreme"
+  }
+}
+```
+
 ## Default Behavior
 
 If a level has no configuration file, the game will:
+
 - Use the level number as the random seed
 - Calculate enemy counts using the formulas in `level_rules.py`
-
