@@ -204,30 +204,6 @@ class LevelCompleteStateHandler(StateHandler):
         return False
 
 
-class GameOverStateHandler(StateHandler):
-    """Handler for game over state events."""
-    
-    def handle_keyboard(self, event: 'pygame.event.Event', game: 'Game') -> bool:
-        """Handle keyboard events in game over state."""
-        if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-            game.state = config.STATE_MENU
-            game.level = 1
-            from scoring.system import ScoringSystem
-            game.scoring = ScoringSystem()
-            return True
-        return False
-    
-    def handle_controller(self, event: 'pygame.event.Event', game: 'Game') -> bool:
-        """Handle controller events in game over state."""
-        if game.input_handler.is_controller_menu_confirm_pressed(event.button):
-            game.state = config.STATE_MENU
-            game.level = 1
-            from scoring.system import ScoringSystem
-            game.scoring = ScoringSystem()
-            return True
-        return False
-
-
 class StateHandlerRegistry:
     """Registry for state handlers."""
     
@@ -238,7 +214,6 @@ class StateHandlerRegistry:
             config.STATE_PLAYING: PlayingStateHandler(),
             config.STATE_QUIT_CONFIRM: QuitConfirmStateHandler(),
             config.STATE_LEVEL_COMPLETE: LevelCompleteStateHandler(),
-            config.STATE_GAME_OVER: GameOverStateHandler(),
         }
     
     def get_handler(self, state: str) -> StateHandler:

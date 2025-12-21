@@ -211,7 +211,6 @@ STATE_SPLASH = "splash"
 STATE_MENU = "menu"
 STATE_PLAYING = "playing"
 STATE_LEVEL_COMPLETE = "level_complete"
-STATE_GAME_OVER = "game_over"
 STATE_QUIT_CONFIRM = "quit_confirm"
 
 # UI and menu settings

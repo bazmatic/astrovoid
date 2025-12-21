@@ -23,6 +23,9 @@ from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
 from rendering.visual_effects import draw_button_glow
+from rendering.main_menu import MainMenu
+from rendering.level_complete_menu import LevelCompleteMenu
+from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
 from game_handlers.entity_manager import EntityManager
@@ -107,48 +110,11 @@ class Game:
         )
         
         # Menu UI components
-        self.menu_background: Optional[AnimatedBackground] = None
-        self.menu_title: Optional[NeonText] = None
-        self.menu_buttons: List[Button] = []
-        self.menu_selected_index = 0
-        self.menu_pulse_phase = 0.0
-        self.level_complete_background: Optional[AnimatedBackground] = None
-        self.game_over_background: Optional[AnimatedBackground] = None
+        self.main_menu = MainMenu(screen)
+        self.level_complete_menu = LevelCompleteMenu(screen)
+        self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
-        self._initialize_menu_ui()
         self._initialize_splash_screen()
-    
-    def _initialize_menu_ui(self) -> None:
-        """Initialize menu UI components."""
-        # Create animated background
-        self.menu_background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
-        
-        # Create title with neon effect
-        title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-        self.menu_title = NeonText(
-            "ASTRO VOID",
-            title_font,
-            (config.SCREEN_WIDTH // 2, 180),
-            config.COLOR_NEON_ASTER_START,
-            config.COLOR_NEON_VOID_END,
-            center=True
-        )
-        
-        # Create buttons
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        
-        start_button = Button(
-            "START GAME",
-            (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 50),
-            button_font,
-            width=400,
-            height=60
-        )
-        start_button.selected = True
-        
-        self.menu_buttons = [start_button]
-        self.menu_selected_index = 0
     
     def _initialize_splash_screen(self) -> None:
         """Initialize splash screen state."""
@@ -304,30 +270,9 @@ class Game:
         
         # Update menu UI animations
         if self.state == config.STATE_MENU:
-            if self.menu_background:
-                self.menu_background.update(dt)
-            if self.menu_title:
-                self.menu_title.update(dt)
-            # Update pulse phase for button glow
-            self.menu_pulse_phase += config.BUTTON_GLOW_PULSE_SPEED * dt / 60.0
-            if self.menu_pulse_phase >= 2 * math.pi:
-                self.menu_pulse_phase -= 2 * math.pi
+            self.main_menu.update(dt)
         elif self.state == config.STATE_LEVEL_COMPLETE:
-            # Update level complete background
-            if self.level_complete_background:
-                self.level_complete_background.update(dt)
-            # Update pulse phase for button glow
-            self.menu_pulse_phase += config.BUTTON_GLOW_PULSE_SPEED * dt / 60.0
-            if self.menu_pulse_phase >= 2 * math.pi:
-                self.menu_pulse_phase -= 2 * math.pi
-        elif self.state == config.STATE_GAME_OVER:
-            # Update game over background
-            if self.game_over_background:
-                self.game_over_background.update(dt)
-            # Update pulse phase for button glow
-            self.menu_pulse_phase += config.BUTTON_GLOW_PULSE_SPEED * dt / 60.0
-            if self.menu_pulse_phase >= 2 * math.pi:
-                self.menu_pulse_phase -= 2 * math.pi
+            self.level_complete_menu.update(dt)
         
         if self.state == config.STATE_LEVEL_COMPLETE:
             # Update star animation during level complete
@@ -686,74 +631,26 @@ class Game:
             if self.splash_screen:
                 self.splash_screen.draw(self.screen)
         elif self.state == config.STATE_MENU:
-            self.draw_menu()
+            self.main_menu.draw()
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
                 self.draw_exit_explosion()
         elif self.state == config.STATE_QUIT_CONFIRM:
             self.draw_game()  # Draw game in background
-            self.draw_quit_confirmation()
+            self.quit_confirmation_menu.draw_quit_confirmation(self.main_menu.menu_pulse_phase)
         elif self.state == config.STATE_LEVEL_COMPLETE:
-            self.draw_level_complete()
-        elif self.state == config.STATE_GAME_OVER:
-            self.draw_game_over()
+            self.level_complete_menu.draw(
+                self.level,
+                self.level_succeeded,
+                self.completion_time_seconds,
+                self.level_score_breakdown,
+                self.star_animation,
+                self.level_complete_quit_confirm,
+                lambda: self.quit_confirmation_menu.draw_level_complete_quit_confirmation(self.level_complete_menu.menu_pulse_phase)
+            )
         
         pygame.display.flip()
-    
-    def draw_menu(self) -> None:
-        """Draw main menu with animated background and neon effects."""
-        # Draw animated background
-        if self.menu_background:
-            self.menu_background.draw(self.screen)
-        
-        # Draw title with neon effect
-        if self.menu_title:
-            self.menu_title.draw(self.screen)
-        
-        # Draw subtitle
-        subtitle_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
-        subtitle = subtitle_font.render("A Skill-Based Space Navigation Game", True, config.COLOR_TEXT)
-        subtitle_rect = subtitle.get_rect(center=(config.SCREEN_WIDTH // 2, 250))
-        self.screen.blit(subtitle, subtitle_rect)
-        
-        # Draw buttons
-        button_y = config.SCREEN_HEIGHT // 2 + 50
-        for i, button in enumerate(self.menu_buttons):
-            button.selected = (i == self.menu_selected_index)
-            button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Draw controller icon next to selected button
-            if button.selected:
-                icon_x = button.position[0] - button.width // 2 - 50
-                icon_y = button.position[1]
-                ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
-        
-        # Draw hints below buttons
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        hint_y = button_y + 80
-        
-        # Start hint
-        start_hint = hint_font.render("Press SPACE/ENTER or A Button to Start", True, config.COLOR_TEXT)
-        start_hint_rect = start_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-        self.screen.blit(start_hint, start_hint_rect)
-        
-        # Quit hint
-        quit_hint = hint_font.render("Press ESC/Q or B Button to Quit", True, config.COLOR_TEXT)
-        quit_hint_rect = quit_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-        self.screen.blit(quit_hint, quit_hint_rect)
-        
-        # Draw controls info at bottom (smaller, less prominent)
-        controls_y = config.SCREEN_HEIGHT - 120
-        controls_font = pygame.font.Font(None, 20)
-        controls_text = [
-            "Controls: Arrow Keys/WASD - Move | Space - Fire | Down/S - Shield",
-            "Controller: Sticks - Move | R/ZR/B - Fire | A - Shield | L/ZL - Thrust"
-        ]
-        for i, line in enumerate(controls_text):
-            text = controls_font.render(line, True, (150, 150, 150))
-            text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, controls_y + i * 25))
-            self.screen.blit(text, text_rect)
     
     def draw_game(self) -> None:
         """Draw game play screen."""
@@ -842,294 +739,9 @@ class Game:
             )
             self.draw_star_rating(potential['score_percentage'], config.SCREEN_WIDTH - 200, 110)
     
-    def draw_level_complete(self) -> None:
-        """Draw level complete or failed screen with enhanced UI."""
-        # Initialize background if needed
-        if not self.level_complete_background:
-            self.level_complete_background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
-        
-        # Draw animated background
-        if self.level_complete_background:
-            self.level_complete_background.draw(self.screen)
-        
-        # Show different title based on success/failure
-        title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-        if self.level_succeeded:
-            title_text = f"LEVEL {self.level} COMPLETE"
-            title = NeonText(
-                title_text,
-                title_font,
-                (config.SCREEN_WIDTH // 2, 150),
-                config.COLOR_NEON_ASTER_START,
-                config.COLOR_NEON_VOID_END,
-                center=True
-            )
-            title.pulse_phase = self.menu_pulse_phase
-            title.draw(self.screen)
-        else:
-            title_text = "LEVEL FAILED"
-            title = title_font.render(title_text, True, (255, 100, 100))
-            title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
-            self.screen.blit(title, title_rect)
-        
-        # Format time as minutes:seconds with one decimal place
-        minutes = int(self.completion_time_seconds // 60)
-        seconds_with_decimal = self.completion_time_seconds % 60
-        time_text = self.small_font.render(
-            f"Time: {minutes}:{seconds_with_decimal:05.1f}",
-            True, config.COLOR_TEXT
-        )
-        time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 220))
-        self.screen.blit(time_text, time_rect)
-        
-        # Draw animated star rating (centered, large)
-        if self.star_animation:
-            self.star_animation.draw(self.screen)
-        
-        # Draw total score
-        total_score = int(self.level_score_breakdown.get('total_score', 0))
-        score_text = self.small_font.render(
-            f"Total Score: {total_score}",
-            True, config.COLOR_TEXT
-        )
-        score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80))
-        self.screen.blit(score_text, score_rect)
-        
-        # Draw buttons with controller icons
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        button_y = config.SCREEN_HEIGHT // 2 + 150
-        
-        if self.level_succeeded:
-            # Continue button
-            continue_button = Button(
-                "CONTINUE",
-                (config.SCREEN_WIDTH // 2, button_y),
-                button_font,
-                width=350,
-                height=60
-            )
-            continue_button.selected = True
-            continue_button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Controller icon
-            icon_x = continue_button.position[0] - continue_button.width // 2 - 50
-            ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=35, selected=True)
-            
-            # Hints
-            hint_y = button_y + 70
-            continue_hint = hint_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
-            continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-            self.screen.blit(continue_hint, continue_hint_rect)
-            
-            back_hint = hint_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
-            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-            self.screen.blit(back_hint, back_hint_rect)
-        else:
-            # Retry button
-            retry_button = Button(
-                "RETRY LEVEL",
-                (config.SCREEN_WIDTH // 2, button_y),
-                button_font,
-                width=350,
-                height=60
-            )
-            retry_button.selected = True
-            retry_button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Controller icon
-            icon_x = retry_button.position[0] - retry_button.width // 2 - 50
-            ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=35, selected=True)
-            
-            # Hints
-            hint_y = button_y + 70
-            retry_hint = hint_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
-            retry_hint_rect = retry_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-            self.screen.blit(retry_hint, retry_hint_rect)
-            
-            back_hint = hint_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
-            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-            self.screen.blit(back_hint, back_hint_rect)
-        
-        # Draw quit confirmation overlay if active
-        if self.level_complete_quit_confirm:
-            self.draw_level_complete_quit_confirmation()
-    
     def draw_star_rating(self, score_percentage: float, x: int, y: int) -> None:
         """Draw 5 stars that fill/drain based on score percentage."""
         self.renderer.draw_star_rating(score_percentage, x, y)
-    
-    def draw_level_complete_quit_confirmation(self) -> None:
-        """Draw quit confirmation dialog overlay for level complete screen."""
-        # Draw semi-transparent overlay
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-        overlay.set_alpha(200)
-        overlay.fill((0, 0, 0))
-        self.screen.blit(overlay, (0, 0))
-        
-        # Draw confirmation dialog box with glow
-        dialog_width = 550
-        dialog_height = 280  # Increased from 240 to add more bottom padding
-        dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
-        dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
-        dialog_rect = pygame.Rect(dialog_x, dialog_y, dialog_width, dialog_height)
-        
-        # Draw glow effect
-        draw_button_glow(
-            self.screen,
-            dialog_rect,
-            config.COLOR_BUTTON_GLOW,
-            config.BUTTON_GLOW_INTENSITY * 1.5,
-            self.menu_pulse_phase
-        )
-        
-        # Dialog background
-        pygame.draw.rect(self.screen, config.COLOR_UI_BG, dialog_rect)
-        pygame.draw.rect(self.screen, config.COLOR_BUTTON_GLOW, dialog_rect, 3)
-        
-        # Title
-        title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
-        title = title_font.render("Quit to Menu?", True, config.COLOR_TEXT)
-        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 50))
-        self.screen.blit(title, title_rect)
-        
-        # Message
-        message = self.small_font.render(
-            "Progress will be saved.",
-            True, config.COLOR_TEXT
-        )
-        message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
-        self.screen.blit(message, message_rect)
-        
-        # Draw buttons with controller icons
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        button_y = dialog_y + 150
-        
-        # Yes button
-        yes_button = Button(
-            "YES",
-            (config.SCREEN_WIDTH // 2 - 120, button_y),
-            button_font,
-            width=180,
-            height=50
-        )
-        yes_button.selected = True
-        yes_button.draw(self.screen, self.menu_pulse_phase)
-        
-        # A button icon for Yes
-        icon_x = yes_button.position[0] - yes_button.width // 2 - 35
-        ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=30, selected=True)
-        
-        # No button
-        no_button = Button(
-            "NO",
-            (config.SCREEN_WIDTH // 2 + 120, button_y),
-            button_font,
-            width=180,
-            height=50
-        )
-        no_button.draw(self.screen, self.menu_pulse_phase)
-        
-        # B button icon for No
-        icon_x = no_button.position[0] + no_button.width // 2 + 35
-        ControllerIcon.draw_b_button(self.screen, (icon_x, button_y), size=30, selected=False)
-        
-        # Button hints
-        yes_hint = hint_font.render("Y/Enter/A", True, config.COLOR_TEXT)
-        no_hint = hint_font.render("N/ESC/B", True, config.COLOR_TEXT)
-        
-        yes_hint_rect = yes_hint.get_rect(center=(config.SCREEN_WIDTH // 2 - 120, button_y + 50))
-        no_hint_rect = no_hint.get_rect(center=(config.SCREEN_WIDTH // 2 + 120, button_y + 50))
-        
-        self.screen.blit(yes_hint, yes_hint_rect)
-        self.screen.blit(no_hint, no_hint_rect)
-    
-    def draw_quit_confirmation(self) -> None:
-        """Draw quit confirmation dialog overlay with modern design."""
-        # Draw semi-transparent overlay
-        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
-        overlay.set_alpha(200)
-        overlay.fill((0, 0, 0))
-        self.screen.blit(overlay, (0, 0))
-        
-        # Draw confirmation dialog box with glow
-        dialog_width = 600
-        dialog_height = 360  # Increased from 300 to add more bottom padding
-        dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
-        dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
-        dialog_rect = pygame.Rect(dialog_x, dialog_y, dialog_width, dialog_height)
-        
-        # Draw glow effect
-        draw_button_glow(
-            self.screen,
-            dialog_rect,
-            config.COLOR_BUTTON_GLOW,
-            config.BUTTON_GLOW_INTENSITY * 1.5,
-            self.menu_pulse_phase
-        )
-        
-        # Dialog background
-        pygame.draw.rect(self.screen, config.COLOR_UI_BG, dialog_rect)
-        pygame.draw.rect(self.screen, config.COLOR_BUTTON_GLOW, dialog_rect, 3)
-        
-        # Title
-        title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
-        title = title_font.render("Quit Level?", True, config.COLOR_TEXT)
-        title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 40))
-        self.screen.blit(title, title_rect)
-        
-        # Message
-        message = self.small_font.render(
-            "Are you sure you want to quit? Progress will be lost.",
-            True, config.COLOR_TEXT
-        )
-        message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 90))
-        self.screen.blit(message, message_rect)
-        
-        # Draw buttons with controller icons
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        button_y = dialog_y + 150
-        
-        # Return to menu button
-        return_button = Button(
-            "RETURN TO MENU",
-            (config.SCREEN_WIDTH // 2, button_y),
-            button_font,
-            width=400,
-            height=50
-        )
-        return_button.selected = True
-        return_button.draw(self.screen, self.menu_pulse_phase)
-        
-        # A button icon
-        icon_x = return_button.position[0] - return_button.width // 2 - 35
-        ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=30, selected=True)
-        
-        # Return button hint
-        return_hint = hint_font.render("Y/Enter/A Button", True, config.COLOR_TEXT)
-        return_hint_rect = return_hint.get_rect(center=(config.SCREEN_WIDTH // 2, button_y + 40))
-        self.screen.blit(return_hint, return_hint_rect)
-        
-        # Cancel button
-        cancel_button = Button(
-            "CANCEL",
-            (config.SCREEN_WIDTH // 2, button_y + 100),
-            button_font,
-            width=400,
-            height=50
-        )
-        cancel_button.draw(self.screen, self.menu_pulse_phase)
-        
-        # B button icon
-        icon_x = cancel_button.position[0] - cancel_button.width // 2 - 35
-        ControllerIcon.draw_b_button(self.screen, (icon_x, button_y + 100), size=30, selected=False)
-        
-        # Cancel button hint
-        cancel_hint = hint_font.render("N/ESC/B Button", True, config.COLOR_TEXT)
-        cancel_hint_rect = cancel_hint.get_rect(center=(config.SCREEN_WIDTH // 2, button_y + 140))
-        self.screen.blit(cancel_hint, cancel_hint_rect)
     
     def draw_exit_explosion(self) -> None:
         """Draw spectacular exit explosion effect that fills the screen with light."""
@@ -1205,64 +817,6 @@ class Game:
                 flash_color = (255, 255, 255, flash_alpha)
                 flash_overlay.fill(flash_color)
                 self.screen.blit(flash_overlay, (0, 0))
-    
-    def draw_game_over(self) -> None:
-        """Draw game over screen with enhanced UI."""
-        # Initialize background if needed
-        if not self.game_over_background:
-            self.game_over_background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
-        
-        # Draw animated background
-        if self.game_over_background:
-            self.game_over_background.draw(self.screen)
-        
-        # Draw title with neon effect
-        title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-        title = NeonText(
-            "GAME OVER",
-            title_font,
-            (config.SCREEN_WIDTH // 2, 300),
-            (255, 100, 100),  # Red for game over
-            (255, 50, 50),
-            center=True
-        )
-        title.pulse_phase = self.menu_pulse_phase
-        title.draw(self.screen)
-        
-        # Draw final score
-        score_text = self.small_font.render(
-            f"Final Score: {self.scoring.get_total_score()}",
-            True, config.COLOR_TEXT
-        )
-        score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, 380))
-        self.screen.blit(score_text, score_rect)
-        
-        # Draw button with controller icon
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        button_y = 450
-        
-        return_button = Button(
-            "RETURN TO MENU",
-            (config.SCREEN_WIDTH // 2, button_y),
-            button_font,
-            width=400,
-            height=60
-        )
-        return_button.selected = True
-        return_button.draw(self.screen, self.menu_pulse_phase)
-        
-        # Controller icon
-        icon_x = return_button.position[0] - return_button.width // 2 - 50
-        ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=35, selected=True)
-        
-        # Hint
-        continue_hint = hint_font.render(
-            "Press SPACE/ENTER or A Button",
-            True, config.COLOR_TEXT
-        )
-        continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, button_y + 70))
-        self.screen.blit(continue_hint, continue_hint_rect)
     
     def run(self) -> None:
         """Main game loop."""
