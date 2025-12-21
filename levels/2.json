@@ -1,6 +1,6 @@
 {
   "enemies": {
-    "static": 0,
+    "static": 3,
     "patrol": 0,
     "aggressive": 0,
     "replay": 0,
@@ -8,7 +8,7 @@
   },
   "seed": 100,
   "maze": {
-    "complexity": "empty",
+    "complexity": "simple",
     "grid_size": 10
   }
 }

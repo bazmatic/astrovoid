@@ -1,14 +1,14 @@
 {
   "enemies": {
-    "static": 0,
-    "patrol": 0,
+    "static": 1,
+    "patrol": 1,
     "aggressive": 0,
     "replay": 0,
     "split_boss": 0
   },
   "seed": 100,
   "maze": {
-    "complexity": "empty",
+    "complexity": "normal",
     "grid_size": 10
   }
 }

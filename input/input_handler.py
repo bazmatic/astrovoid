@@ -169,14 +169,19 @@ class InputHandler:
         
         controller = self.controllers[0]
         num_axes = controller.get_numaxes()
+        num_buttons = controller.get_numbuttons()
         
-        # Fire: ZL (left trigger/axis 5) only
+        # Fire: ZL (left trigger/axis 5) OR Y button (button 3)
         if num_axes > 5:
             left_trigger = controller.get_axis(5)
             # Triggers may range from -1.0 to 1.0 (unpressed to pressed)
             # or 0.0 to 1.0 (unpressed to pressed)
             # Check for positive values above threshold
             if left_trigger > config.CONTROLLER_TRIGGER_THRESHOLD:
+                return True
+        
+        if num_buttons > 3:
+            if controller.get_button(3):  # Y button
                 return True
         
         return False

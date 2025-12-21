@@ -96,7 +96,7 @@ class QuitConfirmStateHandler(StateHandler):
         if event.key == pygame.K_y or event.key == pygame.K_RETURN:
             game.state = config.STATE_MENU
             game.level = 1
-            from scoring import ScoringSystem
+            from scoring.system import ScoringSystem
             game.scoring = ScoringSystem()
             return True
         elif event.key == pygame.K_q:
@@ -112,7 +112,7 @@ class QuitConfirmStateHandler(StateHandler):
         if game.input_handler.is_controller_menu_confirm_pressed(event.button):
             game.state = config.STATE_MENU
             game.level = 1
-            from scoring import ScoringSystem
+            from scoring.system import ScoringSystem
             game.scoring = ScoringSystem()
             return True
         elif event.button == 1:  # B button
@@ -216,7 +216,7 @@ class GameOverStateHandler(StateHandler):
         if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
             game.state = config.STATE_MENU
             game.level = 1
-            from scoring import ScoringSystem
+            from scoring.system import ScoringSystem
             game.scoring = ScoringSystem()
             return True
         return False
@@ -226,7 +226,7 @@ class GameOverStateHandler(StateHandler):
         if game.input_handler.is_controller_menu_confirm_pressed(event.button):
             game.state = config.STATE_MENU
             game.level = 1
-            from scoring import ScoringSystem
+            from scoring.system import ScoringSystem
             game.scoring = ScoringSystem()
             return True
         return False

@@ -12,7 +12,8 @@ Each level can have its own configuration file named `{level}.json` (e.g., `1.js
 {
   "seed": 42,
   "maze": {
-    "complexity": "normal"
+    "complexity": "normal",
+    "grid_size": 25
   },
   "enemies": {
     "static": 5,
@@ -28,11 +29,13 @@ Each level can have its own configuration file named `{level}.json` (e.g., `1.js
 
 - **seed** (optional): Random seed for level generation. If not specified, defaults to the level number.
 - **maze** (optional): Object containing maze configuration overrides.
-  - **complexity** (optional): Maze complexity level. Valid values: `"simple"`, `"normal"`, `"complex"`, `"extreme"`. If not specified, complexity is calculated from level number:
-    - Levels 1-3: `simple`
+  - **complexity** (optional): Maze complexity level. Valid values: `"empty"`, `"simple"`, `"normal"`, `"complex"`, `"extreme"`. If not specified, complexity is calculated from level number:
+    - Level 1: `empty` (perimeter only, no obstacles)
+    - Levels 2-3: `simple`
     - Levels 4-7: `normal`
     - Levels 8-11: `complex`
     - Levels 12+: `extreme`
+  - **grid_size** (optional): Grid size (width/height in cells). The maze is always square. If not specified, calculated as `BASE_MAZE_SIZE + (level - 1) * MAZE_SIZE_INCREMENT` (default: 15 + (level-1) \* 2). Valid range: 5-100. Larger values create more, smaller blocks.
 - **enemies** (optional): Object containing enemy count overrides. If not specified, uses default calculations from `level_rules.py`.
   - **static** (optional): Number of static enemies. Defaults to calculated value.
   - **patrol** (optional): Number of patrol enemies. Defaults to calculated value.
@@ -69,6 +72,27 @@ You can specify only the fields you want to override. Unspecified fields will us
 {
   "maze": {
     "complexity": "extreme"
+  }
+}
+```
+
+### Example: Override maze grid size
+
+```json
+{
+  "maze": {
+    "grid_size": 50
+  }
+}
+```
+
+### Example: Override both maze complexity and grid size
+
+```json
+{
+  "maze": {
+    "complexity": "extreme",
+    "grid_size": 50
   }
 }
 ```

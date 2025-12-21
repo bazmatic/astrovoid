@@ -11,8 +11,8 @@ if TYPE_CHECKING:
     from entities.split_boss import SplitBoss
     from entities.ship import Ship
     from entities.projectile import Projectile
-    from maze import Maze
-    from scoring import ScoringSystem
+    from maze.generator import Maze
+    from scoring.system import ScoringSystem
 
 
 class EnemyUpdater:

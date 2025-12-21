@@ -12,6 +12,7 @@ import config
 
 class MazeComplexity(Enum):
     """Maze complexity levels."""
+    EMPTY = "empty"
     SIMPLE = "simple"
     NORMAL = "normal"
     COMPLEX = "complex"
@@ -53,7 +54,17 @@ class MazeComplexityPresets:
         Returns:
             MazeGenerationConfig with parameters for the complexity level.
         """
-        if complexity == MazeComplexity.SIMPLE:
+        if complexity == MazeComplexity.EMPTY:
+            return MazeGenerationConfig(
+                step_size=1,
+                passage_width=0,
+                clear_radius=0,
+                corner_clear_size=0,
+                extra_paths_multiplier=0,
+                grid_size_base=config.BASE_MAZE_SIZE,
+                grid_size_increment=config.MAZE_SIZE_INCREMENT
+            )
+        elif complexity == MazeComplexity.SIMPLE:
             return MazeGenerationConfig(
                 step_size=3,
                 passage_width=2,
@@ -105,12 +116,15 @@ class MazeComplexityPresets:
             
         Returns:
             MazeComplexity based on level ranges:
-            - Levels 1-3: SIMPLE
+            - Level 1: EMPTY (perimeter only, no obstacles)
+            - Levels 2-3: SIMPLE
             - Levels 4-7: NORMAL
             - Levels 8-11: COMPLEX
             - Levels 12+: EXTREME
         """
-        if level <= 3:
+        if level == 1:
+            return MazeComplexity.EMPTY
+        elif level <= 3:
             return MazeComplexity.SIMPLE
         elif level <= 7:
             return MazeComplexity.NORMAL

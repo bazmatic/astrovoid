@@ -8,7 +8,7 @@ import os
 from typing import List, Optional, Tuple
 import config
 from entities.ship import Ship
-from maze import Maze
+from maze.generator import Maze
 from entities.enemy import Enemy, create_enemies
 import level_rules
 import level_config
@@ -18,7 +18,7 @@ from entities.projectile import Projectile
 from entities.powerup_crystal import PowerupCrystal
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
-from scoring import ScoringSystem
+from scoring.system import ScoringSystem
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator
 from sounds import SoundManager
@@ -131,12 +131,16 @@ class Game:
         # Set random seed from level config or use level number as default
         seed = level_config.get_level_seed(self.level)
         random.seed(seed)
+        # Note: Seed is set before maze generation to ensure reproducible mazes
         
         # Get maze complexity from level config (None will use level-based default)
         maze_complexity = level_config.get_maze_complexity(self.level)
         
+        # Get maze grid size (always returns a value, calculated if not in config)
+        maze_grid_size = level_config.get_maze_grid_size(self.level)
+        
         # Generate maze
-        self.maze = Maze(self.level, complexity=maze_complexity)
+        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size)
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)

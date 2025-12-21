@@ -14,6 +14,7 @@ Architecture:
 
 from dataclasses import dataclass
 from typing import Dict, Tuple
+import math
 import config
 
 
@@ -64,7 +65,11 @@ def get_enemy_count(level: int) -> int:
     Returns:
         Total number of enemies for the level.
     """
-    return config.BASE_ENEMY_COUNT + (level - 1) * config.ENEMY_COUNT_INCREMENT
+    if level <= config.TUTORIAL_LEVELS:
+        return 2
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    return config.BASE_ENEMY_COUNT + (effective_level - 1) * config.ENEMY_COUNT_INCREMENT
 
 
 def get_enemy_type_distribution(level: int, total_count: int) -> Dict[str, int]:
@@ -95,32 +100,43 @@ def get_enemy_type_distribution(level: int, total_count: int) -> Dict[str, int]:
 def get_replay_enemy_count(level: int) -> int:
     """Get number of replay enemy ships for a level.
     
-    Args:
-        level: Current level number (1-based).
-        
-    Returns:
-        Number of replay enemies (1-5, scaling up to 5 at level 10+).
-    """
-    if level >= 10:
-        return 5
-    else:
-        # Scale from 1 to 4 for levels 1-9
-        # Level 1=1, Level 2-3=2, Level 4-6=3, Level 7-9=4
-        return min(1 + (level - 1) // 2, 4)
-
-
-def get_split_boss_count(level: int) -> int:
-    """Get number of SplitBoss enemies for a level.
+    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
+    This provides slow, diminishing returns scaling that continues indefinitely.
     
     Args:
         level: Current level number (1-based).
         
     Returns:
-        Number of SplitBoss enemies (1 for level >= 11, 0 otherwise).
+        Number of replay enemies (0 for tutorial levels, then continuous scaling).
     """
-    if level >= 11:
-        return 1
-    return 0
+    if level <= config.TUTORIAL_LEVELS:
+        return 0
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    # Continuous scaling with square root for diminishing returns
+    count = config.REPLAY_ENEMY_BASE_COUNT + config.REPLAY_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
+    return round(count)
+
+
+def get_split_boss_count(level: int) -> int:
+    """Get number of SplitBoss enemies for a level.
+    
+    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
+    This provides slow, diminishing returns scaling that continues indefinitely.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Number of SplitBoss enemies (0 for tutorial levels, then continuous scaling).
+    """
+    if level <= config.TUTORIAL_LEVELS:
+        return 0
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    # Continuous scaling with square root for diminishing returns
+    count = config.SPLIT_BOSS_BASE_COUNT + config.SPLIT_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
+    return round(count)
 
 
 def get_enemy_speed(level: int, enemy_type: str) -> float:
@@ -144,8 +160,13 @@ def get_enemy_speed(level: int, enemy_type: str) -> float:
     else:
         raise ValueError(f"Unknown enemy type: {enemy_type}")
     
-    # Scale speed by level: 10% increase per level (1.0 + (level - 1) * 0.1)
-    speed_multiplier = 1.0 + (level - 1) * 0.1
+    # Tutorial levels use base speed, scaling starts after
+    if level <= config.TUTORIAL_LEVELS:
+        return base_speed
+    
+    # Scale speed by effective level: 10% increase per effective level
+    effective_level = level - config.TUTORIAL_LEVELS
+    speed_multiplier = 1.0 + (effective_level - 1) * 0.1
     return base_speed * speed_multiplier
 
 
@@ -158,9 +179,14 @@ def get_enemy_damage(level: int) -> int:
     Returns:
         Damage value for enemies at this level.
     """
-    # Base damage from config, scaled by level
-    # 10% increase per level (rounded to nearest int)
-    damage_multiplier = 1.0 + (level - 1) * 0.1
+    # Tutorial levels use base damage, scaling starts after
+    if level <= config.TUTORIAL_LEVELS:
+        return config.ENEMY_DAMAGE
+    
+    # Base damage from config, scaled by effective level
+    # 10% increase per effective level (rounded to nearest int)
+    effective_level = level - config.TUTORIAL_LEVELS
+    damage_multiplier = 1.0 + (effective_level - 1) * 0.1
     return int(config.ENEMY_DAMAGE * damage_multiplier)
 
 
@@ -178,9 +204,14 @@ def get_enemy_fire_interval(level: int) -> Tuple[int, int]:
     base_min = config.ENEMY_FIRE_INTERVAL_MIN
     base_max = config.ENEMY_FIRE_INTERVAL_MAX
     
-    # Reduce interval by 5% per level (faster firing at higher levels)
+    # Tutorial levels use base intervals, scaling starts after
+    if level <= config.TUTORIAL_LEVELS:
+        return (base_min, base_max)
+    
+    # Reduce interval by 5% per effective level (faster firing at higher levels)
     # Minimum interval is 60% of base (40% reduction max)
-    reduction_factor = min(0.4, (level - 1) * 0.05)
+    effective_level = level - config.TUTORIAL_LEVELS
+    reduction_factor = min(0.4, (effective_level - 1) * 0.05)
     interval_multiplier = 1.0 - reduction_factor
     
     min_interval = int(base_min * interval_multiplier)
@@ -206,8 +237,13 @@ def get_enemy_fire_range(level: int) -> float:
     # Base range from config
     base_range = config.ENEMY_FIRE_RANGE
     
-    # Increase range by 5% per level
-    range_multiplier = 1.0 + (level - 1) * 0.05
+    # Tutorial levels use base range, scaling starts after
+    if level <= config.TUTORIAL_LEVELS:
+        return base_range
+    
+    # Increase range by 5% per effective level
+    effective_level = level - config.TUTORIAL_LEVELS
+    range_multiplier = 1.0 + (effective_level - 1) * 0.05
     return base_range * range_multiplier
 
 
@@ -252,5 +288,25 @@ def get_enemy_strength(level: int) -> EnemyStrength:
         fire_interval_max=fire_interval_max,
         fire_range=get_enemy_fire_range(level)
     )
+
+
+def get_maze_grid_size(level: int) -> int:
+    """Get default maze grid size for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Grid size (width/height in cells). Maze is always square.
+        Tutorial levels use base size, scaling starts after tutorial levels.
+        Capped at MAX_MAZE_SIZE to prevent excessive cells at high levels.
+    """
+    if level <= config.TUTORIAL_LEVELS:
+        return config.BASE_MAZE_SIZE
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    calculated_size = config.BASE_MAZE_SIZE + (effective_level - 1) * config.MAZE_SIZE_INCREMENT
+    # Cap at maximum to prevent excessive cells at high levels
+    return min(calculated_size, config.MAX_MAZE_SIZE)
 
 

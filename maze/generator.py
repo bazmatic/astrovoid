@@ -44,6 +44,12 @@ class RecursiveBacktrackingGenerator:
         Returns:
             2D grid where 1 = wall, 0 = path.
         """
+        # Special case: EMPTY complexity = perimeter only, no obstacles
+        if (self.config.extra_paths_multiplier == 0 and 
+            self.config.passage_width == 0 and 
+            self.config.clear_radius == 0):
+            return self._generate_empty_maze()
+        
         # Initialize grid: 1 = wall, 0 = path
         grid = [[1 for _ in range(self.grid_width)] for _ in range(self.grid_height)]
         
@@ -88,6 +94,20 @@ class RecursiveBacktrackingGenerator:
         self._add_extra_paths(grid)
         
         # Ensure perimeter is always walls
+        self._ensure_perimeter(grid)
+        
+        return grid
+    
+    def _generate_empty_maze(self) -> List[List[int]]:
+        """Generate an empty maze with only perimeter walls.
+        
+        Returns:
+            2D grid where 1 = wall (perimeter only), 0 = path (everything else).
+        """
+        # Initialize grid: all paths (0)
+        grid = [[0 for _ in range(self.grid_width)] for _ in range(self.grid_height)]
+        
+        # Set perimeter to walls
         self._ensure_perimeter(grid)
         
         return grid
@@ -197,12 +217,13 @@ class RecursiveBacktrackingGenerator:
 class Maze:
     """Procedurally generated maze."""
     
-    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None):
+    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0):
         """Generate a maze for the given level.
         
         Args:
             level: Current level number (1-based).
             complexity: Optional maze complexity level. If None, calculated from level.
+            grid_size: Grid size (width/height in cells). Always provided by level_config.get_maze_grid_size().
         """
         self.level = level
         
@@ -213,9 +234,9 @@ class Maze:
         # Get generation config
         gen_config = MazeComplexityPresets.get_config(complexity)
         
-        # Calculate grid dimensions
-        self.grid_width = gen_config.grid_size_base + (level - 1) * gen_config.grid_size_increment
-        self.grid_height = self.grid_width
+        # Set grid dimensions (grid_size is already calculated in level_config if None was passed)
+        self.grid_width = grid_size
+        self.grid_height = grid_size
         
         # Create position calculator
         self.position_calculator = MazePositionCalculator(self.grid_width, self.grid_height)

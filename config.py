@@ -46,10 +46,12 @@ AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
 FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
 
 # Difficulty scaling
-BASE_MAZE_SIZE = 15  # Larger base maze to fill screen
+BASE_MAZE_SIZE = 10  # Larger base maze to fill screen
 MAZE_SIZE_INCREMENT = 2
+MAX_MAZE_SIZE = 40  # Maximum grid size (width/height in cells) to prevent excessive cells at high levels
 BASE_ENEMY_COUNT = 2
 ENEMY_COUNT_INCREMENT = 1
+TUTORIAL_LEVELS = 6  # Number of tutorial levels before difficulty scaling begins
 
 # Maze settings
 WALL_THICKNESS = 6
@@ -79,12 +81,16 @@ REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = 30.0  # Degrees - enemy fires when pointing 
 REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
 REPLAY_ENEMY_SIZE = 15  # Size/radius of replay enemy
 REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
+REPLAY_ENEMY_BASE_COUNT = 1  # Base count after tutorial levels
+REPLAY_ENEMY_SCALE_FACTOR = 0.5  # Scaling factor for continuous growth (sqrt-based)
 
 # SplitBoss settings
 SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip
 SPLIT_BOSS_HIT_POINTS = 3  # Number of hits required to destroy SplitBoss
 SPLIT_BOSS_SPAWN_OFFSET_RANGE = 80  # Pixels for random spawn positions of spawned enemies
 SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enemies
+SPLIT_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
+SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
 
 # Projectile settings
 PROJECTILE_SPEED = 8.0

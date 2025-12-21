@@ -7,6 +7,7 @@ default seed and enemy counts. Levels without config files use default behavior.
 import json
 import os
 from typing import Optional, Dict
+import level_rules
 from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count
 from maze.config import MazeComplexity
 
@@ -29,8 +30,9 @@ def load_level_config(level: int) -> Optional[Dict]:
     try:
         with open(config_path, 'r') as f:
             return json.load(f)
-    except (json.JSONDecodeError, IOError):
+    except (json.JSONDecodeError, IOError) as e:
         # Return None on any error to fall back to defaults
+        # Silently fail to avoid disrupting gameplay
         return None
 
 
@@ -117,6 +119,7 @@ def get_maze_complexity(level: int) -> Optional[MazeComplexity]:
     
     # Map string values to enum
     complexity_map = {
+        'empty': MazeComplexity.EMPTY,
         'simple': MazeComplexity.SIMPLE,
         'normal': MazeComplexity.NORMAL,
         'complex': MazeComplexity.COMPLEX,
@@ -128,4 +131,26 @@ def get_maze_complexity(level: int) -> Optional[MazeComplexity]:
     
     # Invalid value, return None to use default
     return None
+
+
+def get_maze_grid_size(level: int) -> int:
+    """Get maze grid size for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Grid size from config if present, otherwise calculated from level_rules.
+        Grid size is the width/height of the maze in cells (maze is always square).
+    """
+    level_config = load_level_config(level)
+    if level_config and 'maze' in level_config and 'grid_size' in level_config['maze']:
+        grid_size = int(level_config['maze']['grid_size'])
+        
+        # Validate grid size is reasonable (minimum 5, maximum 100)
+        if 5 <= grid_size <= 100:
+            return grid_size
+    
+    # Fetch default grid size from level_rules
+    return level_rules.get_maze_grid_size(level)
 
