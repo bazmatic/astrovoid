@@ -517,16 +517,13 @@ class Game:
             "",
             "Controller:",
             "  Left/Right Stick: Rotate",
-            "  ZR / B: Thrust",
-            "  ZL: Fire",
+            "  L/ZL: Thrust",
+            "  R/ZR/B: Fire",
             "  A: Shield",
             "",
             "Objective:",
             "Navigate through mazes to reach the exit",
             "Balance speed, fuel, and ammo for high scores",
-            "",
-            "Press SPACE or A Button to Start",
-            "Press ESC/Q or X Button to Quit"
         ]
         
         title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
@@ -541,6 +538,22 @@ class Game:
             text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
             self.screen.blit(text, text_rect)
             y_offset += 30
+        
+        # Clear call to action - prominent START button
+        y_offset += 20
+        start_prompt = self.font.render("▶ START GAME", True, config.COLOR_TEXT)
+        start_rect = start_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+        self.screen.blit(start_prompt, start_rect)
+        
+        y_offset += 50
+        start_hint = self.small_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
+        start_hint_rect = start_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+        self.screen.blit(start_hint, start_hint_rect)
+        
+        y_offset += 40
+        quit_hint = self.small_font.render("Press ESC/Q or B Button to Quit", True, config.COLOR_TEXT)
+        quit_hint_rect = quit_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+        self.screen.blit(quit_hint, quit_hint_rect)
     
     def draw_game(self) -> None:
         """Draw game play screen."""
@@ -651,26 +664,36 @@ class Game:
         score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80))
         self.screen.blit(score_text, score_rect)
         
-        # Draw action prompts
+        # Clear call to action - prominent buttons
         y_offset = config.SCREEN_HEIGHT // 2 + 130
         if self.level_succeeded:
-            prompts = [
-                "Press SPACE/A to Continue",
-                "Press R/B to Replay Level",
-                "Press ESC/Q or X to Quit"
-            ]
+            continue_prompt = self.font.render("▶ CONTINUE", True, config.COLOR_TEXT)
+            continue_rect = continue_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(continue_prompt, continue_rect)
+            
+            y_offset += 50
+            continue_hint = self.small_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
+            continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(continue_hint, continue_hint_rect)
+            
+            y_offset += 40
+            back_hint = self.small_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
+            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(back_hint, back_hint_rect)
         else:
-            prompts = [
-                "Score reached zero!",
-                "Press SPACE/A or R/B to Retry Level",
-                "Press ESC/Q or X to Quit"
-            ]
-        
-        for prompt in prompts:
-            text = self.small_font.render(prompt, True, config.COLOR_TEXT)
-            text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
-            self.screen.blit(text, text_rect)
-            y_offset += 30
+            retry_prompt = self.font.render("▶ RETRY LEVEL", True, config.COLOR_TEXT)
+            retry_rect = retry_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(retry_prompt, retry_rect)
+            
+            y_offset += 50
+            retry_hint = self.small_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
+            retry_hint_rect = retry_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(retry_hint, retry_hint_rect)
+            
+            y_offset += 40
+            back_hint = self.small_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
+            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, y_offset))
+            self.screen.blit(back_hint, back_hint_rect)
         
         # Draw quit confirmation overlay if active
         if self.level_complete_quit_confirm:
@@ -690,7 +713,7 @@ class Game:
         
         # Draw confirmation dialog box
         dialog_width = 500
-        dialog_height = 200
+        dialog_height = 220
         dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
         dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
         
@@ -713,15 +736,25 @@ class Game:
         message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
         self.screen.blit(message, message_rect)
         
-        # Options
-        yes_text = self.small_font.render("Yes (Y/Enter/A)", True, config.COLOR_TEXT)
-        no_text = self.small_font.render("No (N/ESC/B)", True, config.COLOR_TEXT)
+        # Clear call to action - prominent buttons
+        yes_prompt = self.font.render("▶ YES", True, config.COLOR_TEXT)
+        no_prompt = self.font.render("◀ NO", True, config.COLOR_TEXT)
         
-        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 150))
-        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 150))
+        yes_rect = yes_prompt.get_rect(center=(config.SCREEN_WIDTH // 2 - 120, dialog_y + 150))
+        no_rect = no_prompt.get_rect(center=(config.SCREEN_WIDTH // 2 + 120, dialog_y + 150))
         
-        self.screen.blit(yes_text, yes_rect)
-        self.screen.blit(no_text, no_rect)
+        self.screen.blit(yes_prompt, yes_rect)
+        self.screen.blit(no_prompt, no_rect)
+        
+        # Button hints
+        yes_hint = self.small_font.render("Y/Enter/A", True, config.COLOR_TEXT)
+        no_hint = self.small_font.render("N/ESC/B", True, config.COLOR_TEXT)
+        
+        yes_hint_rect = yes_hint.get_rect(center=(config.SCREEN_WIDTH // 2 - 120, dialog_y + 180))
+        no_hint_rect = no_hint.get_rect(center=(config.SCREEN_WIDTH // 2 + 120, dialog_y + 180))
+        
+        self.screen.blit(yes_hint, yes_hint_rect)
+        self.screen.blit(no_hint, no_hint_rect)
     
     def draw_quit_confirmation(self) -> None:
         """Draw quit confirmation dialog overlay."""
@@ -756,18 +789,25 @@ class Game:
         message_rect = message.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
         self.screen.blit(message, message_rect)
         
-        # Options
-        yes_text = self.small_font.render("Return to Menu (Y/Enter/A)", True, config.COLOR_TEXT)
-        no_text = self.small_font.render("Cancel (N/ESC)", True, config.COLOR_TEXT)
-        quit_text = self.small_font.render("Quit Game (Q/B)", True, config.COLOR_TEXT)
+        # Clear call to action - prominent buttons
+        yes_prompt = self.font.render("▶ RETURN TO MENU", True, config.COLOR_TEXT)
+        no_prompt = self.font.render("◀ CANCEL", True, config.COLOR_TEXT)
         
-        yes_rect = yes_text.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 130))
-        no_rect = no_text.get_rect(center=(config.SCREEN_WIDTH // 2 - 100, dialog_y + 160))
-        quit_rect = quit_text.get_rect(center=(config.SCREEN_WIDTH // 2 + 100, dialog_y + 160))
+        yes_rect = yes_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 130))
+        no_rect = no_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 180))
         
-        self.screen.blit(yes_text, yes_rect)
-        self.screen.blit(no_text, no_rect)
-        self.screen.blit(quit_text, quit_rect)
+        self.screen.blit(yes_prompt, yes_rect)
+        self.screen.blit(no_prompt, no_rect)
+        
+        # Button hints
+        yes_hint = self.small_font.render("Y/Enter/A Button", True, config.COLOR_TEXT)
+        no_hint = self.small_font.render("N/ESC/B Button", True, config.COLOR_TEXT)
+        
+        yes_hint_rect = yes_hint.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 160))
+        no_hint_rect = no_hint.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 210))
+        
+        self.screen.blit(yes_hint, yes_hint_rect)
+        self.screen.blit(no_hint, no_hint_rect)
     
     def draw_exit_explosion(self) -> None:
         """Draw spectacular exit explosion effect that fills the screen with light."""
@@ -857,12 +897,17 @@ class Game:
         score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, 350))
         self.screen.blit(score_text, score_rect)
         
-        continue_text = self.small_font.render(
-            "Press SPACE/A to Return to Menu",
+        # Clear call to action - prominent button
+        continue_prompt = self.font.render("▶ RETURN TO MENU", True, config.COLOR_TEXT)
+        continue_rect = continue_prompt.get_rect(center=(config.SCREEN_WIDTH // 2, 400))
+        self.screen.blit(continue_prompt, continue_rect)
+        
+        continue_hint = self.small_font.render(
+            "Press SPACE/ENTER or A Button",
             True, config.COLOR_TEXT
         )
-        continue_rect = continue_text.get_rect(center=(config.SCREEN_WIDTH // 2, 400))
-        self.screen.blit(continue_text, continue_rect)
+        continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, 440))
+        self.screen.blit(continue_hint, continue_hint_rect)
     
     def run(self) -> None:
         """Main game loop."""

@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Dict, Tuple
 import math
 import config
+from maze.config import MazeComplexity, MazeComplexityPresets
 
 
 @dataclass
@@ -288,6 +289,46 @@ def get_enemy_strength(level: int) -> EnemyStrength:
         fire_interval_max=fire_interval_max,
         fire_range=get_enemy_fire_range(level)
     )
+
+
+def get_maze_complexity(level: int) -> MazeComplexity:
+    """Get default maze complexity for a level.
+    
+    Tutorial levels use simpler complexities, scaling starts after tutorial levels.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        MazeComplexity based on level:
+        - Tutorial levels (1-6):
+          - Level 1: EMPTY (perimeter only, no obstacles)
+          - Levels 2-3: SIMPLE
+          - Levels 4-6: NORMAL
+        - After tutorial levels:
+          - Effective level 1-2: NORMAL
+          - Effective level 3-4: COMPLEX
+          - Effective level 5+: EXTREME
+    """
+    # Tutorial levels use simpler complexities
+    if level <= config.TUTORIAL_LEVELS:
+        if level == 1:
+            return MazeComplexity.EMPTY
+        elif level <= 3:
+            return MazeComplexity.SIMPLE
+        else:  # levels 4-6
+            return MazeComplexity.NORMAL
+    
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    
+    # Scale complexity based on effective level
+    if effective_level <= 2:
+        return MazeComplexity.NORMAL
+    elif effective_level <= 4:
+        return MazeComplexity.COMPLEX
+    else:
+        return MazeComplexity.EXTREME
 
 
 def get_maze_grid_size(level: int) -> int:
