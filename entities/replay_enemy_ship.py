@@ -54,6 +54,14 @@ class ReplayEnemyShip(RotatingThrusterShip):
     EYE_COLOR = (255, 0, 0)
     EYE_HIGHLIGHT_COLOR = (255, 150, 150)
     MAX_SPEED_MULTIPLIER = 0.3
+    # Blink animation constants
+    BLINK_INTERVAL_MIN = 180  # Minimum frames between blinks (3 seconds at 60 FPS)
+    BLINK_INTERVAL_MAX = 480  # Maximum frames between blinks (8 seconds at 60 FPS)
+    BLINK_DURATION = 30  # Frames for a single blink (0.5 seconds at 60 FPS) - much slower
+    BLINK_CLOSE_FRAMES = 10  # Frames to close (first half of blink)
+    BLINK_OPEN_FRAMES = 10  # Frames to open (second half of blink)
+    EYELID_COLOR = (100, 60, 200)  # Color for eyelids (darker purple to match body)
+    EYELID_SLANT_ANGLE = 15  # Degrees - angle of slant for slanted eye shape
 
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize replay enemy ship."""
@@ -62,6 +70,11 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.current_replay_index = 0
         self.fire_cooldown: int = 0
         self.pulse_phase: float = 0.0  # Animation phase for tentacle pulsing
+        # Blink animation state
+        self.blink_timer: int = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
+        self.blink_state: float = 1.0  # 1.0 = fully open, 0.0 = fully closed
+        self.is_blinking: bool = False
+        self.blink_frame: int = 0  # Frame counter within current blink
     
     @property
     def max_speed(self) -> float:
@@ -75,6 +88,36 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         # Update pulse phase for tentacle animation
         self.pulse_phase += dt * self.TENTACLE_PULSE_SPEED
+        
+        # Update blink animation
+        if not self.is_blinking:
+            # Countdown to next blink
+            if self.blink_timer > 0:
+                self.blink_timer -= 1
+            else:
+                # Start blinking
+                self.is_blinking = True
+                self.blink_state = 1.0
+                self.blink_frame = 0
+        else:
+            # Currently blinking - update blink state
+            self.blink_frame += 1
+            
+            if self.blink_frame < self.BLINK_CLOSE_FRAMES:
+                # Closing phase: reduce blink_state from 1.0 to 0.0
+                self.blink_state = 1.0 - (self.blink_frame / self.BLINK_CLOSE_FRAMES)
+            elif self.blink_frame < self.BLINK_CLOSE_FRAMES + 2:
+                # Fully closed: hold for 2 frames
+                self.blink_state = 0.0
+            elif self.blink_frame < self.BLINK_CLOSE_FRAMES + 2 + self.BLINK_OPEN_FRAMES:
+                # Opening phase: increase blink_state from 0.0 to 1.0
+                open_frame = self.blink_frame - (self.BLINK_CLOSE_FRAMES + 2)
+                self.blink_state = open_frame / self.BLINK_OPEN_FRAMES
+            else:
+                # Blink complete
+                self.is_blinking = False
+                self.blink_state = 1.0
+                self.blink_timer = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
         
         if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
             super().update(dt)
@@ -137,33 +180,133 @@ class ReplayEnemyShip(RotatingThrusterShip):
         cos_angle: float,
         sin_angle: float
     ) -> None:
-        """Draw an eye with highlight at the specified relative position.
+        """Draw an eye with highlight and blinking eyelids.
         
         The highlight mimics natural light reflection: it's positioned in the top-left
         of the eye orb in world space. As the creature rotates, the highlight moves
         around the eye to maintain this fixed world-space position, creating a realistic
         light reflection effect.
+        
+        Eyelids occlude the eye when blinking, with sharp corners.
         """
         # Get eye position in world space
         eye_x, eye_y = self._rotate_and_translate_point(eye_pos, cos_angle, sin_angle)
+        
+        # Draw eye as normal circle (always full size)
         pygame.draw.circle(screen, self.EYE_COLOR, (eye_x, eye_y), int(eye_size))
         
-        # Calculate highlight offset in world space (fixed light source from top-left)
-        # Light comes from -135° in world coordinates (top-left direction)
-        # This is a FIXED angle in world space, not relative to the eye's rotation
-        highlight_angle_rad = math.radians(-135)  # Top-left in world space
-        highlight_offset_distance = eye_size * self.EYE_HIGHLIGHT_OFFSET_MULTIPLIER
+        # Draw highlight only when eyes are mostly open
+        if self.blink_state > 0.3:
+            # Calculate highlight offset in world space (fixed light source from top-left)
+            # Light comes from -135° in world coordinates (top-left direction)
+            # This is a FIXED angle in world space, not relative to the eye's rotation
+            highlight_angle_rad = math.radians(-135)  # Top-left in world space
+            highlight_offset_distance = eye_size * self.EYE_HIGHLIGHT_OFFSET_MULTIPLIER
+            
+            # Calculate offset in world coordinates (fixed direction, doesn't rotate with eye)
+            highlight_offset_x = math.cos(highlight_angle_rad) * highlight_offset_distance
+            highlight_offset_y = math.sin(highlight_angle_rad) * highlight_offset_distance
+            
+            # Add offset to eye world position
+            highlight_x = eye_x + highlight_offset_x
+            highlight_y = eye_y + highlight_offset_y
+            
+            pygame.draw.circle(screen, self.EYE_HIGHLIGHT_COLOR, (int(highlight_x), int(highlight_y)),
+                              int(eye_size * self.EYE_HIGHLIGHT_SIZE_RATIO))
         
-        # Calculate offset in world coordinates (fixed direction, doesn't rotate with eye)
-        highlight_offset_x = math.cos(highlight_angle_rad) * highlight_offset_distance
-        highlight_offset_y = math.sin(highlight_angle_rad) * highlight_offset_distance
-        
-        # Add offset to eye world position
-        highlight_x = eye_x + highlight_offset_x
-        highlight_y = eye_y + highlight_offset_y
-        
-        pygame.draw.circle(screen, self.EYE_HIGHLIGHT_COLOR, (int(highlight_x), int(highlight_y)),
-                          int(eye_size * self.EYE_HIGHLIGHT_SIZE_RATIO))
+        # Draw occluding eyelids when blinking (slanted for almond-shaped eyes)
+        if self.blink_state < 1.0:
+            coverage = (1.0 - self.blink_state) * eye_size
+            
+            # Calculate slant angle in radians (relative to body orientation)
+            slant_rad = math.radians(self.EYELID_SLANT_ANGLE)
+            
+            # Create a surface for the eye area to clip eyelids to circle
+            eye_surface_size = int(eye_size * 2) + 4
+            eye_surface = pygame.Surface((eye_surface_size, eye_surface_size), pygame.SRCALPHA)
+            eye_surface_center = eye_surface_size // 2
+            
+            # Calculate eyelid points in local coordinates (relative to eye center)
+            # Top eyelid: slanted from top-left to bottom-right
+            # In local coords, eye center is at (0, 0)
+            eyelid_width = eye_size * 1.5  # Wide enough to cover eye
+            
+            # Top eyelid points in local coordinates (before rotation)
+            top_eyelid_top_y = -eye_size - 1
+            top_eyelid_bottom_y = -eye_size + coverage
+            
+            # Calculate slanted edges in local coordinates
+            # Top edge: slanted line
+            top_left_local_x = -eyelid_width
+            top_left_local_y = top_eyelid_top_y + math.sin(slant_rad) * eyelid_width
+            top_right_local_x = eyelid_width
+            top_right_local_y = top_eyelid_top_y - math.sin(slant_rad) * eyelid_width
+            
+            # Bottom edge of top eyelid (moves down as coverage increases)
+            bottom_left_local_x = top_left_local_x + math.sin(slant_rad) * coverage
+            bottom_left_local_y = top_eyelid_bottom_y + math.cos(slant_rad) * coverage
+            bottom_right_local_x = top_right_local_x - math.sin(slant_rad) * coverage
+            bottom_right_local_y = top_eyelid_bottom_y + math.cos(slant_rad) * coverage
+            
+            # Rotate eyelid points by body angle and translate to eye surface center
+            top_eyelid_points = []
+            for local_x, local_y in [
+                (top_left_local_x, top_left_local_y),
+                (top_right_local_x, top_right_local_y),
+                (bottom_right_local_x, bottom_right_local_y),
+                (bottom_left_local_x, bottom_left_local_y)
+            ]:
+                # Rotate by body angle
+                rotated_x = local_x * cos_angle - local_y * sin_angle
+                rotated_y = local_x * sin_angle + local_y * cos_angle
+                # Translate to eye surface center
+                surface_x = eye_surface_center + rotated_x
+                surface_y = eye_surface_center + rotated_y
+                top_eyelid_points.append((int(surface_x), int(surface_y)))
+            
+            # Bottom eyelid points in local coordinates
+            bottom_eyelid_top_y = eye_size - coverage
+            bottom_eyelid_bottom_y = eye_size + 1
+            
+            # Top edge of bottom eyelid (slanted, moves up as coverage increases)
+            bottom_top_left_local_x = -eyelid_width
+            bottom_top_left_local_y = bottom_eyelid_top_y - math.cos(slant_rad) * coverage
+            bottom_top_right_local_x = eyelid_width
+            bottom_top_right_local_y = bottom_eyelid_top_y - math.cos(slant_rad) * coverage
+            
+            # Bottom edge of bottom eyelid
+            bottom_bottom_left_local_x = bottom_top_left_local_x - math.sin(slant_rad) * coverage
+            bottom_bottom_left_local_y = bottom_eyelid_bottom_y
+            bottom_bottom_right_local_x = bottom_top_right_local_x + math.sin(slant_rad) * coverage
+            bottom_bottom_right_local_y = bottom_eyelid_bottom_y
+            
+            # Rotate bottom eyelid points by body angle
+            bottom_eyelid_points = []
+            for local_x, local_y in [
+                (bottom_top_left_local_x, bottom_top_left_local_y),
+                (bottom_top_right_local_x, bottom_top_right_local_y),
+                (bottom_bottom_right_local_x, bottom_bottom_right_local_y),
+                (bottom_bottom_left_local_x, bottom_bottom_left_local_y)
+            ]:
+                # Rotate by body angle
+                rotated_x = local_x * cos_angle - local_y * sin_angle
+                rotated_y = local_x * sin_angle + local_y * cos_angle
+                # Translate to eye surface center
+                surface_x = eye_surface_center + rotated_x
+                surface_y = eye_surface_center + rotated_y
+                bottom_eyelid_points.append((int(surface_x), int(surface_y)))
+            
+            # Draw eyelids on eye surface
+            pygame.draw.polygon(eye_surface, self.EYELID_COLOR, top_eyelid_points)
+            pygame.draw.polygon(eye_surface, self.EYELID_COLOR, bottom_eyelid_points)
+            
+            # Create a mask to clip to circular eye area
+            mask = pygame.Surface((eye_surface_size, eye_surface_size), pygame.SRCALPHA)
+            pygame.draw.circle(mask, (255, 255, 255, 255), (eye_surface_center, eye_surface_center), int(eye_size))
+            eye_surface.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+            
+            # Blit the clipped eye surface to the main screen
+            screen.blit(eye_surface, (int(eye_x - eye_surface_center), int(eye_y - eye_surface_center)))
     
     def _rotate_towards_player(self, player_pos: Tuple[float, float]) -> None:
         """Rotate towards the player ship."""
