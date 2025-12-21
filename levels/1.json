@@ -1,0 +1,10 @@
+{
+  "enemies": {
+    "static": 0,
+    "patrol": 0,
+    "aggressive": 0,
+    "replay": 0,
+    "split_boss": 0
+  },
+  "seed": 100
+}

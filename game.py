@@ -11,6 +11,7 @@ from entities.ship import Ship
 from maze import Maze
 from entities.enemy import Enemy, create_enemies
 import level_rules
+import level_config
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.split_boss import SplitBoss
 from entities.projectile import Projectile
@@ -127,9 +128,9 @@ class Game:
         self.star_animation = None
         self.level_complete_quit_confirm = False
         
-        # Set random seed based on level number for deterministic generation
-        # Level 1 = seed 1, Level 2 = seed 2, etc.
-        random.seed(self.level)
+        # Set random seed from level config or use level number as default
+        seed = level_config.get_level_seed(self.level)
+        random.seed(seed)
         
         # Generate maze
         self.maze = Maze(self.level)
@@ -146,12 +147,17 @@ class Game:
         self.ship.game_started = False  # Prevent shield timer countdown until first move
         
         # Spawn all enemies using SpawnManager
-        enemy_counts = level_rules.get_enemy_counts(self.level)
-        split_boss_count = level_rules.get_split_boss_count(self.level)
+        # Check for level config overrides, fall back to defaults if not present
+        enemy_counts = level_config.get_level_enemy_counts(self.level)
+        if enemy_counts is None:
+            enemy_counts = level_rules.get_enemy_counts(self.level)
+        split_boss_count = level_config.get_level_split_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
             enemy_counts.total + enemy_counts.replay + split_boss_count + 5  # Extra buffer for spawn positions
         )
-        self.spawn_manager.spawn_all_enemies(self.level, spawn_positions, self.command_recorder)
+        self.spawn_manager.spawn_all_enemies(
+            self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count
+        )
         
         # Clear projectiles and crystals
         self.projectiles = []

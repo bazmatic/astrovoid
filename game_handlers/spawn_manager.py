@@ -5,13 +5,14 @@ in the start_level() method.
 """
 
 from typing import List, Tuple, TYPE_CHECKING
-import level_rules
+import random
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
     from entities.command_recorder import CommandRecorder
     from game_handlers.entity_manager import EntityManager
+    from level_rules import EnemyCounts
 
 
 class SpawnManager:
@@ -29,7 +30,9 @@ class SpawnManager:
         self,
         level: int,
         spawn_positions: List[Tuple[float, float]],
-        command_recorder: 'CommandRecorder'
+        command_recorder: 'CommandRecorder',
+        enemy_counts: 'EnemyCounts',
+        split_boss_count: int
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -37,20 +40,20 @@ class SpawnManager:
             level: Current level number.
             spawn_positions: Available spawn positions.
             command_recorder: Command recorder for replay enemies.
+            enemy_counts: Enemy count configuration.
+            split_boss_count: Number of SplitBoss enemies to spawn.
         """
         from entities.enemy import create_enemies
         from entities.replay_enemy_ship import ReplayEnemyShip
         from entities.split_boss import SplitBoss
         
-        # Get enemy counts
-        enemy_counts = level_rules.get_enemy_counts(level)
-        split_boss_count = level_rules.get_split_boss_count(level)
-        
         # Clear existing enemies
         self.entity_manager.clear_all()
         
-        # Create regular enemies
-        new_enemies = create_enemies(level, spawn_positions)
+        # Create regular enemies based on enemy_counts
+        new_enemies = self._create_enemies_from_counts(
+            level, spawn_positions, enemy_counts
+        )
         self.entity_manager.enemies.extend(new_enemies)
         
         # Calculate used positions
@@ -74,6 +77,52 @@ class SpawnManager:
             available_positions,
             command_recorder
         )
+    
+    def _create_enemies_from_counts(
+        self,
+        level: int,
+        spawn_positions: List[Tuple[float, float]],
+        enemy_counts: 'EnemyCounts'
+    ) -> List['Enemy']:
+        """Create enemies based on enemy_counts configuration.
+        
+        Args:
+            level: Current level number.
+            spawn_positions: List of valid spawn positions.
+            enemy_counts: Enemy count configuration.
+            
+        Returns:
+            List of Enemy instances.
+        """
+        from entities.enemy import Enemy
+        
+        enemies = []
+        used_positions = []
+        
+        # Shuffle positions
+        available_positions = spawn_positions.copy()
+        random.shuffle(available_positions)
+        
+        # Create static enemies
+        for i in range(min(enemy_counts.static, len(available_positions))):
+            pos = available_positions[i]
+            enemies.append(Enemy(pos, "static", level))
+            used_positions.append(pos)
+        
+        # Create patrol enemies
+        remaining_positions = [p for p in available_positions if p not in used_positions]
+        for i in range(min(enemy_counts.patrol, len(remaining_positions))):
+            pos = remaining_positions[i]
+            enemies.append(Enemy(pos, "patrol", level))
+            used_positions.append(pos)
+        
+        # Create aggressive enemies
+        remaining_positions = [p for p in available_positions if p not in used_positions]
+        for i in range(min(enemy_counts.aggressive, len(remaining_positions))):
+            pos = remaining_positions[i]
+            enemies.append(Enemy(pos, "aggressive", level))
+        
+        return enemies
     
     def _spawn_replay_enemies(
         self,
