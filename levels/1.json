@@ -3,8 +3,8 @@
     "static": 0,
     "patrol": 0,
     "aggressive": 0,
-    "replay": 0,
-    "split_boss": 0,
+    "replay": 1,
+    "split_boss": 1,
     "mother_boss": 1,
     "egg": 0
   },

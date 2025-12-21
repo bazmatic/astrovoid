@@ -53,7 +53,12 @@ class MotherBoss(SplitBoss):
         # Update egg laying cooldown
         if self.egg_lay_cooldown > 0:
             self.egg_lay_cooldown -= 1
-    
+
+    @property
+    def max_speed(self) -> float:
+        """Get the maximum speed for the Mother Boss (slower than regular enemies)."""
+        return config.SHIP_MAX_SPEED * 0.15  # Much slower - 15% of player speed
+
     def can_lay_egg(self) -> bool:
         """Check if Mother Boss can lay an egg.
         

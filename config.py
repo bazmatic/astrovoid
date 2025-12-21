@@ -28,7 +28,7 @@ SHIP_SIZE = 8  # Ship radius (affects both collision and visual size)
 SHIP_ROTATION_SPEED = 5.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
-SHIP_MAX_SPEED = 2.0
+SHIP_MAX_SPEED = 8.0
 COLLISION_RESTITUTION = 0.85  # Coefficient of restitution for ship-enemy collisions (0.0 = inelastic, 1.0 = elastic)
 
 # Resources

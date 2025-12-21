@@ -29,49 +29,55 @@ class ReplayEnemyShip(RotatingThrusterShip):
     
     
     # Drawing constants
-    BODY_RADIUS_MULTIPLIER = 0.6  # Circular body (octopus head)
-    TENTACLE_COUNT = 4  # Number of tentacles
-    TENTACLE_LENGTH_MULTIPLIER = 4
-    TENTACLE_BASE_WIDTH_MULTIPLIER = 0.15
-    TENTACLE_TIP_WIDTH_MULTIPLIER = 0.05
-    TENTACLE_SPREAD_ANGLE = 140  # Degrees - how wide the tentacles spread
-    TENTACLE_GLOW_INTENSITY_MULTIPLIER = 0.3
+    BODY_RADIUS_MULTIPLIER = 0.6  # Body radius multiplier
+    BODY_OVAL_WIDTH_MULTIPLIER = 1.1  # Width of oval (perpendicular to facing direction)
+    BODY_OVAL_HEIGHT_MULTIPLIER = 1.0  # Height of oval (along facing direction) - makes it longer front-to-back
+    TENTACLE_COUNT = 8  # Number of tentacles
+    TENTACLE_SPREAD_ANGLE = 100  # Degrees - how wide the tentacles spread
+    TENTACLE_BASE_LENGTH = 0.4  # Base length multiplier (times body radius)
+    TENTACLE_PULSE_AMPLITUDE = 0.3  # Length pulse amplitude (30% variation)
+    TENTACLE_PULSE_SPEED = 0.2  # Animation speed in radians per second
+    TENTACLE_BASE_WIDTH_MULTIPLIER = 0.6  # Base width multiplier (times body radius)
+    TENTACLE_TIP_WIDTH_MULTIPLIER = 0.08  # Tip width multiplier (times body radius)
+    TENTACLE_COLOR = (150, 100, 255)  # Tentacle color
     BODY_GLOW_INTENSITY_MULTIPLIER = 0.5
     BODY_GLOW_RADIUS_MULTIPLIER = 0.4
-    TENTACLE_GLOW_RADIUS_MULTIPLIER = 0.15
+    BODY_TEXTURE_LINES = 6  # Number of longitudinal curved lines
+    BODY_TEXTURE_LINE_COLOR = (120, 80, 220)  # Darker purple for texture lines
     EYE_SIZE_MULTIPLIER = 0.2
     EYE_SPACING_MULTIPLIER = 0.4
     EYE_FORWARD_OFFSET_MULTIPLIER = 0.5
-    EYE_HIGHLIGHT_OFFSET_MULTIPLIER = 0.3
+    EYE_HIGHLIGHT_OFFSET_MULTIPLIER = 0.6  # Offset multiplier for eye highlight (closer to edge for visibility)
     EYE_HIGHLIGHT_SIZE_RATIO = 0.3
     THRUST_BASE_OFFSET_MULTIPLIER = 0.8
-    OUTLINE_COLOR = (200, 150, 255)
+    OUTLINE_COLOR = (150, 100, 255)
     EYE_COLOR = (255, 0, 0)
     EYE_HIGHLIGHT_COLOR = (255, 150, 150)
-    
+    MAX_SPEED_MULTIPLIER = 0.3
+
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize replay enemy ship."""
         super().__init__(start_pos, config.REPLAY_ENEMY_SIZE)
         self.command_recorder = command_recorder
         self.current_replay_index = 0
         self.fire_cooldown: int = 0
-        # Tentacle particle system - one list per tentacle
-        self.tentacle_particles: List[List[dict]] = [[] for _ in range(self.TENTACLE_COUNT)]
-        self.tentacle_max_particles = 30
+        self.pulse_phase: float = 0.0  # Animation phase for tentacle pulsing
     
     @property
     def max_speed(self) -> float:
         """Get the maximum speed for the replay enemy ship."""
-        return config.SHIP_MAX_SPEED * 0.3
+        return config.SHIP_MAX_SPEED * self.MAX_SPEED_MULTIPLIER
     
     def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Update replay enemy ship and execute replay commands."""
         replay_commands = self.command_recorder.get_replay_commands()
         command_count = self.command_recorder.get_command_count()
         
+        # Update pulse phase for tentacle animation
+        self.pulse_phase += dt * self.TENTACLE_PULSE_SPEED
+        
         if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
             super().update(dt)
-            self._update_tentacle_particles(dt)
             return
         
         if replay_commands:
@@ -83,7 +89,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
             self.fire_cooldown -= 1
         
         super().update(dt)
-        self._update_tentacle_particles(dt)
     
     def _execute_command(self, command_type: CommandType, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Execute a replay command."""
@@ -124,55 +129,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
             config.ENEMY_FIRE_INTERVAL_MAX
         )
     
-    def _update_tentacle_particles(self, dt: float) -> None:
-        """Update tentacle particle system based on movement."""
-        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
-        spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
-        
-        # Tentacles should trail behind the ship's facing direction (opposite of where eyes are)
-        # Eyes are at angle, so tentacles should be at angle + pi (behind)
-        trail_angle_rad = angle_to_radians(self.angle) + math.pi
-        
-        particle_spawn_rate = max(2, int(speed * 4) + 2) if speed > 0.01 else 3
-        
-        for tentacle_idx in range(self.TENTACLE_COUNT):
-            base_angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
-            tentacle_base_angle = trail_angle_rad + base_angle_offset
-            base_x = math.cos(tentacle_base_angle) * body_radius
-            base_y = math.sin(tentacle_base_angle) * body_radius
-            
-            particles_needed = self.tentacle_max_particles - len(self.tentacle_particles[tentacle_idx])
-            if particles_needed > 0:
-                for _ in range(min(particle_spawn_rate, particles_needed)):
-                    particle_offset_angle = tentacle_base_angle + random.uniform(-0.2, 0.2)
-                    
-                    if speed > 0.01:
-                        particle_vx = -math.cos(particle_offset_angle) * speed * 0.25
-                        particle_vy = -math.sin(particle_offset_angle) * speed * 0.25
-                    else:
-                        particle_vx = -math.cos(particle_offset_angle) * 1.0
-                        particle_vy = -math.sin(particle_offset_angle) * 1.0
-                    
-                    self.tentacle_particles[tentacle_idx].append({
-                        'x': base_x,
-                        'y': base_y,
-                        'vx': particle_vx,
-                        'vy': particle_vy,
-                        'life': 60,
-                        'size': random.uniform(4.0, 6.0)
-                    })
-        
-        # Update existing particles
-        for tentacle_particles in self.tentacle_particles:
-            for particle in tentacle_particles:
-                particle['vx'] *= 0.96
-                particle['vy'] *= 0.96
-                particle['x'] += particle['vx'] * dt
-                particle['y'] += particle['vy'] * dt
-                particle['life'] -= 1
-            tentacle_particles[:] = [p for p in tentacle_particles if p['life'] > 0]
-    
     def _draw_eye(
         self,
         screen: pygame.Surface,
@@ -181,14 +137,32 @@ class ReplayEnemyShip(RotatingThrusterShip):
         cos_angle: float,
         sin_angle: float
     ) -> None:
-        """Draw an eye with highlight at the specified relative position."""
+        """Draw an eye with highlight at the specified relative position.
+        
+        The highlight mimics natural light reflection: it's positioned in the top-left
+        of the eye orb in world space. As the creature rotates, the highlight moves
+        around the eye to maintain this fixed world-space position, creating a realistic
+        light reflection effect.
+        """
+        # Get eye position in world space
         eye_x, eye_y = self._rotate_and_translate_point(eye_pos, cos_angle, sin_angle)
         pygame.draw.circle(screen, self.EYE_COLOR, (eye_x, eye_y), int(eye_size))
         
-        highlight_offset = eye_size * self.EYE_HIGHLIGHT_OFFSET_MULTIPLIER
-        highlight_pos = (eye_pos[0] - highlight_offset, eye_pos[1] - highlight_offset)
-        highlight_x, highlight_y = self._rotate_and_translate_point(highlight_pos, cos_angle, sin_angle)
-        pygame.draw.circle(screen, self.EYE_HIGHLIGHT_COLOR, (highlight_x, highlight_y),
+        # Calculate highlight offset in world space (fixed light source from top-left)
+        # Light comes from -135° in world coordinates (top-left direction)
+        # This is a FIXED angle in world space, not relative to the eye's rotation
+        highlight_angle_rad = math.radians(-135)  # Top-left in world space
+        highlight_offset_distance = eye_size * self.EYE_HIGHLIGHT_OFFSET_MULTIPLIER
+        
+        # Calculate offset in world coordinates (fixed direction, doesn't rotate with eye)
+        highlight_offset_x = math.cos(highlight_angle_rad) * highlight_offset_distance
+        highlight_offset_y = math.sin(highlight_angle_rad) * highlight_offset_distance
+        
+        # Add offset to eye world position
+        highlight_x = eye_x + highlight_offset_x
+        highlight_y = eye_y + highlight_offset_y
+        
+        pygame.draw.circle(screen, self.EYE_HIGHLIGHT_COLOR, (int(highlight_x), int(highlight_y)),
                           int(eye_size * self.EYE_HIGHLIGHT_SIZE_RATIO))
     
     def _rotate_towards_player(self, player_pos: Tuple[float, float]) -> None:
@@ -238,14 +212,41 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         self._draw_tentacles(screen)
         
+        # Draw oval body (longer front-to-back)
+        oval_width = body_radius * 2 * self.BODY_OVAL_WIDTH_MULTIPLIER
+        oval_height = body_radius * 2 * self.BODY_OVAL_HEIGHT_MULTIPLIER
+        
+        # Create surface for rotated oval (larger to accommodate rotation)
+        surface_size = int(max(oval_width, oval_height) * 1.5) + 4
+        oval_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
+        surface_center = surface_size // 2
+        oval_rect = pygame.Rect(
+            surface_center - int(oval_width // 2),
+            surface_center - int(oval_height // 2),
+            int(oval_width),
+            int(oval_height)
+        )
+        
+        # Draw glow (still circular for simplicity)
         visual_effects.draw_glow_circle(
             screen, (self.x, self.y), body_radius, base_color,
             glow_radius=self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER,
             intensity=config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
         )
         
-        pygame.draw.circle(screen, base_color, (int(self.x), int(self.y)), int(body_radius))
-        pygame.draw.circle(screen, self.OUTLINE_COLOR, (int(self.x), int(self.y)), int(body_radius), 2)
+        # Draw filled oval
+        pygame.draw.ellipse(oval_surface, base_color, oval_rect)
+        
+        # Draw longitudinal curved texture lines
+        self._draw_body_texture(oval_surface, oval_rect, surface_center)
+        
+        # Draw outline
+        pygame.draw.ellipse(oval_surface, self.OUTLINE_COLOR, oval_rect, 2)
+        
+        # Rotate oval to match ship's facing direction
+        rotated_surface = pygame.transform.rotate(oval_surface, -self.angle)
+        rotated_rect = rotated_surface.get_rect(center=(int(self.x), int(self.y)))
+        screen.blit(rotated_surface, rotated_rect)
         
         eye_size = self.radius * self.EYE_SIZE_MULTIPLIER
         eye_spacing = self.radius * self.EYE_SPACING_MULTIPLIER
@@ -257,57 +258,109 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self._draw_eye(screen, right_eye_pos, eye_size, cos_angle, sin_angle)
     
     def _draw_tentacles(self, screen: pygame.Surface) -> None:
-        """Draw tentacles as streaming particle trails."""
+        """Draw short, stubby tentacles that pulse behind the ship."""
         body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
-        # Tentacles should trail behind the ship's facing direction (opposite of where eyes are)
-        # Eyes are at angle, so tentacles should be at angle + pi (behind)
-        trail_angle_rad = angle_to_radians(self.angle) + math.pi
+        # Get the ship's facing direction (where eyes are)
+        forward_angle_rad = angle_to_radians(self.angle)
+        # Tentacles are behind (180 degrees opposite of facing direction)
+        rear_angle_rad = forward_angle_rad + math.pi
         
+        # Calculate pulse factor for length (0.7 to 1.0 range)
+        length_pulse_factor = 0.7 + 0.3 * (1.0 + math.sin(self.pulse_phase)) / 2.0
+        
+        # Calculate pulse factor for width (more dramatic: 0.4 to 1.0 range)
+        width_pulse_factor = 0.4 + 0.6 * (1.0 + math.sin(self.pulse_phase * 1.5)) / 2.0
+        
+        # Base tentacle length (short and stubby)
+        base_length = body_radius * self.TENTACLE_BASE_LENGTH
+        current_length = base_length * length_pulse_factor
+        
+        # Spread angle for tentacles
         spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
         
-        for tentacle_idx, tentacle_particles in enumerate(self.tentacle_particles):
-            base_angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
-            tentacle_base_angle = trail_angle_rad + base_angle_offset
-            base_x = self.x + math.cos(tentacle_base_angle) * body_radius
-            base_y = self.y + math.sin(tentacle_base_angle) * body_radius
+        for tentacle_idx in range(self.TENTACLE_COUNT):
+            # Calculate tentacle angle (spread around rear direction)
+            angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
+            tentacle_angle = rear_angle_rad + angle_offset
             
-            if not tentacle_particles:
-                stub_length = body_radius * 0.5
-                stub_x = base_x - math.cos(tentacle_base_angle) * stub_length
-                stub_y = base_y - math.sin(tentacle_base_angle) * stub_length
-                pygame.draw.line(screen, (200, 140, 255), 
-                               (int(base_x), int(base_y)), 
-                               (int(stub_x), int(stub_y)), 3)
-                continue
+            # Base position on body edge (on the rear side of the ship)
+            base_x = self.x + math.cos(tentacle_angle) * body_radius
+            base_y = self.y + math.sin(tentacle_angle) * body_radius
             
-            sorted_particles = sorted(tentacle_particles, key=lambda p: p['life'], reverse=True)
-            prev_x, prev_y = base_x, base_y
+            # Tip position (extending further backward from base, away from ship center)
+            # Extend in the same direction as tentacle_angle (which points rearward)
+            tip_x = base_x + math.cos(tentacle_angle) * current_length
+            tip_y = base_y + math.sin(tentacle_angle) * current_length
             
-            for particle in sorted_particles:
-                particle_x = self.x + particle['x']
-                particle_y = self.y + particle['y']
-                life_ratio = particle['life'] / 60.0
-                width = max(4, int(8 * life_ratio))
-                color = self._get_tentacle_color(life_ratio)
-                
-                pygame.draw.line(screen, color, 
-                               (int(prev_x), int(prev_y)), 
-                               (int(particle_x), int(particle_y)), width)
-                pygame.draw.circle(screen, color, 
-                                 (int(particle_x), int(particle_y)), 
-                                 max(3, int(6 * life_ratio)))
-                
-                prev_x, prev_y = particle_x, particle_y
+            # Width pulses more dramatically (independent of length pulse)
+            base_width = body_radius * self.TENTACLE_BASE_WIDTH_MULTIPLIER
+            tip_width = body_radius * self.TENTACLE_TIP_WIDTH_MULTIPLIER
+            width = int(base_width * width_pulse_factor)
+            width = max(int(tip_width), width)  # Ensure minimum width
+            
+            # Draw tentacle as a simple line
+            pygame.draw.line(
+                screen,
+                self.TENTACLE_COLOR,
+                (int(base_x), int(base_y)),
+                (int(tip_x), int(tip_y)),
+                width
+            )
     
-    def _get_tentacle_color(self, life_ratio: float) -> Tuple[int, int, int]:
-        """Get color for tentacle particle based on life ratio."""
-        life_ratio = max(0.0, min(1.0, life_ratio))
-        if life_ratio > 0.7:
-            return (220, 160, 255)
-        elif life_ratio > 0.4:
-            return (200, 130, 255)
-        elif life_ratio > 0.2:
-            return (180, 110, 240)
-        else:
-            return (160, 90, 220)
+    def _draw_body_texture(self, surface: pygame.Surface, oval_rect: pygame.Rect, surface_center: int) -> None:
+        """Draw longitudinal curved texture lines on the body for 3D effect.
+        
+        Args:
+            surface: The surface to draw on.
+            oval_rect: Rectangle defining the oval bounds.
+            surface_center: Center coordinate of the surface (both x and y are the same).
+        """
+        oval_width = oval_rect.width
+        oval_height = oval_rect.height
+        center_x = center_y = surface_center
+        
+        # Draw curved lines that follow the oval shape longitudinally
+        num_lines = self.BODY_TEXTURE_LINES
+        line_spacing = oval_width / (num_lines + 1)
+        
+        for i in range(num_lines):
+            # X position of line (spread across width)
+            line_x_offset = (i + 1) * line_spacing - oval_width / 2
+            
+            # Create curved line using multiple segments
+            num_segments = 20
+            points = []
+            
+            for seg in range(num_segments + 1):
+                # Progress along the length (0.0 to 1.0)
+                t = seg / num_segments
+                
+                # Y position along the oval height
+                y_pos = center_y - oval_height / 2 + t * oval_height
+                
+                # Calculate x offset that curves with the oval shape
+                # Use a sine wave to create a gentle curve
+                curve_amplitude = oval_width * 0.15 * math.sin(t * math.pi)
+                x_pos = center_x + line_x_offset + curve_amplitude * math.sin(self.pulse_phase * 0.5 + i * 0.3)
+                
+                # Check if point is within oval bounds (simple ellipse check)
+                dx_from_center = (x_pos - center_x) / (oval_width / 2)
+                dy_from_center = (y_pos - center_y) / (oval_height / 2)
+                distance_from_center = math.sqrt(dx_from_center * dx_from_center + dy_from_center * dy_from_center)
+                
+                if distance_from_center <= 1.0:
+                    points.append((int(x_pos), int(y_pos)))
+            
+            # Draw dotted line
+            if len(points) > 1:
+                for j in range(len(points) - 1):
+                    # Draw every other segment to create dotted effect
+                    if j % 3 < 2:  # Draw 2 out of 3 segments
+                        pygame.draw.line(
+                            surface,
+                            self.BODY_TEXTURE_LINE_COLOR,
+                            points[j],
+                            points[j + 1],
+                            1
+                        )
     

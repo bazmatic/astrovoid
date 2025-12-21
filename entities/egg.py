@@ -38,48 +38,44 @@ class Egg(GameEntity, Collidable, Drawable):
     """
     
     def __init__(self, pos: Tuple[float, float]):
-        """Initialize egg at position.
+        """
+        Initialize egg enemy.
         
         Args:
-            pos: Initial position as (x, y) tuple.
+            pos: Starting position as (x, y) tuple.
         """
-        self.initial_radius = config.EGG_INITIAL_SIZE
-        self.current_radius = self.initial_radius
+        # Initialize with initial size
+        initial_radius = config.EGG_INITIAL_SIZE
+        super().__init__(pos, initial_radius, 0.0, 0.0)
+        
+        self.initial_radius = initial_radius
+        self.current_radius = float(initial_radius)
         self.max_radius = config.EGG_MAX_SIZE
+        # Random growth rate between min and max
         self.growth_rate = random.uniform(
             config.EGG_GROWTH_RATE_MIN,
             config.EGG_GROWTH_RATE_MAX
         )
         self.has_popped = False
-        
-        super().__init__(pos, self.current_radius)
-        
-        # Animation state
-        self.pulse_phase = random.uniform(0, 2 * math.pi)
-        self.inner_phase = random.uniform(0, 2 * math.pi)  # Phase for inner movement
+        self.pulse_phase = 0.0
     
     def update(self, dt: float) -> None:
-        """Update egg state.
+        """Update egg growth and animation.
         
         Args:
             dt: Delta time since last update.
         """
-        if not self.active:
+        if not self.active or self.has_popped:
             return
         
         # Grow the egg
-        self.current_radius += self.growth_rate * dt
+        self.current_radius += self.growth_rate
         self.radius = self.current_radius
         
-        # Update pulse animation
-        self.pulse_phase += config.ENEMY_PULSE_SPEED
+        # Update pulse phase for animation
+        self.pulse_phase += dt * 2.0
         if self.pulse_phase >= 2 * math.pi:
             self.pulse_phase -= 2 * math.pi
-        
-        # Update inner movement animation (slower, more organic)
-        self.inner_phase += config.ENEMY_PULSE_SPEED * 0.3
-        if self.inner_phase >= 2 * math.pi:
-            self.inner_phase -= 2 * math.pi
     
     def should_pop(self) -> bool:
         """Check if egg should pop (reached maximum size).
@@ -132,36 +128,16 @@ class Egg(GameEntity, Collidable, Drawable):
         walls: List,
         spatial_grid=None
     ) -> bool:
-        """Check collision with wall segments.
+        """Check collision with walls (eggs are stationary, so this is mostly for consistency).
         
         Args:
             walls: List of wall segments.
-            spatial_grid: Optional spatial grid for optimized collision detection.
+            spatial_grid: Optional spatial grid (unused for eggs).
             
         Returns:
-            True if collision occurred, False otherwise.
+            False (eggs don't collide with walls).
         """
-        # Eggs are stationary, so wall collision is not critical
-        # But we implement it for consistency with other entities
-        walls_to_check = walls
-        if spatial_grid is not None:
-            walls_to_check = spatial_grid.get_nearby_walls(
-                (self.x, self.y), self.radius * 2.0
-            )
-        
-        for wall in walls_to_check:
-            if hasattr(wall, 'get_segment'):
-                if not wall.active:
-                    continue
-                segment = wall.get_segment()
-            else:
-                segment = wall
-            
-            if circle_line_collision(
-                (self.x, self.y), self.radius,
-                segment[0], segment[1]
-            ):
-                return True
+        # Eggs are stationary and don't need wall collision
         return False
     
     def check_circle_collision(
@@ -179,12 +155,12 @@ class Egg(GameEntity, Collidable, Drawable):
             True if collision occurred, False otherwise.
         """
         return circle_circle_collision(
-            (self.x, self.y), self.radius,
+            self.get_pos(), self.radius,
             other_pos, other_radius
         )
     
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the egg on screen as a spherical, shiny, translucent water droplet.
+        """Draw the egg as a translucent, spherical water droplet.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -192,95 +168,47 @@ class Egg(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
-        # Check if egg is on screen
-        screen_margin = 100
-        if (self.x < -screen_margin or self.x > config.SCREEN_WIDTH + screen_margin or
-            self.y < -screen_margin or self.y > config.SCREEN_HEIGHT + screen_margin):
-            return
-        
-        # Calculate growth progress (0.0 to 1.0)
-        growth_progress = (self.current_radius - self.initial_radius) / (
-            self.max_radius - self.initial_radius
-        )
+        # Calculate growth progress for visual effects
+        growth_progress = (self.current_radius - self.initial_radius) / (self.max_radius - self.initial_radius)
         growth_progress = max(0.0, min(1.0, growth_progress))
         
-        # Calculate pulsing effect
-        sin_pulse = math.sin(self.pulse_phase)
-        pulse_factor = 1.0 + config.ENEMY_PULSE_AMPLITUDE * sin_pulse
-        current_radius = int(self.current_radius * pulse_factor)
+        # Base color (light blue/cyan)
+        color = config.COLOR_EGG
         
-        # Create translucent surface for the egg
-        egg_surface = pygame.Surface((current_radius * 2 + 10, current_radius * 2 + 10), pygame.SRCALPHA)
-        center_x = current_radius + 5
-        center_y = current_radius + 5
+        # Draw main circle with transparency
+        egg_surface = pygame.Surface((int(self.current_radius * 2), int(self.current_radius * 2)), pygame.SRCALPHA)
+        pygame.draw.circle(egg_surface, (color[0], color[1], color[2], 180), (int(self.current_radius), int(self.current_radius)), int(self.current_radius))
+        screen.blit(egg_surface, (int(self.x - self.current_radius), int(self.y - self.current_radius)))
         
-        # Base color - water droplet blue/cyan with transparency
-        base_color = (150, 200, 255)  # Light blue/cyan
-        alpha = 180  # Translucent (0-255)
+        # Draw shiny highlight
+        highlight_radius = self.current_radius * 0.4
+        highlight_pos_x = self.x + math.cos(self.pulse_phase * 0.7) * self.current_radius * 0.3
+        highlight_pos_y = self.y + math.sin(self.pulse_phase * 0.7) * self.current_radius * 0.3
+        visual_effects.draw_glow_circle(screen, (highlight_pos_x, highlight_pos_y), highlight_radius, (255, 255, 255), glow_radius=highlight_radius * 0.5, intensity=0.8)
         
-        # Draw outer glow (subtle, like light refraction)
-        glow_radius = int(current_radius * 1.15)
-        for i in range(3):
-            glow_alpha = int(alpha * 0.2 * (1.0 - i / 3.0))
-            glow_color = (*base_color, glow_alpha)
-            glow_size = int(glow_radius * (1.0 + i * 0.1))
-            pygame.draw.circle(egg_surface, glow_color, (center_x, center_y), glow_size)
-        
-        # Draw main spherical droplet (translucent)
-        droplet_color = (*base_color, alpha)
-        pygame.draw.circle(egg_surface, droplet_color, (center_x, center_y), current_radius)
-        
-        # Draw inner content - something moving inside
-        inner_radius = int(current_radius * 0.6)
-        inner_x = center_x + math.cos(self.inner_phase) * (current_radius * 0.2)
-        inner_y = center_y + math.sin(self.inner_phase * 1.3) * (current_radius * 0.15)
-        
-        # Draw multiple small shapes moving inside (like a creature or particles)
-        inner_color = (100, 150, 200, 200)  # Slightly darker, more opaque
+        # Draw inner moving shapes
         num_inner_shapes = 3
+        inner_radius_base = self.current_radius * 0.3
         for i in range(num_inner_shapes):
-            shape_phase = self.inner_phase + (i * 2 * math.pi / num_inner_shapes)
-            shape_x = inner_x + math.cos(shape_phase) * (inner_radius * 0.3)
-            shape_y = inner_y + math.sin(shape_phase) * (inner_radius * 0.3)
-            shape_size = int(inner_radius * 0.15)
-            pygame.draw.circle(egg_surface, inner_color, (int(shape_x), int(shape_y)), shape_size)
+            inner_angle = (self.pulse_phase * 5 + i * math.pi * 2 / num_inner_shapes) % (2 * math.pi)
+            inner_x = self.x + math.cos(inner_angle) * inner_radius_base * (0.8 + 0.2 * math.sin(self.pulse_phase * 3 + i))
+            inner_y = self.y + math.sin(inner_angle) * inner_radius_base * (0.8 + 0.2 * math.cos(self.pulse_phase * 3 + i))
+            inner_size = max(1, int(self.current_radius * 0.1 * (0.8 + 0.2 * math.sin(self.pulse_phase * 4 + i))))
+            # Use RGB color (no alpha) for pygame.draw.circle
+            inner_color = (min(255, color[0] + 50), min(255, color[1] + 50), min(255, color[2] + 50))
+            pygame.draw.circle(screen, inner_color, (int(inner_x), int(inner_y)), inner_size)
         
-        # Draw highlight (shiny reflection like water droplet)
-        highlight_offset = current_radius * 0.3
-        highlight_x = center_x - highlight_offset
-        highlight_y = center_y - highlight_offset
-        highlight_size = int(current_radius * 0.4)
-        highlight_color = (255, 255, 255, 120)  # White highlight, semi-transparent
-        pygame.draw.circle(egg_surface, highlight_color, (int(highlight_x), int(highlight_y)), highlight_size)
-        
-        # Draw smaller bright highlight
-        small_highlight_size = int(current_radius * 0.15)
-        small_highlight_color = (255, 255, 255, 180)
-        pygame.draw.circle(egg_surface, small_highlight_color, 
-                          (int(highlight_x), int(highlight_y)), small_highlight_size)
-        
-        # Draw border (subtle outline)
-        border_color = (200, 220, 255, 150)  # Light border, semi-transparent
-        pygame.draw.circle(egg_surface, border_color, (center_x, center_y), current_radius, 2)
-        
-        # Show stress when close to popping
+        # Draw stress lines when close to popping
         if growth_progress > 0.7:
-            stress_alpha = int(255 * (sin_pulse * 0.5 + 0.5) * (growth_progress - 0.7) / 0.3)
-            stress_color = (255, 100, 100, stress_alpha)
-            # Draw stress lines
-            num_stress_lines = 4
-            for i in range(num_stress_lines):
-                stress_angle = (i * 360 / num_stress_lines) + self.pulse_phase * 15
-                stress_rad = math.radians(stress_angle)
-                stress_length = current_radius * 0.5
-                stress_x1 = center_x + math.cos(stress_rad) * (current_radius * 0.3)
-                stress_y1 = center_y + math.sin(stress_rad) * (current_radius * 0.3)
-                stress_x2 = center_x + math.cos(stress_rad) * stress_length
-                stress_y2 = center_y + math.sin(stress_rad) * stress_length
-                pygame.draw.line(egg_surface, stress_color,
-                               (int(stress_x1), int(stress_y1)),
-                               (int(stress_x2), int(stress_y2)), 2)
-        
-        # Blit the translucent egg surface onto the screen
-        screen.blit(egg_surface, (int(self.x - center_x), int(self.y - center_y)))
-
+            num_cracks = 4
+            for i in range(num_cracks):
+                crack_angle = (i * 360 / num_cracks) + self.pulse_phase * 10
+                crack_rad = math.radians(crack_angle)
+                crack_length = self.current_radius * (0.5 + 0.4 * (growth_progress - 0.7) / 0.3)
+                crack_x = self.x + math.cos(crack_rad) * crack_length
+                crack_y = self.y + math.sin(crack_rad) * crack_length
+                pygame.draw.line(
+                    screen, (255, 100, 50),
+                    (int(self.x + math.cos(crack_rad) * self.current_radius * 0.3), int(self.y + math.sin(crack_rad) * self.current_radius * 0.3)),
+                    (int(crack_x), int(crack_y)), 1
+                )
