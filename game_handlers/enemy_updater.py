@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
+    from entities.baby import Baby
     from entities.egg import Egg
     from entities.ship import Ship
     from entities.projectile import Projectile
@@ -140,6 +141,46 @@ class EnemyUpdater:
             if fired_projectile:
                 projectiles.append(fired_projectile)
     
+    def update_babies(
+        self,
+        babies: List['Baby'],
+        dt: float,
+        player_pos: Optional[Tuple[float, float]],
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        projectiles: List['Projectile']
+    ) -> None:
+        """Update Baby enemies.
+        
+        Args:
+            babies: List of Baby instances.
+            dt: Delta time since last update.
+            player_pos: Current player position.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            projectiles: List to add fired projectiles to.
+        """
+        for baby in babies:
+            if not baby.active:
+                continue
+            
+            baby.update(dt, player_pos)
+            
+            # Check baby-wall collision
+            baby.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check baby-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(baby.get_pos(), baby.radius, baby):
+                    scoring.record_enemy_collision()
+            
+            # Check if baby fired a projectile
+            fired_projectile = baby.get_fired_projectile(player_pos)
+            if fired_projectile:
+                projectiles.append(fired_projectile)
+    
     def update_eggs(
         self,
         eggs: List['Egg'],
@@ -148,7 +189,7 @@ class EnemyUpdater:
         ship: 'Ship',
         scoring: 'ScoringSystem',
         command_recorder: 'CommandRecorder',
-        replay_enemies: List['ReplayEnemyShip']
+        babies: List['Baby']
     ) -> None:
         """Update egg enemies.
         
@@ -158,8 +199,8 @@ class EnemyUpdater:
             maze: Maze instance for wall collision.
             ship: Player ship for collision detection.
             scoring: Scoring system for recording collisions.
-            command_recorder: Command recorder for spawning Replay Enemies.
-            replay_enemies: List to add spawned Replay Enemies to.
+            command_recorder: Command recorder for spawning Baby enemies.
+            babies: List to add spawned Baby enemies to.
         """
         for egg in eggs:
             if not egg.active:
@@ -169,7 +210,7 @@ class EnemyUpdater:
             
             # Check if egg should pop
             if egg.should_pop():
-                egg.pop(command_recorder, replay_enemies)
+                egg.pop(command_recorder, babies)
                 continue
             
             # Check egg-wall collision (eggs are stationary, but check for consistency)

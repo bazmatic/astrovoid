@@ -130,10 +130,9 @@ class ReplayEnemyShip(RotatingThrusterShip):
         body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
         spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
         
-        if speed > 0.01:
-            trail_angle_rad = math.atan2(self.vy, self.vx) + math.pi
-        else:
-            trail_angle_rad = angle_to_radians(self.angle) + math.pi
+        # Tentacles should trail behind the ship's facing direction (opposite of where eyes are)
+        # Eyes are at angle, so tentacles should be at angle + pi (behind)
+        trail_angle_rad = angle_to_radians(self.angle) + math.pi
         
         particle_spawn_rate = max(2, int(speed * 4) + 2) if speed > 0.01 else 3
         
@@ -260,12 +259,9 @@ class ReplayEnemyShip(RotatingThrusterShip):
     def _draw_tentacles(self, screen: pygame.Surface) -> None:
         """Draw tentacles as streaming particle trails."""
         body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
-        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-        
-        if speed > 0.01:
-            trail_angle_rad = math.atan2(self.vy, self.vx) + math.pi
-        else:
-            trail_angle_rad = angle_to_radians(self.angle) + math.pi
+        # Tentacles should trail behind the ship's facing direction (opposite of where eyes are)
+        # Eyes are at angle, so tentacles should be at angle + pi (behind)
+        trail_angle_rad = angle_to_radians(self.angle) + math.pi
         
         spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
         

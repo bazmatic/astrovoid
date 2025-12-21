@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
+    from entities.baby import Baby
+    from entities.egg import Egg
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -48,6 +50,7 @@ class CollisionHandler:
         replay_enemies: List['ReplayEnemyShip'],
         split_bosses: List['SplitBoss'],
         mother_bosses: List['MotherBoss'],
+        babies: List['Baby'],
         eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal']
     ) -> bool:
@@ -59,6 +62,7 @@ class CollisionHandler:
             replay_enemies: List of replay enemies.
             split_bosses: List of SplitBoss enemies.
             mother_bosses: List of Mother Boss enemies.
+            babies: List of Baby enemies.
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             
@@ -144,6 +148,22 @@ class CollisionHandler:
                             boss_pos, boss_velocity, replay_enemies, powerup_crystals
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-baby collision
+        for baby in babies:
+            if baby.active and projectile.active:
+                if projectile.check_circle_collision(baby.get_pos(), baby.radius):
+                    baby_pos = baby.get_pos()
+                    baby.active = False
+                    self.sound_manager.play_enemy_destroy()
+                    self.scoring.record_enemy_destroyed()
+                    
+                    # Spawn powerup crystal with probability
+                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                        crystal = PowerupCrystal(baby_pos)
+                        powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
         

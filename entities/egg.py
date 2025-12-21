@@ -1,7 +1,7 @@
-"""Egg enemy that grows and spawns Replay Enemies when it pops.
+"""Egg enemy that grows and spawns Baby enemies when it pops.
 
 This module implements an Egg enemy that grows over time and spawns 1-3
-Replay Enemies when it reaches maximum size, or can be destroyed by bullets
+Baby enemies when it reaches maximum size, or can be destroyed by bullets
 to prevent spawning.
 """
 
@@ -17,16 +17,16 @@ from utils import circle_line_collision, circle_circle_collision
 from rendering import visual_effects
 
 if TYPE_CHECKING:
-    from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.baby import Baby
     from entities.command_recorder import CommandRecorder
 
 
 class Egg(GameEntity, Collidable, Drawable):
-    """Egg enemy that grows and spawns Replay Enemies when it pops.
+    """Egg enemy that grows and spawns Baby enemies when it pops.
     
     The egg grows at a random rate. When it reaches maximum size, it pops
-    and spawns 1-3 Replay Enemies. If destroyed by bullets before popping,
-    no Replay Enemies are spawned.
+    and spawns 1-3 Baby enemies. If destroyed by bullets before popping,
+    no Baby enemies are spawned.
     
     Attributes:
         initial_radius: Starting size.
@@ -89,19 +89,19 @@ class Egg(GameEntity, Collidable, Drawable):
         """
         return self.current_radius >= self.max_radius and not self.has_popped
     
-    def pop(self, command_recorder: 'CommandRecorder', replay_enemies: List['ReplayEnemyShip']) -> None:
-        """Pop the egg and spawn Replay Enemies.
+    def pop(self, command_recorder: 'CommandRecorder', babies: List['Baby']) -> None:
+        """Pop the egg and spawn Baby enemies.
         
         Args:
-            command_recorder: CommandRecorder instance for spawning Replay Enemies.
-            replay_enemies: List to add spawned Replay Enemies to.
+            command_recorder: CommandRecorder instance for spawning Baby enemies.
+            babies: List to add spawned Baby enemies to.
         """
         if self.has_popped:
             return
         
         self.has_popped = True
         
-        # Spawn 1-3 Replay Enemies
+        # Spawn 1-3 Baby enemies
         spawn_count = random.randint(1, 3)
         
         for i in range(spawn_count):
@@ -114,11 +114,11 @@ class Egg(GameEntity, Collidable, Drawable):
             spawn_x = self.x + math.cos(angle_offset) * distance_offset
             spawn_y = self.y + math.sin(angle_offset) * distance_offset
             
-            # Create new ReplayEnemyShip
-            from entities.replay_enemy_ship import ReplayEnemyShip
-            spawned_enemy = ReplayEnemyShip((spawn_x, spawn_y), command_recorder)
-            spawned_enemy.current_replay_index = 0
-            replay_enemies.append(spawned_enemy)
+            # Create new Baby enemy
+            from entities.baby import Baby
+            spawned_baby = Baby((spawn_x, spawn_y), command_recorder)
+            spawned_baby.current_replay_index = 0
+            babies.append(spawned_baby)
         
         # Deactivate egg after popping
         self.active = False

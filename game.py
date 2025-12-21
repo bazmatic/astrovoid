@@ -65,6 +65,7 @@ class Game:
         self.replay_enemies = self.entity_manager.replay_enemies
         self.split_bosses = self.entity_manager.split_bosses
         self.mother_bosses = self.entity_manager.mother_bosses
+        self.babies = self.entity_manager.babies
         self.eggs = self.entity_manager.eggs
         
         self.projectiles: List[Projectile] = []
@@ -528,8 +529,11 @@ class Game:
             self.enemy_updater.update_mother_bosses(
                 self.mother_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.eggs
             )
+            self.enemy_updater.update_babies(
+                self.babies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+            )
             self.enemy_updater.update_eggs(
-                self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.replay_enemies
+                self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
             )
         
         # Update projectiles and handle collisions
@@ -557,7 +561,7 @@ class Game:
             
             # Check projectile-enemy collisions (only for player projectiles)
             if self.collision_handler.handle_projectile_enemy_collisions(
-                projectile, self.enemies, self.replay_enemies, self.split_bosses, self.mother_bosses, self.eggs, self.powerup_crystals
+                projectile, self.enemies, self.replay_enemies, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals
             ):
                 continue  # Projectile destroyed, skip adding to active list
             
@@ -774,6 +778,11 @@ class Game:
             if mother_boss.active:
                 mother_boss.draw(self.screen)
         
+        # Draw Baby enemies
+        for baby in self.babies:
+            if baby.active:
+                baby.draw(self.screen)
+        
         # Draw egg enemies
         for egg in self.eggs:
             if egg.active:
@@ -955,7 +964,7 @@ class Game:
         
         # Draw confirmation dialog box with glow
         dialog_width = 550
-        dialog_height = 240
+        dialog_height = 280  # Increased from 240 to add more bottom padding
         dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
         dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
         dialog_rect = pygame.Rect(dialog_x, dialog_y, dialog_width, dialog_height)
@@ -1041,7 +1050,7 @@ class Game:
         
         # Draw confirmation dialog box with glow
         dialog_width = 600
-        dialog_height = 300
+        dialog_height = 360  # Increased from 300 to add more bottom padding
         dialog_x = (config.SCREEN_WIDTH - dialog_width) // 2
         dialog_y = (config.SCREEN_HEIGHT - dialog_height) // 2
         dialog_rect = pygame.Rect(dialog_x, dialog_y, dialog_width, dialog_height)

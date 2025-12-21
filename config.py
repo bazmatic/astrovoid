@@ -28,7 +28,7 @@ SHIP_SIZE = 8  # Ship radius (affects both collision and visual size)
 SHIP_ROTATION_SPEED = 5.0  # Degrees per frame (how fast the ship rotates)
 SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
 SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
-SHIP_MAX_SPEED = 8.0
+SHIP_MAX_SPEED = 2.0
 COLLISION_RESTITUTION = 0.85  # Coefficient of restitution for ship-enemy collisions (0.0 = inelastic, 1.0 = elastic)
 
 # Resources
@@ -83,6 +83,10 @@ REPLAY_ENEMY_SIZE = 15  # Size/radius of replay enemy
 REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
 REPLAY_ENEMY_BASE_COUNT = 1  # Base count after tutorial levels
 REPLAY_ENEMY_SCALE_FACTOR = 0.5  # Scaling factor for continuous growth (sqrt-based)
+
+# Baby enemy settings
+BABY_SIZE = 15  # Size/radius of baby enemy (smaller than replay enemy)
+BABY_SPEED_MULTIPLIER = 0.1  # Speed multiplier (faster than replay enemy's 0.3)
 
 # SplitBoss settings
 SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip
