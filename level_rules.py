@@ -109,6 +109,20 @@ def get_replay_enemy_count(level: int) -> int:
         return min(1 + (level - 1) // 2, 4)
 
 
+def get_split_boss_count(level: int) -> int:
+    """Get number of SplitBoss enemies for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Number of SplitBoss enemies (1 for level >= 11, 0 otherwise).
+    """
+    if level >= 11:
+        return 1
+    return 0
+
+
 def get_enemy_speed(level: int, enemy_type: str) -> float:
     """Get movement speed for an enemy type at a given level.
     
@@ -238,4 +252,5 @@ def get_enemy_strength(level: int) -> EnemyStrength:
         fire_interval_max=fire_interval_max,
         fire_range=get_enemy_fire_range(level)
     )
+
 

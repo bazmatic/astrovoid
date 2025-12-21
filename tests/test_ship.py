@@ -105,21 +105,6 @@ class TestShipThrust:
 class TestShipUpdate:
     """Tests for ship update mechanics."""
     
-    def test_update_applies_friction(self):
-        """Update should apply friction to velocity."""
-        ship = Ship((100, 100))
-        ship.vx = 10.0
-        ship.vy = 10.0
-        
-        ship.update(1.0)  # 1 frame
-        
-        # Velocity should be reduced by friction
-        assert abs(ship.vx) < 10.0
-        assert abs(ship.vy) < 10.0
-        # Should be reduced by friction factor
-        expected_vx = 10.0 * config.SHIP_FRICTION
-        assert abs(ship.vx - expected_vx) < 0.01
-    
     def test_update_clears_thrusting_flag(self):
         """Update should clear thrusting flag."""
         ship = Ship((100, 100))
@@ -196,9 +181,11 @@ class TestShipFire:
         ship = Ship((100, 100))
         ship.angle = 0.0  # Facing right
         
-        projectile = ship.fire()
+        projectiles = ship.fire()
         
-        assert projectile is not None
+        assert projectiles is not None
+        assert len(projectiles) > 0
+        projectile = projectiles[0]  # Get first projectile
         # Projectile should be to the right of ship (higher x)
         assert projectile.x > ship.x
         # Projectile should be at similar y

@@ -4,6 +4,7 @@ import pygame
 import math
 import time
 import random
+import os
 from typing import List, Optional, Tuple
 import config
 from entities.ship import Ship
@@ -11,6 +12,7 @@ from maze import Maze
 from entities.enemy import Enemy, create_enemies
 import level_rules
 from entities.replay_enemy_ship import ReplayEnemyShip
+from entities.split_boss import SplitBoss
 from entities.projectile import Projectile
 from entities.powerup_crystal import PowerupCrystal
 from entities.command_recorder import CommandRecorder, CommandType
@@ -19,6 +21,12 @@ from scoring import ScoringSystem
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator
 from sounds import SoundManager
+from game_handlers.entity_manager import EntityManager
+from game_handlers.spawn_manager import SpawnManager
+from game_handlers.enemy_updater import EnemyUpdater
+from game_handlers.collision_handler import CollisionHandler
+from game_handlers.fire_rate_calculator import calculate_fire_cooldown
+from game_handlers.state_handlers import StateHandlerRegistry
 
 
 class Game:
@@ -33,17 +41,41 @@ class Game:
         self.renderer = Renderer(screen)
         
         self.state = config.STATE_MENU
-        self.level = 1
+        # Check for START_LEVEL environment variable
+        start_level = os.getenv('START_LEVEL')
+        if start_level:
+            try:
+                self.initial_start_level = max(1, int(start_level))
+            except ValueError:
+                self.initial_start_level = None
+        else:
+            self.initial_start_level = None
+        self.level = self.initial_start_level if self.initial_start_level else 1
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
-        self.enemies: List[Enemy] = []
-        self.replay_enemies: List[ReplayEnemyShip] = []
+        
+        # Entity management
+        self.entity_manager = EntityManager()
+        self.enemies = self.entity_manager.enemies
+        self.replay_enemies = self.entity_manager.replay_enemies
+        self.split_bosses = self.entity_manager.split_bosses
+        
         self.projectiles: List[Projectile] = []
         self.powerup_crystals: List[PowerupCrystal] = []
         self.scoring = ScoringSystem()
         self.sound_manager = SoundManager()  # Game-level sound manager for enemy destruction
         self.command_recorder = CommandRecorder()  # Record player commands for replay enemy
         self.input_handler = InputHandler()  # Handle keyboard input and map to commands
+        
+        # Game handlers
+        self.spawn_manager = SpawnManager(self.entity_manager)
+        self.enemy_updater = EnemyUpdater()
+        self.collision_handler = CollisionHandler(
+            self.sound_manager,
+            self.scoring,
+            self.command_recorder
+        )
+        self.state_handler_registry = StateHandlerRegistry()
         
         self.running = True
         self.start_time = time.time()
@@ -113,29 +145,13 @@ class Game:
         self.player_has_moved = False
         self.ship.game_started = False  # Prevent shield timer countdown until first move
         
-        # Create enemies
+        # Spawn all enemies using SpawnManager
         enemy_counts = level_rules.get_enemy_counts(self.level)
+        split_boss_count = level_rules.get_split_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + 5  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + split_boss_count + 5  # Extra buffer for spawn positions
         )
-        self.enemies = create_enemies(self.level, spawn_positions)
-        
-        # Create replay enemy ships
-        replay_enemy_count = enemy_counts.replay
-        self.replay_enemies = []
-        
-        if len(spawn_positions) > 0 and replay_enemy_count > 0:
-            # Use available spawn positions for replay enemies
-            # Skip positions already used by regular enemies
-            used_positions = [e.get_pos() for e in self.enemies]
-            available_positions = [pos for pos in spawn_positions if pos not in used_positions]
-            
-            # Create replay enemies at available positions
-            for i in range(min(replay_enemy_count, len(available_positions))):
-                replay_spawn = available_positions[i]
-                replay_enemy = ReplayEnemyShip(replay_spawn, self.command_recorder)
-                replay_enemy.current_replay_index = 0  # Reset replay index
-                self.replay_enemies.append(replay_enemy)
+        self.spawn_manager.spawn_all_enemies(self.level, spawn_positions, self.command_recorder)
         
         # Clear projectiles and crystals
         self.projectiles = []
@@ -164,128 +180,13 @@ class Game:
                 # Controller disconnected
                 self.input_handler.remove_controller(event.device_index)
             elif event.type == pygame.JOYBUTTONDOWN:
-                # Handle controller button presses for menu navigation
-                if self.state == config.STATE_MENU:
-                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                        self.state = config.STATE_PLAYING
-                        self.level = 1
-                        self.start_level()
-                    elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
-                        # Quit game from menu
-                        self.running = False
-                elif self.state == config.STATE_PLAYING:
-                    if self.input_handler.is_controller_quit_pressed(event.button):
-                        # Show quit confirmation
-                        self.state = config.STATE_QUIT_CONFIRM
-                elif self.state == config.STATE_QUIT_CONFIRM:
-                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                        # Confirm quit - return to menu and reset progress
-                        self.state = config.STATE_MENU
-                        self.level = 1
-                        self.scoring = ScoringSystem()
-                    elif event.button == 1:  # B button - quit game completely
-                        # Quit game completely
-                        self.running = False
-                    elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
-                        # Cancel quit - return to playing
-                        self.state = config.STATE_PLAYING
-                elif self.state == config.STATE_LEVEL_COMPLETE:
-                    if self.level_complete_quit_confirm:
-                        # Handle quit confirmation
-                        if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                            # Confirm quit - return to menu, keep progress
-                            self.state = config.STATE_MENU
-                            self.level_complete_quit_confirm = False
-                        elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
-                            # Cancel quit - return to level complete
-                            self.level_complete_quit_confirm = False
-                    else:
-                        # Normal level complete screen
-                        if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                            # Continue to next level (only if level succeeded)
-                            if self.level_succeeded:
-                                self.level += 1
-                                self.state = config.STATE_PLAYING
-                                self.start_level()
-                            else:
-                                # If failed, replay is the only option
-                                self.scoring.total_score = self.total_score_before_level
-                                self.state = config.STATE_PLAYING
-                                self.start_level()
-                        elif event.button == 1:  # B button for replay
-                            # Replay current level - restore score and restart
-                            self.scoring.total_score = self.total_score_before_level
-                            self.state = config.STATE_PLAYING
-                            self.start_level()
-                        elif self.input_handler.is_controller_menu_cancel_pressed(event.button):
-                            # Show quit confirmation
-                            self.level_complete_quit_confirm = True
-                elif self.state == config.STATE_GAME_OVER:
-                    if self.input_handler.is_controller_menu_confirm_pressed(event.button):
-                        self.state = config.STATE_MENU
-                        self.level = 1
-                        self.scoring = ScoringSystem()
+                # Use state handler for controller events
+                handler = self.state_handler_registry.get_handler(self.state)
+                handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
-                if self.state == config.STATE_MENU:
-                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                        self.state = config.STATE_PLAYING
-                        self.level = 1
-                        self.start_level()
-                    elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                        # Quit game from menu
-                        self.running = False
-                elif self.state == config.STATE_PLAYING:
-                    if event.key == pygame.K_ESCAPE:
-                        # Show quit confirmation
-                        self.state = config.STATE_QUIT_CONFIRM
-                elif self.state == config.STATE_QUIT_CONFIRM:
-                    if event.key == pygame.K_y or event.key == pygame.K_RETURN:
-                        # Confirm quit - return to menu and reset progress
-                        self.state = config.STATE_MENU
-                        self.level = 1
-                        self.scoring = ScoringSystem()
-                    elif event.key == pygame.K_q:
-                        # Quit game completely
-                        self.running = False
-                    elif event.key == pygame.K_n or event.key == pygame.K_ESCAPE:
-                        # Cancel quit - return to playing
-                        self.state = config.STATE_PLAYING
-                elif self.state == config.STATE_LEVEL_COMPLETE:
-                    if self.level_complete_quit_confirm:
-                        # Handle quit confirmation
-                        if event.key == pygame.K_y or event.key == pygame.K_RETURN:
-                            # Confirm quit - return to menu, keep progress
-                            self.state = config.STATE_MENU
-                            self.level_complete_quit_confirm = False
-                        elif event.key == pygame.K_n or event.key == pygame.K_ESCAPE:
-                            # Cancel quit - return to level complete
-                            self.level_complete_quit_confirm = False
-                    else:
-                        # Normal level complete screen
-                        if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                            # Continue to next level (only if level succeeded)
-                            if self.level_succeeded:
-                                self.level += 1
-                                self.state = config.STATE_PLAYING
-                                self.start_level()
-                            else:
-                                # If failed, replay is the only option
-                                self.scoring.total_score = self.total_score_before_level
-                                self.state = config.STATE_PLAYING
-                                self.start_level()
-                        elif event.key == pygame.K_r:
-                            # Replay current level - restore score and restart
-                            self.scoring.total_score = self.total_score_before_level
-                            self.state = config.STATE_PLAYING
-                            self.start_level()
-                        elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
-                            # Show quit confirmation
-                            self.level_complete_quit_confirm = True
-                elif self.state == config.STATE_GAME_OVER:
-                    if event.key == pygame.K_SPACE or event.key == pygame.K_RETURN:
-                        self.state = config.STATE_MENU
-                        self.level = 1
-                        self.scoring = ScoringSystem()
+                # Use state handler for keyboard events
+                handler = self.state_handler_registry.get_handler(self.state)
+                handler.handle_keyboard(event, self)
     
     def update(self, dt: float) -> None:
         """Update game state."""
@@ -389,15 +290,7 @@ class Game:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0
             current_time = pygame.time.get_ticks()
-            # Adjust fire rate based on upgrade level
-            fire_cooldown = 200  # Default 200ms between shots
-            upgrade_level = self.ship.get_gun_upgrade_level()
-            if upgrade_level == 1:
-                fire_cooldown = int(200 / config.POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER)
-            elif upgrade_level == 2:
-                fire_cooldown = int(200 / config.POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER)
-            elif upgrade_level == 3:
-                fire_cooldown = int(200 / config.POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER)
+            fire_cooldown = calculate_fire_cooldown(self.ship)
             
             if current_time - self.last_shot_time > fire_cooldown:
                 projectiles = self.ship.fire()
@@ -425,49 +318,18 @@ class Game:
         # Only update enemies after player has made their first move
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
         if self.player_has_moved:
-            # Update enemies
-            for enemy in self.enemies:
-                if enemy.active:
-                    enemy.update(dt, player_pos, self.maze.walls)
-                    
-                    # Check enemy-ship collision (skip if shield is active)
-                    if not self.ship.is_shield_active():
-                        if self.ship.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
-                            self.scoring.record_enemy_collision()
-                    
-                    # Check if enemy fired a projectile
-                    fired_projectile = enemy.get_fired_projectile(player_pos)
-                    if fired_projectile:
-                        self.projectiles.append(fired_projectile)
-            
-            # Update replay enemies
-            # Replay enemies update independently from the player ship.
-            # They replay commands but handle collisions based on their own position/velocity state.
-            # Pass player position for NO_ACTION behavior (rotate towards player) and firing.
-            for replay_enemy in self.replay_enemies:
-                if not replay_enemy.active:
-                    continue
-                
-                replay_enemy.update(dt, player_pos)
-                
-                # Check replay enemy-wall collision
-                # This uses the replay enemy's own state (prev_x, prev_y, x, y, vx, vy)
-                # and is completely independent from the player ship's collisions.
-                # The replay enemy only bounces when it actually hits a wall at its position.
-                if replay_enemy.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
-                    pass  # Replay enemy bounces off walls (handled in base class using its own state)
-                
-                # Check replay enemy-ship collision (skip if shield is active)
-                if not self.ship.is_shield_active():
-                    if self.ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius, replay_enemy):
-                        self.scoring.record_enemy_collision()
-                
-                # Check if replay enemy fired a projectile
-                fired_projectile = replay_enemy.get_fired_projectile(player_pos)
-                if fired_projectile:
-                    self.projectiles.append(fired_projectile)
+            # Update all enemy types using EnemyUpdater
+            self.enemy_updater.update_enemies(
+                self.enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+            )
+            self.enemy_updater.update_replay_enemies(
+                self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+            )
+            self.enemy_updater.update_split_bosses(
+                self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+            )
         
-        # Update projectiles (use list comprehension instead of remove)
+        # Update projectiles and handle collisions
         active_projectiles = []
         for projectile in self.projectiles:
             projectile.update(dt)
@@ -486,51 +348,15 @@ class Game:
                 # Enemy projectiles just deactivate on wall collision
                 projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
             
-            # Check enemy projectile-ship collision (skip if shield is active)
-            if projectile.is_enemy and projectile.active:
-                if not self.ship.is_shield_active():
-                    if projectile.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
-                        self.scoring.record_enemy_collision()  # Apply collision penalty
-                        # Apply small velocity impulse to ship from projectile impact
-                        # Transfer momentum in direction projectile was traveling
-                        self.ship.vx += projectile.vx * config.PROJECTILE_IMPACT_FORCE
-                        self.ship.vy += projectile.vy * config.PROJECTILE_IMPACT_FORCE
-                        # Projectile is deactivated by collision, skip adding to active list
-                        continue
+            # Check enemy projectile-ship collision
+            if self.collision_handler.handle_projectile_ship_collision(projectile, self.ship, self.scoring):
+                continue  # Projectile destroyed, skip adding to active list
             
-            # Check projectile-enemy collision (only for player projectiles)
-            if not projectile.is_enemy:
-                for enemy in self.enemies:
-                    if enemy.active and projectile.active:
-                        if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
-                            enemy_pos = enemy.get_pos()
-                            enemy.destroy()
-                            self.sound_manager.play_enemy_destroy()  # Play destruction sound
-                            self.scoring.record_enemy_destroyed()  # Award bonus points
-                            
-                            # Spawn powerup crystal with probability
-                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                                crystal = PowerupCrystal(enemy_pos)
-                                self.powerup_crystals.append(crystal)
-                            
-                            # Projectile is deactivated by collision, break
-                            break
-                
-                # Check projectile-replay enemy collision
-                for replay_enemy in self.replay_enemies:
-                    if replay_enemy.active and projectile.active:
-                        if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
-                            enemy_pos = replay_enemy.get_pos()
-                            replay_enemy.active = False  # Destroy replay enemy
-                            self.sound_manager.play_enemy_destroy()  # Play destruction sound
-                            self.scoring.record_enemy_destroyed()  # Award bonus points
-                            
-                            # Spawn powerup crystal with probability
-                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                                crystal = PowerupCrystal(enemy_pos)
-                                self.powerup_crystals.append(crystal)
-                            
-                            break  # Projectile destroyed, stop checking
+            # Check projectile-enemy collisions (only for player projectiles)
+            if self.collision_handler.handle_projectile_enemy_collisions(
+                projectile, self.enemies, self.replay_enemies, self.split_bosses, self.powerup_crystals
+            ):
+                continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks
             if projectile.active:
@@ -549,10 +375,8 @@ class Game:
             crystal.update(dt, player_pos)
             
             # Check ship-crystal collision
-            if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
-                # Collect crystal and activate upgrade
-                self.ship.activate_gun_upgrade()
-                continue  # Don't add to active list
+            if self.collision_handler.handle_ship_crystal_collision(self.ship, crystal):
+                continue  # Crystal collected, don't add to active list
             
             if crystal.active:
                 active_crystals.append(crystal)
@@ -717,6 +541,11 @@ class Game:
         for replay_enemy in self.replay_enemies:
             if replay_enemy.active:
                 replay_enemy.draw(self.screen)
+        
+        # Draw SplitBoss enemies
+        for split_boss in self.split_bosses:
+            if split_boss.active:
+                split_boss.draw(self.screen)
         
         # Draw powerup crystals
         for crystal in self.powerup_crystals:

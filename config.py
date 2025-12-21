@@ -80,6 +80,12 @@ REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
 REPLAY_ENEMY_SIZE = 15  # Size/radius of replay enemy
 REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
 
+# SplitBoss settings
+SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip
+SPLIT_BOSS_HIT_POINTS = 3  # Number of hits required to destroy SplitBoss
+SPLIT_BOSS_SPAWN_OFFSET_RANGE = 80  # Pixels for random spawn positions of spawned enemies
+SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enemies
+
 # Projectile settings
 PROJECTILE_SPEED = 8.0
 PROJECTILE_SIZE = 3
