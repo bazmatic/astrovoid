@@ -37,6 +37,8 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         self.base_radius = radius
         self.animation_time = 0.0
         self.player_nearby = False
+        self.is_activated = True  # Portal is active by default
+        self.previous_activated = True  # Track previous state to detect changes
     
     def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Update exit animation state and check player proximity.
@@ -84,6 +86,10 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         Returns:
             True if collision occurred, False otherwise.
         """
+        # Portal doesn't work when not activated (eggs still present)
+        if not self.is_activated:
+            return False
+        
         return circle_circle_collision(
             (self.x, self.y), self.radius,
             other_pos, other_radius
@@ -101,7 +107,7 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         Returns:
             Force vector (fx, fy) if player is within attraction radius, None otherwise.
         """
-        if not self.active:
+        if not self.active or not self.is_activated:
             return None
         
         dx = self.x - player_pos[0]
@@ -158,11 +164,21 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         center_x = int(self.x)
         center_y = int(self.y)
         
+        # Dim visuals when not activated (eggs present)
+        if not self.is_activated:
+            dim_factor = 0.35  # Reduce brightness to 35%
+            glow_intensity_multiplier = 0.3  # Reduce glow intensity
+            base_color = tuple(int(c * dim_factor) for c in config.COLOR_EXIT)
+        else:
+            dim_factor = 1.0
+            glow_intensity_multiplier = 1.0
+            base_color = config.COLOR_EXIT
+        
         # Draw outer glow layers
         for layer in range(3):
             glow_radius = max_radius + (3 - layer) * config.EXIT_PORTAL_GLOW_LAYER_OFFSET
-            alpha = int(80 * (1.0 - layer / 3.0))
-            glow_color = (*config.COLOR_EXIT, alpha)
+            alpha = int(80 * (1.0 - layer / 3.0) * glow_intensity_multiplier)
+            glow_color = (*base_color, alpha)
             glow_surf = pygame.Surface((glow_radius * 2 + 4, glow_radius * 2 + 4), pygame.SRCALPHA)
             pygame.draw.circle(glow_surf, glow_color, 
                              (int(glow_radius) + 2, int(glow_radius) + 2), 
@@ -199,11 +215,11 @@ class ExitPortal(GameEntity, Collidable, Drawable):
                 intensity = i / (len(spiral_points) - 1)
                 
                 # Interpolate between exit color and brighter version
-                base_color = config.COLOR_EXIT
+                # Use dimmed base_color if not activated
                 bright_color = (
-                    min(255, base_color[0] + 100),
-                    min(255, base_color[1] + 50),
-                    min(255, base_color[2] + 50)
+                    min(255, base_color[0] + int(100 * dim_factor)),
+                    min(255, base_color[1] + int(50 * dim_factor)),
+                    min(255, base_color[2] + int(50 * dim_factor))
                 )
                 
                 # Blend colors based on intensity
@@ -229,11 +245,11 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         # Draw core with gradient
         for i in range(3):
             radius = core_radius * (1.0 - i * 0.3)
-            alpha = 255 - i * 60
+            alpha = int((255 - i * 60) * dim_factor)
             core_color = (
-                min(255, config.COLOR_EXIT[0] + i * 30),
-                min(255, config.COLOR_EXIT[1] + i * 20),
-                min(255, config.COLOR_EXIT[2] + i * 20)
+                min(255, base_color[0] + int(i * 30 * dim_factor)),
+                min(255, base_color[1] + int(i * 20 * dim_factor)),
+                min(255, base_color[2] + int(i * 20 * dim_factor))
             )
             core_surf = pygame.Surface((int(radius * 2) + 4, int(radius * 2) + 4), pygame.SRCALPHA)
             pygame.draw.circle(core_surf, (*core_color, alpha),
@@ -244,7 +260,28 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         # Draw outer ring
         ring_radius = max_radius * 0.95
         ring_thickness = 2
-        pygame.draw.circle(screen, config.COLOR_EXIT,
+        pygame.draw.circle(screen, base_color,
                          (center_x, center_y),
                          int(ring_radius), ring_thickness)
+    
+    def set_activated(self, activated: bool, sound_manager=None) -> None:
+        """Set the activation state of the exit portal.
+        
+        When deactivated (eggs present), the portal is dimmed and non-functional.
+        When activated (no eggs), the portal is fully functional.
+        
+        Args:
+            activated: True to activate portal, False to deactivate.
+            sound_manager: Optional sound manager to play activation/deactivation sounds.
+        """
+        # Only play sound if state actually changed
+        if self.previous_activated != activated:
+            if sound_manager:
+                if activated:
+                    sound_manager.play_portal_power_up()
+                else:
+                    sound_manager.play_portal_power_down()
+        
+        self.previous_activated = self.is_activated
+        self.is_activated = activated
 

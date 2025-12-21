@@ -350,6 +350,11 @@ class Game:
         if not self.ship or not self.maze:
             return
         
+        # Check if any eggs are still alive - deactivate exit portal if eggs exist
+        has_active_eggs = any(egg.active for egg in self.eggs)
+        if self.maze.exit.active:
+            self.maze.exit.set_activated(not has_active_eggs, self.sound_manager)
+        
         # Update exit animation and check player proximity
         if self.maze.exit.active:
             player_pos = (self.ship.x, self.ship.y) if self.ship else None
