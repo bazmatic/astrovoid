@@ -1,4 +1,4 @@
-"""Main entry point for ASTER VOID.
+"""Main entry point for ASTRO VOID.
 
 This module initializes Pygame, creates the game window, and starts the main
 game loop. It serves as the application entry point.
@@ -47,7 +47,7 @@ def main():
     else:
         screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN)
     
-    pygame.display.set_caption("ASTER VOID - Space Navigation Game")
+    pygame.display.set_caption("ASTRO VOID - Space Navigation Game")
     
     # Update config with actual screen size (fullscreen may use different resolution)
     actual_width, actual_height = screen.get_size()

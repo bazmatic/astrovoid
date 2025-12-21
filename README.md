@@ -1,4 +1,4 @@
-# ASTER VOID
+# ASTRO VOID
 
 A skill-based space navigation game built with Pygame. Navigate procedurally-generated mazes using classic Asteroids-style momentum-based flight mechanics. Balance speed, fuel conservation, precision flying, and combat efficiency to achieve high scores.
 
@@ -7,15 +7,21 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 - **Momentum-Based Physics**: Zero-G flight mechanics with realistic momentum and low friction
 - **Procedural Maze Generation**: Each level features a unique procedurally-generated maze. Levels are deterministic - each level number always generates the same maze layout (Level 1 = seed 1, Level 2 = seed 2, etc.)
 - **Multiple Enemy Types**:
-  - Static enemies that remain stationary
+  - Static enemies that remain stationary (but move when hit by projectiles)
   - Patrol enemies that move in straight lines
   - Aggressive enemies that chase the player
   - Replay enemy ships that mimic your previous playthrough
+  - Egg enemies that grow over time and spawn Baby enemies when they hatch
+  - Baby enemies - small, fast versions of Replay enemies
+  - Split Boss - large enemies that split into two Replay enemies when destroyed
+  - Mother Boss - even larger enemies that continuously lay Egg enemies
 - **Resource Management**: Limited fuel and ammunition require strategic decision-making
 - **Scoring System**: Score based on completion time, collisions, resource usage, and enemy destructions
 - **Visual Effects**: Ship glow, thrust particles, enemy pulsing, and more
-- **Sound System**: Procedurally-generated sound effects for thrusters, shooting, and enemy destruction
+- **Sound System**: Procedurally-generated sound effects for thrusters, shooting, enemy destruction, and portal activation/deactivation
 - **Progressive Difficulty**: Enemy count, speed, and strength scale with level
+- **Momentum Physics**: Eggs and Static enemies gain momentum when hit by projectiles, moving with realistic physics and bouncing off walls
+- **Exit Portal Lock**: Exit portal deactivates when eggs are present, requiring all eggs to be destroyed before level completion
 
 ## Requirements
 
@@ -29,7 +35,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 
 ```bash
 git clone <repository-url>
-cd asterdroids
+cd astrovoid
 ```
 
 2. Install dependencies:
@@ -72,6 +78,8 @@ pip install -r requirements.txt
 
 Navigate through each maze level, reaching the exit (green) while managing resources and avoiding or destroying enemies.
 
+**Important**: The exit portal is locked when any Egg enemies are present. You must destroy all eggs before the exit portal activates and allows level completion. The portal will dim and make a power-down sound when eggs are present, and brighten with a power-up sound when all eggs are destroyed.
+
 ### Scoring
 
 Each level has a maximum score of 100 points. Your score is reduced by:
@@ -101,10 +109,14 @@ When you complete a level, the screen displays:
 
 ### Enemy Types
 
-- **Static**: Stationary enemies that fire at the player when in range
+- **Static**: Stationary enemies that fire at the player when in range. When hit by projectiles, they gain momentum and move with physics, bouncing off walls. Require multiple hits to destroy.
 - **Patrol**: Move in straight lines, reversing direction on wall collision
 - **Aggressive**: Actively chase the player when alerted
 - **Replay**: Purple ships that replay your previous successful attempt
+- **Egg**: Stationary enemies that grow over time. When they reach maximum size, they hatch and spawn 1-3 Baby enemies. Can be destroyed by projectiles before hatching (requires 2 hits). When hit, they gain momentum and move with physics.
+- **Baby**: Small, fast versions of Replay enemies that spawn when Eggs hatch
+- **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 3 hits to destroy.
+- **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 5 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
 
 ### Level Progression
 
@@ -131,7 +143,12 @@ asterdroids/
 │   ├── replay_enemy_ship.py # Replay enemy implementation
 │   ├── rotating_thruster_ship.py # Ship with rotating thrusters
 │   ├── projectile.py      # Projectiles
-│   └── command_recorder.py # Command recording for replay
+│   ├── command_recorder.py # Command recording for replay
+│   ├── egg.py             # Egg enemy that grows and spawns babies
+│   ├── baby.py            # Baby enemy (small, fast replay enemy)
+│   ├── split_boss.py      # Split Boss enemy
+│   ├── mother_boss.py     # Mother Boss enemy that lays eggs
+│   └── exit.py            # Exit portal with activation system
 ├── maze/                   # Maze generation
 │   ├── generator.py       # Procedural maze generation
 │   └── wall_segment.py    # Wall representation
@@ -145,9 +162,14 @@ asterdroids/
 ├── input/                 # Input handling
 │   └── input_handler.py  # Keyboard input mapping
 ├── sounds/                # Sound system
-│   └── sound_manager.py  # Procedural sound generation
+│   └── sound_manager.py  # Procedural sound generation (thrusters, shooting, explosions, portal sounds)
 ├── states/                # State management
 │   └── state_machine.py  # State machine infrastructure
+├── game_handlers/         # Game system handlers
+│   ├── entity_manager.py # Entity management
+│   ├── spawn_manager.py  # Enemy spawning system
+│   ├── enemy_updater.py  # Enemy update logic
+│   └── collision_handler.py # Collision detection and response
 ├── utils/                 # Utilities
 │   ├── math_utils.py     # Math and collision utilities
 │   └── spatial_grid.py   # Spatial partitioning
@@ -182,4 +204,8 @@ The codebase follows:
 
 ## License
 
-[Add your license here]
+MIT License
+
+Copyright (c) 2025 Barry Earsman
+
+See [LICENSE](LICENSE) file for details.

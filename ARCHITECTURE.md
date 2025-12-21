@@ -1,8 +1,8 @@
-# ASTER VOID Architecture Documentation
+# ASTRO VOID Architecture Documentation
 
 ## Overview
 
-ASTER VOID is a skill-based space navigation game built with Pygame. The game combines classic Asteroids-style flight mechanics with procedurally-generated maze challenges. Players pilot a momentum-based spacecraft through increasingly complex mazes, balancing speed, fuel conservation, precision flying, and combat efficiency.
+ASTRO VOID is a skill-based space navigation game built with Pygame. The game combines classic Asteroids-style flight mechanics with procedurally-generated maze challenges. Players pilot a momentum-based spacecraft through increasingly complex mazes, balancing speed, fuel conservation, precision flying, and combat efficiency.
 
 ## System Design
 
@@ -201,7 +201,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 ## File Structure
 
 ```
-asterdroids/
+/
 ├── main.py                 # Entry point
 ├── game.py                 # Main game coordinator
 ├── config.py               # Configuration constants
@@ -237,4 +237,3 @@ asterdroids/
 4. **Save System**: Add save/load functionality for game progress
 5. **Sound System**: Add sound effects and music
 6. **Particle Effects**: Add visual effects for explosions, thrust, etc.
-

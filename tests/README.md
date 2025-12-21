@@ -1,6 +1,6 @@
-# Unit Tests for ASTER VOID
+# Unit Tests for ASTRO VOID
 
-This directory contains unit tests for key functions in the ASTER VOID game.
+This directory contains unit tests for key functions in the ASTRO VOID game.
 
 ## Running Tests
 
@@ -109,4 +109,3 @@ def test_new_functionality():
     # Assert
     assert result == expected_value
 ```
-

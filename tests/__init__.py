@@ -1,3 +1,3 @@
-"""Unit tests for ASTER VOID game."""
+"""Unit tests for ASTRO VOID game."""
 
 

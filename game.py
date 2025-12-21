@@ -126,7 +126,7 @@ class Game:
         # Create title with neon effect
         title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
         self.menu_title = NeonText(
-            "ASTER VOID",
+            "ASTRO VOID",
             title_font,
             (config.SCREEN_WIDTH // 2, 180),
             config.COLOR_NEON_ASTER_START,

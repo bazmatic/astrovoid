@@ -1,4 +1,4 @@
-# ASTER VOID API Documentation
+# ASTRO VOID API Documentation
 
 ## Public Interfaces
 
@@ -9,12 +9,14 @@
 Base class for all game entities.
 
 **Attributes:**
+
 - `x`, `y` (float): Position coordinates
 - `vx`, `vy` (float): Velocity components
 - `radius` (float): Collision radius
 - `active` (bool): Whether entity is active
 
 **Methods:**
+
 - `get_pos() -> Tuple[float, float]`: Get current position
 - `get_radius() -> float`: Get collision radius
 - `update(dt: float) -> None`: Update entity (abstract)
@@ -25,6 +27,7 @@ Base class for all game entities.
 Player-controlled spacecraft.
 
 **Methods:**
+
 - `rotate_left() -> None`: Rotate counter-clockwise
 - `rotate_right() -> None`: Rotate clockwise
 - `apply_thrust() -> bool`: Apply thrust, returns True if fuel consumed
@@ -34,6 +37,7 @@ Player-controlled spacecraft.
 - `draw_ui(screen: pygame.Surface, font: pygame.font.Font) -> None`: Draw fuel/ammo UI
 
 **Attributes:**
+
 - `fuel` (int): Current fuel remaining
 - `ammo` (int): Current ammunition remaining
 - `angle` (float): Facing angle in degrees
@@ -43,12 +47,14 @@ Player-controlled spacecraft.
 Enemy entity with configurable behavior.
 
 **Methods:**
+
 - `update(dt: float, player_pos: Optional[Tuple], walls: Optional[List]) -> None`: Update enemy
 - `destroy() -> None`: Destroy the enemy
 - `check_wall_collision(walls: List) -> bool`: Check wall collision
 - `check_circle_collision(pos: Tuple, radius: float) -> bool`: Check entity collision
 
 **Attributes:**
+
 - `type` (str): Enemy type ("static", "patrol", "aggressive")
 - `strategy` (EnemyStrategy): Behavior strategy
 - `speed` (float): Movement speed
@@ -59,10 +65,12 @@ Enemy entity with configurable behavior.
 Projectile fired from ship.
 
 **Methods:**
+
 - `check_wall_collision(walls: List) -> bool`: Check wall collision
 - `check_enemy_collision(pos: Tuple, radius: float) -> bool`: Check enemy collision
 
 **Attributes:**
+
 - `lifetime` (int): Remaining lifetime in frames
 - `angle` (float): Firing angle
 
@@ -73,11 +81,13 @@ Projectile fired from ship.
 Procedurally generated maze.
 
 **Methods:**
+
 - `get_valid_spawn_positions(count: int) -> List[Tuple[float, float]]`: Get spawn positions
 - `check_exit_collision(pos: Tuple, radius: float) -> bool`: Check if at exit
 - `draw(screen: pygame.Surface) -> None`: Draw maze
 
 **Attributes:**
+
 - `start_pos` (Tuple[float, float]): Starting position
 - `exit_pos` (Tuple[float, float]): Exit position
 - `walls` (List): List of wall segments
@@ -89,6 +99,7 @@ Procedurally generated maze.
 Manages scoring and metrics tracking.
 
 **Methods:**
+
 - `start_level(current_time: float) -> None`: Start tracking new level
 - `record_wall_collision() -> None`: Record wall collision
 - `record_enemy_collision() -> None`: Record enemy collision
@@ -100,6 +111,7 @@ Manages scoring and metrics tracking.
 - `get_level_score() -> int`: Get current level score
 
 **Return Format:**
+
 ```python
 {
     "time_penalty": float,
@@ -119,6 +131,7 @@ Manages scoring and metrics tracking.
 Static methods for score calculation.
 
 **Methods:**
+
 - `calculate_score(elapsed_time: float, enemy_collisions: int, enemies_destroyed: int, shots_fired: int, fuel_used: int) -> Dict`: Calculate score
 - `calculate_score_percentage(score: float, max_score: float) -> float`: Calculate percentage
 
@@ -129,6 +142,7 @@ Static methods for score calculation.
 Centralized rendering operations.
 
 **Methods:**
+
 - `clear() -> None`: Clear screen
 - `draw_text(text: str, position: Tuple, font: pygame.font.Font, color: Tuple, center: bool) -> None`: Draw text
 - `draw_star_rating(score_percentage: float, x: int, y: int) -> None`: Draw 5-star rating
@@ -139,6 +153,7 @@ Centralized rendering operations.
 Static methods for UI element rendering.
 
 **Methods:**
+
 - `draw_star_rating(screen: pygame.Surface, score_percentage: float, x: int, y: int, ...) -> None`: Draw star rating
 
 ### Utilities
@@ -148,6 +163,7 @@ Static methods for UI element rendering.
 Mathematical and collision utilities.
 
 **Functions:**
+
 - `distance(pos1: Tuple, pos2: Tuple) -> float`: Calculate distance
 - `angle_to_radians(angle: float) -> float`: Convert degrees to radians
 - `normalize_angle(angle: float) -> float`: Normalize to 0-360 range
@@ -165,6 +181,7 @@ Mathematical and collision utilities.
 All game constants and configuration values.
 
 **Key Constants:**
+
 - `SCREEN_WIDTH`, `SCREEN_HEIGHT`: Screen dimensions
 - `SHIP_SIZE`, `SHIP_ROTATION_SPEED`, `SHIP_THRUST_FORCE`: Ship parameters
 - `INITIAL_FUEL`, `INITIAL_AMMO`: Resource limits
@@ -247,5 +264,3 @@ enemies = create_enemies(level=1, spawn_positions=spawn_positions)
 for enemy in enemies:
     enemy.update(dt, player_pos=ship.get_pos(), walls=maze.walls)
 ```
-
-
