@@ -289,8 +289,9 @@ class CollisionHandler:
         if projectile.check_circle_collision((ship.x, ship.y), ship.radius):
             scoring.record_enemy_collision()
             # Apply small velocity impulse to ship from projectile impact
-            ship.vx += projectile.vx * config.PROJECTILE_IMPACT_FORCE
-            ship.vy += projectile.vy * config.PROJECTILE_IMPACT_FORCE
+            impact_force = config.PROJECTILE_IMPACT_FORCE * getattr(projectile, "impact_force_multiplier", 1.0)
+            ship.vx += projectile.vx * impact_force
+            ship.vy += projectile.vy * impact_force
             return True
         
         return False

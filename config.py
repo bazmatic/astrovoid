@@ -100,10 +100,20 @@ SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-base
 
 # Mother Boss settings
 MOTHER_BOSS_SIZE_MULTIPLIER = 3.0  # Triple size compared to regular ReplayEnemyShip
-MOTHER_BOSS_HIT_POINTS = 5  # Number of hits required to destroy Mother Boss
+MOTHER_BOSS_HIT_POINTS = 10  # Number of hits required to destroy Mother Boss
 MOTHER_BOSS_EGG_LAY_INTERVAL = 180  # Frames between egg laying (3 seconds at 60 FPS)
 MOTHER_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
 MOTHER_BOSS_SCALE_FACTOR = 0.2  # Scaling factor for continuous growth (sqrt-based)
+
+MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX = 0.7  # Max additive glow multiplier for texture lines
+MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = 2.0  # Max blink frequency multiplier when hurt
+MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX = 1.5  # Max multiplier for blink duration at low HP
+
+MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER = 1.6  # Speed boost for Mother Boss bullets
+MOTHER_BOSS_PROJECTILE_IMPACT_MULTIPLIER = 1.4  # Impact force multiplier for boss bullets
+MOTHER_BOSS_PROJECTILE_GLOW_COLOR = (255, 160, 100)
+MOTHER_BOSS_PROJECTILE_GLOW_RADIUS_MULTIPLIER = 1.8
+MOTHER_BOSS_PROJECTILE_GLOW_INTENSITY = 0.65
 
 # Egg settings
 EGG_INITIAL_SIZE = 8  # Starting radius

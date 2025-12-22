@@ -71,10 +71,28 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.fire_cooldown: int = 0
         self.pulse_phase: float = 0.0  # Animation phase for tentacle pulsing
         # Blink animation state
-        self.blink_timer: int = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
+        self.blink_timer: float = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
         self.blink_state: float = 1.0  # 1.0 = fully open, 0.0 = fully closed
         self.is_blinking: bool = False
         self.blink_frame: int = 0  # Frame counter within current blink
+
+    def get_damage_fraction(self) -> float:
+        """Return damage fraction (0.0 no damage, 1.0 destroyed)."""
+        return 0.0
+
+    def _get_blink_interval_multiplier(self, damage_fraction: float) -> float:
+        """Calculate blink timer multiplier based on damage."""
+        max_mult = getattr(config, "MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX", 1.0)
+        if max_mult <= 1.0 or damage_fraction <= 0.0:
+            return 1.0
+        return 1.0 + damage_fraction * (max_mult - 1.0)
+
+    def _get_blink_duration_multiplier(self, damage_fraction: float) -> float:
+        """Calculate blink duration multiplier based on damage."""
+        max_mult = getattr(config, "MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX", 1.0)
+        if max_mult <= 1.0 or damage_fraction <= 0.0:
+            return 1.0
+        return 1.0 + damage_fraction * (max_mult - 1.0)
     
     @property
     def max_speed(self) -> float:
@@ -106,10 +124,13 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.pulse_phase += dt * self.TENTACLE_PULSE_SPEED
         
         # Update blink animation
+        damage_fraction = self.get_damage_fraction()
+        interval_multiplier = self._get_blink_interval_multiplier(damage_fraction)
+
         if not self.is_blinking:
             # Countdown to next blink
             if self.blink_timer > 0:
-                self.blink_timer -= 1
+                self.blink_timer = max(0.0, self.blink_timer - interval_multiplier)
             else:
                 # Start blinking
                 self.is_blinking = True
@@ -119,21 +140,27 @@ class ReplayEnemyShip(RotatingThrusterShip):
             # Currently blinking - update blink state
             self.blink_frame += 1
             
-            if self.blink_frame < self.BLINK_CLOSE_FRAMES:
+            duration_multiplier = self._get_blink_duration_multiplier(damage_fraction)
+            close_frames = max(1, int(self.BLINK_CLOSE_FRAMES * duration_multiplier))
+            open_frames = max(1, int(self.BLINK_OPEN_FRAMES * duration_multiplier))
+            hold_frames = max(2, int(2 * duration_multiplier))
+
+            if self.blink_frame < close_frames:
                 # Closing phase: reduce blink_state from 1.0 to 0.0
-                self.blink_state = 1.0 - (self.blink_frame / self.BLINK_CLOSE_FRAMES)
-            elif self.blink_frame < self.BLINK_CLOSE_FRAMES + 2:
-                # Fully closed: hold for 2 frames
+                self.blink_state = 1.0 - (self.blink_frame / close_frames)
+            elif self.blink_frame < close_frames + hold_frames:
+                # Fully closed: hold for a short period
                 self.blink_state = 0.0
-            elif self.blink_frame < self.BLINK_CLOSE_FRAMES + 2 + self.BLINK_OPEN_FRAMES:
-                # Opening phase: increase blink_state from 0.0 to 1.0
-                open_frame = self.blink_frame - (self.BLINK_CLOSE_FRAMES + 2)
-                self.blink_state = open_frame / self.BLINK_OPEN_FRAMES
+            elif self.blink_frame < close_frames + hold_frames + open_frames:
+                # Opening phase
+                open_frame = self.blink_frame - (close_frames + hold_frames)
+                self.blink_state = open_frame / open_frames
             else:
                 # Blink complete
                 self.is_blinking = False
                 self.blink_state = 1.0
-                self.blink_timer = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
+                base_interval = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
+                self.blink_timer = base_interval / max(1.0, interval_multiplier)
         
         if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
             super().update(dt)
@@ -482,6 +509,14 @@ class ReplayEnemyShip(RotatingThrusterShip):
         num_lines = self.BODY_TEXTURE_LINES
         line_spacing = oval_width / (num_lines + 1)
         
+        damage_fraction = self.get_damage_fraction()
+        glow_factor = min(1.0, damage_fraction * config.MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX)
+        base_color = self.BODY_TEXTURE_LINE_COLOR
+        if glow_factor > 0:
+            line_color = tuple(min(255, int(c + (255 - c) * glow_factor)) for c in base_color)
+        else:
+            line_color = base_color
+
         for i in range(num_lines):
             # X position of line (spread across width)
             line_x_offset = (i + 1) * line_spacing - oval_width / 2
@@ -517,7 +552,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
                     if j % 3 < 2:  # Draw 2 out of 3 segments
                         pygame.draw.line(
                             surface,
-                            self.BODY_TEXTURE_LINE_COLOR,
+                            line_color,
                             points[j],
                             points[j + 1],
                             2

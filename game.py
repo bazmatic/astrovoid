@@ -39,7 +39,7 @@ from utils.math_utils import get_angle_to_point
 
 class Game:
     """Main game class managing state and game loop."""
-    CRITICAL_WARNING_THRESHOLD = 5.0  # Points remaining before warning tone starts
+    CRITICAL_WARNING_THRESHOLD = 7  # Points remaining before warning tone starts
     
     def __init__(self, screen: pygame.Surface):
         """Initialize game."""

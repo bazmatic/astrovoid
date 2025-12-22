@@ -38,7 +38,11 @@ class Projectile(GameEntity, Collidable, Drawable):
         enhanced_size_multiplier: float = 1.0,
         enhanced_speed_multiplier: float = 1.0,
         dynamic_color: Optional[Tuple[int, int, int]] = None,
-        enhanced_glow_intensity: float = 0.4
+        enhanced_glow_intensity: float = 0.4,
+        impact_force_multiplier: float = 1.0,
+        glow_color: Optional[Tuple[int, int, int]] = None,
+        glow_radius_multiplier: float = 1.0,
+        glow_intensity: float = 0.0
     ):
         """Initialize projectile at position with given angle.
         
@@ -72,6 +76,10 @@ class Projectile(GameEntity, Collidable, Drawable):
         self.is_upgraded = is_upgraded
         self.dynamic_color = dynamic_color
         self.enhanced_glow_intensity = enhanced_glow_intensity
+        self.impact_force_multiplier = impact_force_multiplier
+        self.glow_color = glow_color
+        self.glow_radius_multiplier = glow_radius_multiplier
+        self.glow_intensity = glow_intensity
     
     def update(self, dt: float) -> None:
         """Update projectile position and lifetime.
@@ -195,12 +203,22 @@ class Projectile(GameEntity, Collidable, Drawable):
         end_x = self.x + dir_x * line_length * 0.5
         end_y = self.y + dir_y * line_length * 0.5
         
-        # Draw upgraded projectiles with glow effect
-        if self.is_upgraded:
+        # Draw glowing projectiles if configured
+        if self.glow_intensity > 0:
             from rendering import visual_effects
-            # Use enhanced glow intensity if dynamic color is set (post-level-3 powerups)
+            glow_radius = max(self.radius * self.glow_radius_multiplier, self.radius * 0.5)
+            glow_color = self.glow_color or color
+            visual_effects.draw_glow_circle(
+                screen,
+                (self.x, self.y),
+                self.radius,
+                glow_color,
+                glow_radius=glow_radius,
+                intensity=self.glow_intensity
+            )
+        elif self.is_upgraded:
+            from rendering import visual_effects
             glow_intensity = self.enhanced_glow_intensity if self.dynamic_color is not None else 0.4
-            # Increase glow radius for enhanced projectiles
             glow_radius_mult = 1.5 if self.dynamic_color is not None else 1.0
             visual_effects.draw_glow_circle(
                 screen,

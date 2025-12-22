@@ -4,7 +4,7 @@ This module implements a Mother Boss enemy that is larger than SplitBoss
 and continuously lays Egg enemies.
 """
 
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 import config
 from entities.split_boss import SplitBoss
 from entities.command_recorder import CommandRecorder
@@ -96,4 +96,16 @@ class MotherBoss(SplitBoss):
         self.egg_lay_cooldown = self.egg_lay_interval
         
         return True
+
+    def get_fired_projectile(self, player_pos: Optional[Tuple[float, float]]) -> Optional['Projectile']:
+        """Fire a glowing, powerful projectile when conditions are met."""
+        projectile = super().get_fired_projectile(player_pos)
+        if projectile:
+            projectile.vx *= config.MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER
+            projectile.vy *= config.MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER
+            projectile.impact_force_multiplier = config.MOTHER_BOSS_PROJECTILE_IMPACT_MULTIPLIER
+            projectile.glow_color = config.MOTHER_BOSS_PROJECTILE_GLOW_COLOR
+            projectile.glow_radius_multiplier = config.MOTHER_BOSS_PROJECTILE_GLOW_RADIUS_MULTIPLIER
+            projectile.glow_intensity = config.MOTHER_BOSS_PROJECTILE_GLOW_INTENSITY
+        return projectile
 
