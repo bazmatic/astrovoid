@@ -9,6 +9,7 @@ import random
 from typing import Tuple, List, Optional
 import config
 from utils import angle_to_radians
+from utils.math_utils import hsv_to_rgb
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.projectile import Projectile
 from rendering import visual_effects
@@ -165,6 +166,24 @@ class Ship(RotatingThrusterShip):
         offset_y = math.sin(angle_rad) * (self.radius + 5)
         start_pos = (self.x + offset_x, self.y + offset_y)
         
+        # Calculate enhancements for powerups beyond level 3
+        extra_powerups = max(0, self.gun_upgrade_level - 3)
+        enhanced_size_mult = 1.0
+        enhanced_speed_mult = 1.0
+        dynamic_color = None
+        enhanced_glow_intensity = 0.4
+        
+        if extra_powerups > 0:
+            # Calculate cumulative multipliers
+            enhanced_size_mult = 1.0 + (extra_powerups * config.POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT)
+            enhanced_speed_mult = 1.0 + (extra_powerups * config.POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT)
+            enhanced_glow_intensity = 0.4 + (extra_powerups * config.POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT)
+            
+            # Generate color using hue rotation
+            hue = (extra_powerups * config.POWERUP_BEYOND_LEVEL_3_HUE_ROTATION) % 360
+            # Use full saturation and value for vibrant colors
+            dynamic_color = hsv_to_rgb(hue, 1.0, 1.0)
+        
         # Fan effect (3-way spread) at level 2+
         if self.gun_upgrade_level >= 2:
             # Fire 3-way spread: center, left, right
@@ -172,21 +191,45 @@ class Ship(RotatingThrusterShip):
             spread_angle = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
             
             # Center projectile
-            projectiles.append(Projectile(start_pos, self.angle, is_upgraded=True))
+            projectiles.append(Projectile(
+                start_pos, self.angle, is_upgraded=True,
+                enhanced_size_multiplier=enhanced_size_mult,
+                enhanced_speed_multiplier=enhanced_speed_mult,
+                dynamic_color=dynamic_color,
+                enhanced_glow_intensity=enhanced_glow_intensity
+            ))
             
             # Left projectile
             left_angle = self.angle - spread_angle
-            projectiles.append(Projectile(start_pos, left_angle, is_upgraded=True))
+            projectiles.append(Projectile(
+                start_pos, left_angle, is_upgraded=True,
+                enhanced_size_multiplier=enhanced_size_mult,
+                enhanced_speed_multiplier=enhanced_speed_mult,
+                dynamic_color=dynamic_color,
+                enhanced_glow_intensity=enhanced_glow_intensity
+            ))
             
             # Right projectile
             right_angle = self.angle + spread_angle
-            projectiles.append(Projectile(start_pos, right_angle, is_upgraded=True))
+            projectiles.append(Projectile(
+                start_pos, right_angle, is_upgraded=True,
+                enhanced_size_multiplier=enhanced_size_mult,
+                enhanced_speed_multiplier=enhanced_speed_mult,
+                dynamic_color=dynamic_color,
+                enhanced_glow_intensity=enhanced_glow_intensity
+            ))
             
             return projectiles
         else:
             # Single projectile (level 0 or 1)
             is_upgraded = self.gun_upgrade_level >= 1
-            return [Projectile(start_pos, self.angle, is_upgraded=is_upgraded)]
+            return [Projectile(
+                start_pos, self.angle, is_upgraded=is_upgraded,
+                enhanced_size_multiplier=enhanced_size_mult,
+                enhanced_speed_multiplier=enhanced_speed_mult,
+                dynamic_color=dynamic_color,
+                enhanced_glow_intensity=enhanced_glow_intensity
+            )]
     
     def on_edge_collision(self) -> None:
         """Handle edge collision - set damage state."""
@@ -221,11 +264,10 @@ class Ship(RotatingThrusterShip):
     
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
-        # Increment level, capped at 3
-        if self.gun_upgrade_level < 3:
-            self.gun_upgrade_level += 1
-            self._start_powerup_flash()
-            self.sound_manager.play_powerup_activation()
+        # Increment level (no cap - unlimited powerups)
+        self.gun_upgrade_level += 1
+        self._start_powerup_flash()
+        self.sound_manager.play_powerup_activation()
     
     def reset_gun_upgrade(self) -> None:
         """Reset gun upgrade state (called on level start)."""
@@ -519,40 +561,128 @@ class Ship(RotatingThrusterShip):
                     pygame.draw.circle(screen, flicker_color,
                                      (int(plume_x), int(plume_y)), size)
     
-    def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font) -> None:
-        """Draw ship UI (fuel, ammo).
+    def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font, potential_score: Optional[float] = None, max_score: float = 100.0, level: Optional[int] = None, time_seconds: Optional[float] = None) -> None:
+        """Draw ship UI (level, time, fuel, ammo, score) using circular gauges.
         
         Args:
             screen: The pygame Surface to draw on.
             font: Font to use for text rendering.
+            potential_score: Current potential score (for score gauge).
+            max_score: Maximum possible score (default 100).
+            level: Current level number to display at top.
+            time_seconds: Elapsed time in seconds to display in circular gauge.
         """
+        from rendering.ui_elements import UIElementRenderer
+        from rendering.number_sprite import NumberSprite
+        
+        # UI zone constants
+        UI_ZONE_WIDTH = 320
+        GAUGE_RADIUS = 60
+        GAUGE_CENTER_X = UI_ZONE_WIDTH // 2  # Center of UI zone
+        LEVEL_Y = 60  # Level indicator at top (needs space, so gauges start lower)
+        TIME_Y = 180   # Time gauge position (create space above other gauges)
+        
+        # Calculate equal spacing for radial gauges
+        # Start after time indicator, shift all gauges downward
+        GAUGE_START_Y = TIME_Y + GAUGE_RADIUS * 2 + 50  # Push gauges farther down
+        GAUGE_SPACING = 170  # Equal spacing between all radial gauges
+        GAUGE_Y_POSITIONS = {
+            'fuel': GAUGE_START_Y,
+            'score': GAUGE_START_Y + GAUGE_SPACING,
+            'ammo': GAUGE_START_Y + (GAUGE_SPACING * 2)
+        }
+        GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 3)  # Below all gauges
+        EMPTY_COLOR = (50, 50, 50)
+        
+        def draw_gauge(
+            center_y: int,
+            percentage: float,
+            text: str,
+            fill_color: Tuple[int, int, int],
+            label_text: str,
+            text_color: Tuple[int, int, int] = config.COLOR_TEXT
+        ) -> None:
+            """Helper to draw a gauge with common parameters."""
+            UIElementRenderer.draw_circular_gauge(
+                screen,
+                GAUGE_CENTER_X,
+                center_y,
+                GAUGE_RADIUS,
+                percentage,
+                text,
+                fill_color,
+                empty_color=EMPTY_COLOR,
+                text_color=text_color,
+                label_text=label_text
+            )
+        
+        # Level indicator at top (centered)
+        if level is not None:
+            number_sprite = NumberSprite()
+            number_surface = number_sprite.render_number(level, scale=0.2)
+            if number_surface:
+                number_rect = number_surface.get_rect(center=(GAUGE_CENTER_X, LEVEL_Y))
+                screen.blit(number_surface, number_rect)
+        
+        # Time gauge (circular display, no fill)
+        if time_seconds is not None:
+            time_text = f"{time_seconds:.1f}s"
+            # Draw as a circular gauge with no fill (percentage = 0) but with a background circle
+            UIElementRenderer.draw_circular_gauge(
+                screen,
+                GAUGE_CENTER_X,
+                TIME_Y,
+                GAUGE_RADIUS,
+                0.0,  # No fill percentage
+                time_text,
+                (100, 150, 200),  # Light blue color for time
+                empty_color=(50, 50, 50),
+                text_color=config.COLOR_TEXT,
+                label_text="TIME"
+            )
+        
         # Fuel gauge
-        fuel_text = font.render(f"Fuel: {int(self.fuel)}", True, config.COLOR_TEXT)
-        screen.blit(fuel_text, (10, 10))
-        
-        # Fuel bar
-        bar_width = 200
-        bar_height = 20
-        bar_x = 10
-        bar_y = 40
         fuel_percent = max(0, min(1, self.fuel / config.INITIAL_FUEL))
+        fuel_color = UIElementRenderer._calculate_percentage_color(
+            fuel_percent,
+            high_color=(100, 200, 100),
+            medium_color=(100, 200, 100),
+            low_color=(200, 100, 100),
+            high_threshold=0.3,
+            medium_threshold=0.3
+        )
+        draw_gauge(GAUGE_Y_POSITIONS['fuel'], fuel_percent, str(int(self.fuel)), fuel_color, "FUEL")
         
-        # Background
-        pygame.draw.rect(screen, (50, 50, 50), (bar_x, bar_y, bar_width, bar_height))
-        # Fuel level
-        fuel_color = (100, 200, 100) if fuel_percent > 0.3 else (200, 100, 100)
-        pygame.draw.rect(screen, fuel_color, (bar_x, bar_y, int(bar_width * fuel_percent), bar_height))
-        pygame.draw.rect(screen, config.COLOR_TEXT, (bar_x, bar_y, bar_width, bar_height), 2)
+        # Score gauge (if provided)
+        if potential_score is not None:
+            score_percent = max(0, min(1, potential_score / max_score))
+            score_color = UIElementRenderer._calculate_percentage_color(
+                score_percent,
+                high_color=(255, 215, 0),
+                medium_color=(255, 150, 0),
+                low_color=(255, 100, 100),
+                high_threshold=0.5,
+                medium_threshold=0.2
+            )
+            draw_gauge(GAUGE_Y_POSITIONS['score'], score_percent, str(int(potential_score)), score_color, "POWER")
         
-        # Ammo counter
+        # Ammo gauge
         if self.gun_upgrade_level >= 1:
-            ammo_text = font.render("Ammo: UNLIMITED", True, config.COLOR_UPGRADED_SHIP_GLOW)
+            ammo_percent = 1.0
+            ammo_text = "∞"
+            ammo_color = config.COLOR_UPGRADED_SHIP_GLOW
+            ammo_text_color = config.COLOR_UPGRADED_SHIP_GLOW
         else:
-            ammo_text = font.render(f"Ammo: {self.ammo}", True, config.COLOR_TEXT)
-        screen.blit(ammo_text, (10, 70))
+            ammo_percent = max(0, min(1, self.ammo / config.INITIAL_AMMO))
+            ammo_text = str(self.ammo)
+            ammo_color = (100, 200, 255)
+            ammo_text_color = config.COLOR_TEXT
         
-        # Gun upgrade indicator
+        draw_gauge(GAUGE_Y_POSITIONS['ammo'], ammo_percent, ammo_text, ammo_color, "AMMO", ammo_text_color)
+        
+        # Gun upgrade indicator (below gauges, centered)
         if self.gun_upgrade_level > 0:
             upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)
-            screen.blit(upgrade_text, (10, 100))
+            text_rect = upgrade_text.get_rect(center=(GAUGE_CENTER_X, GUN_UPGRADE_Y))
+            screen.blit(upgrade_text, text_rect)
 

@@ -25,9 +25,21 @@ class Projectile(GameEntity, Collidable, Drawable):
         lifetime: Remaining lifetime in frames.
         is_enemy: Whether this is an enemy projectile.
         is_upgraded: Whether this is an upgraded projectile (larger, faster).
+        dynamic_color: Optional dynamic color for enhanced projectiles.
+        enhanced_glow_intensity: Glow intensity for enhanced projectiles.
     """
     
-    def __init__(self, start_pos: Tuple[float, float], angle: float, is_enemy: bool = False, is_upgraded: bool = False):
+    def __init__(
+        self,
+        start_pos: Tuple[float, float],
+        angle: float,
+        is_enemy: bool = False,
+        is_upgraded: bool = False,
+        enhanced_size_multiplier: float = 1.0,
+        enhanced_speed_multiplier: float = 1.0,
+        dynamic_color: Optional[Tuple[int, int, int]] = None,
+        enhanced_glow_intensity: float = 0.4
+    ):
         """Initialize projectile at position with given angle.
         
         Args:
@@ -35,10 +47,18 @@ class Projectile(GameEntity, Collidable, Drawable):
             angle: Firing angle in degrees.
             is_enemy: Whether this is an enemy projectile (default: False).
             is_upgraded: Whether this is an upgraded projectile (default: False).
+            enhanced_size_multiplier: Additional size multiplier for post-level-3 powerups (default: 1.0).
+            enhanced_speed_multiplier: Additional speed multiplier for post-level-3 powerups (default: 1.0).
+            dynamic_color: Optional dynamic color for enhanced projectiles (default: None).
+            enhanced_glow_intensity: Glow intensity for enhanced projectiles (default: 0.4).
         """
-        # Calculate size and speed (enhanced if upgraded)
-        size = config.PROJECTILE_SIZE * config.UPGRADED_PROJECTILE_SIZE_MULTIPLIER if is_upgraded else config.PROJECTILE_SIZE
-        speed = config.PROJECTILE_SPEED * config.UPGRADED_PROJECTILE_SPEED_MULTIPLIER if is_upgraded else config.PROJECTILE_SPEED
+        # Calculate base size and speed
+        base_size = config.PROJECTILE_SIZE * config.UPGRADED_PROJECTILE_SIZE_MULTIPLIER if is_upgraded else config.PROJECTILE_SIZE
+        base_speed = config.PROJECTILE_SPEED * config.UPGRADED_PROJECTILE_SPEED_MULTIPLIER if is_upgraded else config.PROJECTILE_SPEED
+        
+        # Apply enhanced multipliers for post-level-3 powerups
+        size = base_size * enhanced_size_multiplier
+        speed = base_speed * enhanced_speed_multiplier
         
         # Calculate velocity from angle
         angle_rad = angle_to_radians(angle)
@@ -50,6 +70,8 @@ class Projectile(GameEntity, Collidable, Drawable):
         self.lifetime = config.PROJECTILE_LIFETIME
         self.is_enemy = is_enemy
         self.is_upgraded = is_upgraded
+        self.dynamic_color = dynamic_color
+        self.enhanced_glow_intensity = enhanced_glow_intensity
     
     def update(self, dt: float) -> None:
         """Update projectile position and lifetime.
@@ -142,8 +164,10 @@ class Projectile(GameEntity, Collidable, Drawable):
         if not self.active:
             return
         
-        # Use different color based on type
-        if self.is_enemy:
+        # Use different color based on type, with dynamic color taking precedence
+        if self.dynamic_color is not None:
+            color = self.dynamic_color
+        elif self.is_enemy:
             color = config.COLOR_ENEMY_PROJECTILE
         elif self.is_upgraded:
             color = config.COLOR_UPGRADED_PROJECTILE
@@ -174,13 +198,17 @@ class Projectile(GameEntity, Collidable, Drawable):
         # Draw upgraded projectiles with glow effect
         if self.is_upgraded:
             from rendering import visual_effects
+            # Use enhanced glow intensity if dynamic color is set (post-level-3 powerups)
+            glow_intensity = self.enhanced_glow_intensity if self.dynamic_color is not None else 0.4
+            # Increase glow radius for enhanced projectiles
+            glow_radius_mult = 1.5 if self.dynamic_color is not None else 1.0
             visual_effects.draw_glow_circle(
                 screen,
                 (self.x, self.y),
                 self.radius * 0.5,
                 color,
-                glow_radius=self.radius * 1.0,
-                intensity=0.4
+                glow_radius=self.radius * glow_radius_mult,
+                intensity=glow_intensity
             )
         
         # Draw the line with width based on upgrade status

@@ -51,31 +51,32 @@ class GridToWallsConverter:
         Returns:
             List of WallSegment instances for the cell's four edges.
         """
-        cell_size = self.position_calculator.cell_size
+        cell_size_x = self.position_calculator.cell_size_x
+        cell_size_y = self.position_calculator.cell_size_y
         screen_x, screen_y = self.position_calculator.grid_to_screen(grid_x, grid_y)
         
         # Create wall rectangle as line segments with hit points
         # Top edge
         top = WallSegment(
             (screen_x, screen_y),
-            (screen_x + cell_size, screen_y),
+            (screen_x + cell_size_x, screen_y),
             config.WALL_HIT_POINTS
         )
         # Right edge
         right = WallSegment(
-            (screen_x + cell_size, screen_y),
-            (screen_x + cell_size, screen_y + cell_size),
+            (screen_x + cell_size_x, screen_y),
+            (screen_x + cell_size_x, screen_y + cell_size_y),
             config.WALL_HIT_POINTS
         )
         # Bottom edge
         bottom = WallSegment(
-            (screen_x + cell_size, screen_y + cell_size),
-            (screen_x, screen_y + cell_size),
+            (screen_x + cell_size_x, screen_y + cell_size_y),
+            (screen_x, screen_y + cell_size_y),
             config.WALL_HIT_POINTS
         )
         # Left edge
         left = WallSegment(
-            (screen_x, screen_y + cell_size),
+            (screen_x, screen_y + cell_size_y),
             (screen_x, screen_y),
             config.WALL_HIT_POINTS
         )

@@ -6,8 +6,78 @@ star ratings, text, and other interface components.
 
 import pygame
 import math
-from typing import Tuple, List, Optional, Callable
+import os
+from typing import Tuple, List, Optional, Callable, Dict
 import config
+from rendering.number_sprite import NumberSprite
+
+
+class GaugeFrame:
+    """Handles loading and rendering the gauge frame template image.
+    
+    Loads gauge.png once and provides scaled versions for different gauge sizes.
+    Follows the NumberSprite pattern for consistency.
+    """
+    
+    def __init__(self, image_path: str = "assets/gauge.png"):
+        """Initialize gauge frame loader.
+        
+        Args:
+            image_path: Path to the gauge frame image file.
+        """
+        self.image_path = image_path
+        self.original_image: Optional[pygame.Surface] = None
+        self.scaled_cache: Dict[Tuple[int, int], pygame.Surface] = {}
+        self._load_image()
+    
+    def _load_image(self) -> None:
+        """Load the gauge frame image file."""
+        try:
+            if not os.path.exists(self.image_path):
+                print(f"Warning: Gauge frame file not found: {self.image_path}")
+                self.original_image = None
+                return
+            
+            # Load with alpha channel preserved
+            self.original_image = pygame.image.load(self.image_path).convert_alpha()
+            print(f"Gauge frame loaded successfully: {self.image_path}, size: {self.original_image.get_size()}")
+        except (pygame.error, FileNotFoundError) as e:
+            print(f"Warning: Could not load gauge frame from {self.image_path}: {e}")
+            self.original_image = None
+    
+    def get_scaled_frame(self, diameter: int) -> Optional[pygame.Surface]:
+        """Get a scaled version of the gauge frame.
+        
+        Args:
+            diameter: Desired diameter of the frame in pixels.
+            
+        Returns:
+            Scaled pygame.Surface, or None if image not available.
+        """
+        if self.original_image is None:
+            return None
+        
+        # Check cache first
+        cache_key = (diameter, diameter)
+        if cache_key in self.scaled_cache:
+            return self.scaled_cache[cache_key]
+        
+        # Scale the image while preserving alpha channel
+        # Create a new surface with alpha support and scale onto it
+        scaled = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
+        # Use smoothscale to preserve quality and alpha
+        scaled_image = pygame.transform.smoothscale(self.original_image, (diameter, diameter))
+        scaled.blit(scaled_image, (0, 0))
+        self.scaled_cache[cache_key] = scaled
+        return scaled
+    
+    def is_available(self) -> bool:
+        """Check if the gauge frame image is available.
+        
+        Returns:
+            True if image is loaded, False otherwise.
+        """
+        return self.original_image is not None
 
 
 class StarIndicator:
@@ -114,6 +184,16 @@ class StarIndicator:
 class UIElementRenderer:
     """Utility class for rendering UI elements."""
     
+    # Class-level gauge frame instance (shared across all gauges)
+    _gauge_frame = None
+    
+    @classmethod
+    def _get_gauge_frame(cls):
+        """Get or create the gauge frame instance (lazy initialization)."""
+        if cls._gauge_frame is None:
+            cls._gauge_frame = GaugeFrame()
+        return cls._gauge_frame
+    
     @staticmethod
     def draw_star_rating(
         screen: pygame.Surface,
@@ -160,6 +240,166 @@ class UIElementRenderer:
                 screen, star_x, y, star_size, star_fill,
                 star_color_full, star_color_empty
             )
+    
+    @staticmethod
+    def _draw_led_ring(
+        screen: pygame.Surface,
+        center_x: int,
+        center_y: int,
+        radius: int,
+        percentage: float,
+        color: Tuple[int, int, int],
+        thickness: int
+    ) -> None:
+        """Draw a ring of glowing LEDs to indicate percentage.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            center_x: X coordinate of gauge center.
+            center_y: Y coordinate of gauge center.
+            radius: Radius of the gauge ring.
+            percentage: Fill percentage (0.0 to 1.0).
+            color: RGB color for the LEDs.
+            thickness: Thickness of the ring (used to determine LED size).
+        """
+        # Use smaller radius for LED ring (closer to center)
+        led_ring_radius = int(radius * 0.75)  # 75% of gauge radius
+        
+        # Calculate number of LEDs with spacing between them
+        # Use fewer LEDs with spacing - approximately one LED per 15-20 pixels
+        circumference = 2 * math.pi * led_ring_radius
+        num_leds = max(12, int(circumference / 18))  # Fewer LEDs with spacing
+        
+        progress = num_leds * percentage
+        led_size = max(2, thickness // 3)  # Smaller LEDs
+
+        # Draw each LED with spacing and glow layers
+        for i in range(num_leds):
+            strength = progress - i
+            if strength <= 0:
+                break
+            strength = min(1.0, strength)
+
+            angle = math.radians(-90 + (i / num_leds) * 360)
+            led_x = center_x + led_ring_radius * math.cos(angle)
+            led_y = center_y + led_ring_radius * math.sin(angle)
+
+            # Gradually reduce glow size and brightness as strength falls
+            glow_radius = led_size + 1 + int(strength * led_size)
+            glow_color = tuple(min(255, int(c + 80 * strength)) for c in color)
+            pygame.draw.circle(screen, glow_color, (int(led_x), int(led_y)), glow_radius)
+
+            core_radius = max(1, int(led_size * (0.4 + 0.6 * strength)))
+            core_color = tuple(min(255, int(c * (0.6 + 0.4 * strength))) for c in color)
+            pygame.draw.circle(screen, core_color, (int(led_x), int(led_y)), core_radius)
+
+            bright_radius = max(1, int(core_radius * 0.5))
+            bright_color = tuple(min(255, int(c + 100 * strength)) for c in color)
+            pygame.draw.circle(screen, bright_color, (int(led_x), int(led_y)), bright_radius)
+    
+    @staticmethod
+    def _calculate_percentage_color(
+        percentage: float,
+        high_color: Tuple[int, int, int],
+        medium_color: Tuple[int, int, int],
+        low_color: Tuple[int, int, int],
+        high_threshold: float = 0.5,
+        medium_threshold: float = 0.2
+    ) -> Tuple[int, int, int]:
+        """Calculate color based on percentage with thresholds.
+        
+        Args:
+            percentage: Percentage value (0.0 to 1.0).
+            high_color: Color when percentage > high_threshold.
+            medium_color: Color when percentage > medium_threshold.
+            low_color: Color when percentage <= medium_threshold.
+            high_threshold: Threshold for high color (default 0.5).
+            medium_threshold: Threshold for medium color (default 0.2).
+            
+        Returns:
+            RGB color tuple.
+        """
+        if percentage > high_threshold:
+            return high_color
+        elif percentage > medium_threshold:
+            return medium_color
+        else:
+            return low_color
+    
+    @staticmethod
+    def draw_circular_gauge(
+        screen: pygame.Surface,
+        center_x: int,
+        center_y: int,
+        radius: int,
+        percentage: float,
+        center_text: str,
+        fill_color: Tuple[int, int, int],
+        empty_color: Tuple[int, int, int] = (50, 50, 50),
+        text_color: Tuple[int, int, int] = (255, 255, 255),
+        thickness: int = 7,
+        label_text: Optional[str] = None
+    ) -> None:
+        """Draw a circular gauge with percentage fill and center text.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            center_x: X coordinate of gauge center.
+            center_y: Y coordinate of gauge center.
+            radius: Radius of the gauge in pixels.
+            percentage: Fill percentage (0.0 to 1.0).
+            center_text: Text to display in center of gauge.
+            fill_color: RGB color for filled portion.
+            empty_color: RGB color for empty/background portion.
+            text_color: RGB color for center text.
+            thickness: Thickness of the gauge ring in pixels.
+            label_text: Optional label to render above the numeric value.
+        """
+        # Clamp percentage
+        percentage = max(0.0, min(1.0, percentage))
+        
+        # Get gauge frame instance
+        gauge_frame = UIElementRenderer._get_gauge_frame()
+        
+        # Draw gauge frame image first (as background layer)
+        # The frame has a transparent center, so arcs will show through
+        # Make frame 50% bigger than the gauge radius
+        frame_diameter = int(radius * 2 * 1.5)
+        frame_image = gauge_frame.get_scaled_frame(frame_diameter)
+        if frame_image is not None:
+            # Draw the frame image centered at the gauge position
+            frame_rect = frame_image.get_rect(center=(center_x, center_y))
+            screen.blit(frame_image, frame_rect)
+        else:
+            # Fallback: Draw background ring (empty portion) - full circle
+            pygame.draw.circle(screen, empty_color, (center_x, center_y), radius, thickness)
+        
+        # Draw filled arc as glowing LEDs if percentage > 0
+        if percentage > 0.01:
+            UIElementRenderer._draw_led_ring(
+                screen,
+                center_x,
+                center_y,
+                radius,
+                percentage,
+                fill_color,
+                thickness
+            )
+        
+        text_y = center_y
+        if label_text:
+            label_font = pygame.font.Font(None, max(12, radius // 3))
+            label_surface = label_font.render(label_text, True, text_color)
+            label_rect = label_surface.get_rect(center=(center_x, center_y - radius // 6))
+            screen.blit(label_surface, label_rect)
+            text_y = center_y + radius // 6
+
+        if center_text:
+            font_size = max(16, radius // 2 - 2)
+            font = pygame.font.Font(None, font_size)
+            text_surface = font.render(center_text, True, text_color)
+            text_rect = text_surface.get_rect(center=(center_x, text_y))
+            screen.blit(text_surface, text_rect)
     
     @staticmethod
     def _draw_star(
@@ -447,5 +687,55 @@ class AnimatedStarRating:
         # Check if appearance animation is complete
         appearance_progress = self.star_timers[last_star_index] / config.STAR_APPEAR_DURATION
         return appearance_progress >= 1.0
+
+
+class GameIndicators:
+    """Component for rendering game indicators (score, level, time, stars).
+    
+    Encapsulates all game status indicators in a reusable component.
+    """
+    
+    def __init__(
+        self,
+        x: int = 20,
+        y_start: int = 200,
+        line_spacing: int = 60,
+        font: Optional[pygame.font.Font] = None,
+        level_scale: float = 0.15
+    ):
+        """Initialize game indicators component.
+        
+        Args:
+            x: X coordinate for all indicators (left-aligned with consistent margin).
+            y_start: Y coordinate for first indicator (level).
+            line_spacing: Vertical spacing between indicators.
+            font: Font to use for text rendering. If None, creates default font.
+            level_scale: Scale factor for level number sprites (default 0.15).
+        """
+        self.x = x
+        self.y_start = y_start
+        self.line_spacing = line_spacing
+        self.font = font if font is not None else pygame.font.Font(None, 24)
+        self.number_sprite = NumberSprite()
+        self.level_scale = level_scale
+    
+    def draw(
+        self,
+        screen: pygame.Surface,
+        level: int,
+        time_seconds: float,
+        score_percentage: float
+    ) -> None:
+        """Draw all game indicators.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            level: Current level number.
+            time_seconds: Elapsed time in seconds.
+            score_percentage: Score percentage (0.0 to 1.0+) for star rating.
+        """
+        # Level is now shown at top of UI, so skip it here
+        # Time is now drawn as a circular gauge in ship.draw_ui()
+        # Stars indicator is hidden (removed)
 
 

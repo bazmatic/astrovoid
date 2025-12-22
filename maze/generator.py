@@ -240,7 +240,10 @@ class Maze:
         
         # Create position calculator
         self.position_calculator = MazePositionCalculator(self.grid_width, self.grid_height)
-        self.cell_size = self.position_calculator.cell_size
+        self.cell_size_x = self.position_calculator.cell_size_x
+        self.cell_size_y = self.position_calculator.cell_size_y
+        # Keep cell_size property for backward compatibility (use average)
+        self.cell_size = (self.cell_size_x + self.cell_size_y) / 2
         self.offset_x = self.position_calculator.offset_x
         self.offset_y = self.position_calculator.offset_y
         
@@ -278,7 +281,8 @@ class Maze:
         
         # Create exit object
         exit_pos = self.position_calculator.grid_center_to_screen(exit_grid[0], exit_grid[1])
-        exit_radius = self.cell_size // 2
+        # Use average cell size for exit radius
+        exit_radius = (self.cell_size_x + self.cell_size_y) / 4
         self.exit = ExitPortal(exit_pos, exit_radius)
     
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
@@ -319,12 +323,12 @@ class Maze:
             
             # Random position in maze (with offset)
             x = random.uniform(
-                self.offset_x + self.cell_size * 2,
-                self.offset_x + (self.grid_width - 2) * self.cell_size
+                self.offset_x + self.cell_size_x * 2,
+                self.offset_x + (self.grid_width - 2) * self.cell_size_x
             )
             y = random.uniform(
-                self.offset_y + self.cell_size * 2,
-                self.offset_y + (self.grid_height - 2) * self.cell_size
+                self.offset_y + self.cell_size_y * 2,
+                self.offset_y + (self.grid_height - 2) * self.cell_size_y
             )
             pos = (x, y)
             

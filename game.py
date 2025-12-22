@@ -20,7 +20,7 @@ from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
 from rendering import Renderer
-from rendering.ui_elements import AnimatedStarRating, StarIndicator
+from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
 from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
@@ -47,6 +47,15 @@ class Game:
         self.font = pygame.font.Font(None, 36)
         self.small_font = pygame.font.Font(None, 24)
         self.renderer = Renderer(screen)
+        
+        # Initialize game indicators component
+        # Positioned below gauges with proper spacing
+        self.game_indicators = GameIndicators(
+            x=20,  # Consistent left margin
+            y_start=200,  # Below gauge section with more space
+            line_spacing=60,  # Much increased spacing to prevent overlap
+            font=self.small_font
+        )
         
         self.state = config.STATE_SPLASH
         # Check for START_LEVEL environment variable
@@ -714,43 +723,25 @@ class Game:
         
         # Draw UI (hide during exit explosion)
         if not self.exit_explosion_active:
-            self.ship.draw_ui(self.screen, self.small_font)
-        
-        # Draw score
-        score_text = self.small_font.render(
-            f"Score: {self.scoring.get_total_score()}", 
-            True, config.COLOR_TEXT
-        )
-        self.screen.blit(score_text, (config.SCREEN_WIDTH - 200, 10))
-        
-        # Draw level
-        level_text = self.small_font.render(
-            f"Level: {self.level}", 
-            True, config.COLOR_TEXT
-        )
-        self.screen.blit(level_text, (config.SCREEN_WIDTH - 200, 40))
-        
-        # Draw time
-        current_time = time.time()
-        elapsed = self.scoring.get_current_time(current_time)
-        time_text = self.small_font.render(
-            f"Time: {elapsed:.1f}s", 
-            True, config.COLOR_TEXT
-        )
-        self.screen.blit(time_text, (config.SCREEN_WIDTH - 200, 70))
-        
-        # Draw 5-star potential score display
-        if self.ship:
+            current_time = time.time()
             potential = self.scoring.calculate_current_potential_score(
                 current_time,
                 self.ship.fuel,
                 self.ship.ammo
             )
-            self.draw_star_rating(potential['score_percentage'], config.SCREEN_WIDTH - 200, 110)
+            elapsed = self.scoring.get_current_time(current_time)
+            self.ship.draw_ui(
+                self.screen,
+                self.small_font,
+                potential_score=potential['potential_score'],
+                max_score=potential['max_score'],
+                level=self.level,
+                time_seconds=elapsed
+            )
+        
+        # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
+        # GameIndicators is kept for potential future use but currently doesn't draw anything
     
-    def draw_star_rating(self, score_percentage: float, x: int, y: int) -> None:
-        """Draw 5 stars that fill/drain based on score percentage."""
-        self.renderer.draw_star_rating(score_percentage, x, y)
     
     def draw_exit_explosion(self) -> None:
         """Draw spectacular exit explosion effect that fills the screen with light."""

@@ -198,6 +198,12 @@ UPGRADED_PROJECTILE_SPEED_MULTIPLIER = 1.2
 COLOR_UPGRADED_PROJECTILE = (150, 220, 255)  # Bright cyan
 COLOR_UPGRADED_SHIP_GLOW = (150, 200, 255)  # Cyan glow
 
+# Post-level-3 powerup enhancements (unlimited stacking)
+POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT = 0.05  # 5% size increase per powerup
+POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT = 0.05  # 5% speed increase per powerup
+POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT = 0.1  # Glow intensity increase per powerup
+POWERUP_BEYOND_LEVEL_3_HUE_ROTATION = 30  # Degrees to rotate hue per powerup
+
 # Star animation settings
 STAR_APPEAR_DURATION = 0.4  # Seconds per star appearance animation
 STAR_TWINKLE_SPEED = 8.0  # Twinkle animation speed (radians per second)

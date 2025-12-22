@@ -364,6 +364,48 @@ def resolve_circle_collision(
     )
 
 
+def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[int, int, int]:
+    """Convert HSV color to RGB.
+    
+    Args:
+        h: Hue in degrees (0-360).
+        s: Saturation (0.0-1.0).
+        v: Value/brightness (0.0-1.0).
+        
+    Returns:
+        RGB tuple (r, g, b) with values 0-255.
+    """
+    # Normalize hue to 0-360
+    h = h % 360.0
+    if h < 0:
+        h += 360.0
+    
+    # Convert to 0-6 range for sector calculation
+    h /= 60.0
+    i = int(h)
+    f = h - i
+    p = v * (1.0 - s)
+    q = v * (1.0 - s * f)
+    t = v * (1.0 - s * (1.0 - f))
+    
+    # Determine RGB based on sector
+    if i == 0:
+        r, g, b = v, t, p
+    elif i == 1:
+        r, g, b = q, v, p
+    elif i == 2:
+        r, g, b = p, v, t
+    elif i == 3:
+        r, g, b = p, q, v
+    elif i == 4:
+        r, g, b = t, p, v
+    else:  # i == 5
+        r, g, b = v, p, q
+    
+    # Convert to 0-255 range
+    return (int(r * 255), int(g * 255), int(b * 255))
+
+
 def circle_line_collision_swept(
     start_pos: Tuple[float, float],
     end_pos: Tuple[float, float],
