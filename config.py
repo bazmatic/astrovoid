@@ -106,8 +106,8 @@ MOTHER_BOSS_SCALE_FACTOR = 0.2  # Scaling factor for continuous growth (sqrt-bas
 # Egg settings
 EGG_INITIAL_SIZE = 8  # Starting radius
 EGG_MAX_SIZE = 24  # Maximum radius before popping
-EGG_GROWTH_RATE_MIN = 0.003  # Minimum growth per frame (slower growth)
-EGG_GROWTH_RATE_MAX = 0.015  # Maximum growth per frame (slower growth)
+EGG_GROWTH_RATE_MIN = 0.01  # Minimum growth per frame (faster hatching)
+EGG_GROWTH_RATE_MAX = 0.04  # Maximum growth per frame (faster hatching)
 EGG_SPAWN_OFFSET_RANGE = 60  # Pixels for random spawn positions of Replay Enemies
 EGG_BASE_COUNT = 0  # Base count after tutorial levels
 EGG_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)

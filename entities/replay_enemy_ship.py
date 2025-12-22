@@ -81,6 +81,22 @@ class ReplayEnemyShip(RotatingThrusterShip):
         """Get the maximum speed for the replay enemy ship."""
         return config.SHIP_MAX_SPEED * self.MAX_SPEED_MULTIPLIER
     
+    def trigger_blink(self) -> None:
+        """Trigger a blink animation (e.g., when colliding with something).
+        
+        This will start a blink if not already blinking, or reset the blink
+        if already in progress.
+        """
+        if not self.is_blinking:
+            # Start blinking
+            self.is_blinking = True
+            self.blink_state = 1.0
+            self.blink_frame = 0
+        else:
+            # If already blinking, reset to start of blink
+            self.blink_frame = 0
+            self.blink_state = 1.0
+    
     def update(self, dt: float, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Update replay enemy ship and execute replay commands."""
         replay_commands = self.command_recorder.get_replay_commands()

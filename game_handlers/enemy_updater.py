@@ -89,12 +89,15 @@ class EnemyUpdater:
             # Check replay enemy-wall collision
             # This uses the replay enemy's own state and is completely independent
             # from the player ship's collisions.
-            replay_enemy.check_wall_collision(maze.walls, maze.spatial_grid)
+            wall_collision = replay_enemy.check_wall_collision(maze.walls, maze.spatial_grid)
+            if wall_collision:
+                replay_enemy.trigger_blink()
             
             # Check replay enemy-ship collision (skip if shield is active)
             if not ship.is_shield_active():
                 if ship.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius, replay_enemy):
                     scoring.record_enemy_collision()
+                    replay_enemy.trigger_blink()
             
             # Check if replay enemy fired a projectile
             fired_projectile = replay_enemy.get_fired_projectile(player_pos)

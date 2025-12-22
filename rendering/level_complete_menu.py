@@ -8,6 +8,7 @@ from typing import Optional, Dict
 import config
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
 from rendering.ui_elements import AnimatedStarRating
+from rendering.number_sprite import NumberSprite
 
 
 class LevelCompleteMenu:
@@ -23,12 +24,16 @@ class LevelCompleteMenu:
         self.level_complete_background: Optional[AnimatedBackground] = None
         self.level_complete_image: Optional[pygame.Surface] = None
         self.level_complete_rect: Optional[pygame.Rect] = None
+        self.level_failed_image: Optional[pygame.Surface] = None
+        self.level_failed_rect: Optional[pygame.Rect] = None
         self.menu_pulse_phase = 0.0
         self.small_font = pygame.font.Font(None, 24)
+        self.number_sprite = NumberSprite()
         self._initialize()
     
     def _initialize(self) -> None:
-        """Initialize level complete graphic."""
+        """Initialize level complete and failed graphics."""
+        # Load level complete image
         try:
             self.level_complete_image = pygame.image.load("assets/level_complete.png").convert_alpha()
             # Scale image to 1/3 size (maintain aspect ratio)
@@ -41,6 +46,19 @@ class LevelCompleteMenu:
         except (pygame.error, FileNotFoundError):
             self.level_complete_image = None
             self.level_complete_rect = None
+        
+        # Load level failed image
+        try:
+            self.level_failed_image = pygame.image.load("assets/level_failed.png").convert_alpha()
+            original_width = self.level_failed_image.get_width()
+            original_height = self.level_failed_image.get_height()
+            image_width = original_width * .4
+            image_height = original_height * .4
+            self.level_failed_image = pygame.transform.scale(self.level_failed_image, (image_width, image_height))
+            self.level_failed_rect = self.level_failed_image.get_rect(center=(config.SCREEN_WIDTH // 2, 200))
+        except (pygame.error, FileNotFoundError):
+            self.level_failed_image = None
+            self.level_failed_rect = None
     
     def update(self, dt: float) -> None:
         """Update menu animations.
@@ -89,6 +107,18 @@ class LevelCompleteMenu:
             # Draw level complete graphic or fallback to text
             if self.level_complete_image is not None:
                 self.screen.blit(self.level_complete_image, self.level_complete_rect)
+                # Draw level number below the level complete image
+                level_number_y = self.level_complete_rect.bottom + 30
+                # Scale the number to be appropriately sized
+                # Digit files are 216px tall, scale to about 1/4 of level complete image height
+                number_scale = (self.level_complete_image.get_height() * 0.25) / 216.0
+                self.number_sprite.draw_number(
+                    self.screen,
+                    level,
+                    (config.SCREEN_WIDTH // 2, level_number_y),
+                    scale=number_scale,
+                    center=True
+                )
             else:
                 # Fallback to text if image not found
                 title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
@@ -104,22 +134,39 @@ class LevelCompleteMenu:
                 title.pulse_phase = self.menu_pulse_phase
                 title.draw(self.screen)
         else:
-            # Level failed - show text
-            title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-            title_text = "LEVEL FAILED"
-            title = title_font.render(title_text, True, (255, 100, 100))
-            title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
-            self.screen.blit(title, title_rect)
+            # Level failed - show graphic or fallback to text
+            if self.level_failed_image is not None:
+                self.screen.blit(self.level_failed_image, self.level_failed_rect)
+                # Draw level number below the level failed image
+                level_number_y = self.level_failed_rect.bottom + 30
+                # Scale the number to be appropriately sized
+                # Digit files are 216px tall, scale to about 1/4 of level failed image height
+                number_scale = (self.level_failed_image.get_height() * 0.25) / 216.0
+                self.number_sprite.draw_number(
+                    self.screen,
+                    level,
+                    (config.SCREEN_WIDTH // 2, level_number_y),
+                    scale=number_scale,
+                    center=True
+                )
+            else:
+                # Fallback to text if image not found
+                title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
+                title_text = "LEVEL FAILED"
+                title = title_font.render(title_text, True, (255, 100, 100))
+                title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
+                self.screen.blit(title, title_rect)
         
-        # Format time as minutes:seconds with one decimal place
-        minutes = int(completion_time_seconds // 60)
-        seconds_with_decimal = completion_time_seconds % 60
-        time_text = self.small_font.render(
-            f"Time: {minutes}:{seconds_with_decimal:05.1f}",
-            True, config.COLOR_TEXT
-        )
-        time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 220))
-        self.screen.blit(time_text, time_rect)
+        # Format time as minutes:seconds with one decimal place (only show if level succeeded)
+        if level_succeeded:
+            minutes = int(completion_time_seconds // 60)
+            seconds_with_decimal = completion_time_seconds % 60
+            time_text = self.small_font.render(
+                f"Time: {minutes}:{seconds_with_decimal:05.1f}",
+                True, config.COLOR_TEXT
+            )
+            time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 220))
+            self.screen.blit(time_text, time_rect)
         
         # Draw animated star rating (centered, large)
         if star_animation:

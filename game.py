@@ -606,7 +606,11 @@ class Game:
         
         # Initialize animated star rating if level succeeded
         if success:
-            star_x = config.SCREEN_WIDTH // 2 - (5 * int(config.LEVEL_COMPLETE_STAR_SIZE * 1.2)) // 2
+            # Calculate star spacing (default is star_size * 1.2)
+            star_spacing = int(config.LEVEL_COMPLETE_STAR_SIZE * 1.2)
+            # Center the stars: first star center should be at screen_center - 2 * star_spacing
+            # (since we have 5 stars, the middle star at index 2 should be at screen center)
+            star_x = config.SCREEN_WIDTH // 2 - 2 * star_spacing
             star_y = config.SCREEN_HEIGHT // 2 - 50
             self.star_animation = AnimatedStarRating(
                 self.level_score_percentage,
