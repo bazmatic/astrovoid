@@ -115,12 +115,12 @@ class MainMenu:
         hint_y = button_y + 80
         
         # Start hint
-        start_hint = hint_font.render("Press SPACE/ENTER or A Button to Start", True, config.COLOR_TEXT)
+        start_hint = hint_font.render("Press SPACE or A Button to Start", True, config.COLOR_TEXT)
         start_hint_rect = start_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
         self.screen.blit(start_hint, start_hint_rect)
         
         # Quit hint
-        quit_hint = hint_font.render("Press ESC/Q or B Button to Quit", True, config.COLOR_TEXT)
+        quit_hint = hint_font.render("Press ESC or B Button to Quit", True, config.COLOR_TEXT)
         quit_hint_rect = quit_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
         self.screen.blit(quit_hint, quit_hint_rect)
         

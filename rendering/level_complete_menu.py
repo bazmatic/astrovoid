@@ -204,7 +204,7 @@ class LevelCompleteMenu:
             
             # Hints
             hint_y = button_y + 70
-            continue_hint = hint_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
+            continue_hint = hint_font.render("Press SPACE or A Button", True, config.COLOR_TEXT)
             continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
             self.screen.blit(continue_hint, continue_hint_rect)
             
@@ -229,7 +229,7 @@ class LevelCompleteMenu:
             
             # Hints
             hint_y = button_y + 70
-            retry_hint = hint_font.render("Press SPACE/ENTER or A Button", True, config.COLOR_TEXT)
+            retry_hint = hint_font.render("Press SPACE or A Button", True, config.COLOR_TEXT)
             retry_hint_rect = retry_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
             self.screen.blit(retry_hint, retry_hint_rect)
             
