@@ -29,7 +29,62 @@ class LevelCompleteMenu:
         self.menu_pulse_phase = 0.0
         self.small_font = pygame.font.Font(None, 24)
         self.number_sprite = NumberSprite()
+        self.menu_options: list[str] = []
+        self.menu_buttons: list[Button] = []
+        self.menu_selected_index = 0
         self._initialize()
+    
+    def set_options(self, level_succeeded: bool) -> None:
+        """Set menu options based on level success status.
+        
+        Args:
+            level_succeeded: True if level was completed successfully.
+        """
+        if level_succeeded:
+            self.menu_options = ["CONTINUE", "MAIN MENU"]
+        else:
+            self.menu_options = ["RETRY LEVEL", "MAIN MENU"]
+        self.menu_selected_index = 0
+        self._create_buttons()
+    
+    def _create_buttons(self) -> None:
+        """Create buttons for current menu options."""
+        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
+        self.menu_buttons = []
+        
+        button_y = config.SCREEN_HEIGHT // 2 + 150
+        button_spacing = 80
+        
+        for i, option_text in enumerate(self.menu_options):
+            button = Button(
+                option_text,
+                (config.SCREEN_WIDTH // 2, button_y + i * button_spacing),
+                button_font,
+                width=350,
+                height=60
+            )
+            button.selected = (i == self.menu_selected_index)
+            self.menu_buttons.append(button)
+    
+    def navigate_up(self) -> None:
+        """Navigate to the previous menu option."""
+        if self.menu_selected_index > 0:
+            self.menu_selected_index -= 1
+    
+    def navigate_down(self) -> None:
+        """Navigate to the next menu option."""
+        if self.menu_selected_index < len(self.menu_options) - 1:
+            self.menu_selected_index += 1
+    
+    def get_selected_option(self) -> str:
+        """Get the currently selected menu option.
+        
+        Returns:
+            The text of the currently selected option.
+        """
+        if not self.menu_options:
+            return ""
+        return self.menu_options[self.menu_selected_index]
     
     def _initialize(self) -> None:
         """Initialize level complete and failed graphics."""
@@ -157,15 +212,17 @@ class LevelCompleteMenu:
                 title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
                 self.screen.blit(title, title_rect)
         
-        # Format time as minutes:seconds with one decimal place (only show if level succeeded)
+        # Format time as MM:SS.{tenths} (only show if level succeeded)
         if level_succeeded:
             minutes = int(completion_time_seconds // 60)
-            seconds_with_decimal = completion_time_seconds % 60
+            remaining_seconds = completion_time_seconds % 60
+            seconds = int(remaining_seconds)
+            tenths = int((remaining_seconds - seconds) * 10)
             time_text = self.small_font.render(
-                f"Time: {minutes}:{seconds_with_decimal:05.1f}",
+                f"Time: {minutes:02d}:{seconds:02d}.{tenths}",
                 True, config.COLOR_TEXT
             )
-            time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 220))
+            time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 190))
             self.screen.blit(time_text, time_rect)
         
         # Draw animated star rating (centered, large)
@@ -181,61 +238,45 @@ class LevelCompleteMenu:
         score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80))
         self.screen.blit(score_text, score_rect)
         
-        # Draw buttons with controller icons
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        button_y = config.SCREEN_HEIGHT // 2 + 150
+        # Set menu options based on level success status
+        # Check if we need to update (options might be empty or from previous state)
+        expected_options = ["CONTINUE", "MAIN MENU"] if level_succeeded else ["RETRY LEVEL", "MAIN MENU"]
+        if not self.menu_options or self.menu_options != expected_options:
+            self.set_options(level_succeeded)
         
-        if level_succeeded:
-            # Continue button
-            continue_button = Button(
-                "CONTINUE",
-                (config.SCREEN_WIDTH // 2, button_y),
-                button_font,
-                width=350,
-                height=60
-            )
-            continue_button.selected = True
-            continue_button.draw(self.screen, self.menu_pulse_phase)
+        # Draw buttons with controller icons
+        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
+        
+        for i, button in enumerate(self.menu_buttons):
+            button.selected = (i == self.menu_selected_index)
+            button.draw(self.screen, self.menu_pulse_phase)
             
-            # Controller icon
-            icon_x = continue_button.position[0] - continue_button.width // 2 - 50
-            ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=35, selected=True)
-            
-            # Hints
-            hint_y = button_y + 70
-            continue_hint = hint_font.render("Press SPACE or A Button", True, config.COLOR_TEXT)
-            continue_hint_rect = continue_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-            self.screen.blit(continue_hint, continue_hint_rect)
-            
-            back_hint = hint_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
-            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-            self.screen.blit(back_hint, back_hint_rect)
-        else:
-            # Retry button
-            retry_button = Button(
-                "RETRY LEVEL",
-                (config.SCREEN_WIDTH // 2, button_y),
-                button_font,
-                width=350,
-                height=60
-            )
-            retry_button.selected = True
-            retry_button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Controller icon
-            icon_x = retry_button.position[0] - retry_button.width // 2 - 50
-            ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=35, selected=True)
-            
-            # Hints
-            hint_y = button_y + 70
-            retry_hint = hint_font.render("Press SPACE or A Button", True, config.COLOR_TEXT)
-            retry_hint_rect = retry_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-            self.screen.blit(retry_hint, retry_hint_rect)
-            
-            back_hint = hint_font.render("Press ESC/Q or B Button to Return to Menu", True, config.COLOR_TEXT)
-            back_hint_rect = back_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-            self.screen.blit(back_hint, back_hint_rect)
+            # Draw controller icon next to selected button
+            if button.selected:
+                icon_x = button.position[0] - button.width // 2 - 50
+                icon_y = button.position[1]
+                ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
+        
+        # Draw hints below buttons (dynamic based on selected option)
+        last_button_y = self.menu_buttons[-1].position[1] if self.menu_buttons else config.SCREEN_HEIGHT // 2 + 150
+        hint_y = last_button_y + 70
+        
+        selected_option = self.get_selected_option()
+        if selected_option == "CONTINUE":
+            hint_text = "Press SPACE/ENTER or A Button to Continue"
+        elif selected_option == "RETRY LEVEL":
+            hint_text = "Press SPACE/ENTER or A Button to Retry"
+        else:  # MAIN MENU
+            hint_text = "Press SPACE/ENTER or A Button to Return to Main Menu"
+        
+        hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
+        hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
+        self.screen.blit(hint, hint_rect)
+        
+        # Navigation hint
+        nav_hint = hint_font.render("Use Arrow Keys or D-Pad to Navigate", True, config.COLOR_TEXT)
+        nav_hint_rect = nav_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
+        self.screen.blit(nav_hint, nav_hint_rect)
         
         # Draw quit confirmation overlay if active
         if show_quit_confirmation:

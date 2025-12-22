@@ -118,3 +118,4 @@ class MazePositionCalculator:
         center_x, center_y = self.grid_center_to_screen(start_grid_x, start_grid_y)
         return (center_x + offset_x, center_y + offset_y)
 
+

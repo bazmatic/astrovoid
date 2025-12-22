@@ -36,3 +36,4 @@ class Baby(ReplayEnemyShip):
         """Get the maximum speed for the baby enemy (faster than regular Replay Enemy)."""
         return config.SHIP_MAX_SPEED / 2 # * config.BABY_SPEED_MULTIPLIER
 
+

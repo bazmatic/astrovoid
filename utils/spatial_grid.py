@@ -245,3 +245,4 @@ class SpatialGrid:
                 if 0 <= row < self.grid_rows and 0 <= col < self.grid_cols:
                     self.grid[row][col].add(wall_index)
 
+

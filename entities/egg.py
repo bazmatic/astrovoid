@@ -58,9 +58,10 @@ class Egg(GameEntity, Collidable, Drawable):
         )
         self.has_popped = False
         self.pulse_phase = 0.0
-        # Hit points for momentum system
-        self.hit_points = config.EGG_HIT_POINTS
-        self.max_hit_points = config.EGG_HIT_POINTS
+        # Hit points for momentum system - calculated dynamically based on size
+        # Start with initial hit points (should be 2 at initial size)
+        self.max_hit_points = self._calculate_hit_points_from_size()
+        self.hit_points = self.max_hit_points
     
     def update(self, dt: float) -> None:
         """Update egg growth, animation, and momentum physics.
@@ -89,10 +90,46 @@ class Egg(GameEntity, Collidable, Drawable):
         self.current_radius += self.growth_rate
         self.radius = self.current_radius
         
+        # Recalculate hit points based on new size, preserving damage ratio
+        old_max_hit_points = self.max_hit_points
+        new_max_hit_points = self._calculate_hit_points_from_size()
+        
+        if old_max_hit_points > 0:
+            # Preserve damage ratio when scaling up
+            damage_ratio = self.hit_points / old_max_hit_points
+            self.max_hit_points = new_max_hit_points
+            self.hit_points = int(round(new_max_hit_points * damage_ratio))
+            # Ensure hit_points doesn't exceed max_hit_points
+            self.hit_points = min(self.hit_points, self.max_hit_points)
+        else:
+            # If somehow max_hit_points was 0, just set to new max
+            self.max_hit_points = new_max_hit_points
+            self.hit_points = new_max_hit_points
+        
         # Update pulse phase for animation
         self.pulse_phase += dt * 2.0
         if self.pulse_phase >= 2 * math.pi:
             self.pulse_phase -= 2 * math.pi
+    
+    def _calculate_hit_points_from_size(self) -> int:
+        """Calculate max hit points based on current radius.
+        
+        Hit points scale linearly from 2 (at initial size) to 4 (at max size).
+        
+        Returns:
+            Max hit points as integer, clamped between 2 and 4.
+        """
+        if self.max_radius <= self.initial_radius:
+            return 2
+        
+        # Calculate growth progress (0.0 at initial, 1.0 at max)
+        growth_progress = (self.current_radius - self.initial_radius) / (self.max_radius - self.initial_radius)
+        growth_progress = max(0.0, min(1.0, growth_progress))
+        
+        # Scale from 2 to 4 hit points
+        max_hit_points = 2 + growth_progress * 2
+        
+        return int(round(max_hit_points))
     
     def should_pop(self) -> bool:
         """Check if egg should pop (reached maximum size).

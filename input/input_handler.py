@@ -281,5 +281,49 @@ class InputHandler:
             return True
         
         return False
+    
+    def get_controller_menu_navigation(self) -> Optional[str]:
+        """Get controller menu navigation direction.
+        
+        Checks d-pad buttons and analog stick Y-axis for up/down navigation.
+        
+        Returns:
+            "up" if d-pad up or stick up is pressed, "down" if d-pad down or stick down is pressed,
+            None otherwise.
+        """
+        if not self.controllers:
+            return None
+        
+        controller = self.controllers[0]
+        num_axes = controller.get_numaxes()
+        num_buttons = controller.get_numbuttons()
+        
+        # Check d-pad buttons (typically buttons 11-14, but varies by controller)
+        # Common mapping: 11=up, 12=down, 13=left, 14=right
+        if num_buttons >= 12:
+            if controller.get_button(11):  # D-pad up
+                return "up"
+            if controller.get_button(12):  # D-pad down
+                return "down"
+        
+        # Check analog stick Y-axis (axis 1 for left stick, axis 3 for right stick)
+        # Negative Y = up, positive Y = down
+        left_stick_y = controller.get_axis(1) if num_axes > 1 else 0.0
+        right_stick_y = controller.get_axis(3) if num_axes > 3 else 0.0
+        
+        # Use whichever stick has input above deadzone (prioritize left stick)
+        stick_y = 0.0
+        if abs(left_stick_y) > config.CONTROLLER_DEADZONE:
+            stick_y = left_stick_y
+        elif abs(right_stick_y) > config.CONTROLLER_DEADZONE:
+            stick_y = right_stick_y
+        
+        if abs(stick_y) > config.CONTROLLER_DEADZONE:
+            if stick_y < 0:
+                return "up"
+            elif stick_y > 0:
+                return "down"
+        
+        return None
 
 

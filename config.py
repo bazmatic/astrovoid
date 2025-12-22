@@ -85,8 +85,8 @@ REPLAY_ENEMY_BASE_COUNT = 1  # Base count after tutorial levels
 REPLAY_ENEMY_SCALE_FACTOR = 0.5  # Scaling factor for continuous growth (sqrt-based)
 
 # Baby enemy settings
-BABY_SIZE = 15  # Size/radius of baby enemy (smaller than replay enemy)
-BABY_SPEED_MULTIPLIER = 0.1  # Speed multiplier (faster than replay enemy's 0.3)
+BABY_SIZE = 10  # Size/radius of baby enemy (smaller than replay enemy)
+BABY_SPEED_MULTIPLIER = 0.1  # Speed multiplier
 
 # SplitBoss settings
 SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip

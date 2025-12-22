@@ -201,3 +201,4 @@ class QuitConfirmationMenu:
         cancel_hint_rect = cancel_hint.get_rect(center=(config.SCREEN_WIDTH // 2, button_y + 140))
         self.screen.blit(cancel_hint, cancel_hint_rect)
 
+

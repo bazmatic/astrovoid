@@ -82,3 +82,4 @@ class GridToWallsConverter:
         
         return [top, right, bottom, left]
 
+

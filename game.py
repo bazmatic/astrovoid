@@ -249,6 +249,11 @@ class Game:
                     # Use state handler for controller events
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
+            elif event.type == pygame.JOYHATMOTION or event.type == pygame.JOYAXISMOTION:
+                # Handle controller hat (d-pad) and axis (stick) events for menu navigation
+                if self.state == config.STATE_MENU or self.state == config.STATE_LEVEL_COMPLETE:
+                    handler = self.state_handler_registry.get_handler(self.state)
+                    handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
                 # Handle splash screen input
                 if self.state == config.STATE_SPLASH and self.splash_screen:

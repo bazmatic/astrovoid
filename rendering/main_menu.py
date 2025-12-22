@@ -23,6 +23,7 @@ class MainMenu:
         self.menu_title: Optional[NeonText] = None
         self.menu_title_image: Optional[pygame.Surface] = None
         self.menu_title_rect: Optional[pygame.Rect] = None
+        self.menu_options = ["START GAME", "OPTIONS", "QUIT"]
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self.menu_pulse_phase = 0.0
@@ -56,20 +57,42 @@ class MainMenu:
             )
             self.menu_title_image = None
         
-        # Create buttons
+        # Create buttons for all menu options
         button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
+        self.menu_buttons = []
         
-        start_button = Button(
-            "START GAME",
-            (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 50),
-            button_font,
-            width=400,
-            height=60
-        )
-        start_button.selected = True
+        # Position buttons vertically centered with 80px spacing
+        start_y = config.SCREEN_HEIGHT // 2 + 20
+        button_spacing = 80
         
-        self.menu_buttons = [start_button]
-        self.menu_selected_index = 0
+        for i, option_text in enumerate(self.menu_options):
+            button = Button(
+                option_text,
+                (config.SCREEN_WIDTH // 2, start_y + i * button_spacing),
+                button_font,
+                width=400,
+                height=60
+            )
+            button.selected = (i == self.menu_selected_index)
+            self.menu_buttons.append(button)
+    
+    def navigate_up(self) -> None:
+        """Navigate to the previous menu option."""
+        if self.menu_selected_index > 0:
+            self.menu_selected_index -= 1
+    
+    def navigate_down(self) -> None:
+        """Navigate to the next menu option."""
+        if self.menu_selected_index < len(self.menu_options) - 1:
+            self.menu_selected_index += 1
+    
+    def get_selected_option(self) -> str:
+        """Get the currently selected menu option.
+        
+        Returns:
+            The text of the currently selected option.
+        """
+        return self.menu_options[self.menu_selected_index]
     
     def update(self, dt: float) -> None:
         """Update menu animations.
@@ -99,7 +122,6 @@ class MainMenu:
             self.menu_title.draw(self.screen)
         
         # Draw buttons
-        button_y = config.SCREEN_HEIGHT // 2 + 50
         for i, button in enumerate(self.menu_buttons):
             button.selected = (i == self.menu_selected_index)
             button.draw(self.screen, self.menu_pulse_phase)
@@ -110,19 +132,28 @@ class MainMenu:
                 icon_y = button.position[1]
                 ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
-        # Draw hints below buttons
+        # Draw hints below buttons (dynamic based on selected option)
         hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        hint_y = button_y + 80
+        last_button_y = self.menu_buttons[-1].position[1] if self.menu_buttons else config.SCREEN_HEIGHT // 2
+        hint_y = last_button_y + 80
         
-        # Start hint
-        start_hint = hint_font.render("Press SPACE or A Button to Start", True, config.COLOR_TEXT)
-        start_hint_rect = start_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-        self.screen.blit(start_hint, start_hint_rect)
+        # Dynamic hint based on selected option
+        selected_option = self.get_selected_option()
+        if selected_option == "START GAME":
+            hint_text = "Press SPACE/ENTER or A Button to Start"
+        elif selected_option == "OPTIONS":
+            hint_text = "Press SPACE/ENTER or A Button (Coming Soon)"
+        else:  # QUIT
+            hint_text = "Press SPACE/ENTER or A Button to Quit"
         
-        # Quit hint
-        quit_hint = hint_font.render("Press ESC or B Button to Quit", True, config.COLOR_TEXT)
-        quit_hint_rect = quit_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-        self.screen.blit(quit_hint, quit_hint_rect)
+        hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
+        hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
+        self.screen.blit(hint, hint_rect)
+        
+        # Navigation hint
+        nav_hint = hint_font.render("Use Arrow Keys or D-Pad to Navigate | ESC or B Button to Quit", True, config.COLOR_TEXT)
+        nav_hint_rect = nav_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
+        self.screen.blit(nav_hint, nav_hint_rect)
         
         # Draw controls info at bottom (smaller, less prominent)
         controls_y = config.SCREEN_HEIGHT - 120

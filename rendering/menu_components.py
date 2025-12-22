@@ -185,10 +185,12 @@ class Button:
         # Draw button background
         bg_color = (40, 40, 60) if not self.selected else (60, 60, 90)
         pygame.draw.rect(screen, bg_color, rect)
-        pygame.draw.rect(screen, config.COLOR_TEXT, rect, 2)
+        border_color = (100, 100, 100) if not self.selected else config.COLOR_TEXT
+        pygame.draw.rect(screen, border_color, rect, 2)
         
-        # Draw text
-        text_surface = self.font.render(self.text, True, config.COLOR_TEXT)
+        # Draw text (dimmed if not selected)
+        text_color = (150, 150, 150) if not self.selected else config.COLOR_TEXT
+        text_surface = self.font.render(self.text, True, text_color)
         text_rect = text_surface.get_rect(center=self.position)
         screen.blit(text_surface, text_rect)
         
