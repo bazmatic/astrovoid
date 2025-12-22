@@ -52,6 +52,8 @@ class SoundManager:
         self.portal_power_up_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.portal_power_down_sound: Optional[pygame.mixer.Sound] = None  # Generated on first use
         self.tinkling_sound_cache: Dict[float, Optional[pygame.mixer.Sound]] = {}  # Cache tinkling sounds by pitch
+        self.critical_warning_sound: Optional[pygame.mixer.Sound] = None
+        self.critical_warning_channel: Optional[pygame.mixer.Channel] = None
         
         # Set up dedicated channel for thruster (continuous sound)
         self.thruster_channel = pygame.mixer.Channel(0)
@@ -793,6 +795,71 @@ class SoundManager:
         if sound:
             sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.7)  # Moderate volume
         return sound
+
+    def _generate_critical_warning_sound(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a longer descending warning tone to loop while score nears zero."""
+        if not config.SOUND_ENABLED:
+            return None
+
+        sample_rate = config.SOUND_SAMPLE_RATE
+        segment_duration = 0.6
+        base_freqs = [440.0, 360.0, 300.0, 250.0, 210.0]
+        segments = []
+
+        for idx, start_freq in enumerate(base_freqs):
+            duration = segment_duration
+            num_samples = int(sample_rate * duration)
+            t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+            progress = t_array / duration
+            end_freq = start_freq * 0.45
+            freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+
+            vibrato = 0.08 * np.sin(2 * math.pi * 4.0 * t_array)
+            phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+
+            tone = np.sin(phase)
+            tone += 0.3 * np.sin(phase * 2)
+            tone += 0.15 * np.sin(phase * 3)
+
+            envelope = np.clip(np.sqrt(1.0 - progress), 0.0, 1.0) * np.exp(-progress * 2.0)
+            amplitude = 1.0 - idx * 0.08
+            segment = tone * envelope * amplitude
+            segments.append(segment)
+
+        samples = np.concatenate(segments)
+        samples = np.clip(samples, -1.0, 1.0)
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.75)
+        return sound
+
+    def start_critical_warning(self) -> None:
+        """Start the looping critical warning tone."""
+        if not config.SOUND_ENABLED:
+            return
+
+        if self.critical_warning_sound is None:
+            self.critical_warning_sound = self._generate_critical_warning_sound()
+
+        if not self.critical_warning_sound:
+            return
+
+        if self.critical_warning_channel is None:
+            self.critical_warning_channel = pygame.mixer.Channel(5)
+
+        if not self.critical_warning_channel.get_busy():
+            self.critical_warning_channel.play(self.critical_warning_sound, loops=-1)
+
+    def stop_critical_warning(self) -> None:
+        """Stop the critical warning tone."""
+        if not config.SOUND_ENABLED or not self.critical_warning_channel:
+            return
+
+        if self.critical_warning_channel.get_busy():
+            self.critical_warning_channel.stop()
     
     def _generate_star_gained_sound(self) -> Optional[pygame.mixer.Sound]:
         """Generate an optimistic ascending tone for when a star is gained.

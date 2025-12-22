@@ -39,6 +39,7 @@ from utils.math_utils import get_angle_to_point
 
 class Game:
     """Main game class managing state and game loop."""
+    CRITICAL_WARNING_THRESHOLD = 5.0  # Points remaining before warning tone starts
     
     def __init__(self, screen: pygame.Surface):
         """Initialize game."""
@@ -117,6 +118,7 @@ class Game:
             on_star_lost=self.sound_manager.play_star_lost,
             on_star_gained=self.sound_manager.play_star_gained
         )
+        self.critical_warning_active = False
         
         # Menu UI components
         self.main_menu = MainMenu(screen)
@@ -151,6 +153,10 @@ class Game:
         # Store total score before starting level (for replay functionality)
         self.total_score_before_level = self.scoring.get_total_score()
         
+        # Ensure warning sound is silenced when a level starts
+        self.sound_manager.stop_critical_warning()
+        self.critical_warning_active = False
+
         # Reset exit explosion state
         self.exit_explosion_active = False
         self.exit_explosion_time = 0.0
@@ -568,6 +574,8 @@ class Game:
                     self.ship.sound_manager.stop_thruster()
                 # Play cosmic warble for exit
                 self.sound_manager.play_exit_warble()
+                self.sound_manager.stop_critical_warning()
+                self.critical_warning_active = False
             return  # Don't update game during explosion
         
         # Check if score has reached zero (level failed)
@@ -577,7 +585,9 @@ class Game:
             self.ship.fuel,
             self.ship.ammo
         )
-        if potential['potential_score'] <= 0:
+        potential_score = potential['potential_score']
+        self._update_critical_warning(potential_score)
+        if potential_score <= 0:
             self.complete_level(success=False)
             return
         
@@ -589,6 +599,16 @@ class Game:
         if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:
             # Out of fuel and stopped
             pass  # Could trigger game over here if desired
+
+    def _update_critical_warning(self, potential_score: float) -> None:
+        """Start/stop critical warning sound based on remaining potential score."""
+        if potential_score <= self.CRITICAL_WARNING_THRESHOLD:
+            if not self.critical_warning_active:
+                self.sound_manager.start_critical_warning()
+                self.critical_warning_active = True
+        elif self.critical_warning_active:
+            self.sound_manager.stop_critical_warning()
+            self.critical_warning_active = False
     
     def complete_level(self, success: bool = True) -> None:
         """Handle level completion or failure.
@@ -599,6 +619,8 @@ class Game:
         """
         current_time = time.time()
         completion_time = self.scoring.get_current_time(current_time)
+        self.sound_manager.stop_critical_warning()
+        self.critical_warning_active = False
         
         # Store success status
         self.level_succeeded = success
