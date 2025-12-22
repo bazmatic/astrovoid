@@ -298,7 +298,8 @@ class CollisionHandler:
     def handle_ship_crystal_collision(
         self,
         ship: 'Ship',
-        crystal: 'PowerupCrystal'
+        crystal: 'PowerupCrystal',
+        scoring: 'ScoringSystem'
     ) -> bool:
         """Handle collision between ship and powerup crystal.
         
@@ -314,6 +315,7 @@ class CollisionHandler:
         
         if crystal.check_circle_collision((ship.x, ship.y), ship.radius):
             ship.activate_gun_upgrade()
+            scoring.record_powerup_collected()
             return True
         
         return False

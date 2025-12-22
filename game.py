@@ -552,7 +552,7 @@ class Game:
             crystal.update(dt, player_pos)
             
             # Check ship-crystal collision
-            if self.collision_handler.handle_ship_crystal_collision(self.ship, crystal):
+            if self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring):
                 continue  # Crystal collected, don't add to active list
             
             if crystal.active:

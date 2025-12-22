@@ -44,6 +44,8 @@ TIME_PENALTY_RATE = 2  # Points deducted per second of elapsed time
 COLLISION_PENALTY = 5  # Points deducted per collision (wall or enemy)
 AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
 FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
+WALL_COLLISION_PENALTY = 4  # Points deducted each time the ship bounces off a wall
+POWERUP_CRYSTAL_BONUS = 5  # Points awarded when a crystal is collected
 
 # Difficulty scaling
 BASE_MAZE_SIZE = 10  # Larger base maze to fill screen

@@ -34,6 +34,7 @@ class ScoringSystem:
         self.enemy_collisions = 0
         self.shots_fired = 0
         self.enemies_destroyed = 0
+        self.powerup_crystals_collected = 0
     
     def start_level(self, current_time: float) -> None:
         """Start tracking a new level.
@@ -47,6 +48,7 @@ class ScoringSystem:
         self.enemy_collisions = 0
         self.shots_fired = 0
         self.enemies_destroyed = 0
+        self.powerup_crystals_collected = 0
     
     def record_wall_collision(self) -> None:
         """Record a wall collision."""
@@ -64,6 +66,10 @@ class ScoringSystem:
         """Record an enemy destroyed by projectile (awards bonus points)."""
         self.enemies_destroyed += 1
     
+    def record_powerup_collected(self) -> None:
+        """Record when the ship collects a powerup crystal."""
+        self.powerup_crystals_collected += 1
+
     def calculate_level_score(
         self,
         completion_time: float,
@@ -87,7 +93,9 @@ class ScoringSystem:
             enemy_collisions=self.enemy_collisions,
             enemies_destroyed=self.enemies_destroyed,
             shots_fired=self.shots_fired,
-            fuel_used=fuel_used
+            fuel_used=fuel_used,
+            wall_collisions=self.wall_collisions,
+            powerups_collected=self.powerup_crystals_collected
         )
         
         self.level_score = result["final_score"]
@@ -155,7 +163,9 @@ class ScoringSystem:
             enemy_collisions=self.enemy_collisions,
             enemies_destroyed=self.enemies_destroyed,
             shots_fired=self.shots_fired,
-            fuel_used=fuel_used
+            fuel_used=fuel_used,
+            wall_collisions=self.wall_collisions,
+            powerups_collected=self.powerup_crystals_collected
         )
         
         max_score = self.calculate_max_possible_score()

@@ -141,6 +141,7 @@ def create_glow_surface(
     for layer in range(int(glow_radius)):
         layer_radius = radius + glow_radius - layer
         alpha = int(255 * intensity * (1.0 - layer / glow_radius))
+        alpha = max(0, min(255, alpha))
         if alpha > 0 and layer_radius > 0:
             glow_color = (*color, alpha)
             pygame.draw.circle(surf, glow_color, (center, center), int(layer_radius))

@@ -21,7 +21,9 @@ class ScoreCalculator:
         enemy_collisions: int,
         enemies_destroyed: int,
         shots_fired: int,
-        fuel_used: int
+        fuel_used: int,
+        wall_collisions: int,
+        powerups_collected: int
     ) -> Dict[str, float]:
         """Calculate score based on performance metrics.
         
@@ -58,20 +60,34 @@ class ScoreCalculator:
         
         # Fuel penalty (minor reduction per unit used)
         fuel_penalty = fuel_used * config.FUEL_PENALTY_RATE
+
+        # Wall collision penalty (minor reduction per bounce)
+        wall_collision_penalty = wall_collisions * config.WALL_COLLISION_PENALTY
+
+        # Powerup bonus (reward for collecting crystals)
+        powerup_bonus = powerups_collected * config.POWERUP_CRYSTAL_BONUS
         
         # Calculate final score (bonus adds to score, can exceed 100)
         final_score = (
-            score - time_penalty - collision_penalty - ammo_penalty - fuel_penalty
+            score
+            - time_penalty
+            - collision_penalty
+            - wall_collision_penalty
+            - ammo_penalty
+            - fuel_penalty
             + enemy_destruction_bonus
+            + powerup_bonus
         )
         final_score = max(0, final_score)  # Minimum 0, but can exceed 100
         
         return {
             "time_penalty": time_penalty,
             "collision_penalty": collision_penalty,
+            "wall_collision_penalty": wall_collision_penalty,
             "enemy_destruction_bonus": enemy_destruction_bonus,
             "ammo_penalty": ammo_penalty,
             "fuel_penalty": fuel_penalty,
+            "powerup_bonus": powerup_bonus,
             "final_score": final_score
         }
     
