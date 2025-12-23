@@ -84,7 +84,7 @@ class QuitConfirmationMenu:
         yes_button.draw(self.screen, menu_pulse_phase)
         
         # A button icon for Yes
-        icon_x = yes_button.position[0] - yes_button.width // 2 - 35
+        icon_x = yes_button.position[0] - yes_button.width // 2 - 43
         ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=30, selected=True)
         
         # No button
@@ -174,7 +174,7 @@ class QuitConfirmationMenu:
         return_button.draw(self.screen, menu_pulse_phase)
         
         # A button icon
-        icon_x = return_button.position[0] - return_button.width // 2 - 35
+        icon_x = return_button.position[0] - return_button.width // 2 - 43
         ControllerIcon.draw_a_button(self.screen, (icon_x, button_y), size=30, selected=True)
         
         # Return button hint

@@ -207,6 +207,7 @@
     "enemyDestroyVolume": 0.6,
     "exitWarbleVolume": 0.65,
     "powerupActivationVolume": 0.6,
+    "hitSoundVolume": 0.35,
     "thrusterNoiseDuration": 0.1,
     "shootBlipFrequency": 800,
     "shootBlipDuration": 0.05
@@ -244,7 +245,8 @@
       "speedIncrement": 0.05,
       "glowIntensityIncrement": 0.1,
       "hueRotation": 30
-    }
+    },
+    "rotationSpeedMultiplier": 1.2
   },
   "starAnimation": {
     "appearDuration": 0.4,

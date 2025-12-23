@@ -223,6 +223,7 @@ class SoundSettings:
     thrusterNoiseDuration: float
     shootBlipFrequency: int
     shootBlipDuration: float
+    hitSoundVolume: float
 
 
 @dataclass
@@ -271,6 +272,7 @@ class PowerupSettings:
     fireRateMultipliers: PowerupFireRateMultipliers
     upgradedProjectile: PowerupUpgradedProjectile
     beyondLevel3: PowerupBeyondLevel3
+    rotationSpeedMultiplier: float
 
 
 @dataclass
@@ -396,6 +398,8 @@ def load_settings() -> Settings:
             glowColor=_as_color(tuple(powerup_raw["upgradedProjectile"]["glowColor"]))
         ),
         beyondLevel3=PowerupBeyondLevel3(**powerup_raw["beyondLevel3"])
+        ,
+        rotationSpeedMultiplier=powerup_raw["rotationSpeedMultiplier"]
     )
 
     colors_raw = raw["colors"]
@@ -650,6 +654,7 @@ POWERUP_ACTIVATION_SOUND_VOLUME = SETTINGS.sound.powerupActivationVolume
 THRUSTER_NOISE_DURATION = SETTINGS.sound.thrusterNoiseDuration
 SHOOT_BLIP_FREQUENCY = SETTINGS.sound.shootBlipFrequency
 SHOOT_BLIP_DURATION = SETTINGS.sound.shootBlipDuration
+BAD_HIT_SOUND_VOLUME = SETTINGS.sound.hitSoundVolume
 
 CONTROLLER_DEADZONE = SETTINGS.controller.deadzone
 CONTROLLER_TRIGGER_THRESHOLD = SETTINGS.controller.triggerThreshold
@@ -678,6 +683,7 @@ POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT = SETTINGS.powerups.beyondLevel3.sizeIncre
 POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT = SETTINGS.powerups.beyondLevel3.speedIncrement
 POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT = SETTINGS.powerups.beyondLevel3.glowIntensityIncrement
 POWERUP_BEYOND_LEVEL_3_HUE_ROTATION = SETTINGS.powerups.beyondLevel3.hueRotation
+POWERUP_ROTATION_SPEED_MULTIPLIER = SETTINGS.powerups.rotationSpeedMultiplier
 
 STAR_APPEAR_DURATION = SETTINGS.starAnimation.appearDuration
 STAR_TWINKLE_SPEED = SETTINGS.starAnimation.twinkleSpeed

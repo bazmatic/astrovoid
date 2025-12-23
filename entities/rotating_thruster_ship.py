@@ -71,6 +71,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         self.thrusting = False  # Track when thrust is actively being applied
         self.prev_x = self.x  # Previous position for swept collision detection
         self.prev_y = self.y
+        self.base_rotation_speed = config.SHIP_ROTATION_SPEED
+        self.rotation_speed_multiplier = 1.0
     
     @property
     def max_speed(self) -> float:
@@ -85,13 +87,17 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
     
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
-        self.angle -= config.SHIP_ROTATION_SPEED
+        self.angle -= self.current_rotation_speed
         self.angle = normalize_angle(self.angle)
     
     def rotate_right(self) -> None:
         """Rotate ship clockwise."""
-        self.angle += config.SHIP_ROTATION_SPEED
+        self.angle += self.current_rotation_speed
         self.angle = normalize_angle(self.angle)
+
+    @property
+    def current_rotation_speed(self) -> float:
+        return self.base_rotation_speed * self.rotation_speed_multiplier
     
     def apply_thrust(self) -> bool:
         """Apply thrust in current direction.
