@@ -1,0 +1,7 @@
+{
+  "seed": 100,
+  "maze": {
+    "complexity": "normal",
+    "grid_size": 30
+  }
+}

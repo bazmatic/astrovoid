@@ -78,6 +78,7 @@ class Game:
         self.entity_manager = EntityManager()
         self.enemies = self.entity_manager.enemies
         self.replay_enemies = self.entity_manager.replay_enemies
+        self.flockers = self.entity_manager.flockers
         self.split_bosses = self.entity_manager.split_bosses
         self.mother_bosses = self.entity_manager.mother_bosses
         self.babies = self.entity_manager.babies
@@ -208,7 +209,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.egg + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.egg + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
         )
         self.spawn_manager.spawn_all_enemies(
             self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count
@@ -506,6 +507,9 @@ class Game:
             self.enemy_updater.update_replay_enemies(
                 self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
             )
+            self.enemy_updater.update_flockers(
+                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager
+            )
             self.enemy_updater.update_split_bosses(
                 self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
             )
@@ -544,7 +548,7 @@ class Game:
             
             # Check projectile-enemy collisions (only for player projectiles)
             if self.collision_handler.handle_projectile_enemy_collisions(
-                projectile, self.enemies, self.replay_enemies, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals
+                projectile, self.enemies, self.replay_enemies, self.flockers, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals
             ):
                 continue  # Projectile destroyed, skip adding to active list
             
@@ -732,6 +736,11 @@ class Game:
         for replay_enemy in self.replay_enemies:
             if replay_enemy.active:
                 replay_enemy.draw(self.screen)
+        
+        # Draw flocker enemies
+        for flocker in self.flockers:
+            if flocker.active:
+                flocker.draw(self.screen)
         
         # Draw SplitBoss enemies
         for split_boss in self.split_bosses:

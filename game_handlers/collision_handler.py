@@ -12,6 +12,7 @@ from entities.powerup_crystal import PowerupCrystal
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
@@ -48,6 +49,7 @@ class CollisionHandler:
         projectile: 'Projectile',
         enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
+        flockers: List['FlockerEnemyShip'],
         split_bosses: List['SplitBoss'],
         mother_bosses: List['MotherBoss'],
         babies: List['Baby'],
@@ -60,6 +62,7 @@ class CollisionHandler:
             projectile: The projectile to check collisions for.
             enemies: List of regular enemies.
             replay_enemies: List of replay enemies.
+            flockers: List of flocker enemies.
             split_bosses: List of SplitBoss enemies.
             mother_bosses: List of Mother Boss enemies.
             babies: List of Baby enemies.
@@ -123,6 +126,22 @@ class CollisionHandler:
                     # Spawn powerup crystal with probability
                     if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
                         crystal = PowerupCrystal(enemy_pos)
+                        powerup_crystals.append(crystal)
+                    
+                    return True  # Projectile destroyed
+        
+        # Check projectile-flocker collision
+        for flocker in flockers:
+            if flocker.active and projectile.active:
+                if projectile.check_circle_collision(flocker.get_pos(), flocker.radius):
+                    flocker_pos = flocker.get_pos()
+                    flocker.active = False
+                    self.sound_manager.play_enemy_destroy()
+                    self.scoring.record_enemy_destroyed()
+                    
+                    # Spawn powerup crystal with probability
+                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                        crystal = PowerupCrystal(flocker_pos)
                         powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed

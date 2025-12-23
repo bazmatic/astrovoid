@@ -129,12 +129,6 @@ class MainMenu:
         for i, button in enumerate(self.menu_buttons):
             button.selected = (i == self.menu_selected_index)
             button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Draw controller icon next to selected button
-            if button.selected:
-                icon_x = button.position[0] - button.width // 2 - 58
-                icon_y = button.position[1]
-                ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
         # Draw controls info at bottom (smaller, less prominent)
         controls_y = config.SCREEN_HEIGHT - 120

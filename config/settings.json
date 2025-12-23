@@ -116,6 +116,24 @@
     "baseCount": 1,
     "scaleFactor": 0.5
   },
+  "flockerEnemy": {
+    "size": 12,
+    "color": [255, 180, 50],
+    "speedMultiplier": 0.4,
+    "separationRadius": 50,
+    "alignmentRadius": 80,
+    "cohesionRadius": 100,
+    "separationWeight": 1.5,
+    "alignmentWeight": 1.0,
+    "cohesionWeight": 1.0,
+    "seekWeight": 0.8,
+    "baseCount": 2,
+    "scaleFactor": 0.3,
+    "closeRangeFireDistance": 150,
+    "closeRangeFireAngleTolerance": 30.0,
+    "clusterRadius": 300,
+    "fireCooldownSeconds": 5.0
+  },
   "baby": {
     "size": 10,
     "speedMultiplier": 0.1
@@ -179,7 +197,7 @@
     "thrustPlumeParticles": 5
   },
   "colors": {
-    "background": [9,1,19],
+    "background": [9, 1, 19],
     "ship": [100, 200, 255],
     "walls": [150, 150, 150],
     "enemyStatic": [255, 100, 100],

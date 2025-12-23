@@ -1139,5 +1139,88 @@ class SoundManager:
         # Use channel 6 for portal sounds
         portal_channel = pygame.mixer.Channel(6)
         portal_channel.play(self.portal_power_down_sound)
+    
+    def _generate_tweet_sound(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a bird-like tweeting/chirping sound.
+        
+        Creates a short, pleasant chirp with frequency variation to sound like a bird.
+        
+        Returns:
+            pygame.mixer.Sound object with tweet sound, or None if sounds disabled.
+        """
+        if not config.SOUND_ENABLED:
+            return None
+        
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = random.uniform(0.08, 0.15)  # Short, variable duration
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+        
+        # Base frequency with variation (bird-like chirp range: 2000-4000 Hz)
+        base_freq = random.uniform(2000.0, 4000.0)
+        
+        # Frequency modulation for chirp character (quick up-down)
+        # Create a quick frequency sweep up then down using numpy where
+        freq_mult = np.where(
+            progress < 0.3,
+            1.0 + (progress / 0.3) * 0.3,  # Quick rise: Rise 30%
+            np.where(
+                progress < 0.7,
+                1.3 - ((progress - 0.3) / 0.4) * 0.2,  # Peak and slight fall: Fall from 1.3 to 1.1
+                1.1 - ((progress - 0.7) / 0.3) * 0.2  # Final fall: Fall to 0.9
+            )
+        )
+        
+        freq_curve = base_freq * freq_mult
+        
+        # Add vibrato for natural bird sound
+        vibrato_rate = random.uniform(8.0, 15.0)  # Fast vibrato
+        vibrato_depth = random.uniform(0.05, 0.12)
+        vibrato = vibrato_depth * np.sin(2 * math.pi * vibrato_rate * t_array)
+        
+        # Generate phase with frequency modulation
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+        
+        # Main tone with harmonics for richness
+        tone = np.sin(phase)
+        tone += 0.3 * np.sin(phase * 2)  # Second harmonic
+        tone += 0.15 * np.sin(phase * 3)  # Third harmonic
+        
+        # Add slight noise for texture (bird sounds aren't pure tones)
+        noise = np.random.normal(0.0, 0.15, num_samples).astype(np.float32)
+        tone = tone + noise
+        
+        # Envelope: quick attack, smooth decay
+        attack = np.clip(progress / 0.15, 0.0, 1.0)
+        decay = np.exp(-np.maximum(progress - 0.2, 0.0) * 4.0)
+        envelope = attack * decay
+        
+        # Apply envelope and normalize
+        samples = tone * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.4)  # Quieter than shoot
+        return sound
+    
+    def play_tweet(self) -> None:
+        """Play a random bird-like tweet/chirp sound.
+        
+        Generates a new tweet sound each time with random characteristics.
+        """
+        if not config.SOUND_ENABLED:
+            return
+        
+        sound = self._generate_tweet_sound()
+        if sound:
+            # Use channel 7 for tweet sounds (or find an available channel)
+            # Try to use a channel that won't interfere with other sounds
+            tweet_channel = pygame.mixer.Channel(7)
+            tweet_channel.play(sound)
 
 

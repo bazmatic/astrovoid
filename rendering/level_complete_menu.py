@@ -245,18 +245,12 @@ class LevelCompleteMenu:
         if not self.menu_options or self.menu_options != expected_options:
             self.set_options(level_succeeded)
         
-        # Draw buttons with controller icons
+        # Draw buttons
         hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
         
         for i, button in enumerate(self.menu_buttons):
             button.selected = (i == self.menu_selected_index)
             button.draw(self.screen, self.menu_pulse_phase)
-            
-            # Draw controller icon next to selected button
-            if button.selected:
-                icon_x = button.position[0] - button.width // 2 - 58
-                icon_y = button.position[1]
-                ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
         # Draw hints below buttons (dynamic based on selected option)
         last_button_y = self.menu_buttons[-1].position[1] if self.menu_buttons else config.SCREEN_HEIGHT // 2 + 150
