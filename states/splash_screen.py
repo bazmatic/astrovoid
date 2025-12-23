@@ -6,16 +6,22 @@ with fade-in/out animations and auto-advances to the menu.
 
 import pygame
 import os
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 import config
 from utils.resource_path import resource_path
+
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
 
 if TYPE_CHECKING:
     from states.state_machine import StateMachine
 
 
 class SplashScreenState:
-    """Splash screen state with fade animations."""
+    """Splash screen state with fade animations and video playback."""
     
     def __init__(self, state_machine: 'StateMachine', screen: pygame.Surface):
         """Initialize splash screen state.
@@ -42,12 +48,23 @@ class SplashScreenState:
             # Fallback if image not found
             self.splash_image = None
         
+        # Video state
+        self.video_cap: Optional[object] = None  # cv2.VideoCapture when available
+        self.video_fps: float = 30.0
+        self.video_frame: Optional[pygame.Surface] = None
+        self.video_started = False
+        self.video_complete = False
+        self.video_path = resource_path('assets/video.mp4')
+        self.screen_width, self.screen_height = screen.get_size()
+        self.video_time_accumulator: float = 0.0
+        
         # Animation state
         self.time_elapsed = 0.0
         self.alpha = 0.0
         self.fade_in_complete = False
         self.fade_out_started = False
         self.should_transition = False
+        self.showing_image = True
     
     def enter(self) -> None:
         """Called when entering this state."""
@@ -56,10 +73,115 @@ class SplashScreenState:
         self.fade_in_complete = False
         self.fade_out_started = False
         self.should_transition = False
+        self.showing_image = True
+        self.video_started = False
+        self.video_complete = False
+        self.video_frame = None
+        self.video_time_accumulator = 0.0
+        
+        # Close any existing video capture
+        if self.video_cap is not None:
+            self.video_cap.release()
+            self.video_cap = None
     
     def exit(self) -> None:
         """Called when exiting this state."""
-        pass
+        # Clean up video capture
+        if self.video_cap is not None:
+            self.video_cap.release()
+            self.video_cap = None
+    
+    def _load_video(self) -> bool:
+        """Load and initialize video playback.
+        
+        Returns:
+            True if video was loaded successfully, False otherwise.
+        """
+        if not CV2_AVAILABLE:
+            print("Warning: opencv-python not available. Video playback disabled.")
+            return False
+        
+        try:
+            if not os.path.exists(self.video_path):
+                print(f"Warning: Video file not found: {self.video_path}")
+                return False
+            
+            self.video_cap = cv2.VideoCapture(self.video_path)
+            if not self.video_cap.isOpened():
+                print(f"Warning: Could not open video file: {self.video_path}")
+                return False
+            
+            self.video_fps = self.video_cap.get(cv2.CAP_PROP_FPS)
+            if self.video_fps <= 0:
+                self.video_fps = 30.0
+            
+            # Load first frame immediately
+            ret, frame = self.video_cap.read()
+            if ret:
+                # Convert BGR to RGB
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                
+                # Scale to fit screen while maintaining aspect ratio
+                frame_height, frame_width = frame_rgb.shape[:2]
+                scale = min(self.screen_width / frame_width, self.screen_height / frame_height)
+                new_width = int(frame_width * scale)
+                new_height = int(frame_height * scale)
+                
+                # Resize frame
+                frame_resized = cv2.resize(frame_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+                
+                # Convert to pygame surface
+                frame_surface = pygame.surfarray.make_surface(frame_resized.swapaxes(0, 1))
+                self.video_frame = frame_surface.convert()
+            
+            return True
+        except Exception as e:
+            print(f"Warning: Error loading video: {e}")
+            return False
+    
+    def _update_video(self, dt_seconds: float) -> None:
+        """Update video playback and load next frame.
+        
+        Args:
+            dt_seconds: Delta time in seconds.
+        """
+        if self.video_cap is None or not self.video_cap.isOpened():
+            self.video_complete = True
+            return
+        
+        # For smooth playback, read a frame every update cycle (60fps)
+        # To achieve 2x speed, skip every other frame by reading 2 frames but only displaying the second
+        # This ensures smooth playback without frame skipping
+        ret, frame = self.video_cap.read()
+        if not ret:
+            # Video ended
+            self.video_complete = True
+            self.video_cap.release()
+            self.video_cap = None
+            return
+        
+        # For 2x speed, read one more frame and discard the first
+        # This effectively skips frames to double the speed
+        ret2, frame2 = self.video_cap.read()
+        if ret2:
+            frame = frame2  # Use the second frame
+        # If we can't read a second frame, use the first one (near end of video)
+        
+        # Convert BGR to RGB
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        
+        # Scale to fit screen while maintaining aspect ratio
+        frame_height, frame_width = frame_rgb.shape[:2]
+        scale = min(self.screen_width / frame_width, self.screen_height / frame_height)
+        new_width = int(frame_width * scale)
+        new_height = int(frame_height * scale)
+        
+        # Resize frame
+        frame_resized = cv2.resize(frame_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+        
+        # Convert to pygame surface
+        frame_surface = pygame.surfarray.make_surface(frame_resized.swapaxes(0, 1))
+        self.video_frame = frame_surface.convert()
     
     def update(self, dt: float) -> None:
         """Update splash screen animation.
@@ -70,23 +192,42 @@ class SplashScreenState:
         dt_seconds = dt / 60.0
         self.time_elapsed += dt_seconds
         
-        # Fade in
-        if not self.fade_in_complete:
-            fade_progress = self.time_elapsed / config.SPLASH_FADE_IN_DURATION
-            if fade_progress >= 1.0:
-                self.alpha = 1.0
-                self.fade_in_complete = True
+        if self.showing_image:
+            # Phase 1: Show image with fade-in
+            if not self.fade_in_complete:
+                fade_progress = self.time_elapsed / config.SPLASH_FADE_IN_DURATION
+                if fade_progress >= 1.0:
+                    self.alpha = 1.0
+                    self.fade_in_complete = True
+                else:
+                    self.alpha = fade_progress
             else:
-                self.alpha = fade_progress
+                # Wait for image display duration, then switch to video
+                wait_time = config.SPLASH_DISPLAY_DURATION - config.SPLASH_FADE_IN_DURATION
+                if self.time_elapsed >= wait_time and not self.video_started:
+                    # Switch to video
+                    self.showing_image = False
+                    self.video_started = True
+                    self.time_elapsed = 0.0  # Reset timer for video phase
+                    self.video_time_accumulator = 0.0
+                    self.alpha = 1.0
+                    if not self._load_video():
+                        # If video fails to load, skip to fade out
+                        self.video_complete = True
+                        self.fade_out_started = True
+                        self.time_elapsed = 0.0  # Reset timer for fade out
         else:
-            # Wait, then fade out
-            wait_time = config.SPLASH_DISPLAY_DURATION - config.SPLASH_FADE_IN_DURATION
-            if self.time_elapsed >= wait_time and not self.fade_out_started:
-                self.fade_out_started = True
-            
-            if self.fade_out_started:
-                fade_out_start_time = wait_time
-                fade_out_progress = (self.time_elapsed - fade_out_start_time) / config.SPLASH_FADE_OUT_DURATION
+            # Phase 2: Play video
+            if not self.video_complete:
+                self._update_video(dt_seconds)
+            else:
+                # Phase 3: Fade out after video
+                if not self.fade_out_started:
+                    self.fade_out_started = True
+                    # Reset timer for fade out
+                    self.time_elapsed = 0.0
+                
+                fade_out_progress = self.time_elapsed / config.SPLASH_FADE_OUT_DURATION
                 if fade_out_progress >= 1.0:
                     # Mark for transition
                     self.alpha = 0.0
@@ -103,18 +244,32 @@ class SplashScreenState:
         # Clear screen
         screen.fill((0, 0, 0))
         
-        # Draw splash image with alpha
-        if self.splash_image:
-            # Create surface with alpha
-            alpha_surf = self.splash_image.copy()
-            alpha_surf.set_alpha(int(255 * self.alpha))
-            
-            # Center on screen
-            screen_width, screen_height = screen.get_size()
-            img_width, img_height = alpha_surf.get_size()
-            x = (screen_width - img_width) // 2
-            y = (screen_height - img_height) // 2
-            screen.blit(alpha_surf, (x, y))
+        if self.showing_image:
+            # Draw splash image with alpha
+            if self.splash_image:
+                # Create surface with alpha
+                alpha_surf = self.splash_image.copy()
+                alpha_surf.set_alpha(int(255 * self.alpha))
+                
+                # Center on screen
+                screen_width, screen_height = screen.get_size()
+                img_width, img_height = alpha_surf.get_size()
+                x = (screen_width - img_width) // 2
+                y = (screen_height - img_height) // 2
+                screen.blit(alpha_surf, (x, y))
+        else:
+            # Draw video frame with alpha
+            if self.video_frame:
+                # Create surface with alpha
+                alpha_surf = self.video_frame.copy()
+                alpha_surf.set_alpha(int(255 * self.alpha))
+                
+                # Center on screen
+                screen_width, screen_height = screen.get_size()
+                frame_width, frame_height = alpha_surf.get_size()
+                x = (screen_width - frame_width) // 2
+                y = (screen_height - frame_height) // 2
+                screen.blit(alpha_surf, (x, y))
     
     def handle_event(self, event: pygame.event.Event) -> None:
         """Handle pygame events.
@@ -124,11 +279,26 @@ class SplashScreenState:
         """
         # Skip on any input (keyboard or controller)
         if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN:
-            if self.fade_in_complete:
-                # Start fade out immediately
+            if self.showing_image and self.fade_in_complete:
+                # Skip image and go to video
+                self.showing_image = False
+                self.video_started = True
+                self.time_elapsed = 0.0
+                self.video_time_accumulator = 0.0
+                self.alpha = 1.0
+                if not self._load_video():
+                    self.video_complete = True
+                    self.fade_out_started = True
+            elif not self.showing_image and not self.video_complete:
+                # Skip video and go to fade out
+                self.video_complete = True
                 self.fade_out_started = True
-                # Adjust time so fade out starts now
-                wait_time = config.SPLASH_DISPLAY_DURATION - config.SPLASH_FADE_IN_DURATION
-                self.time_elapsed = wait_time
+                self.time_elapsed = 0.0
+                if self.video_cap is not None:
+                    self.video_cap.release()
+                    self.video_cap = None
+            elif self.fade_out_started:
+                # Already fading out, do nothing
+                pass
     
 

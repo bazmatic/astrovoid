@@ -110,9 +110,37 @@ else:
     from game import Game
 
 
+def check_hardware_acceleration() -> None:
+    """Check and report hardware acceleration availability.
+    
+    Pygame 2.5+ (SDL2) enables hardware acceleration by default when available.
+    This function checks the display driver to verify acceleration support.
+    """
+    try:
+        driver = pygame.display.get_driver()
+        # SDL2 drivers that typically support hardware acceleration:
+        # 'windows', 'x11', 'cocoa', 'wayland', 'directfb', etc.
+        # Software fallback drivers: 'dummy', 'aalib', 'ggi'
+        hardware_drivers = {'windows', 'x11', 'cocoa', 'wayland', 'directfb', 'fbcon'}
+        has_hw_accel = driver.lower() not in {'dummy', 'aalib', 'ggi'}
+        
+        if has_hw_accel:
+            # Hardware acceleration is likely available (SDL2 default behavior)
+            pass  # Silent success - acceleration enabled by default
+        else:
+            # Software rendering fallback
+            print(f"Warning: Using software rendering driver '{driver}'. Hardware acceleration may not be available.")
+    except Exception:
+        # If check fails, assume acceleration is available (SDL2 default)
+        pass
+
+
 def main():
     """Initialize and run the game."""
     pygame.init()
+    
+    # Check hardware acceleration availability
+    check_hardware_acceleration()
     
     # Initialize joystick support for game controllers
     pygame.joystick.init()
@@ -135,10 +163,12 @@ def main():
         # Use settings.json: fullscreen=false means windowed=true
         windowed = not config.SCREEN_FULLSCREEN
     
+    # Enable double buffering for smoother rendering and reduced flicker
+    # Hardware acceleration is enabled by default in SDL2 (pygame 2.5+)
     if windowed:
-        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.DOUBLEBUF)
     else:
-        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN)
+        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.DOUBLEBUF)
     
     pygame.display.set_caption("ASTRO VOID - Space Navigation Game")
     
