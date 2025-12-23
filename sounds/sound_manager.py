@@ -146,6 +146,40 @@ class SoundManager:
         # Create sound from array
         sound = pygame.sndarray.make_sound(stereo_samples)
         return sound
+
+    def _generate_bad_hit(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a short, unpleasant tone for when the player is hit."""
+        if not config.SOUND_ENABLED:
+            return None
+
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 0.13
+        num_samples = int(sample_rate * duration)
+        t = np.arange(num_samples, dtype=np.float32) / sample_rate
+
+        freq = random.uniform(260.0, 360.0)
+        tone = np.sin(2 * math.pi * freq * t)
+        envelope = np.exp(-9.0 * t)
+        noise = np.random.uniform(-0.3, 0.3, size=num_samples) * np.exp(-12.0 * t)
+        samples = (tone + noise) * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        return pygame.sndarray.make_sound(stereo_int16)
+
+    def play_bad_hit(self) -> None:
+        """Play a quick 'bad hit' sound for when the player is struck."""
+        if not config.SOUND_ENABLED:
+            return
+
+        sound = self._generate_bad_hit()
+        if not sound:
+            return
+
+        sound.set_volume(config.BAD_HIT_SOUND_VOLUME)
+        hit_channel = pygame.mixer.Channel(4)
+        hit_channel.play(sound)
     
     def _generate_upgraded_shoot(self) -> Optional[pygame.mixer.Sound]:
         """Generate machine gun sound for upgraded guns.

@@ -128,7 +128,7 @@ class MainMenu:
             
             # Draw controller icon next to selected button
             if button.selected:
-                icon_x = button.position[0] - button.width // 2 - 50
+                icon_x = button.position[0] - button.width // 2 - 58
                 icon_y = button.position[1]
                 ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
@@ -140,11 +140,11 @@ class MainMenu:
         # Dynamic hint based on selected option
         selected_option = self.get_selected_option()
         if selected_option == "START GAME":
-            hint_text = "Press SPACE/ENTER or A Button to Start"
+            hint_text = "Press SPACE or A Button to Start"
         elif selected_option == "OPTIONS":
-            hint_text = "Press SPACE/ENTER or A Button (Coming Soon)"
+            hint_text = "Press SPACE or A Button (Coming Soon)"
         else:  # QUIT
-            hint_text = "Press SPACE/ENTER or A Button to Quit"
+            hint_text = "Press SPACE or A Button to Quit"
         
         hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
         hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))

@@ -151,8 +151,11 @@ class Egg(GameEntity, Collidable, Drawable):
         
         self.has_popped = True
         
-        # Spawn 1-3 Baby enemies
-        spawn_count = random.randint(1, 3)
+        # Spawn babies using configured range
+        spawn_count = random.randint(
+            config.EGG_BABY_SPAWN_MIN,
+            config.EGG_BABY_SPAWN_MAX
+        )
         
         for i in range(spawn_count):
             # Random offset within spawn range

@@ -123,6 +123,7 @@ class SplitBossSettings:
     splitVelocityMagnitude: float
     baseCount: int
     scaleFactor: float
+    childrenCount: int
 
 
 @dataclass
@@ -153,6 +154,8 @@ class EggSettings:
     scaleFactor: float
     color: Tuple[int, int, int]
     hitPoints: int
+    babySpawnMin: int
+    babySpawnMax: int
 
 
 @dataclass
@@ -220,6 +223,7 @@ class SoundSettings:
     thrusterNoiseDuration: float
     shootBlipFrequency: int
     shootBlipDuration: float
+    hitSoundVolume: float
 
 
 @dataclass
@@ -268,6 +272,7 @@ class PowerupSettings:
     fireRateMultipliers: PowerupFireRateMultipliers
     upgradedProjectile: PowerupUpgradedProjectile
     beyondLevel3: PowerupBeyondLevel3
+    rotationSpeedMultiplier: float
 
 
 @dataclass
@@ -393,6 +398,8 @@ def load_settings() -> Settings:
             glowColor=_as_color(tuple(powerup_raw["upgradedProjectile"]["glowColor"]))
         ),
         beyondLevel3=PowerupBeyondLevel3(**powerup_raw["beyondLevel3"])
+        ,
+        rotationSpeedMultiplier=powerup_raw["rotationSpeedMultiplier"]
     )
 
     colors_raw = raw["colors"]
@@ -436,7 +443,9 @@ def load_settings() -> Settings:
             baseCount=raw["egg"]["baseCount"],
             scaleFactor=raw["egg"]["scaleFactor"],
             color=_as_color(tuple(raw["egg"]["color"])),
-            hitPoints=raw["egg"]["hitPoints"]
+            hitPoints=raw["egg"]["hitPoints"],
+            babySpawnMin=raw["egg"]["babySpawnMin"],
+            babySpawnMax=raw["egg"]["babySpawnMax"]
         ),
         momentum=MomentumSettings(**raw["momentum"]),
         projectile=ProjectileSettings(
@@ -567,6 +576,7 @@ SPLIT_BOSS_SPAWN_OFFSET_RANGE = SETTINGS.splitBoss.spawnOffsetRange
 SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = SETTINGS.splitBoss.splitVelocityMagnitude
 SPLIT_BOSS_BASE_COUNT = SETTINGS.splitBoss.baseCount
 SPLIT_BOSS_SCALE_FACTOR = SETTINGS.splitBoss.scaleFactor
+SPLIT_BOSS_CHILD_COUNT = SETTINGS.splitBoss.childrenCount
 
 MOTHER_BOSS_SIZE_MULTIPLIER = SETTINGS.motherBoss.sizeMultiplier
 MOTHER_BOSS_HIT_POINTS = SETTINGS.motherBoss.hitPoints
@@ -593,6 +603,8 @@ EGG_BASE_COUNT = SETTINGS.egg.baseCount
 EGG_SCALE_FACTOR = SETTINGS.egg.scaleFactor
 COLOR_EGG = SETTINGS.egg.color
 EGG_HIT_POINTS = SETTINGS.egg.hitPoints
+EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin
+EGG_BABY_SPAWN_MAX = SETTINGS.egg.babySpawnMax
 
 STATIC_ENEMY_HIT_POINTS = SETTINGS.momentum.staticEnemyHitPoints
 MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
@@ -642,6 +654,7 @@ POWERUP_ACTIVATION_SOUND_VOLUME = SETTINGS.sound.powerupActivationVolume
 THRUSTER_NOISE_DURATION = SETTINGS.sound.thrusterNoiseDuration
 SHOOT_BLIP_FREQUENCY = SETTINGS.sound.shootBlipFrequency
 SHOOT_BLIP_DURATION = SETTINGS.sound.shootBlipDuration
+BAD_HIT_SOUND_VOLUME = SETTINGS.sound.hitSoundVolume
 
 CONTROLLER_DEADZONE = SETTINGS.controller.deadzone
 CONTROLLER_TRIGGER_THRESHOLD = SETTINGS.controller.triggerThreshold
@@ -670,6 +683,7 @@ POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT = SETTINGS.powerups.beyondLevel3.sizeIncre
 POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT = SETTINGS.powerups.beyondLevel3.speedIncrement
 POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT = SETTINGS.powerups.beyondLevel3.glowIntensityIncrement
 POWERUP_BEYOND_LEVEL_3_HUE_ROTATION = SETTINGS.powerups.beyondLevel3.hueRotation
+POWERUP_ROTATION_SPEED_MULTIPLIER = SETTINGS.powerups.rotationSpeedMultiplier
 
 STAR_APPEAR_DURATION = SETTINGS.starAnimation.appearDuration
 STAR_TWINKLE_SPEED = SETTINGS.starAnimation.twinkleSpeed

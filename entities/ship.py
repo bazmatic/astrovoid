@@ -265,7 +265,10 @@ class Ship(RotatingThrusterShip):
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
         # Increment level (no cap - unlimited powerups)
+        previous_level = self.gun_upgrade_level
         self.gun_upgrade_level += 1
+        if previous_level == 0:
+            self.rotation_speed_multiplier = config.POWERUP_ROTATION_SPEED_MULTIPLIER
         self._start_powerup_flash()
         self.sound_manager.play_powerup_activation()
     
@@ -275,6 +278,7 @@ class Ship(RotatingThrusterShip):
         self.upgrade_glow_phase = 0.0
         self.powerup_flash_timer = 0
         self.powerup_flash_phase = 0.0
+        self.rotation_speed_multiplier = 1.0
     
     def is_gun_upgraded_active(self) -> bool:
         """Check if gun upgrade is currently active.

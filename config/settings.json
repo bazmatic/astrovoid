@@ -27,7 +27,7 @@
     "enemyBulletPenalty": 5,
     "ammoPenaltyRate": 0.1,
     "fuelPenaltyRate": 0.01,
-    "wallCollisionPenalty": 4,
+    "wallCollisionPenalty": 1,
     "powerupCrystalBonus": 5
   },
   "difficulty": {
@@ -121,15 +121,16 @@
   },
   "splitBoss": {
     "sizeMultiplier": 2.0,
-    "hitPoints": 3,
+    "hitPoints": 8,
     "spawnOffsetRange": 80,
     "splitVelocityMagnitude": 2.0,
     "baseCount": 0,
-    "scaleFactor": 0.3
+    "scaleFactor": 0.3,
+    "childrenCount": 6
   },
   "motherBoss": {
     "sizeMultiplier": 3.0,
-    "hitPoints": 10,
+    "hitPoints": 20,
     "eggLayInterval": 180,
     "baseCount": 0,
     "scaleFactor": 0.2,
@@ -151,7 +152,9 @@
     "baseCount": 0,
     "scaleFactor": 0.3,
     "color": [255, 200, 100],
-    "hitPoints": 2
+    "hitPoints": 2,
+    "babySpawnMin": 1,
+    "babySpawnMax": 3
   },
   "momentum": {
     "staticEnemyHitPoints": 2,
@@ -204,6 +207,7 @@
     "enemyDestroyVolume": 0.6,
     "exitWarbleVolume": 0.65,
     "powerupActivationVolume": 0.6,
+    "hitSoundVolume": 0.35,
     "thrusterNoiseDuration": 0.1,
     "shootBlipFrequency": 800,
     "shootBlipDuration": 0.05
@@ -217,9 +221,9 @@
     "crystalSpawnChance": 0.3,
     "crystalRotationSpeed": 2.0,
     "crystalGlowIntensity": 0.6,
-    "crystalColor": [150, 100, 255],
-    "attractionRadius": 50,
-    "attractionSpeed": 1.0,
+    "crystalColor": [100, 255, 100],
+    "attractionRadius": 60,
+    "attractionSpeed": 2.0,
     "flashDurationFrames": 18,
     "flashTintStrength": 0.85,
     "flashGlowMultiplier": 1.6,
@@ -241,7 +245,8 @@
       "speedIncrement": 0.05,
       "glowIntensityIncrement": 0.1,
       "hueRotation": 30
-    }
+    },
+    "rotationSpeedMultiplier": 1.2
   },
   "starAnimation": {
     "appearDuration": 0.4,

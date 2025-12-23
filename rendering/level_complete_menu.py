@@ -253,7 +253,7 @@ class LevelCompleteMenu:
             
             # Draw controller icon next to selected button
             if button.selected:
-                icon_x = button.position[0] - button.width // 2 - 50
+                icon_x = button.position[0] - button.width // 2 - 58
                 icon_y = button.position[1]
                 ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
@@ -263,11 +263,11 @@ class LevelCompleteMenu:
         
         selected_option = self.get_selected_option()
         if selected_option == "CONTINUE":
-            hint_text = "Press SPACE/ENTER or A Button to Continue"
+            hint_text = "Press SPACE or A Button to Continue"
         elif selected_option == "RETRY LEVEL":
-            hint_text = "Press SPACE/ENTER or A Button to Retry"
+            hint_text = "Press SPACE or A Button to Retry"
         else:  # MAIN MENU
-            hint_text = "Press SPACE/ENTER or A Button to Return to Main Menu"
+            hint_text = "Press SPACE or A Button to Return to Main Menu"
         
         hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
         hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
