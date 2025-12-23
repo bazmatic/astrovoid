@@ -22,8 +22,9 @@ class ScoreCalculator:
         enemies_destroyed: int,
         shots_fired: int,
         fuel_used: int,
-        wall_collisions: int,
-        powerups_collected: int
+        wall_collisions: int = 0,
+        powerups_collected: int = 0,
+        enemy_bullet_hits: int = 0
     ) -> Dict[str, float]:
         """Calculate score based on performance metrics.
         
@@ -68,6 +69,7 @@ class ScoreCalculator:
         powerup_bonus = powerups_collected * config.POWERUP_CRYSTAL_BONUS
         
         # Calculate final score (bonus adds to score, can exceed 100)
+        enemy_bullet_penalty = enemy_bullet_hits * config.ENEMY_BULLET_PENALTY
         final_score = (
             score
             - time_penalty
@@ -75,6 +77,7 @@ class ScoreCalculator:
             - wall_collision_penalty
             - ammo_penalty
             - fuel_penalty
+            - enemy_bullet_penalty
             + enemy_destruction_bonus
             + powerup_bonus
         )
@@ -88,6 +91,7 @@ class ScoreCalculator:
             "ammo_penalty": ammo_penalty,
             "fuel_penalty": fuel_penalty,
             "powerup_bonus": powerup_bonus,
+            "enemy_bullet_penalty": enemy_bullet_penalty,
             "final_score": final_score
         }
     

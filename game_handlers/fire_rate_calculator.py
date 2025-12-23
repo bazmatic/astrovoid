@@ -19,15 +19,16 @@ def calculate_fire_cooldown(ship: 'Ship') -> int:
     Returns:
         Fire cooldown in milliseconds.
     """
-    base_cooldown = 200  # Default 200ms between shots
+    base_cooldown = config.SETTINGS.powerups.fireRateBaseCooldown
     upgrade_level = ship.get_gun_upgrade_level()
     
+    multipliers = config.SETTINGS.powerups.fireRateMultipliers
     if upgrade_level == 1:
-        return int(base_cooldown / config.POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER)
+        return int(base_cooldown / multipliers.level1)
     elif upgrade_level == 2:
-        return int(base_cooldown / config.POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER)
+        return int(base_cooldown / multipliers.level2)
     elif upgrade_level == 3:
-        return int(base_cooldown / config.POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER)
+        return int(base_cooldown / multipliers.level3)
     
     return base_cooldown
 

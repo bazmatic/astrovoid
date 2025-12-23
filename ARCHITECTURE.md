@@ -27,14 +27,18 @@ Main game coordinator class. Manages game state, level progression, and coordina
 
 #### `config.py`
 
-Centralized configuration file containing all game constants, including:
+Loads the centralized configuration from `config/settings.json` and exposes both:
 
-- Screen dimensions
-- Physics parameters (ship speed, rotation, thrust)
-- Resource limits (fuel, ammo)
-- Scoring weights and penalties
-- Difficulty scaling
-- Visual settings (colors, sizes)
+- A typed `config.SETTINGS` object with per-section dataclasses (`ScreenSettings`, `MazeSettings`, `PowerupSettings`, etc.)
+- Legacy uppercase constants for backwards compatibility (e.g., `config.FPS`, `config.COLOR_BACKGROUND`)
+
+The JSON file governs tunable sections such as:
+
+- Screen dimensions and framerate
+- Physics parameters (ship thrust, enemy speeds)
+- Resource limits (fuel, ammo, shields)
+- Difficulty scaling and maze presets
+- Visual settings (colors, UI animation speeds)
 
 ### Entity System (`entities/`)
 

@@ -1,263 +1,710 @@
-"""Game configuration and constants.
+"""Game configuration loader that exposes typed settings backed by JSON."""
 
-This module centralizes all game configuration values including screen settings,
-physics parameters, resource limits, scoring weights, difficulty scaling, and
-visual settings. All constants should be defined here to make tuning easy.
+from __future__ import annotations
 
-Dependencies:
-    - pygame: For color constants
+import json
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, Optional, Tuple
 
-Architecture:
-    This module follows the Configuration Object pattern, providing a single
-    source of truth for all game parameters. This makes it easy to:
-    - Tune game balance
-    - Adjust difficulty
-    - Modify visual appearance
-    - Test different configurations
-"""
 
-import pygame
+def _as_color(value: Tuple[int, int, int]) -> Tuple[int, int, int]:
+    return tuple(value)
 
-# Screen settings
-SCREEN_WIDTH = 1480
-SCREEN_HEIGHT = 900
-FPS = 60
 
-# Ship physics
-SHIP_SIZE = 8  # Ship radius (affects both collision and visual size)
-SHIP_ROTATION_SPEED = 5.0  # Degrees per frame (how fast the ship rotates)
-SHIP_THRUST_FORCE = 0.15  # Thrust power (acceleration per frame when thrusting)
-SHIP_FRICTION = 0.998  # Very low friction for zero-G environment
-SHIP_MAX_SPEED = 8.0
-COLLISION_RESTITUTION = 0.85  # Coefficient of restitution for ship-enemy collisions (0.0 = inelastic, 1.0 = elastic)
+@dataclass
+class ScreenSettings:
+    width: int
+    height: int
+    fps: int
 
-# Resources
-INITIAL_FUEL = 1000
-INITIAL_AMMO = 50
-FUEL_CONSUMPTION_PER_THRUST = 1
-AMMO_CONSUMPTION_PER_SHOT = 1
-SHIELD_FUEL_CONSUMPTION_PER_FRAME = 4  # Fuel consumed per frame while shield is active
 
-# Scoring system (100 point maximum per level)
-MAX_LEVEL_SCORE = 100  # Maximum score per level
-TIME_PENALTY_RATE = 2  # Points deducted per second of elapsed time
-COLLISION_PENALTY = 5  # Points deducted per collision (wall or enemy)
-AMMO_PENALTY_RATE = 0.1  # Points deducted per shot fired
-FUEL_PENALTY_RATE = 0.01  # Points deducted per unit of fuel used
-WALL_COLLISION_PENALTY = 4  # Points deducted each time the ship bounces off a wall
-POWERUP_CRYSTAL_BONUS = 5  # Points awarded when a crystal is collected
+@dataclass
+class ShipSettings:
+    size: int
+    rotationSpeed: float
+    thrustForce: float
+    friction: float
+    maxSpeed: float
+    spawnOffset: float
+    collisionRestitution: float
 
-# Difficulty scaling
-BASE_MAZE_SIZE = 10  # Larger base maze to fill screen
-MAZE_SIZE_INCREMENT = 2
-MAX_MAZE_SIZE = 40  # Maximum grid size (width/height in cells) to prevent excessive cells at high levels
-BASE_ENEMY_COUNT = 2
-ENEMY_COUNT_INCREMENT = 1
-TUTORIAL_LEVELS = 1  # Number of tutorial levels before difficulty scaling begins
 
-# Maze settings
-WALL_THICKNESS = 6
-# Cell size will be calculated dynamically to fill screen
-CELL_SIZE = None  # Will be calculated based on screen size
-MIN_PASSAGE_WIDTH = 3  # Wider passages (3+ cells wide)
-WALL_HIT_POINTS = 2  # Number of hits required to destroy a wall block
-SHIP_SPAWN_OFFSET = 0.35  # Offset from corner cell center (0.0 = center, 0.5 = edge) - moves ship inward
+@dataclass
+class ResourceSettings:
+    initialFuel: int
+    initialAmmo: int
+    fuelPerThrust: int
+    ammoPerShot: int
+    shieldFuelPerFrame: int
 
-# Enemy settings
-STATIC_ENEMY_SIZE = 10
-DYNAMIC_ENEMY_SIZE = 8
-ENEMY_PATROL_SPEED = 1
-ENEMY_AGGRESSIVE_SPEED = 1.0
-ENEMY_DAMAGE = 10
-ENEMY_STUCK_DETECTION_THRESHOLD = 0.1  # Minimum distance change to consider enemy moving
-ENEMY_SHIFT_ANGLE_MIN = 45  # Minimum angle shift in degrees (45-90 range)
-ENEMY_SHIFT_ANGLE_MAX = 90  # Maximum angle shift in degrees
-ENEMY_SHIFT_DURATION_MIN = 10  # Minimum frames to maintain shifted direction
-ENEMY_SHIFT_DURATION_MAX = 100  # Maximum frames to maintain shifted direction
-ENEMY_FIRE_INTERVAL_MIN = 60  # Minimum frames between shots (1 second at 60 FPS)
-ENEMY_FIRE_INTERVAL_MAX = 300  # Maximum frames between shots (5 seconds at 60 FPS)
-ENEMY_FIRE_RANGE = 400  # Maximum distance to player for firing (pixels)
-REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = 30.0  # Degrees - enemy fires when pointing within this angle of player
 
-# Replay enemy settings
-REPLAY_ENEMY_WINDOW_SIZE = 100  # Number of actions to store and replay
-REPLAY_ENEMY_SIZE = 15  # Size/radius of replay enemy
-REPLAY_ENEMY_COLOR = (150, 100, 255)  # Visual color for replay enemy (purple/violet)
-REPLAY_ENEMY_BASE_COUNT = 1  # Base count after tutorial levels
-REPLAY_ENEMY_SCALE_FACTOR = 0.5  # Scaling factor for continuous growth (sqrt-based)
+@dataclass
+class ScoringSettings:
+    maxLevelScore: int
+    timePenaltyRate: int
+    collisionPenalty: int
+    ammoPenaltyRate: float
+    fuelPenaltyRate: float
+    wallCollisionPenalty: int
+    powerupCrystalBonus: int
+    enemyBulletPenalty: int
 
-# Baby enemy settings
-BABY_SIZE = 10  # Size/radius of baby enemy (smaller than replay enemy)
-BABY_SPEED_MULTIPLIER = 0.1  # Speed multiplier
 
-# SplitBoss settings
-SPLIT_BOSS_SIZE_MULTIPLIER = 2.0  # Double size compared to regular ReplayEnemyShip
-SPLIT_BOSS_HIT_POINTS = 3  # Number of hits required to destroy SplitBoss
-SPLIT_BOSS_SPAWN_OFFSET_RANGE = 80  # Pixels for random spawn positions of spawned enemies
-SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = 2.0  # Velocity magnitude for spawned enemies
-SPLIT_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
-SPLIT_BOSS_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
+@dataclass
+class DifficultySettings:
+    baseMazeSize: int
+    mazeSizeIncrement: int
+    maxMazeSize: int
+    baseEnemyCount: int
+    enemyCountIncrement: int
+    tutorialLevels: int
 
-# Mother Boss settings
-MOTHER_BOSS_SIZE_MULTIPLIER = 3.0  # Triple size compared to regular ReplayEnemyShip
-MOTHER_BOSS_HIT_POINTS = 10  # Number of hits required to destroy Mother Boss
-MOTHER_BOSS_EGG_LAY_INTERVAL = 180  # Frames between egg laying (3 seconds at 60 FPS)
-MOTHER_BOSS_BASE_COUNT = 0  # Base count after tutorial levels
-MOTHER_BOSS_SCALE_FACTOR = 0.2  # Scaling factor for continuous growth (sqrt-based)
 
-MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX = 0.7  # Max additive glow multiplier for texture lines
-MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = 2.0  # Max blink frequency multiplier when hurt
-MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX = 1.5  # Max multiplier for blink duration at low HP
+@dataclass
+class MazeComplexityPreset:
+    stepSize: int
+    passageWidth: int
+    clearRadius: int
+    cornerClearSize: int
+    extraPathsMultiplier: int
+    gridSizeBase: int
+    gridSizeIncrement: int
 
-MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER = 1.6  # Speed boost for Mother Boss bullets
-MOTHER_BOSS_PROJECTILE_IMPACT_MULTIPLIER = 1.4  # Impact force multiplier for boss bullets
-MOTHER_BOSS_PROJECTILE_GLOW_COLOR = (255, 160, 100)
-MOTHER_BOSS_PROJECTILE_GLOW_RADIUS_MULTIPLIER = 1.8
-MOTHER_BOSS_PROJECTILE_GLOW_INTENSITY = 0.65
 
-# Egg settings
-EGG_INITIAL_SIZE = 8  # Starting radius
-EGG_MAX_SIZE = 24  # Maximum radius before popping
-EGG_GROWTH_RATE_MIN = 0.01  # Minimum growth per frame (faster hatching)
-EGG_GROWTH_RATE_MAX = 0.04  # Maximum growth per frame (faster hatching)
-EGG_SPAWN_OFFSET_RANGE = 60  # Pixels for random spawn positions of Replay Enemies
-EGG_BASE_COUNT = 0  # Base count after tutorial levels
-EGG_SCALE_FACTOR = 0.3  # Scaling factor for continuous growth (sqrt-based)
-COLOR_EGG = (255, 200, 100)  # Visual color (yellow/orange)
-EGG_HIT_POINTS = 2  # Number of hits required to destroy an Egg
+@dataclass
+class MazeSettings:
+    wallThickness: int
+    cellSize: Optional[int]
+    minPassageWidth: int
+    wallHitPoints: int
+    shipSpawnOffset: float
+    complexityPresets: Dict[str, MazeComplexityPreset]
 
-# Momentum physics settings
-STATIC_ENEMY_HIT_POINTS = 2  # Number of hits required to destroy a Static enemy
-MOMENTUM_TRANSFER_FACTOR = 0.3  # Fraction of projectile velocity transferred to entity
-FRICTION_COEFFICIENT = 0.98  # Velocity decay per frame (light friction, 0.98 = 2% reduction)
-MIN_VELOCITY_THRESHOLD = 0.1  # Velocity below which entity stops completely
 
-# Projectile settings
-PROJECTILE_SPEED = 8.0
-PROJECTILE_SIZE = 3
-PROJECTILE_LIFETIME = 120  # frames
-COLOR_ENEMY_PROJECTILE = (255, 100, 100)  # Red/orange color for enemy bullets
-PROJECTILE_IMPACT_FORCE = 0.3  # Velocity impulse applied to ship when hit by projectile (small effect)
+@dataclass
+class EnemySettings:
+    staticSize: int
+    dynamicSize: int
+    patrolSpeed: float
+    aggressiveSpeed: float
+    damage: int
+    stuckDetectionThreshold: float
+    shiftAngleMin: int
+    shiftAngleMax: int
+    shiftDurationMin: int
+    shiftDurationMax: int
+    fireIntervalMin: int
+    fireIntervalMax: int
+    fireRange: float
+    replayFireAngleTolerance: float
 
-# Visual effects
-SHIP_GLOW_INTENSITY = 0.3
-SHIP_GLOW_RADIUS_MULTIPLIER = 1.5
-ENEMY_PULSE_SPEED = 0.05
-ENEMY_PULSE_AMPLITUDE = 0.1
-THRUST_PLUME_LENGTH = 15
-THRUST_PLUME_PARTICLES = 5
 
-# Colors
-COLOR_BACKGROUND = (10, 10, 20)
-COLOR_SHIP = (100, 200, 255)
-COLOR_WALLS = (150, 150, 150)
-COLOR_ENEMY_STATIC = (255, 100, 100)
-COLOR_ENEMY_DYNAMIC = (255, 150, 50)
-COLOR_PROJECTILE = (255, 255, 100)
-COLOR_EXIT = (50, 255, 50)
-COLOR_START = (50, 150, 255)
+@dataclass
+class ReplayEnemySettings:
+    windowSize: int
+    size: int
+    color: Tuple[int, int, int]
+    baseCount: int
+    scaleFactor: float
 
-# Exit portal settings
-EXIT_PORTAL_ATTRACTION_RADIUS = 150  # Distance at which portal starts attracting player
-EXIT_PORTAL_ATTRACTION_FORCE_MULTIPLIER = 0.5  # Attraction force as multiplier of ship thruster force (0.5 = half)
-EXIT_PORTAL_GLOW_MULTIPLIER = 2.0  # Multiplier for glow size when player is nearby
-EXIT_PORTAL_GLOW_LAYER_OFFSET = 3  # Additional radius per glow layer (creates layered glow effect)
-COLOR_TEXT = (255, 255, 255)
-COLOR_UI_BG = (20, 20, 30)
 
-# Gradient colors for ship
-COLOR_SHIP_NOSE = (150, 220, 255)
-COLOR_SHIP_REAR = (50, 150, 200)
-COLOR_SHIP_DAMAGED_NOSE = (255, 150, 150)
-COLOR_SHIP_DAMAGED_REAR = (200, 50, 50)
+@dataclass
+class BabySettings:
+    size: int
+    speedMultiplier: float
 
-# Sound settings
-SOUND_ENABLED = True
-SOUND_SAMPLE_RATE = 44100  # Standard CD quality
-THRUSTER_SOUND_VOLUME = 0.05  # Volume level for thruster (0.0 to 1.0)
-SHOOT_SOUND_VOLUME = 0.5  # Volume level for shoot sound (0.0 to 1.0)
-ENEMY_DESTROY_SOUND_VOLUME = 0.6  # Volume level for enemy destruction sound (0.0 to 1.0)
-EXIT_WARBLE_SOUND_VOLUME = 0.65  # Volume level for exit cosmic warble
-POWERUP_ACTIVATION_SOUND_VOLUME = 0.6  # Volume level for powerup pickup phase sound
-THRUSTER_NOISE_DURATION = 0.1  # Duration of white noise loop in seconds
-SHOOT_BLIP_FREQUENCY = 800  # Frequency in Hz for 8-bit blip sound
-SHOOT_BLIP_DURATION = 0.05  # Duration of blip sound in seconds
 
-# Controller settings
-CONTROLLER_DEADZONE = 0.05  # Deadzone threshold for analog sticks (0.0 to 1.0)
-CONTROLLER_TRIGGER_THRESHOLD = 0.3  # Threshold for trigger activation (0.0 to 1.0, requires intentional press)
+@dataclass
+class SplitBossSettings:
+    sizeMultiplier: float
+    hitPoints: int
+    spawnOffsetRange: int
+    splitVelocityMagnitude: float
+    baseCount: int
+    scaleFactor: float
 
-# Powerup crystal settings
-POWERUP_CRYSTAL_SIZE = 6
-POWERUP_CRYSTAL_SPAWN_CHANCE = 0.3  # 30% chance to drop
-POWERUP_CRYSTAL_ROTATION_SPEED = 2.0  # Degrees per frame
-POWERUP_CRYSTAL_GLOW_INTENSITY = 0.6
-COLOR_POWERUP_CRYSTAL = (150, 100, 255)  # Purple/cyan
-POWERUP_CRYSTAL_ATTRACTION_RADIUS = 50  # Distance at which crystal starts moving towards player
-POWERUP_CRYSTAL_ATTRACTION_SPEED = 1.0  # Speed at which crystal moves towards player
-POWERUP_FLASH_DURATION_FRAMES = 18  # Frames the ship flashes when a powerup is collected
-POWERUP_FLASH_TINT_STRENGTH = 0.85  # 0-1 blend of ship colors toward white during flash
-POWERUP_FLASH_GLOW_MULTIPLIER = 1.6  # Extra glow intensity while flashing
 
-# Gun upgrade settings
-POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER = 1.5  # Level 1: 1.5x faster fire rate
-POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER = 2.0  # Level 2: 2x faster fire rate
-POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER = 3.0  # Level 3: 3x faster fire rate
-UPGRADED_FIRE_RATE_MULTIPLIER = 2.0  # Deprecated: kept for backwards compatibility
-UPGRADED_PROJECTILE_SPREAD_ANGLE = 15.0  # Degrees for 3-way spread (level 2+)
-UPGRADED_PROJECTILE_SIZE_MULTIPLIER = 1.5
-UPGRADED_PROJECTILE_SPEED_MULTIPLIER = 1.2
-COLOR_UPGRADED_PROJECTILE = (150, 220, 255)  # Bright cyan
-COLOR_UPGRADED_SHIP_GLOW = (150, 200, 255)  # Cyan glow
+@dataclass
+class MotherBossSettings:
+    sizeMultiplier: float
+    hitPoints: int
+    eggLayInterval: int
+    baseCount: int
+    scaleFactor: float
+    lineGlowIntensityMax: float
+    blinkFrequencyMultiplierMax: float
+    blinkDurationMultiplierMax: float
+    projectileSpeedMultiplier: float
+    projectileImpactMultiplier: float
+    projectileGlowColor: Tuple[int, int, int]
+    projectileGlowRadiusMultiplier: float
+    projectileGlowIntensity: float
 
-# Post-level-3 powerup enhancements (unlimited stacking)
-POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT = 0.05  # 5% size increase per powerup
-POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT = 0.05  # 5% speed increase per powerup
-POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT = 0.1  # Glow intensity increase per powerup
-POWERUP_BEYOND_LEVEL_3_HUE_ROTATION = 30  # Degrees to rotate hue per powerup
 
-# Star animation settings
-STAR_APPEAR_DURATION = 0.4  # Seconds per star appearance animation
-STAR_TWINKLE_SPEED = 8.0  # Twinkle animation speed (radians per second)
-STAR_TWINKLE_INTENSITY = 0.3  # Twinkle brightness variation (0.0 to 1.0)
-STAR_TINKLE_BASE_PITCH = 800  # Hz for first star tinkling sound
-STAR_TINKLE_PITCH_INCREMENT = 200  # Hz increase per star
-LEVEL_COMPLETE_STAR_SIZE = 45  # Size of stars on level complete screen (pixels)
+@dataclass
+class EggSettings:
+    initialSize: int
+    maxSize: int
+    growthRateMin: float
+    growthRateMax: float
+    spawnOffsetRange: int
+    baseCount: int
+    scaleFactor: float
+    color: Tuple[int, int, int]
+    hitPoints: int
 
-# Game states
-STATE_SPLASH = "splash"
-STATE_MENU = "menu"
-STATE_PLAYING = "playing"
-STATE_LEVEL_COMPLETE = "level_complete"
-STATE_QUIT_CONFIRM = "quit_confirm"
 
-# UI and menu settings
-# Splash screen
-SPLASH_DISPLAY_DURATION = 3.5  # Seconds to show splash before auto-advancing
-SPLASH_FADE_IN_DURATION = 1.0  # Seconds for fade-in animation
-SPLASH_FADE_OUT_DURATION = 0.8  # Seconds for fade-out animation
+@dataclass
+class MomentumSettings:
+    staticEnemyHitPoints: int
+    transferFactor: float
+    frictionCoefficient: float
+    minVelocityThreshold: float
 
-# UI colors matching splash screen theme
-COLOR_NEON_ASTER_START = (255, 215, 0)  # Bright yellow
-COLOR_NEON_ASTER_END = (255, 140, 0)  # Orange-red
-COLOR_NEON_VOID_START = (100, 200, 255)  # Light blue/cyan
-COLOR_NEON_VOID_END = (100, 100, 255)  # Deep blue/purple
-COLOR_BUTTON_A = (50, 255, 100)  # Green for A button
-COLOR_BUTTON_B = (255, 100, 100)  # Red for B button
-COLOR_BUTTON_GLOW = (150, 220, 255)  # Cyan glow for buttons
 
-# UI animation settings
-NEON_GLOW_INTENSITY = 0.6  # Glow intensity for neon text (0.0 to 1.0)
-NEON_GLOW_PULSE_SPEED = 2.0  # Speed of glow pulsing animation
-BUTTON_GLOW_INTENSITY = 0.4  # Glow intensity for buttons
-BUTTON_GLOW_PULSE_SPEED = 3.0  # Speed of button glow pulsing
-STARFIELD_STAR_COUNT = 150  # Number of stars in animated starfield
-STARFIELD_TWINKLE_SPEED = 0.5  # Speed of star twinkling
-MENU_PARTICLE_COUNT = 30  # Number of particles in menu background
+@dataclass
+class ProjectileSettings:
+    speed: float
+    size: int
+    lifetime: int
+    color: Tuple[int, int, int]
+    impactForce: float
 
-# Font sizes
-FONT_SIZE_TITLE = 72
-FONT_SIZE_SUBTITLE = 32
-FONT_SIZE_BUTTON = 42
-FONT_SIZE_HINT = 24
 
+@dataclass
+class VisualSettings:
+    shipGlowIntensity: float
+    shipGlowRadiusMultiplier: float
+    enemyPulseSpeed: float
+    enemyPulseAmplitude: float
+    thrustPlumeLength: int
+    thrustPlumeParticles: int
+
+
+@dataclass
+class ColorsSettings:
+    background: Tuple[int, int, int]
+    ship: Tuple[int, int, int]
+    walls: Tuple[int, int, int]
+    enemyStatic: Tuple[int, int, int]
+    enemyDynamic: Tuple[int, int, int]
+    projectile: Tuple[int, int, int]
+    exit: Tuple[int, int, int]
+    start: Tuple[int, int, int]
+    text: Tuple[int, int, int]
+    uiBackground: Tuple[int, int, int]
+    shipNose: Tuple[int, int, int]
+    shipRear: Tuple[int, int, int]
+    shipDamagedNose: Tuple[int, int, int]
+    shipDamagedRear: Tuple[int, int, int]
+
+
+@dataclass
+class ExitPortalSettings:
+    attractionRadius: int
+    attractionForceMultiplier: float
+    glowMultiplier: float
+    glowLayerOffset: int
+
+
+@dataclass
+class SoundSettings:
+    enabled: bool
+    sampleRate: int
+    thrusterVolume: float
+    shootVolume: float
+    enemyDestroyVolume: float
+    exitWarbleVolume: float
+    powerupActivationVolume: float
+    thrusterNoiseDuration: float
+    shootBlipFrequency: int
+    shootBlipDuration: float
+
+
+@dataclass
+class ControllerSettings:
+    deadzone: float
+    triggerThreshold: float
+
+
+@dataclass
+class PowerupFireRateMultipliers:
+    level1: float
+    level2: float
+    level3: float
+
+
+@dataclass
+class PowerupUpgradedProjectile:
+    spreadAngle: float
+    sizeMultiplier: float
+    speedMultiplier: float
+    color: Tuple[int, int, int]
+    glowColor: Tuple[int, int, int]
+
+
+@dataclass
+class PowerupBeyondLevel3:
+    sizeIncrement: float
+    speedIncrement: float
+    glowIntensityIncrement: float
+    hueRotation: float
+
+
+@dataclass
+class PowerupSettings:
+    crystalSize: int
+    crystalSpawnChance: float
+    crystalRotationSpeed: float
+    crystalGlowIntensity: float
+    crystalColor: Tuple[int, int, int]
+    attractionRadius: int
+    attractionSpeed: float
+    flashDurationFrames: int
+    flashTintStrength: float
+    flashGlowMultiplier: float
+    fireRateBaseCooldown: int
+    fireRateMultipliers: PowerupFireRateMultipliers
+    upgradedProjectile: PowerupUpgradedProjectile
+    beyondLevel3: PowerupBeyondLevel3
+
+
+@dataclass
+class StarAnimationSettings:
+    appearDuration: float
+    twinkleSpeed: float
+    twinkleIntensity: float
+    tinkleBasePitch: int
+    tinklePitchIncrement: int
+    levelCompleteStarSize: int
+
+
+@dataclass
+class UIAnimations:
+    neonGlowIntensity: float
+    neonGlowPulseSpeed: float
+    buttonGlowIntensity: float
+    buttonGlowPulseSpeed: float
+
+
+@dataclass
+class UIStarfield:
+    starCount: int
+    twinkleSpeed: float
+
+
+@dataclass
+class UIFonts:
+    title: int
+    subtitle: int
+    button: int
+    hint: int
+
+
+@dataclass
+class UISettings:
+    splashDisplayDuration: float
+    splashFadeInDuration: float
+    splashFadeOutDuration: float
+    neonAsterStart: Tuple[int, int, int]
+    neonAsterEnd: Tuple[int, int, int]
+    neonVoidStart: Tuple[int, int, int]
+    neonVoidEnd: Tuple[int, int, int]
+    buttonAColor: Tuple[int, int, int]
+    buttonBColor: Tuple[int, int, int]
+    buttonGlowColor: Tuple[int, int, int]
+    animations: UIAnimations
+    starfield: UIStarfield
+    menuParticles: int
+    fonts: UIFonts
+
+
+@dataclass
+class GameSettings:
+    criticalWarningThreshold: int
+
+
+@dataclass
+class Settings:
+    screen: ScreenSettings
+    ship: ShipSettings
+    resources: ResourceSettings
+    scoring: ScoringSettings
+    difficulty: DifficultySettings
+    maze: MazeSettings
+    enemies: EnemySettings
+    replayEnemy: ReplayEnemySettings
+    baby: BabySettings
+    splitBoss: SplitBossSettings
+    motherBoss: MotherBossSettings
+    egg: EggSettings
+    momentum: MomentumSettings
+    projectile: ProjectileSettings
+    visuals: VisualSettings
+    colors: ColorsSettings
+    exitPortal: ExitPortalSettings
+    sound: SoundSettings
+    controller: ControllerSettings
+    powerups: PowerupSettings
+    starAnimation: StarAnimationSettings
+    ui: UISettings
+    game: GameSettings
+
+
+def _load_settings_json() -> dict:
+    path = Path(__file__).parent / "config" / "settings.json"
+    with path.open("r", encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def load_settings() -> Settings:
+    raw = _load_settings_json()
+
+    def _preset_map(presets: dict) -> Dict[str, MazeComplexityPreset]:
+        return {
+            key: MazeComplexityPreset(**value)
+            for key, value in presets.items()
+        }
+
+    starfield = UIStarfield(**raw["ui"]["starfield"])
+    animations = UIAnimations(**raw["ui"]["animations"])
+    fonts = UIFonts(**raw["ui"]["fonts"])
+
+    powerup_raw = raw["powerups"]
+    powerup_settings = PowerupSettings(
+        crystalSize=powerup_raw["crystalSize"],
+        crystalSpawnChance=powerup_raw["crystalSpawnChance"],
+        crystalRotationSpeed=powerup_raw["crystalRotationSpeed"],
+        crystalGlowIntensity=powerup_raw["crystalGlowIntensity"],
+        crystalColor=_as_color(tuple(powerup_raw["crystalColor"])),
+        attractionRadius=powerup_raw["attractionRadius"],
+        attractionSpeed=powerup_raw["attractionSpeed"],
+        flashDurationFrames=powerup_raw["flashDurationFrames"],
+        flashTintStrength=powerup_raw["flashTintStrength"],
+        flashGlowMultiplier=powerup_raw["flashGlowMultiplier"],
+        fireRateBaseCooldown=powerup_raw["fireRateBaseCooldown"],
+        fireRateMultipliers=PowerupFireRateMultipliers(**powerup_raw["fireRateMultipliers"]),
+        upgradedProjectile=PowerupUpgradedProjectile(
+            spreadAngle=powerup_raw["upgradedProjectile"]["spreadAngle"],
+            sizeMultiplier=powerup_raw["upgradedProjectile"]["sizeMultiplier"],
+            speedMultiplier=powerup_raw["upgradedProjectile"]["speedMultiplier"],
+            color=_as_color(tuple(powerup_raw["upgradedProjectile"]["color"])),
+            glowColor=_as_color(tuple(powerup_raw["upgradedProjectile"]["glowColor"]))
+        ),
+        beyondLevel3=PowerupBeyondLevel3(**powerup_raw["beyondLevel3"])
+    )
+
+    colors_raw = raw["colors"]
+
+    return Settings(
+        screen=ScreenSettings(**raw["screen"]),
+        ship=ShipSettings(**raw["ship"]),
+        resources=ResourceSettings(**raw["resources"]),
+        scoring=ScoringSettings(**raw["scoring"]),
+        difficulty=DifficultySettings(**raw["difficulty"]),
+        maze=MazeSettings(
+            wallThickness=raw["maze"]["wallThickness"],
+            cellSize=raw["maze"]["cellSize"],
+            minPassageWidth=raw["maze"]["minPassageWidth"],
+            wallHitPoints=raw["maze"]["wallHitPoints"],
+            shipSpawnOffset=raw["maze"]["shipSpawnOffset"],
+            complexityPresets=_preset_map(raw["maze"]["complexityPresets"])
+        ),
+        enemies=EnemySettings(**raw["enemies"]),
+        replayEnemy=ReplayEnemySettings(
+            windowSize=raw["replayEnemy"]["windowSize"],
+            size=raw["replayEnemy"]["size"],
+            color=_as_color(tuple(raw["replayEnemy"]["color"])),
+            baseCount=raw["replayEnemy"]["baseCount"],
+            scaleFactor=raw["replayEnemy"]["scaleFactor"]
+        ),
+        baby=BabySettings(**raw["baby"]),
+        splitBoss=SplitBossSettings(**raw["splitBoss"]),
+        motherBoss=MotherBossSettings(
+            **{
+                **raw["motherBoss"],
+                "projectileGlowColor": _as_color(tuple(raw["motherBoss"]["projectileGlowColor"]))
+            }
+        ),
+        egg=EggSettings(
+            initialSize=raw["egg"]["initialSize"],
+            maxSize=raw["egg"]["maxSize"],
+            growthRateMin=raw["egg"]["growthRateMin"],
+            growthRateMax=raw["egg"]["growthRateMax"],
+            spawnOffsetRange=raw["egg"]["spawnOffsetRange"],
+            baseCount=raw["egg"]["baseCount"],
+            scaleFactor=raw["egg"]["scaleFactor"],
+            color=_as_color(tuple(raw["egg"]["color"])),
+            hitPoints=raw["egg"]["hitPoints"]
+        ),
+        momentum=MomentumSettings(**raw["momentum"]),
+        projectile=ProjectileSettings(
+            **{
+                **raw["projectile"],
+                "color": _as_color(tuple(raw["projectile"]["color"]))
+            }
+        ),
+        visuals=VisualSettings(**raw["visuals"]),
+        colors=ColorsSettings(
+            background=_as_color(tuple(colors_raw["background"])),
+            ship=_as_color(tuple(colors_raw["ship"])),
+            walls=_as_color(tuple(colors_raw["walls"])),
+            enemyStatic=_as_color(tuple(colors_raw["enemyStatic"])),
+            enemyDynamic=_as_color(tuple(colors_raw["enemyDynamic"])),
+            projectile=_as_color(tuple(colors_raw["projectile"])),
+            exit=_as_color(tuple(colors_raw["exit"])),
+            start=_as_color(tuple(colors_raw["start"])),
+            text=_as_color(tuple(colors_raw["text"])),
+            uiBackground=_as_color(tuple(colors_raw["uiBackground"])),
+            shipNose=_as_color(tuple(colors_raw["shipNose"])),
+            shipRear=_as_color(tuple(colors_raw["shipRear"])),
+            shipDamagedNose=_as_color(tuple(colors_raw["shipDamagedNose"])),
+            shipDamagedRear=_as_color(tuple(colors_raw["shipDamagedRear"]))
+        ),
+        exitPortal=ExitPortalSettings(**raw["exitPortal"]),
+        sound=SoundSettings(**raw["sound"]),
+        controller=ControllerSettings(**raw["controller"]),
+        powerups=powerup_settings,
+        starAnimation=StarAnimationSettings(**raw["starAnimation"]),
+        ui=UISettings(
+            splashDisplayDuration=raw["ui"]["splashDisplayDuration"],
+            splashFadeInDuration=raw["ui"]["splashFadeInDuration"],
+            splashFadeOutDuration=raw["ui"]["splashFadeOutDuration"],
+            neonAsterStart=_as_color(tuple(raw["ui"]["neonAsterStart"])),
+            neonAsterEnd=_as_color(tuple(raw["ui"]["neonAsterEnd"])),
+            neonVoidStart=_as_color(tuple(raw["ui"]["neonVoidStart"])),
+            neonVoidEnd=_as_color(tuple(raw["ui"]["neonVoidEnd"])),
+            buttonAColor=_as_color(tuple(raw["ui"]["buttonAColor"])),
+            buttonBColor=_as_color(tuple(raw["ui"]["buttonBColor"])),
+            buttonGlowColor=_as_color(tuple(raw["ui"]["buttonGlowColor"])),
+            animations=animations,
+            starfield=starfield,
+            menuParticles=raw["ui"]["menuParticles"],
+            fonts=fonts
+        ),
+        game=GameSettings(**raw["game"])
+    )
+
+
+SETTINGS = load_settings()
+
+STATES_DEFAULTS = {
+    "splash": "splash",
+    "menu": "menu",
+    "playing": "playing",
+    "levelComplete": "level_complete",
+    "quitConfirm": "quit_confirm"
+}
+
+# Backwards-compatible constants
+SCREEN_WIDTH = SETTINGS.screen.width
+SCREEN_HEIGHT = SETTINGS.screen.height
+FPS = SETTINGS.screen.fps
+
+SHIP_SIZE = SETTINGS.ship.size
+SHIP_ROTATION_SPEED = SETTINGS.ship.rotationSpeed
+SHIP_THRUST_FORCE = SETTINGS.ship.thrustForce
+SHIP_FRICTION = SETTINGS.ship.friction
+SHIP_MAX_SPEED = SETTINGS.ship.maxSpeed
+COLLISION_RESTITUTION = SETTINGS.ship.collisionRestitution
+
+INITIAL_FUEL = SETTINGS.resources.initialFuel
+INITIAL_AMMO = SETTINGS.resources.initialAmmo
+FUEL_CONSUMPTION_PER_THRUST = SETTINGS.resources.fuelPerThrust
+AMMO_CONSUMPTION_PER_SHOT = SETTINGS.resources.ammoPerShot
+SHIELD_FUEL_CONSUMPTION_PER_FRAME = SETTINGS.resources.shieldFuelPerFrame
+
+MAX_LEVEL_SCORE = SETTINGS.scoring.maxLevelScore
+TIME_PENALTY_RATE = SETTINGS.scoring.timePenaltyRate
+COLLISION_PENALTY = SETTINGS.scoring.collisionPenalty
+AMMO_PENALTY_RATE = SETTINGS.scoring.ammoPenaltyRate
+FUEL_PENALTY_RATE = SETTINGS.scoring.fuelPenaltyRate
+WALL_COLLISION_PENALTY = SETTINGS.scoring.wallCollisionPenalty
+POWERUP_CRYSTAL_BONUS = SETTINGS.scoring.powerupCrystalBonus
+ENEMY_BULLET_PENALTY = SETTINGS.scoring.enemyBulletPenalty
+
+BASE_MAZE_SIZE = SETTINGS.difficulty.baseMazeSize
+MAZE_SIZE_INCREMENT = SETTINGS.difficulty.mazeSizeIncrement
+MAX_MAZE_SIZE = SETTINGS.difficulty.maxMazeSize
+BASE_ENEMY_COUNT = SETTINGS.difficulty.baseEnemyCount
+ENEMY_COUNT_INCREMENT = SETTINGS.difficulty.enemyCountIncrement
+TUTORIAL_LEVELS = SETTINGS.difficulty.tutorialLevels
+
+WALL_THICKNESS = SETTINGS.maze.wallThickness
+CELL_SIZE = SETTINGS.maze.cellSize
+MIN_PASSAGE_WIDTH = SETTINGS.maze.minPassageWidth
+WALL_HIT_POINTS = SETTINGS.maze.wallHitPoints
+SHIP_SPAWN_OFFSET = SETTINGS.maze.shipSpawnOffset
+
+STATIC_ENEMY_SIZE = SETTINGS.enemies.staticSize
+DYNAMIC_ENEMY_SIZE = SETTINGS.enemies.dynamicSize
+ENEMY_PATROL_SPEED = SETTINGS.enemies.patrolSpeed
+ENEMY_AGGRESSIVE_SPEED = SETTINGS.enemies.aggressiveSpeed
+ENEMY_DAMAGE = SETTINGS.enemies.damage
+ENEMY_STUCK_DETECTION_THRESHOLD = SETTINGS.enemies.stuckDetectionThreshold
+ENEMY_SHIFT_ANGLE_MIN = SETTINGS.enemies.shiftAngleMin
+ENEMY_SHIFT_ANGLE_MAX = SETTINGS.enemies.shiftAngleMax
+ENEMY_SHIFT_DURATION_MIN = SETTINGS.enemies.shiftDurationMin
+ENEMY_SHIFT_DURATION_MAX = SETTINGS.enemies.shiftDurationMax
+ENEMY_FIRE_INTERVAL_MIN = SETTINGS.enemies.fireIntervalMin
+ENEMY_FIRE_INTERVAL_MAX = SETTINGS.enemies.fireIntervalMax
+ENEMY_FIRE_RANGE = SETTINGS.enemies.fireRange
+REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = SETTINGS.enemies.replayFireAngleTolerance
+
+REPLAY_ENEMY_WINDOW_SIZE = SETTINGS.replayEnemy.windowSize
+REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
+REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
+REPLAY_ENEMY_BASE_COUNT = SETTINGS.replayEnemy.baseCount
+REPLAY_ENEMY_SCALE_FACTOR = SETTINGS.replayEnemy.scaleFactor
+
+BABY_SIZE = SETTINGS.baby.size
+BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier
+
+SPLIT_BOSS_SIZE_MULTIPLIER = SETTINGS.splitBoss.sizeMultiplier
+SPLIT_BOSS_HIT_POINTS = SETTINGS.splitBoss.hitPoints
+SPLIT_BOSS_SPAWN_OFFSET_RANGE = SETTINGS.splitBoss.spawnOffsetRange
+SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = SETTINGS.splitBoss.splitVelocityMagnitude
+SPLIT_BOSS_BASE_COUNT = SETTINGS.splitBoss.baseCount
+SPLIT_BOSS_SCALE_FACTOR = SETTINGS.splitBoss.scaleFactor
+
+MOTHER_BOSS_SIZE_MULTIPLIER = SETTINGS.motherBoss.sizeMultiplier
+MOTHER_BOSS_HIT_POINTS = SETTINGS.motherBoss.hitPoints
+MOTHER_BOSS_EGG_LAY_INTERVAL = SETTINGS.motherBoss.eggLayInterval
+MOTHER_BOSS_BASE_COUNT = SETTINGS.motherBoss.baseCount
+MOTHER_BOSS_SCALE_FACTOR = SETTINGS.motherBoss.scaleFactor
+
+MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX = SETTINGS.motherBoss.lineGlowIntensityMax
+MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkFrequencyMultiplierMax
+MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkDurationMultiplierMax
+
+MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER = SETTINGS.motherBoss.projectileSpeedMultiplier
+MOTHER_BOSS_PROJECTILE_IMPACT_MULTIPLIER = SETTINGS.motherBoss.projectileImpactMultiplier
+MOTHER_BOSS_PROJECTILE_GLOW_COLOR = SETTINGS.motherBoss.projectileGlowColor
+MOTHER_BOSS_PROJECTILE_GLOW_RADIUS_MULTIPLIER = SETTINGS.motherBoss.projectileGlowRadiusMultiplier
+MOTHER_BOSS_PROJECTILE_GLOW_INTENSITY = SETTINGS.motherBoss.projectileGlowIntensity
+
+EGG_INITIAL_SIZE = SETTINGS.egg.initialSize
+EGG_MAX_SIZE = SETTINGS.egg.maxSize
+EGG_GROWTH_RATE_MIN = SETTINGS.egg.growthRateMin
+EGG_GROWTH_RATE_MAX = SETTINGS.egg.growthRateMax
+EGG_SPAWN_OFFSET_RANGE = SETTINGS.egg.spawnOffsetRange
+EGG_BASE_COUNT = SETTINGS.egg.baseCount
+EGG_SCALE_FACTOR = SETTINGS.egg.scaleFactor
+COLOR_EGG = SETTINGS.egg.color
+EGG_HIT_POINTS = SETTINGS.egg.hitPoints
+
+STATIC_ENEMY_HIT_POINTS = SETTINGS.momentum.staticEnemyHitPoints
+MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
+FRICTION_COEFFICIENT = SETTINGS.momentum.frictionCoefficient
+MIN_VELOCITY_THRESHOLD = SETTINGS.momentum.minVelocityThreshold
+
+PROJECTILE_SPEED = SETTINGS.projectile.speed
+PROJECTILE_SIZE = SETTINGS.projectile.size
+PROJECTILE_LIFETIME = SETTINGS.projectile.lifetime
+COLOR_ENEMY_PROJECTILE = SETTINGS.projectile.color
+PROJECTILE_IMPACT_FORCE = SETTINGS.projectile.impactForce
+
+SHIP_GLOW_INTENSITY = SETTINGS.visuals.shipGlowIntensity
+SHIP_GLOW_RADIUS_MULTIPLIER = SETTINGS.visuals.shipGlowRadiusMultiplier
+ENEMY_PULSE_SPEED = SETTINGS.visuals.enemyPulseSpeed
+ENEMY_PULSE_AMPLITUDE = SETTINGS.visuals.enemyPulseAmplitude
+THRUST_PLUME_LENGTH = SETTINGS.visuals.thrustPlumeLength
+THRUST_PLUME_PARTICLES = SETTINGS.visuals.thrustPlumeParticles
+
+COLOR_BACKGROUND = SETTINGS.colors.background
+COLOR_SHIP = SETTINGS.colors.ship
+COLOR_WALLS = SETTINGS.colors.walls
+COLOR_ENEMY_STATIC = SETTINGS.colors.enemyStatic
+COLOR_ENEMY_DYNAMIC = SETTINGS.colors.enemyDynamic
+COLOR_PROJECTILE = SETTINGS.colors.projectile
+COLOR_EXIT = SETTINGS.colors.exit
+COLOR_START = SETTINGS.colors.start
+COLOR_TEXT = SETTINGS.colors.text
+COLOR_UI_BG = SETTINGS.colors.uiBackground
+COLOR_SHIP_NOSE = SETTINGS.colors.shipNose
+COLOR_SHIP_REAR = SETTINGS.colors.shipRear
+COLOR_SHIP_DAMAGED_NOSE = SETTINGS.colors.shipDamagedNose
+COLOR_SHIP_DAMAGED_REAR = SETTINGS.colors.shipDamagedRear
+
+EXIT_PORTAL_ATTRACTION_RADIUS = SETTINGS.exitPortal.attractionRadius
+EXIT_PORTAL_ATTRACTION_FORCE_MULTIPLIER = SETTINGS.exitPortal.attractionForceMultiplier
+EXIT_PORTAL_GLOW_MULTIPLIER = SETTINGS.exitPortal.glowMultiplier
+EXIT_PORTAL_GLOW_LAYER_OFFSET = SETTINGS.exitPortal.glowLayerOffset
+
+SOUND_ENABLED = SETTINGS.sound.enabled
+SOUND_SAMPLE_RATE = SETTINGS.sound.sampleRate
+THRUSTER_SOUND_VOLUME = SETTINGS.sound.thrusterVolume
+SHOOT_SOUND_VOLUME = SETTINGS.sound.shootVolume
+ENEMY_DESTROY_SOUND_VOLUME = SETTINGS.sound.enemyDestroyVolume
+EXIT_WARBLE_SOUND_VOLUME = SETTINGS.sound.exitWarbleVolume
+POWERUP_ACTIVATION_SOUND_VOLUME = SETTINGS.sound.powerupActivationVolume
+THRUSTER_NOISE_DURATION = SETTINGS.sound.thrusterNoiseDuration
+SHOOT_BLIP_FREQUENCY = SETTINGS.sound.shootBlipFrequency
+SHOOT_BLIP_DURATION = SETTINGS.sound.shootBlipDuration
+
+CONTROLLER_DEADZONE = SETTINGS.controller.deadzone
+CONTROLLER_TRIGGER_THRESHOLD = SETTINGS.controller.triggerThreshold
+
+POWERUP_CRYSTAL_SIZE = SETTINGS.powerups.crystalSize
+POWERUP_CRYSTAL_SPAWN_CHANCE = SETTINGS.powerups.crystalSpawnChance
+POWERUP_CRYSTAL_ROTATION_SPEED = SETTINGS.powerups.crystalRotationSpeed
+POWERUP_CRYSTAL_GLOW_INTENSITY = SETTINGS.powerups.crystalGlowIntensity
+COLOR_POWERUP_CRYSTAL = SETTINGS.powerups.crystalColor
+POWERUP_CRYSTAL_ATTRACTION_RADIUS = SETTINGS.powerups.attractionRadius
+POWERUP_CRYSTAL_ATTRACTION_SPEED = SETTINGS.powerups.attractionSpeed
+POWERUP_FLASH_DURATION_FRAMES = SETTINGS.powerups.flashDurationFrames
+POWERUP_FLASH_TINT_STRENGTH = SETTINGS.powerups.flashTintStrength
+POWERUP_FLASH_GLOW_MULTIPLIER = SETTINGS.powerups.flashGlowMultiplier
+
+POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level1
+POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level2
+POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level3
+UPGRADED_PROJECTILE_SPREAD_ANGLE = SETTINGS.powerups.upgradedProjectile.spreadAngle
+UPGRADED_PROJECTILE_SIZE_MULTIPLIER = SETTINGS.powerups.upgradedProjectile.sizeMultiplier
+UPGRADED_PROJECTILE_SPEED_MULTIPLIER = SETTINGS.powerups.upgradedProjectile.speedMultiplier
+COLOR_UPGRADED_PROJECTILE = SETTINGS.powerups.upgradedProjectile.color
+COLOR_UPGRADED_SHIP_GLOW = SETTINGS.powerups.upgradedProjectile.glowColor
+
+POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT = SETTINGS.powerups.beyondLevel3.sizeIncrement
+POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT = SETTINGS.powerups.beyondLevel3.speedIncrement
+POWERUP_BEYOND_LEVEL_3_GLOW_INTENSITY_INCREMENT = SETTINGS.powerups.beyondLevel3.glowIntensityIncrement
+POWERUP_BEYOND_LEVEL_3_HUE_ROTATION = SETTINGS.powerups.beyondLevel3.hueRotation
+
+STAR_APPEAR_DURATION = SETTINGS.starAnimation.appearDuration
+STAR_TWINKLE_SPEED = SETTINGS.starAnimation.twinkleSpeed
+STAR_TWINKLE_INTENSITY = SETTINGS.starAnimation.twinkleIntensity
+STAR_TINKLE_BASE_PITCH = SETTINGS.starAnimation.tinkleBasePitch
+STAR_TINKLE_PITCH_INCREMENT = SETTINGS.starAnimation.tinklePitchIncrement
+LEVEL_COMPLETE_STAR_SIZE = SETTINGS.starAnimation.levelCompleteStarSize
+
+STATE_SPLASH = STATES_DEFAULTS["splash"]
+STATE_MENU = STATES_DEFAULTS["menu"]
+STATE_PLAYING = STATES_DEFAULTS["playing"]
+STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
+STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]
+
+SPLASH_DISPLAY_DURATION = SETTINGS.ui.splashDisplayDuration
+SPLASH_FADE_IN_DURATION = SETTINGS.ui.splashFadeInDuration
+SPLASH_FADE_OUT_DURATION = SETTINGS.ui.splashFadeOutDuration
+
+COLOR_NEON_ASTER_START = SETTINGS.ui.neonAsterStart
+COLOR_NEON_ASTER_END = SETTINGS.ui.neonAsterEnd
+COLOR_NEON_VOID_START = SETTINGS.ui.neonVoidStart
+COLOR_NEON_VOID_END = SETTINGS.ui.neonVoidEnd
+COLOR_BUTTON_A = SETTINGS.ui.buttonAColor
+COLOR_BUTTON_B = SETTINGS.ui.buttonBColor
+COLOR_BUTTON_GLOW = SETTINGS.ui.buttonGlowColor
+
+NEON_GLOW_INTENSITY = SETTINGS.ui.animations.neonGlowIntensity
+NEON_GLOW_PULSE_SPEED = SETTINGS.ui.animations.neonGlowPulseSpeed
+BUTTON_GLOW_INTENSITY = SETTINGS.ui.animations.buttonGlowIntensity
+BUTTON_GLOW_PULSE_SPEED = SETTINGS.ui.animations.buttonGlowPulseSpeed
+STARFIELD_STAR_COUNT = SETTINGS.ui.starfield.starCount
+STARFIELD_TWINKLE_SPEED = SETTINGS.ui.starfield.twinkleSpeed
+MENU_PARTICLE_COUNT = SETTINGS.ui.menuParticles
+
+FONT_SIZE_TITLE = SETTINGS.ui.fonts.title
+FONT_SIZE_SUBTITLE = SETTINGS.ui.fonts.subtitle
+FONT_SIZE_BUTTON = SETTINGS.ui.fonts.button
+FONT_SIZE_HINT = SETTINGS.ui.fonts.hint

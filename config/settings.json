@@ -1,0 +1,286 @@
+{
+  "screen": {
+    "width": 1480,
+    "height": 900,
+    "fps": 60
+  },
+  "ship": {
+    "size": 8,
+    "rotationSpeed": 5.0,
+    "thrustForce": 0.15,
+    "friction": 0.998,
+    "maxSpeed": 8.0,
+    "spawnOffset": 0.35,
+    "collisionRestitution": 0.85
+  },
+  "resources": {
+    "initialFuel": 1000,
+    "initialAmmo": 50,
+    "fuelPerThrust": 1,
+    "ammoPerShot": 1,
+    "shieldFuelPerFrame": 4
+  },
+  "scoring": {
+    "maxLevelScore": 100,
+    "timePenaltyRate": 2,
+    "collisionPenalty": 5,
+    "enemyBulletPenalty": 5,
+    "ammoPenaltyRate": 0.1,
+    "fuelPenaltyRate": 0.01,
+    "wallCollisionPenalty": 4,
+    "powerupCrystalBonus": 5
+  },
+  "difficulty": {
+    "baseMazeSize": 10,
+    "mazeSizeIncrement": 2,
+    "maxMazeSize": 40,
+    "baseEnemyCount": 2,
+    "enemyCountIncrement": 1,
+    "tutorialLevels": 1
+  },
+  "maze": {
+    "wallThickness": 6,
+    "cellSize": null,
+    "minPassageWidth": 3,
+    "wallHitPoints": 2,
+    "shipSpawnOffset": 0.35,
+    "complexityPresets": {
+      "EMPTY": {
+        "stepSize": 1,
+        "passageWidth": 0,
+        "clearRadius": 0,
+        "cornerClearSize": 0,
+        "extraPathsMultiplier": 0,
+        "gridSizeBase": 10,
+        "gridSizeIncrement": 2
+      },
+      "SIMPLE": {
+        "stepSize": 3,
+        "passageWidth": 2,
+        "clearRadius": 2,
+        "cornerClearSize": 4,
+        "extraPathsMultiplier": 5,
+        "gridSizeBase": 10,
+        "gridSizeIncrement": 2
+      },
+      "NORMAL": {
+        "stepSize": 5,
+        "passageWidth": 4,
+        "clearRadius": 3,
+        "cornerClearSize": 6,
+        "extraPathsMultiplier": 10,
+        "gridSizeBase": 10,
+        "gridSizeIncrement": 2
+      },
+      "COMPLEX": {
+        "stepSize": 7,
+        "passageWidth": 6,
+        "clearRadius": 4,
+        "cornerClearSize": 8,
+        "extraPathsMultiplier": 15,
+        "gridSizeBase": 10,
+        "gridSizeIncrement": 2
+      },
+      "EXTREME": {
+        "stepSize": 9,
+        "passageWidth": 8,
+        "clearRadius": 5,
+        "cornerClearSize": 10,
+        "extraPathsMultiplier": 20,
+        "gridSizeBase": 10,
+        "gridSizeIncrement": 2
+      }
+    }
+  },
+  "enemies": {
+    "staticSize": 10,
+    "dynamicSize": 8,
+    "patrolSpeed": 1,
+    "aggressiveSpeed": 1.0,
+    "damage": 10,
+    "stuckDetectionThreshold": 0.1,
+    "shiftAngleMin": 45,
+    "shiftAngleMax": 90,
+    "shiftDurationMin": 10,
+    "shiftDurationMax": 100,
+    "fireIntervalMin": 60,
+    "fireIntervalMax": 300,
+    "fireRange": 400,
+    "replayFireAngleTolerance": 30.0
+  },
+  "replayEnemy": {
+    "windowSize": 100,
+    "size": 15,
+    "color": [150, 100, 255],
+    "baseCount": 1,
+    "scaleFactor": 0.5
+  },
+  "baby": {
+    "size": 10,
+    "speedMultiplier": 0.1
+  },
+  "splitBoss": {
+    "sizeMultiplier": 2.0,
+    "hitPoints": 3,
+    "spawnOffsetRange": 80,
+    "splitVelocityMagnitude": 2.0,
+    "baseCount": 0,
+    "scaleFactor": 0.3
+  },
+  "motherBoss": {
+    "sizeMultiplier": 3.0,
+    "hitPoints": 10,
+    "eggLayInterval": 180,
+    "baseCount": 0,
+    "scaleFactor": 0.2,
+    "lineGlowIntensityMax": 0.7,
+    "blinkFrequencyMultiplierMax": 2.0,
+    "blinkDurationMultiplierMax": 1.5,
+    "projectileSpeedMultiplier": 1.6,
+    "projectileImpactMultiplier": 1.4,
+    "projectileGlowColor": [255, 160, 100],
+    "projectileGlowRadiusMultiplier": 1.8,
+    "projectileGlowIntensity": 0.65
+  },
+  "egg": {
+    "initialSize": 8,
+    "maxSize": 24,
+    "growthRateMin": 0.01,
+    "growthRateMax": 0.04,
+    "spawnOffsetRange": 60,
+    "baseCount": 0,
+    "scaleFactor": 0.3,
+    "color": [255, 200, 100],
+    "hitPoints": 2
+  },
+  "momentum": {
+    "staticEnemyHitPoints": 2,
+    "transferFactor": 0.3,
+    "frictionCoefficient": 0.98,
+    "minVelocityThreshold": 0.1
+  },
+  "projectile": {
+    "speed": 8.0,
+    "size": 3,
+    "lifetime": 120,
+    "color": [255, 100, 100],
+    "impactForce": 0.3
+  },
+  "visuals": {
+    "shipGlowIntensity": 0.3,
+    "shipGlowRadiusMultiplier": 1.5,
+    "enemyPulseSpeed": 0.05,
+    "enemyPulseAmplitude": 0.1,
+    "thrustPlumeLength": 15,
+    "thrustPlumeParticles": 5
+  },
+  "colors": {
+    "background": [10, 10, 20],
+    "ship": [100, 200, 255],
+    "walls": [150, 150, 150],
+    "enemyStatic": [255, 100, 100],
+    "enemyDynamic": [255, 150, 50],
+    "projectile": [255, 255, 100],
+    "exit": [50, 255, 50],
+    "start": [50, 150, 255],
+    "text": [255, 255, 255],
+    "uiBackground": [20, 20, 30],
+    "shipNose": [150, 220, 255],
+    "shipRear": [50, 150, 200],
+    "shipDamagedNose": [255, 150, 150],
+    "shipDamagedRear": [200, 50, 50]
+  },
+  "exitPortal": {
+    "attractionRadius": 150,
+    "attractionForceMultiplier": 0.5,
+    "glowMultiplier": 2.0,
+    "glowLayerOffset": 3
+  },
+  "sound": {
+    "enabled": true,
+    "sampleRate": 44100,
+    "thrusterVolume": 0.05,
+    "shootVolume": 0.5,
+    "enemyDestroyVolume": 0.6,
+    "exitWarbleVolume": 0.65,
+    "powerupActivationVolume": 0.6,
+    "thrusterNoiseDuration": 0.1,
+    "shootBlipFrequency": 800,
+    "shootBlipDuration": 0.05
+  },
+  "controller": {
+    "deadzone": 0.05,
+    "triggerThreshold": 0.3
+  },
+  "powerups": {
+    "crystalSize": 6,
+    "crystalSpawnChance": 0.3,
+    "crystalRotationSpeed": 2.0,
+    "crystalGlowIntensity": 0.6,
+    "crystalColor": [150, 100, 255],
+    "attractionRadius": 50,
+    "attractionSpeed": 1.0,
+    "flashDurationFrames": 18,
+    "flashTintStrength": 0.85,
+    "flashGlowMultiplier": 1.6,
+    "fireRateBaseCooldown": 200,
+    "fireRateMultipliers": {
+      "level1": 1.5,
+      "level2": 2.0,
+      "level3": 3.0
+    },
+    "upgradedProjectile": {
+      "spreadAngle": 12.5,
+      "sizeMultiplier": 1.5,
+      "speedMultiplier": 1.2,
+      "color": [150, 220, 255],
+      "glowColor": [150, 200, 255]
+    },
+    "beyondLevel3": {
+      "sizeIncrement": 0.05,
+      "speedIncrement": 0.05,
+      "glowIntensityIncrement": 0.1,
+      "hueRotation": 30
+    }
+  },
+  "starAnimation": {
+    "appearDuration": 0.4,
+    "twinkleSpeed": 8.0,
+    "twinkleIntensity": 0.3,
+    "tinkleBasePitch": 800,
+    "tinklePitchIncrement": 200,
+    "levelCompleteStarSize": 45
+  },
+  "ui": {
+    "splashDisplayDuration": 3.5,
+    "splashFadeInDuration": 1.0,
+    "splashFadeOutDuration": 0.8,
+    "neonAsterStart": [255, 215, 0],
+    "neonAsterEnd": [255, 140, 0],
+    "neonVoidStart": [100, 200, 255],
+    "neonVoidEnd": [100, 100, 255],
+    "buttonAColor": [50, 255, 100],
+    "buttonBColor": [255, 100, 100],
+    "buttonGlowColor": [150, 220, 255],
+    "animations": {
+      "neonGlowIntensity": 0.6,
+      "neonGlowPulseSpeed": 2.0,
+      "buttonGlowIntensity": 0.4,
+      "buttonGlowPulseSpeed": 3.0
+    },
+    "starfield": {
+      "starCount": 150,
+      "twinkleSpeed": 0.5
+    },
+    "menuParticles": 30,
+    "fonts": {
+      "title": 72,
+      "subtitle": 32,
+      "button": 42,
+      "hint": 24
+    }
+  },
+  "game": {
+    "criticalWarningThreshold": 7
+  }
+}
