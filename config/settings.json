@@ -134,6 +134,20 @@
     "clusterRadius": 300,
     "fireCooldownSeconds": 5.0
   },
+  "flighthouseEnemy": {
+    "size": 14,
+    "color": [120, 240, 200],
+    "visionConeDegrees": 45,
+    "visionRange": 600,
+    "scanHalfAngleDegrees": 45,
+    "scanSpeedDegreesPerSecond": 90,
+    "trackSpeedDegreesPerSecond": 240,
+    "spawnIntervalSeconds": 0.5,
+    "hitPoints": 3,
+    "baseCount": 1,
+    "scaleFactor": 0.1,
+    "initialFlockerSpeedMultiplier": 0.8
+  },
   "baby": {
     "size": 10,
     "speedMultiplier": 0.1
@@ -279,6 +293,7 @@
     "splashDisplayDuration": 3.5,
     "splashFadeInDuration": 1.0,
     "splashFadeOutDuration": 0.8,
+    "splashVideoSpeedMultiplier": 1,
     "neonAsterStart": [255, 215, 0],
     "neonAsterEnd": [255, 140, 0],
     "neonVoidStart": [100, 200, 255],

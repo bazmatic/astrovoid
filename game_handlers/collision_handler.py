@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
@@ -50,6 +51,7 @@ class CollisionHandler:
         enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
         flockers: List['FlockerEnemyShip'],
+        flighthouses: List['FlighthouseEnemy'],
         split_bosses: List['SplitBoss'],
         mother_bosses: List['MotherBoss'],
         babies: List['Baby'],
@@ -145,6 +147,20 @@ class CollisionHandler:
                         powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
+
+        # Check projectile-flighthouse collision
+        for flighthouse in flighthouses:
+            if flighthouse.active and projectile.active:
+                if projectile.check_circle_collision(flighthouse.get_pos(), flighthouse.radius):
+                    fh_pos = flighthouse.get_pos()
+                    if flighthouse.take_damage():
+                        flighthouse.destroy()
+                        self.sound_manager.play_enemy_destroy()
+                        self.scoring.record_enemy_destroyed()
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(fh_pos)
+                            powerup_crystals.append(crystal)
+                    return True
         
         # Check projectile-SplitBoss collision
         for split_boss in split_bosses:

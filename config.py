@@ -131,6 +131,22 @@ class FlockerEnemySettings:
 
 
 @dataclass
+class FlighthouseEnemySettings:
+    size: int
+    color: Tuple[int, int, int]
+    visionConeDegrees: float
+    visionRange: float
+    scanHalfAngleDegrees: float
+    scanSpeedDegreesPerSecond: float
+    trackSpeedDegreesPerSecond: float
+    spawnIntervalSeconds: float
+    hitPoints: int
+    baseCount: int
+    scaleFactor: float
+    initialFlockerSpeedMultiplier: float
+
+
+@dataclass
 class BabySettings:
     size: int
     speedMultiplier: float
@@ -333,6 +349,7 @@ class UISettings:
     splashDisplayDuration: float
     splashFadeInDuration: float
     splashFadeOutDuration: float
+    splashVideoSpeedMultiplier: float
     neonAsterStart: Tuple[int, int, int]
     neonAsterEnd: Tuple[int, int, int]
     neonVoidStart: Tuple[int, int, int]
@@ -362,6 +379,7 @@ class Settings:
     enemies: EnemySettings
     replayEnemy: ReplayEnemySettings
     flockerEnemy: FlockerEnemySettings
+    flighthouseEnemy: FlighthouseEnemySettings
     baby: BabySettings
     splitBoss: SplitBossSettings
     motherBoss: MotherBossSettings
@@ -467,6 +485,20 @@ def load_settings() -> Settings:
             clusterRadius=raw["flockerEnemy"]["clusterRadius"],
             fireCooldownSeconds=raw["flockerEnemy"]["fireCooldownSeconds"]
         ),
+        flighthouseEnemy=FlighthouseEnemySettings(
+            size=raw["flighthouseEnemy"]["size"],
+            color=_as_color(tuple(raw["flighthouseEnemy"]["color"])),
+            visionConeDegrees=raw["flighthouseEnemy"]["visionConeDegrees"],
+            visionRange=raw["flighthouseEnemy"]["visionRange"],
+            scanHalfAngleDegrees=raw["flighthouseEnemy"]["scanHalfAngleDegrees"],
+            scanSpeedDegreesPerSecond=raw["flighthouseEnemy"]["scanSpeedDegreesPerSecond"],
+            trackSpeedDegreesPerSecond=raw["flighthouseEnemy"]["trackSpeedDegreesPerSecond"],
+            spawnIntervalSeconds=raw["flighthouseEnemy"]["spawnIntervalSeconds"],
+            hitPoints=raw["flighthouseEnemy"]["hitPoints"],
+            baseCount=raw["flighthouseEnemy"]["baseCount"],
+            scaleFactor=raw["flighthouseEnemy"]["scaleFactor"],
+            initialFlockerSpeedMultiplier=raw["flighthouseEnemy"]["initialFlockerSpeedMultiplier"]
+        ),
         baby=BabySettings(**raw["baby"]),
         splitBoss=SplitBossSettings(**raw["splitBoss"]),
         motherBoss=MotherBossSettings(
@@ -521,6 +553,7 @@ def load_settings() -> Settings:
             splashDisplayDuration=raw["ui"]["splashDisplayDuration"],
             splashFadeInDuration=raw["ui"]["splashFadeInDuration"],
             splashFadeOutDuration=raw["ui"]["splashFadeOutDuration"],
+            splashVideoSpeedMultiplier=raw["ui"]["splashVideoSpeedMultiplier"],
             neonAsterStart=_as_color(tuple(raw["ui"]["neonAsterStart"])),
             neonAsterEnd=_as_color(tuple(raw["ui"]["neonAsterEnd"])),
             neonVoidStart=_as_color(tuple(raw["ui"]["neonVoidStart"])),
@@ -626,6 +659,19 @@ FLOCKER_ENEMY_CLOSE_RANGE_FIRE_DISTANCE = SETTINGS.flockerEnemy.closeRangeFireDi
 FLOCKER_ENEMY_CLOSE_RANGE_FIRE_ANGLE_TOLERANCE = SETTINGS.flockerEnemy.closeRangeFireAngleTolerance
 FLOCKER_ENEMY_CLUSTER_RADIUS = SETTINGS.flockerEnemy.clusterRadius
 FLOCKER_ENEMY_FIRE_COOLDOWN_SECONDS = SETTINGS.flockerEnemy.fireCooldownSeconds
+
+FLIGHTHOUSE_ENEMY_SIZE = SETTINGS.flighthouseEnemy.size
+FLIGHTHOUSE_ENEMY_COLOR = SETTINGS.flighthouseEnemy.color
+FLIGHTHOUSE_ENEMY_VISION_CONE_DEGREES = SETTINGS.flighthouseEnemy.visionConeDegrees
+FLIGHTHOUSE_ENEMY_VISION_RANGE = SETTINGS.flighthouseEnemy.visionRange
+FLIGHTHOUSE_ENEMY_SCAN_HALF_ANGLE_DEGREES = SETTINGS.flighthouseEnemy.scanHalfAngleDegrees
+FLIGHTHOUSE_ENEMY_SCAN_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.scanSpeedDegreesPerSecond
+FLIGHTHOUSE_ENEMY_TRACK_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.trackSpeedDegreesPerSecond
+FLIGHTHOUSE_ENEMY_SPAWN_INTERVAL_SECONDS = SETTINGS.flighthouseEnemy.spawnIntervalSeconds
+FLIGHTHOUSE_ENEMY_HIT_POINTS = SETTINGS.flighthouseEnemy.hitPoints
+FLIGHTHOUSE_ENEMY_BASE_COUNT = SETTINGS.flighthouseEnemy.baseCount
+FLIGHTHOUSE_ENEMY_SCALE_FACTOR = SETTINGS.flighthouseEnemy.scaleFactor
+FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER = SETTINGS.flighthouseEnemy.initialFlockerSpeedMultiplier
 
 BABY_SIZE = SETTINGS.baby.size
 BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier
@@ -762,6 +808,7 @@ STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]
 SPLASH_DISPLAY_DURATION = SETTINGS.ui.splashDisplayDuration
 SPLASH_FADE_IN_DURATION = SETTINGS.ui.splashFadeInDuration
 SPLASH_FADE_OUT_DURATION = SETTINGS.ui.splashFadeOutDuration
+SPLASH_VIDEO_SPEED_MULTIPLIER = SETTINGS.ui.splashVideoSpeedMultiplier
 
 COLOR_NEON_ASTER_START = SETTINGS.ui.neonAsterStart
 COLOR_NEON_ASTER_END = SETTINGS.ui.neonAsterEnd

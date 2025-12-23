@@ -8,7 +8,7 @@ import json
 import os
 from typing import Optional, Dict
 import level_rules
-from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count, get_egg_count
+from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count, get_egg_count, get_flighthouse_count
 from maze.config import MazeComplexity
 
 
@@ -76,6 +76,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
     aggressive = enemies_config.get('aggressive', default_counts.aggressive)
     replay = enemies_config.get('replay', default_counts.replay)
     flocker = enemies_config.get('flocker', default_counts.flocker)
+    flighthouse = enemies_config.get('flighthouse', default_counts.flighthouse)
     egg = enemies_config.get('egg', default_counts.egg)
     
     # Calculate total from the sum of regular enemies
@@ -88,6 +89,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         aggressive=aggressive,
         replay=replay,
         flocker=flocker,
+        flighthouse=flighthouse,
         egg=egg
     )
 
