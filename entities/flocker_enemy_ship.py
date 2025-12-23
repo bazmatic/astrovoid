@@ -42,7 +42,7 @@ class FlockerEnemyShip(RotatingThrusterShip):
         self.wing_phase: float = 0.0  # Animation phase for wing movement
         self.tweet_cooldown: float = 0.0  # Cooldown timer for tweeting
         # Cooldown timer for firing (seconds expressed in frame-normalized units; dt ~= 1 per frame)
-        self.fire_cooldown: float = random.uniform(2.0, 5.0) * config.FPS
+        self.fire_cooldown: float = config.FLOCKER_ENEMY_FIRE_COOLDOWN_SECONDS * config.FPS
         self.is_about_to_fire: bool = False  # Flag indicating this flocker is about to fire (for synchronization)
         self.just_fired: bool = False  # Flag indicating this flocker just fired (for synchronization)
     
@@ -691,8 +691,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
         # Mark as just fired for synchronization (neighbors will see this in their get_fired_projectile call)
         self.just_fired = True
         
-        # Reset fire cooldown to ~1 second (frame-normalized)
-        self.fire_cooldown = 1.0 * config.FPS
+        # Reset fire cooldown using configured seconds (frame-normalized)
+        self.fire_cooldown = config.FLOCKER_ENEMY_FIRE_COOLDOWN_SECONDS * config.FPS
         
         # Reset just_fired flag after a tiny delay so neighbors can see it this frame
         # We'll reset it at the start of next update cycle

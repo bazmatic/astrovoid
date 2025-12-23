@@ -131,7 +131,8 @@
     "scaleFactor": 0.3,
     "closeRangeFireDistance": 150,
     "closeRangeFireAngleTolerance": 30.0,
-    "clusterRadius": 300
+    "clusterRadius": 300,
+    "fireCooldownSeconds": 5.0
   },
   "baby": {
     "size": 10,
