@@ -501,6 +501,7 @@ SETTINGS = load_settings()
 STATES_DEFAULTS = {
     "splash": "splash",
     "menu": "menu",
+    "profileSelection": "profile_selection",
     "playing": "playing",
     "levelComplete": "level_complete",
     "quitConfirm": "quit_confirm"
@@ -694,6 +695,7 @@ LEVEL_COMPLETE_STAR_SIZE = SETTINGS.starAnimation.levelCompleteStarSize
 
 STATE_SPLASH = STATES_DEFAULTS["splash"]
 STATE_MENU = STATES_DEFAULTS["menu"]
+STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
 STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
 STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]

@@ -19,12 +19,14 @@ from entities.powerup_crystal import PowerupCrystal
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
+from profiles import ProfileManager
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
 from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
 from rendering.level_complete_menu import LevelCompleteMenu
+from rendering.profile_selection_menu import ProfileSelectionMenu
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
@@ -68,7 +70,9 @@ class Game:
                 self.initial_start_level = None
         else:
             self.initial_start_level = None
-        self.level = self.initial_start_level if self.initial_start_level else 1
+        self.profile_manager = ProfileManager()
+        profile_level = self.profile_manager.get_active_level()
+        self.level = self.initial_start_level if self.initial_start_level else profile_level
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
         
@@ -119,6 +123,7 @@ class Game:
             on_star_gained=self.sound_manager.play_star_gained
         )
         self.critical_warning_active = False
+        self.profile_selection_menu = ProfileSelectionMenu(screen, self.profile_manager)
         
         # Menu UI components
         self.main_menu = MainMenu(screen)
@@ -126,6 +131,8 @@ class Game:
         self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
         self._initialize_splash_screen()
+        self.reset_scoring_to_profile_state()
+        self.quit_confirmation_selection = 0
     
     def _initialize_splash_screen(self) -> None:
         """Initialize splash screen state."""
@@ -266,7 +273,7 @@ class Game:
                     handler.handle_controller(event, self)
             elif event.type == pygame.JOYHATMOTION or event.type == pygame.JOYAXISMOTION:
                 # Handle controller hat (d-pad) and axis (stick) events for menu navigation
-                if self.state == config.STATE_MENU or self.state == config.STATE_LEVEL_COMPLETE:
+                if self.state in (config.STATE_MENU, config.STATE_PROFILE_SELECTION, config.STATE_LEVEL_COMPLETE):
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
@@ -290,7 +297,15 @@ class Game:
         
         # Update menu UI animations
         if self.state == config.STATE_MENU:
+            profile = self.profile_manager.get_active_profile()
+            self.main_menu.set_profile_info(
+                profile.name if profile else None,
+                profile.level if profile else None
+            )
             self.main_menu.update(dt)
+        elif self.state == config.STATE_PROFILE_SELECTION:
+            self.profile_selection_menu.update(dt)
+            return
         elif self.state == config.STATE_LEVEL_COMPLETE:
             self.level_complete_menu.update(dt)
         
@@ -639,6 +654,8 @@ class Game:
         max_score = self.scoring.calculate_max_possible_score()
         final_score = self.level_score_breakdown.get('final_score', 0)
         self.level_score_percentage = min(1.0, max(0.0, final_score / max_score)) if max_score > 0 else 0.0
+        if success:
+            self.profile_manager.update_active_profile_progress(self.level, self.scoring.get_total_score())
         
         # Initialize animated star rating if level succeeded
         if success:
@@ -672,13 +689,18 @@ class Game:
                 self.splash_screen.draw(self.screen)
         elif self.state == config.STATE_MENU:
             self.main_menu.draw()
+        elif self.state == config.STATE_PROFILE_SELECTION:
+            self.profile_selection_menu.draw()
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
                 self.draw_exit_explosion()
         elif self.state == config.STATE_QUIT_CONFIRM:
             self.draw_game()  # Draw game in background
-            self.quit_confirmation_menu.draw_quit_confirmation(self.main_menu.menu_pulse_phase)
+            self.quit_confirmation_menu.draw_quit_confirmation(
+                self.main_menu.menu_pulse_phase,
+                self.quit_confirmation_selection
+            )
         elif self.state == config.STATE_LEVEL_COMPLETE:
             self.level_complete_menu.draw(
                 self.level,
@@ -687,7 +709,10 @@ class Game:
                 self.level_score_breakdown,
                 self.star_animation,
                 self.level_complete_quit_confirm,
-                lambda: self.quit_confirmation_menu.draw_level_complete_quit_confirmation(self.level_complete_menu.menu_pulse_phase)
+                lambda: self.quit_confirmation_menu.draw_level_complete_quit_confirmation(
+                    self.level_complete_menu.menu_pulse_phase,
+                    self.quit_confirmation_selection
+                )
             )
         
         pygame.display.flip()
@@ -840,6 +865,22 @@ class Game:
                 flash_overlay.fill(flash_color)
                 self.screen.blit(flash_overlay, (0, 0))
     
+    def reset_scoring_to_profile_state(self) -> None:
+        """Reset scoring state while keeping saved profile progress."""
+        self.scoring = ScoringSystem()
+        profile = self.profile_manager.get_active_profile()
+        if profile:
+            self.scoring.total_score = profile.total_score
+            self.level = profile.level
+        elif self.initial_start_level:
+            self.level = self.initial_start_level
+        else:
+            self.level = 1
+
+    def reset_quit_confirmation_selection(self) -> None:
+        """Reset overlay selection back to the default option."""
+        self.quit_confirmation_selection = 0
+
     def run(self) -> None:
         """Main game loop."""
         while self.running:
