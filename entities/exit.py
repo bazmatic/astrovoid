@@ -151,8 +151,8 @@ class ExitPortal(GameEntity, Collidable, Drawable):
         # Base radius with pulse
         base_radius = self.base_radius * pulse_factor
         
-        # Increase size when player is nearby
-        if self.player_nearby:
+        # Increase size when player is nearby, but only if portal is activated
+        if self.player_nearby and self.is_activated:
             size_multiplier = config.EXIT_PORTAL_GLOW_MULTIPLIER
         else:
             size_multiplier = 1.0

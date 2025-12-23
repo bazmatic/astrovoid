@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.flocker_neighbor_cache import FlockerNeighborCache
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
@@ -161,6 +162,33 @@ class EnemyUpdater:
             # Check flocker-ship collision (skip if shield is active)
             if not ship.is_shield_active():
                 if ship.check_circle_collision(flocker.get_pos(), flocker.radius, flocker):
+                    scoring.record_enemy_collision()
+
+    def update_flighthouses(
+        self,
+        flighthouses: List['FlighthouseEnemy'],
+        dt: float,
+        player_pos: Optional[Tuple[float, float]],
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        flockers: List['FlockerEnemyShip']
+    ) -> None:
+        """Update flighthouse enemies and append any spawned flockers."""
+        for flighthouse in flighthouses:
+            if not flighthouse.active:
+                continue
+
+            spawned = flighthouse.update(dt, player_pos, maze.walls, maze.spatial_grid)
+            if spawned:
+                flockers.extend(spawned)
+
+            # Check flighthouse-wall collision (ignored; remains stationary)
+            flighthouse.check_wall_collision(maze.walls, maze.spatial_grid)
+
+            # Check flighthouse-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(flighthouse.get_pos(), flighthouse.radius):
                     scoring.record_enemy_collision()
     
     def update_split_bosses(

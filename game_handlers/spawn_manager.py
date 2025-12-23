@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.split_boss import SplitBoss
     from entities.command_recorder import CommandRecorder
     from game_handlers.entity_manager import EntityManager
@@ -186,7 +187,7 @@ class SpawnManager:
         
         # Define spawn configurations for all enemy types
         spawn_configs = self._create_spawn_configs(
-            enemy_counts, split_boss_count, mother_boss_count
+            enemy_counts, split_boss_count, mother_boss_count, level
         )
         
         # Spawn all entities using configuration
@@ -199,7 +200,8 @@ class SpawnManager:
         self,
         enemy_counts: 'EnemyCounts',
         split_boss_count: int,
-        mother_boss_count: int
+        mother_boss_count: int,
+        level: int = 1
     ) -> List[SpawnConfig]:
         """Create spawn configurations for all enemy types.
         
@@ -213,6 +215,7 @@ class SpawnManager:
         """
         from entities.replay_enemy_ship import ReplayEnemyShip
         from entities.flocker_enemy_ship import FlockerEnemyShip
+        from entities.flighthouse_enemy import FlighthouseEnemy
         from entities.split_boss import SplitBoss
         from entities.mother_boss import MotherBoss
         from entities.egg import Egg
@@ -239,6 +242,18 @@ class SpawnManager:
                 count=enemy_counts.flocker,
                 entity_list_attr="flockers",
                 factory_func=lambda pos, cr: FlockerEnemyShip(pos),
+                requires_command_recorder=False,
+                post_create_hook=None
+            ))
+
+        # Flighthouse enemies
+        if enemy_counts.flighthouse > 0:
+            # Capture level in closure
+            flighthouse_level = level
+            configs.append(SpawnConfig(
+                count=enemy_counts.flighthouse,
+                entity_list_attr="flighthouses",
+                factory_func=lambda pos, cr: FlighthouseEnemy(pos, flighthouse_level),
                 requires_command_recorder=False,
                 post_create_hook=None
             ))

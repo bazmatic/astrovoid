@@ -30,6 +30,7 @@ class EnemyCounts:
         aggressive: Number of aggressive enemies
         replay: Number of replay enemy ships
         flocker: Number of flocker enemy ships
+        flighthouse: Number of flighthouse enemies
         egg: Number of egg enemies
     """
     total: int
@@ -38,6 +39,7 @@ class EnemyCounts:
     aggressive: int
     replay: int
     flocker: int
+    flighthouse: int
     egg: int
 
 
@@ -165,6 +167,15 @@ def get_flocker_count(level: int) -> int:
     return round(count)
 
 
+def get_flighthouse_count(level: int) -> int:
+    """Get number of flighthouse enemies for a level."""
+    if level <= config.TUTORIAL_LEVELS:
+        return 0
+    effective_level = level - config.TUTORIAL_LEVELS
+    count = config.FLIGHTHOUSE_ENEMY_BASE_COUNT + config.FLIGHTHOUSE_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
+    return round(count)
+
+
 def get_egg_count(level: int) -> int:
     """Get number of egg enemies for a level.
     
@@ -205,6 +216,40 @@ def get_mother_boss_count(level: int) -> int:
     # Continuous scaling with square root for diminishing returns
     count = config.MOTHER_BOSS_BASE_COUNT + config.MOTHER_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
     return round(count)
+
+
+def get_flighthouse_spawn_interval(level: int) -> float:
+    """Get spawn interval for Flighthouse enemies at a given level.
+    
+    Spawn interval starts at 3.0 seconds and decreases to 0.5 seconds as level increases.
+    Uses linear interpolation between start and end values.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Spawn interval in seconds (between 0.5 and 3.0).
+    """
+    start_interval = 3.0  # seconds at level 1
+    end_interval = 0.5    # seconds at high levels
+    
+    # Tutorial levels use start interval
+    if level <= config.TUTORIAL_LEVELS:
+        return start_interval
+    
+    # Calculate effective level (after tutorial)
+    effective_level = level - config.TUTORIAL_LEVELS
+    
+    # Use a scaling curve that reaches end_interval by around level 20-30
+    # Linear interpolation: start at effective_level 1, reach end by effective_level 20
+    max_effective_level = 20.0
+    progress = min(1.0, (effective_level - 1) / (max_effective_level - 1))
+    
+    # Interpolate between start and end
+    interval = start_interval - (start_interval - end_interval) * progress
+    
+    # Ensure we don't go below end_interval
+    return max(end_interval, interval)
 
 
 def get_enemy_speed(level: int, enemy_type: str) -> float:
@@ -328,6 +373,7 @@ def get_enemy_counts(level: int) -> EnemyCounts:
     distribution = get_enemy_type_distribution(level, total)
     replay = get_replay_enemy_count(level)
     flocker = get_flocker_count(level)
+    flighthouse = get_flighthouse_count(level)
     egg = get_egg_count(level)
     
     return EnemyCounts(
@@ -337,6 +383,7 @@ def get_enemy_counts(level: int) -> EnemyCounts:
         aggressive=distribution['aggressive'],
         replay=replay,
         flocker=flocker,
+        flighthouse=flighthouse,
         egg=egg
     )
 

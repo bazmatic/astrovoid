@@ -149,39 +149,42 @@ class SplashScreenState:
             self.video_complete = True
             return
         
-        # For smooth playback, read a frame every update cycle (60fps)
-        # To achieve 2x speed, skip every other frame by reading 2 frames but only displaying the second
-        # This ensures smooth playback without frame skipping
-        ret, frame = self.video_cap.read()
-        if not ret:
-            # Video ended
-            self.video_complete = True
-            self.video_cap.release()
-            self.video_cap = None
-            return
+        # Accumulate time for time-based frame reading
+        # Apply speed multiplier to slow down or speed up playback
+        self.video_time_accumulator += dt_seconds * config.SPLASH_VIDEO_SPEED_MULTIPLIER
         
-        # For 2x speed, read one more frame and discard the first
-        # This effectively skips frames to double the speed
-        ret2, frame2 = self.video_cap.read()
-        if ret2:
-            frame = frame2  # Use the second frame
-        # If we can't read a second frame, use the first one (near end of video)
+        # Calculate how many frames should have elapsed based on video FPS
+        frames_to_advance = int(self.video_time_accumulator * self.video_fps)
         
-        # Convert BGR to RGB
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        
-        # Scale to fit screen while maintaining aspect ratio
-        frame_height, frame_width = frame_rgb.shape[:2]
-        scale = min(self.screen_width / frame_width, self.screen_height / frame_height)
-        new_width = int(frame_width * scale)
-        new_height = int(frame_height * scale)
-        
-        # Resize frame
-        frame_resized = cv2.resize(frame_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
-        
-        # Convert to pygame surface
-        frame_surface = pygame.surfarray.make_surface(frame_resized.swapaxes(0, 1))
-        self.video_frame = frame_surface.convert()
+        if frames_to_advance > 0:
+            # Advance by the calculated number of frames
+            for _ in range(frames_to_advance):
+                ret, frame = self.video_cap.read()
+                if not ret:
+                    # Video ended
+                    self.video_complete = True
+                    self.video_cap.release()
+                    self.video_cap = None
+                    return
+            
+            # Update accumulator to keep fractional frame time
+            self.video_time_accumulator -= frames_to_advance / self.video_fps
+            
+            # Convert BGR to RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Scale to fit screen while maintaining aspect ratio
+            frame_height, frame_width = frame_rgb.shape[:2]
+            scale = min(self.screen_width / frame_width, self.screen_height / frame_height)
+            new_width = int(frame_width * scale)
+            new_height = int(frame_height * scale)
+            
+            # Resize frame
+            frame_resized = cv2.resize(frame_rgb, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            
+            # Convert to pygame surface
+            frame_surface = pygame.surfarray.make_surface(frame_resized.swapaxes(0, 1))
+            self.video_frame = frame_surface.convert()
     
     def update(self, dt: float) -> None:
         """Update splash screen animation.
