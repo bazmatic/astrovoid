@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from maze.generator import Maze
     from scoring.system import ScoringSystem
     from entities.command_recorder import CommandRecorder
+    from sounds.sound_manager import SoundManager
 
 
 class EnemyUpdater:
@@ -114,7 +115,8 @@ class EnemyUpdater:
         maze: 'Maze',
         ship: 'Ship',
         scoring: 'ScoringSystem',
-        projectiles: List['Projectile']
+        projectiles: List['Projectile'],
+        sound_manager: Optional['SoundManager'] = None
     ) -> None:
         """Update flocker enemy ships with optimized neighbor caching.
         
@@ -126,19 +128,32 @@ class EnemyUpdater:
             ship: Player ship for collision detection.
             scoring: Scoring system for recording collisions.
             projectiles: List to add fired projectiles to.
+            sound_manager: Sound manager for playing tweet sounds.
         """
         # Create and update shared neighbor cache for efficient flocking
         from entities.flocker_neighbor_cache import FlockerNeighborCache
         neighbor_cache = FlockerNeighborCache()
         neighbor_cache.update(flockers)
         
-        # Update each flocker using the shared cache
+        # First pass: update all flockers (this resets just_fired flags)
         for idx, flocker in enumerate(flockers):
             if not flocker.active:
                 continue
             
             # Update flocker with cached neighbors for optimal performance
-            flocker.update(dt, player_pos, None, neighbor_cache, idx)
+            flocker.update(dt, player_pos, None, neighbor_cache, idx, sound_manager)
+        
+        # Second pass: check for firing (allows neighbors to see each other's firing state)
+        for idx, flocker in enumerate(flockers):
+            if not flocker.active:
+                continue
+            
+            # Check if flocker fired a projectile
+            fired_projectile = flocker.get_fired_projectile(
+                player_pos, neighbor_cache, idx, flockers
+            )
+            if fired_projectile:
+                projectiles.append(fired_projectile)
             
             # Check flocker-wall collision
             flocker.check_wall_collision(maze.walls, maze.spatial_grid)

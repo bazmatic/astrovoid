@@ -124,6 +124,9 @@ class FlockerEnemySettings:
     seekWeight: float
     baseCount: int
     scaleFactor: float
+    closeRangeFireDistance: float
+    closeRangeFireAngleTolerance: float
+    clusterRadius: float
 
 
 @dataclass
@@ -457,7 +460,10 @@ def load_settings() -> Settings:
             cohesionWeight=raw["flockerEnemy"]["cohesionWeight"],
             seekWeight=raw["flockerEnemy"]["seekWeight"],
             baseCount=raw["flockerEnemy"]["baseCount"],
-            scaleFactor=raw["flockerEnemy"]["scaleFactor"]
+            scaleFactor=raw["flockerEnemy"]["scaleFactor"],
+            closeRangeFireDistance=raw["flockerEnemy"]["closeRangeFireDistance"],
+            closeRangeFireAngleTolerance=raw["flockerEnemy"]["closeRangeFireAngleTolerance"],
+            clusterRadius=raw["flockerEnemy"]["clusterRadius"]
         ),
         baby=BabySettings(**raw["baby"]),
         splitBoss=SplitBossSettings(**raw["splitBoss"]),
@@ -614,6 +620,9 @@ FLOCKER_ENEMY_COHESION_WEIGHT = SETTINGS.flockerEnemy.cohesionWeight
 FLOCKER_ENEMY_SEEK_WEIGHT = SETTINGS.flockerEnemy.seekWeight
 FLOCKER_ENEMY_BASE_COUNT = SETTINGS.flockerEnemy.baseCount
 FLOCKER_ENEMY_SCALE_FACTOR = SETTINGS.flockerEnemy.scaleFactor
+FLOCKER_ENEMY_CLOSE_RANGE_FIRE_DISTANCE = SETTINGS.flockerEnemy.closeRangeFireDistance
+FLOCKER_ENEMY_CLOSE_RANGE_FIRE_ANGLE_TOLERANCE = SETTINGS.flockerEnemy.closeRangeFireAngleTolerance
+FLOCKER_ENEMY_CLUSTER_RADIUS = SETTINGS.flockerEnemy.clusterRadius
 
 BABY_SIZE = SETTINGS.baby.size
 BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier

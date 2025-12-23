@@ -66,6 +66,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize replay enemy ship."""
         super().__init__(start_pos, config.REPLAY_ENEMY_SIZE)
+        self.angle = random.uniform(0, 360)  # Random starting orientation
         self.command_recorder = command_recorder
         self.current_replay_index = 0
         self.fire_cooldown: int = 0

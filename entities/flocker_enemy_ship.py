@@ -7,9 +7,11 @@ The ship is visually designed to look like a swallow (bird).
 
 import pygame
 import math
+import random
 from typing import Tuple, Optional, List
 import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
+from entities.projectile import Projectile
 from utils import (
     angle_to_radians,
     get_angle_to_point,
@@ -36,7 +38,13 @@ class FlockerEnemyShip(RotatingThrusterShip):
     def __init__(self, start_pos: Tuple[float, float]):
         """Initialize flocker enemy ship."""
         super().__init__(start_pos, config.FLOCKER_ENEMY_SIZE)
+        self.angle = random.uniform(0, 360)  # Random starting orientation
         self.wing_phase: float = 0.0  # Animation phase for wing movement
+        self.tweet_cooldown: float = 0.0  # Cooldown timer for tweeting
+        # Cooldown timer for firing (seconds expressed in frame-normalized units; dt ~= 1 per frame)
+        self.fire_cooldown: float = random.uniform(2.0, 5.0) * config.FPS
+        self.is_about_to_fire: bool = False  # Flag indicating this flocker is about to fire (for synchronization)
+        self.just_fired: bool = False  # Flag indicating this flocker just fired (for synchronization)
     
     @property
     def max_speed(self) -> float:
@@ -49,7 +57,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
         player_pos: Optional[Tuple[float, float]] = None,
         all_flockers: Optional[List['FlockerEnemyShip']] = None,
         neighbor_cache: Optional[object] = None,
-        flocker_idx: Optional[int] = None
+        flocker_idx: Optional[int] = None,
+        sound_manager: Optional[object] = None
     ) -> None:
         """Update flocker enemy ship with flocking behavior.
         
@@ -59,12 +68,36 @@ class FlockerEnemyShip(RotatingThrusterShip):
             all_flockers: List of all other flocker ships (excluding self).
             neighbor_cache: Optional shared neighbor cache for efficient queries.
             flocker_idx: Optional index of this flocker in the list.
+            sound_manager: Optional sound manager for playing tweet sounds.
         """
         if not self.active:
             return
         
+        # Reset just_fired flag at start of update (after neighbors have seen it)
+        self.just_fired = False
+        
         # Update wing animation
         self.wing_phase += dt * 3.0  # Wing flapping speed
+        
+        # Update tweet cooldown and randomly tweet
+        if self.tweet_cooldown > 0:
+            self.tweet_cooldown -= dt
+        elif sound_manager and random.random() < 0.01:  # 1% chance per frame when cooldown is ready
+            # Play tweet sound
+            if hasattr(sound_manager, 'play_tweet'):
+                sound_manager.play_tweet()
+            # Reset cooldown with random interval (3-8 seconds)
+            self.tweet_cooldown = random.uniform(3.0, 8.0)  # 3-8 seconds
+        
+        # Update fire cooldown
+        # Note: just_fired is reset in get_fired_projectile after neighbors can see it
+        if self.fire_cooldown > 0:
+            # Clamp to zero to avoid going negative and spamming shots
+            self.fire_cooldown = max(0.0, self.fire_cooldown - dt)
+            # Set is_about_to_fire flag when cooldown is almost ready (within ~0.2 seconds)
+            self.is_about_to_fire = self.fire_cooldown <= (0.2 * config.FPS)
+        else:
+            self.is_about_to_fire = False
         
         # Use neighbor cache if available, otherwise fall back to full list
         if neighbor_cache is not None and flocker_idx is not None:
@@ -395,8 +428,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
         """Draw the flocker enemy ship as a swallow (bird).
         
         Features:
-        - Forked tail (two tail feathers)
-        - Pointed, swept-back wings
+        - Sickle-moon-like, backwards-curving wings
+        - Straight tail
         - Streamlined body
         - Darker color on top, lighter underneath
         """
@@ -408,7 +441,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
         sin_angle = math.sin(angle_rad)
         
         base_color = config.FLOCKER_ENEMY_COLOR
-        body_radius = self.radius * 0.6
+        darker_color = tuple(max(0, c - 40) for c in base_color)
+        body_radius = self.radius * 0.5
         
         # Draw glow effect
         from rendering import visual_effects
@@ -418,11 +452,11 @@ class FlockerEnemyShip(RotatingThrusterShip):
         )
         
         # Calculate wing animation (subtle flapping)
-        wing_angle_offset = math.sin(self.wing_phase) * 5.0  # 5 degree wing movement
+        wing_angle_offset = math.sin(self.wing_phase) * 3.0  # 3 degree wing movement
         
-        # Draw body (oval shape, streamlined)
-        body_length = self.radius * 1.2
-        body_width = self.radius * 0.8
+        # Draw body (small oval shape, streamlined)
+        body_length = self.radius * 0.8
+        body_width = self.radius * 0.5
         
         # Create surface for rotated body
         surface_size = int(max(body_length, body_width) * 2) + 4
@@ -439,7 +473,6 @@ class FlockerEnemyShip(RotatingThrusterShip):
         pygame.draw.ellipse(body_surface, base_color, body_rect)
         
         # Draw darker top (for swallow appearance)
-        darker_color = tuple(max(0, c - 40) for c in base_color)
         top_rect = pygame.Rect(
             surface_center - int(body_length // 2),
             surface_center - int(body_width // 2),
@@ -453,68 +486,215 @@ class FlockerEnemyShip(RotatingThrusterShip):
         body_rect = rotated_body.get_rect(center=(int(self.x), int(self.y)))
         screen.blit(rotated_body, body_rect)
         
-        # Draw wings (swept back, pointed)
-        wing_length = self.radius * 1.0
-        wing_base_width = self.radius * 0.3
+        # Draw sickle-moon-like, backwards-curving wings
+        wing_span = self.radius * 1.4  # Wing span
+        wing_curve_radius = self.radius * 1.2  # Radius of the curved wing
+        wing_base_offset = self.radius * 0.2  # How far forward the wing attaches
         
-        # Left wing
-        left_wing_angle = angle_rad + math.radians(90 + wing_angle_offset)
-        left_wing_tip_x = self.x + math.cos(left_wing_angle) * wing_length
-        left_wing_tip_y = self.y + math.sin(left_wing_angle) * wing_length
-        left_wing_base_x = self.x + math.cos(angle_rad) * body_radius * 0.3
-        left_wing_base_y = self.y + math.sin(angle_rad) * body_radius * 0.3
+        # Wing attachment point on body
+        wing_attach_x = self.x + math.cos(angle_rad) * wing_base_offset
+        wing_attach_y = self.y + math.sin(angle_rad) * wing_base_offset
         
-        # Right wing
-        right_wing_angle = angle_rad - math.radians(90 - wing_angle_offset)
-        right_wing_tip_x = self.x + math.cos(right_wing_angle) * wing_length
-        right_wing_tip_y = self.y + math.sin(right_wing_angle) * wing_length
-        right_wing_base_x = self.x + math.cos(angle_rad) * body_radius * 0.3
-        right_wing_base_y = self.y + math.sin(angle_rad) * body_radius * 0.3
+        # Create curved wing shape (sickle-moon)
+        # Left wing - curves backward and upward
+        left_wing_points = []
+        num_points = 20
+        for i in range(num_points + 1):
+            # Progress along the curve (0.0 to 1.0)
+            t = i / num_points
+            
+            # Angle starts perpendicular to body, curves backward
+            # Start angle: 90 degrees from body direction
+            # End angle: curves backward (more than 90 degrees)
+            start_angle = angle_rad + math.radians(90 + wing_angle_offset)
+            end_angle = angle_rad + math.radians(135 + wing_angle_offset)  # Curves backward
+            
+            # Interpolate angle
+            wing_angle = start_angle + (end_angle - start_angle) * t
+            
+            # Distance from attachment point increases along curve
+            # Creates the curved sickle shape
+            distance = wing_curve_radius * (0.3 + 0.7 * t)  # Starts closer, extends further
+            
+            point_x = wing_attach_x + math.cos(wing_angle) * distance
+            point_y = wing_attach_y + math.sin(wing_angle) * distance
+            left_wing_points.append((int(point_x), int(point_y)))
         
-        # Draw wings as triangles
-        pygame.draw.polygon(screen, darker_color, [
-            (int(left_wing_base_x), int(left_wing_base_y)),
-            (int(left_wing_tip_x), int(left_wing_tip_y)),
-            (int(self.x + math.cos(angle_rad) * body_radius * 0.5), 
-             int(self.y + math.sin(angle_rad) * body_radius * 0.5))
-        ])
-        pygame.draw.polygon(screen, darker_color, [
-            (int(right_wing_base_x), int(right_wing_base_y)),
-            (int(right_wing_tip_x), int(right_wing_tip_y)),
-            (int(self.x + math.cos(angle_rad) * body_radius * 0.5), 
-             int(self.y + math.sin(angle_rad) * body_radius * 0.5))
-        ])
+        # Close the wing shape by adding attachment point
+        left_wing_points.append((int(wing_attach_x), int(wing_attach_y)))
         
-        # Draw forked tail (two tail feathers extending backward)
-        tail_length = self.radius * 0.8
-        tail_spread = math.radians(25)  # 25 degree spread between tail feathers
+        # Right wing - curves backward and downward
+        right_wing_points = []
+        for i in range(num_points + 1):
+            t = i / num_points
+            
+            # Start angle: -90 degrees from body direction
+            # End angle: curves backward (more than -90 degrees)
+            start_angle = angle_rad - math.radians(90 - wing_angle_offset)
+            end_angle = angle_rad - math.radians(135 - wing_angle_offset)  # Curves backward
+            
+            wing_angle = start_angle + (end_angle - start_angle) * t
+            distance = wing_curve_radius * (0.3 + 0.7 * t)
+            
+            point_x = wing_attach_x + math.cos(wing_angle) * distance
+            point_y = wing_attach_y + math.sin(wing_angle) * distance
+            right_wing_points.append((int(point_x), int(point_y)))
         
-        # Left tail feather
-        left_tail_angle = angle_rad + math.pi + tail_spread
-        left_tail_tip_x = self.x + math.cos(left_tail_angle) * tail_length
-        left_tail_tip_y = self.y + math.sin(left_tail_angle) * tail_length
+        right_wing_points.append((int(wing_attach_x), int(wing_attach_y)))
+        
+        # Draw wings
+        if len(left_wing_points) > 2:
+            pygame.draw.polygon(screen, darker_color, left_wing_points)
+        if len(right_wing_points) > 2:
+            pygame.draw.polygon(screen, darker_color, right_wing_points)
+        
+        # Draw straight tail extending backward
+        tail_length = self.radius * 0.9
+        tail_width = self.radius * 0.15
+        
+        # Tail base (at rear of body)
         tail_base_x = self.x - math.cos(angle_rad) * body_radius * 0.6
         tail_base_y = self.y - math.sin(angle_rad) * body_radius * 0.6
         
-        # Right tail feather
-        right_tail_angle = angle_rad + math.pi - tail_spread
-        right_tail_tip_x = self.x + math.cos(right_tail_angle) * tail_length
-        right_tail_tip_y = self.y + math.sin(right_tail_angle) * tail_length
+        # Tail tip (straight backward)
+        tail_tip_x = self.x - math.cos(angle_rad) * (body_radius * 0.6 + tail_length)
+        tail_tip_y = self.y - math.sin(angle_rad) * (body_radius * 0.6 + tail_length)
         
-        # Draw tail feathers
-        pygame.draw.polygon(screen, base_color, [
-            (int(tail_base_x), int(tail_base_y)),
-            (int(left_tail_tip_x), int(left_tail_tip_y)),
-            (int(self.x - math.cos(angle_rad) * body_radius * 0.4), 
-             int(self.y - math.sin(angle_rad) * body_radius * 0.4))
-        ])
-        pygame.draw.polygon(screen, base_color, [
-            (int(tail_base_x), int(tail_base_y)),
-            (int(right_tail_tip_x), int(right_tail_tip_y)),
-            (int(self.x - math.cos(angle_rad) * body_radius * 0.4), 
-             int(self.y - math.sin(angle_rad) * body_radius * 0.4))
-        ])
+        # Perpendicular vector for tail width
+        perp_angle = angle_rad + math.pi / 2
+        perp_x = math.cos(perp_angle) * tail_width / 2
+        perp_y = math.sin(perp_angle) * tail_width / 2
         
-        # Draw outline
-        pygame.draw.circle(screen, (255, 255, 255), (int(self.x), int(self.y)), int(body_radius), 1)
+        # Draw tail as rectangle
+        tail_points = [
+            (int(tail_base_x + perp_x), int(tail_base_y + perp_y)),
+            (int(tail_base_x - perp_x), int(tail_base_y - perp_y)),
+            (int(tail_tip_x - perp_x), int(tail_tip_y - perp_y)),
+            (int(tail_tip_x + perp_x), int(tail_tip_y + perp_y))
+        ]
+        pygame.draw.polygon(screen, base_color, tail_points)
+    
+    def _check_neighbor_firing(
+        self,
+        neighbor_cache: Optional[object],
+        flocker_idx: Optional[int],
+        all_flockers: Optional[List['FlockerEnemyShip']],
+        sync_radius: float
+    ) -> bool:
+        """Check if any neighbors are firing or about to fire (for synchronization).
+        
+        Args:
+            neighbor_cache: Optional shared neighbor cache.
+            flocker_idx: Optional index of this flocker.
+            all_flockers: List of all other flocker ships.
+            sync_radius: Radius to check for neighbors.
+            
+        Returns:
+            True if any neighbor is firing or about to fire.
+        """
+        # Use neighbor cache if available
+        if neighbor_cache is not None and flocker_idx is not None:
+            neighbors = neighbor_cache.get_neighbors(flocker_idx, sync_radius)
+            for neighbor, _ in neighbors:
+                if neighbor.just_fired or neighbor.is_about_to_fire:
+                    return True
+        elif all_flockers:
+            # Fallback: check all flockers within sync radius
+            sync_radius_sq = sync_radius * sync_radius
+            for flocker in all_flockers:
+                if not flocker.active or flocker is self:
+                    continue
+                
+                dist_sq = distance_squared((self.x, self.y), (flocker.x, flocker.y))
+                if dist_sq <= sync_radius_sq:
+                    if flocker.just_fired or flocker.is_about_to_fire:
+                        return True
+        
+        return False
+    
+    def get_fired_projectile(
+        self,
+        player_pos: Optional[Tuple[float, float]],
+        neighbor_cache: Optional[object] = None,
+        flocker_idx: Optional[int] = None,
+        all_flockers: Optional[List['FlockerEnemyShip']] = None
+    ) -> Optional[Projectile]:
+        """Get a projectile fired by this flocker if applicable.
+        
+        Flockers fire when:
+        1. Fire cooldown has expired
+        2. Player is within firing range
+        3. Either this flocker randomly decides to fire, OR a neighbor is firing/about to fire (synchronization)
+        
+        Args:
+            player_pos: Current player position.
+            neighbor_cache: Optional shared neighbor cache.
+            flocker_idx: Optional index of this flocker.
+            all_flockers: List of all other flocker ships.
+            
+        Returns:
+            Projectile instance if fired, None otherwise.
+        """
+        if not self.active or not player_pos:
+            return None
+        
+        # Check if player is within firing range
+        dist_to_player = distance((self.x, self.y), player_pos)
+        if dist_to_player > config.ENEMY_FIRE_RANGE:
+            return None
+        
+        # Check if fire cooldown has expired
+        if self.fire_cooldown > 0.0:
+            return None
+        
+        # Check if flocker is close to player and pointing roughly at it (definite fire)
+        close_range = config.FLOCKER_ENEMY_CLOSE_RANGE_FIRE_DISTANCE
+        angle_tolerance = config.FLOCKER_ENEMY_CLOSE_RANGE_FIRE_ANGLE_TOLERANCE
+        
+        is_close = dist_to_player <= close_range
+        if is_close:
+            # Calculate angle to player
+            angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
+            angle_diff = self._normalize_angle_diff(angle_to_player - self.angle)
+            
+            # If pointing roughly at player, definitely fire
+            if abs(angle_diff) <= angle_tolerance:
+                should_fire = True
+            else:
+                should_fire = False
+        else:
+            should_fire = False
+        
+        # If not in close range or not pointing at player, check for synchronization
+        if not should_fire:
+            # Check if neighbors are firing (synchronization)
+            sync_radius = config.FLOCKER_ENEMY_COHESION_RADIUS  # Use cohesion radius for sync
+            neighbor_firing = self._check_neighbor_firing(
+                neighbor_cache, flocker_idx, all_flockers, sync_radius
+            )
+            
+            # Fire if neighbor is firing (synchronization)
+            if neighbor_firing:
+                # High chance to fire when neighbor is firing (synchronization)
+                should_fire = random.random() < 0.8
+        
+        if not should_fire:
+            return None
+        
+        # Calculate angle to player (if not already calculated in close range check)
+        if not is_close:
+            angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
+        
+        # Create projectile
+        projectile = Projectile((self.x, self.y), angle_to_player, is_enemy=True)
+        
+        # Mark as just fired for synchronization (neighbors will see this in their get_fired_projectile call)
+        self.just_fired = True
+        
+        # Reset fire cooldown to ~1 second (frame-normalized)
+        self.fire_cooldown = 1.0 * config.FPS
+        
+        # Reset just_fired flag after a tiny delay so neighbors can see it this frame
+        # We'll reset it at the start of next update cycle
+        return projectile
 

@@ -7,7 +7,9 @@ in the start_level() method.
 from dataclasses import dataclass
 from typing import List, Tuple, Callable, Optional, TYPE_CHECKING
 import random
+import math
 import level_rules
+import config as game_config
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -81,33 +83,74 @@ class SpawnManager:
         """
         if config.count <= 0 or len(available_positions) == 0:
             return []
-        
-        # Get the entity list from entity manager
+
         entity_list = getattr(self.entity_manager, config.entity_list_attr)
         entity_list.clear()
+
+        positions_to_use = self._select_positions(config, available_positions)
+        used_positions: List[Tuple[float, float]] = []
         
-        used_positions = []
-        spawn_count = min(config.count, len(available_positions))
-        
-        for i in range(spawn_count):
-            pos = available_positions[i]
-            
-            # Create entity using factory function
-            if config.requires_command_recorder:
-                if command_recorder is None:
-                    raise ValueError(f"command_recorder required for {config.entity_list_attr}")
-                entity = config.factory_func(pos, command_recorder)
-            else:
-                entity = config.factory_func(pos, None)
-            
-            # Apply post-create hook if provided
+        for pos in positions_to_use:
+            entity = self._create_entity(config, pos, command_recorder)
             if config.post_create_hook:
                 config.post_create_hook(entity)
-            
             entity_list.append(entity)
             used_positions.append(pos)
         
         return used_positions
+
+    def _create_entity(
+        self,
+        config: SpawnConfig,
+        pos: Tuple[float, float],
+        command_recorder: Optional['CommandRecorder']
+    ):
+        """Create an entity using the provided factory and recorder requirement."""
+        if config.requires_command_recorder:
+            if command_recorder is None:
+                raise ValueError(f"command_recorder required for {config.entity_list_attr}")
+            return config.factory_func(pos, command_recorder)
+        return config.factory_func(pos, None)
+
+    def _select_positions(
+        self,
+        config: SpawnConfig,
+        available_positions: List[Tuple[float, float]]
+    ) -> List[Tuple[float, float]]:
+        """Select spawn positions with special handling for flockers."""
+        spawn_count = min(config.count, len(available_positions))
+        if spawn_count <= 0:
+            return []
+
+        if config.entity_list_attr == "flockers":
+            return self._select_flocker_positions(available_positions, spawn_count)
+
+        return available_positions[:spawn_count]
+
+    def _select_flocker_positions(
+        self,
+        available_positions: List[Tuple[float, float]],
+        spawn_count: int
+    ) -> List[Tuple[float, float]]:
+        """Select clustered positions for flockers using configurable radius."""
+        anchor = available_positions[0]
+        radius_sq = game_config.FLOCKER_ENEMY_CLUSTER_RADIUS * game_config.FLOCKER_ENEMY_CLUSTER_RADIUS
+
+        within_radius = [
+            p for p in available_positions
+            if (p[0] - anchor[0]) ** 2 + (p[1] - anchor[1]) ** 2 <= radius_sq
+        ]
+
+        positions_sorted = sorted(
+            within_radius if within_radius else available_positions,
+            key=lambda p: (p[0] - anchor[0]) ** 2 + (p[1] - anchor[1]) ** 2
+        )
+
+        if len(positions_sorted) >= spawn_count:
+            return positions_sorted[:spawn_count]
+
+        # Allow overlap if not enough slots; repeat anchor to fill
+        return positions_sorted + [anchor] * (spawn_count - len(positions_sorted))
     
     def spawn_all_enemies(
         self,

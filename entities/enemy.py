@@ -65,18 +65,18 @@ class Enemy(GameEntity, Collidable, Drawable):
         if enemy_type == "static":
             self.strategy = StaticEnemyStrategy()
             self.speed = 0.0
-            self.angle = 0.0
+            self.angle = random.uniform(0, 360)  # Random starting orientation
             # Hit points for momentum system
             self.hit_points = config.STATIC_ENEMY_HIT_POINTS
             self.max_hit_points = config.STATIC_ENEMY_HIT_POINTS
         elif enemy_type == "patrol":
             self.strategy = PatrolEnemyStrategy()
             self.speed = strength.patrol_speed
-            self.angle = random.uniform(0, 360)
+            self.angle = random.uniform(0, 360)  # Random starting orientation
         elif enemy_type == "aggressive":
             self.strategy = AggressiveEnemyStrategy()
             self.speed = strength.aggressive_speed
-            self.angle = 0.0
+            self.angle = random.uniform(0, 360)  # Random starting orientation
         else:
             raise ValueError(f"Unknown enemy type: {enemy_type}")
         

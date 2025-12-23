@@ -1,0 +1,17 @@
+{
+  "enemies": {
+    "static": 0,
+    "patrol": 0,
+    "aggressive": 0,
+    "replay": 0,
+    "flocker": 12,
+    "split_boss": 0,
+    "mother_boss": 0,
+    "egg": 1
+  },
+  "seed": 100,
+  "maze": {
+    "complexity": "simple",
+    "grid_size": 30
+  }
+}

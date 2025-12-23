@@ -508,7 +508,7 @@ class Game:
                 self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
             )
             self.enemy_updater.update_flockers(
-                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager
             )
             self.enemy_updater.update_split_bosses(
                 self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
