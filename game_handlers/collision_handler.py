@@ -228,9 +228,9 @@ class CollisionHandler:
             replay_enemies: List to add spawned enemies to.
             powerup_crystals: List to add spawned crystal to.
         """
-        from entities.replay_enemy_ship import ReplayEnemyShip
+        from entities.baby import Baby
         
-        for i in range(2):
+        for i in range(config.SPLIT_BOSS_CHILD_COUNT):
             # Random offset within spawn range
             angle_offset = random.uniform(0, 2 * math.pi)
             distance_offset = random.uniform(
@@ -253,11 +253,11 @@ class CollisionHandler:
             spawn_velocity_y = math.sin(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
             
             # Create new ReplayEnemyShip
-            spawned_enemy = ReplayEnemyShip((spawn_x, spawn_y), self.command_recorder)
-            spawned_enemy.vx = spawn_velocity_x
-            spawned_enemy.vy = spawn_velocity_y
-            spawned_enemy.current_replay_index = 0
-            replay_enemies.append(spawned_enemy)
+            spawned_baby = Baby((spawn_x, spawn_y), self.command_recorder)
+            spawned_baby.vx = spawn_velocity_x
+            spawned_baby.vy = spawn_velocity_y
+            spawned_baby.current_replay_index = 0
+            replay_enemies.append(spawned_baby)
         
         # Spawn powerup crystal with probability
         if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:

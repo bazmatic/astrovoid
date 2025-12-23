@@ -123,6 +123,7 @@ class SplitBossSettings:
     splitVelocityMagnitude: float
     baseCount: int
     scaleFactor: float
+    childrenCount: int
 
 
 @dataclass
@@ -153,6 +154,8 @@ class EggSettings:
     scaleFactor: float
     color: Tuple[int, int, int]
     hitPoints: int
+    babySpawnMin: int
+    babySpawnMax: int
 
 
 @dataclass
@@ -436,7 +439,9 @@ def load_settings() -> Settings:
             baseCount=raw["egg"]["baseCount"],
             scaleFactor=raw["egg"]["scaleFactor"],
             color=_as_color(tuple(raw["egg"]["color"])),
-            hitPoints=raw["egg"]["hitPoints"]
+            hitPoints=raw["egg"]["hitPoints"],
+            babySpawnMin=raw["egg"]["babySpawnMin"],
+            babySpawnMax=raw["egg"]["babySpawnMax"]
         ),
         momentum=MomentumSettings(**raw["momentum"]),
         projectile=ProjectileSettings(
@@ -567,6 +572,7 @@ SPLIT_BOSS_SPAWN_OFFSET_RANGE = SETTINGS.splitBoss.spawnOffsetRange
 SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = SETTINGS.splitBoss.splitVelocityMagnitude
 SPLIT_BOSS_BASE_COUNT = SETTINGS.splitBoss.baseCount
 SPLIT_BOSS_SCALE_FACTOR = SETTINGS.splitBoss.scaleFactor
+SPLIT_BOSS_CHILD_COUNT = SETTINGS.splitBoss.childrenCount
 
 MOTHER_BOSS_SIZE_MULTIPLIER = SETTINGS.motherBoss.sizeMultiplier
 MOTHER_BOSS_HIT_POINTS = SETTINGS.motherBoss.hitPoints
@@ -593,6 +599,8 @@ EGG_BASE_COUNT = SETTINGS.egg.baseCount
 EGG_SCALE_FACTOR = SETTINGS.egg.scaleFactor
 COLOR_EGG = SETTINGS.egg.color
 EGG_HIT_POINTS = SETTINGS.egg.hitPoints
+EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin
+EGG_BABY_SPAWN_MAX = SETTINGS.egg.babySpawnMax
 
 STATIC_ENEMY_HIT_POINTS = SETTINGS.momentum.staticEnemyHitPoints
 MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
