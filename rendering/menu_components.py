@@ -414,15 +414,6 @@ class ConfirmationDialog:
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
-        # A button icon on the left
-        icon_x = confirm_button.position[0] - confirm_button.width // 2 - 43
-        ControllerIcon.draw_a_button(
-            self.screen,
-            (icon_x, button_y),
-            size=30,
-            selected=selection_index == 0
-        )
-        
         # Confirm button hint
         confirm_hint = self.hint_font.render("Enter/A", True, config.COLOR_TEXT)
         confirm_hint_rect = confirm_hint.get_rect(
@@ -440,15 +431,6 @@ class ConfirmationDialog:
         )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
-        
-        # B button icon on the left
-        icon_x = cancel_button.position[0] - cancel_button.width // 2 - 43
-        ControllerIcon.draw_b_button(
-            self.screen,
-            (icon_x, button_y),
-            size=30,
-            selected=selection_index == 1
-        )
         
         # Cancel button hint
         cancel_hint = self.hint_font.render("ESC/B", True, config.COLOR_TEXT)
@@ -477,15 +459,6 @@ class ConfirmationDialog:
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
-        # A button icon on the left
-        icon_x = confirm_button.position[0] - confirm_button.width // 2 - 43
-        ControllerIcon.draw_a_button(
-            self.screen,
-            (icon_x, button_y),
-            size=30,
-            selected=selection_index == 0
-        )
-        
         # Confirm button hint
         confirm_hint = self.hint_font.render("Enter/A/OK", True, config.COLOR_TEXT)
         confirm_hint_rect = confirm_hint.get_rect(
@@ -503,15 +476,6 @@ class ConfirmationDialog:
         )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
-        
-        # B button icon on the left
-        icon_x = cancel_button.position[0] - cancel_button.width // 2 - 43
-        ControllerIcon.draw_b_button(
-            self.screen,
-            (icon_x, button_y + 100),
-            size=30,
-            selected=selection_index == 1
-        )
         
         # Cancel button hint
         cancel_hint = self.hint_font.render("ESC/B/Cancel", True, config.COLOR_TEXT)
