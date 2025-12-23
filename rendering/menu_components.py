@@ -302,3 +302,221 @@ class NeonText:
             self.center
         )
 
+
+class ConfirmationDialog:
+    """Reusable confirmation dialog component with two-button layout."""
+    
+    def __init__(
+        self,
+        screen: pygame.Surface,
+        title: str,
+        message: str,
+        confirm_label: str = "OK",
+        cancel_label: str = "Cancel",
+        dialog_width: int = 550,
+        dialog_height: int = 280,
+        button_layout: str = "side_by_side"
+    ):
+        """Initialize confirmation dialog.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            title: Dialog title text.
+            message: Dialog message text.
+            confirm_label: Text for confirm button (default: "OK").
+            cancel_label: Text for cancel button (default: "Cancel").
+            dialog_width: Width of dialog box.
+            dialog_height: Height of dialog box.
+            button_layout: "side_by_side" or "stacked" button layout.
+        """
+        self.screen = screen
+        self.title = title
+        self.message = message
+        self.confirm_label = confirm_label
+        self.cancel_label = cancel_label
+        self.dialog_width = dialog_width
+        self.dialog_height = dialog_height
+        self.button_layout = button_layout
+        
+        self.small_font = pygame.font.Font(None, 24)
+        self.title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
+        self.button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
+        self.hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
+    
+    def draw(
+        self,
+        menu_pulse_phase: float,
+        selection_index: int = 0
+    ) -> None:
+        """Draw confirmation dialog.
+        
+        Args:
+            menu_pulse_phase: Current pulse phase for button glow animation.
+            selection_index: Which button is selected (0 = confirm, 1 = cancel).
+        """
+        # Draw semi-transparent overlay
+        overlay = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        self.screen.blit(overlay, (0, 0))
+        
+        # Calculate dialog position (centered)
+        dialog_x = (config.SCREEN_WIDTH - self.dialog_width) // 2
+        dialog_y = (config.SCREEN_HEIGHT - self.dialog_height) // 2
+        dialog_rect = pygame.Rect(dialog_x, dialog_y, self.dialog_width, self.dialog_height)
+        
+        # Draw glow effect
+        draw_button_glow(
+            self.screen,
+            dialog_rect,
+            config.COLOR_BUTTON_GLOW,
+            config.BUTTON_GLOW_INTENSITY * 1.5,
+            menu_pulse_phase
+        )
+        
+        # Dialog background
+        pygame.draw.rect(self.screen, config.COLOR_UI_BG, dialog_rect)
+        pygame.draw.rect(self.screen, config.COLOR_BUTTON_GLOW, dialog_rect, 3)
+        
+        # Draw title
+        title_surface = self.title_font.render(self.title, True, config.COLOR_TEXT)
+        title_rect = title_surface.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 50))
+        self.screen.blit(title_surface, title_rect)
+        
+        # Draw message
+        message_surface = self.small_font.render(self.message, True, config.COLOR_TEXT)
+        message_rect = message_surface.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
+        self.screen.blit(message_surface, message_rect)
+        
+        # Draw buttons based on layout
+        if self.button_layout == "side_by_side":
+            self._draw_side_by_side_buttons(dialog_y, menu_pulse_phase, selection_index)
+        else:
+            self._draw_stacked_buttons(dialog_y, menu_pulse_phase, selection_index)
+    
+    def _draw_side_by_side_buttons(
+        self,
+        dialog_y: int,
+        menu_pulse_phase: float,
+        selection_index: int
+    ) -> None:
+        """Draw buttons side by side."""
+        button_y = dialog_y + 150
+        
+        # Confirm button (left)
+        confirm_button = Button(
+            self.confirm_label,
+            (config.SCREEN_WIDTH // 2 - 120, button_y),
+            self.button_font,
+            width=180,
+            height=50
+        )
+        confirm_button.selected = selection_index == 0
+        confirm_button.draw(self.screen, menu_pulse_phase)
+        
+        # A button icon on the left
+        icon_x = confirm_button.position[0] - confirm_button.width // 2 - 43
+        ControllerIcon.draw_a_button(
+            self.screen,
+            (icon_x, button_y),
+            size=30,
+            selected=selection_index == 0
+        )
+        
+        # Confirm button hint
+        confirm_hint = self.hint_font.render("Enter/A", True, config.COLOR_TEXT)
+        confirm_hint_rect = confirm_hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2 - 120, button_y + 50)
+        )
+        self.screen.blit(confirm_hint, confirm_hint_rect)
+        
+        # Cancel button (right)
+        cancel_button = Button(
+            self.cancel_label,
+            (config.SCREEN_WIDTH // 2 + 120, button_y),
+            self.button_font,
+            width=180,
+            height=50
+        )
+        cancel_button.selected = selection_index == 1
+        cancel_button.draw(self.screen, menu_pulse_phase)
+        
+        # B button icon on the left
+        icon_x = cancel_button.position[0] - cancel_button.width // 2 - 43
+        ControllerIcon.draw_b_button(
+            self.screen,
+            (icon_x, button_y),
+            size=30,
+            selected=selection_index == 1
+        )
+        
+        # Cancel button hint
+        cancel_hint = self.hint_font.render("ESC/B", True, config.COLOR_TEXT)
+        cancel_hint_rect = cancel_hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2 + 120, button_y + 50)
+        )
+        self.screen.blit(cancel_hint, cancel_hint_rect)
+    
+    def _draw_stacked_buttons(
+        self,
+        dialog_y: int,
+        menu_pulse_phase: float,
+        selection_index: int
+    ) -> None:
+        """Draw buttons stacked vertically."""
+        button_y = dialog_y + 150
+        
+        # Confirm button (top)
+        confirm_button = Button(
+            self.confirm_label,
+            (config.SCREEN_WIDTH // 2, button_y),
+            self.button_font,
+            width=400,
+            height=50
+        )
+        confirm_button.selected = selection_index == 0
+        confirm_button.draw(self.screen, menu_pulse_phase)
+        
+        # A button icon on the left
+        icon_x = confirm_button.position[0] - confirm_button.width // 2 - 43
+        ControllerIcon.draw_a_button(
+            self.screen,
+            (icon_x, button_y),
+            size=30,
+            selected=selection_index == 0
+        )
+        
+        # Confirm button hint
+        confirm_hint = self.hint_font.render("Enter/A/OK", True, config.COLOR_TEXT)
+        confirm_hint_rect = confirm_hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2, button_y + 40)
+        )
+        self.screen.blit(confirm_hint, confirm_hint_rect)
+        
+        # Cancel button (bottom)
+        cancel_button = Button(
+            self.cancel_label,
+            (config.SCREEN_WIDTH // 2, button_y + 100),
+            self.button_font,
+            width=400,
+            height=50
+        )
+        cancel_button.selected = selection_index == 1
+        cancel_button.draw(self.screen, menu_pulse_phase)
+        
+        # B button icon on the left
+        icon_x = cancel_button.position[0] - cancel_button.width // 2 - 43
+        ControllerIcon.draw_b_button(
+            self.screen,
+            (icon_x, button_y + 100),
+            size=30,
+            selected=selection_index == 1
+        )
+        
+        # Cancel button hint
+        cancel_hint = self.hint_font.render("ESC/B/Cancel", True, config.COLOR_TEXT)
+        cancel_hint_rect = cancel_hint.get_rect(
+            center=(config.SCREEN_WIDTH // 2, button_y + 140)
+        )
+        self.screen.blit(cancel_hint, cancel_hint_rect)
+

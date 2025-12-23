@@ -23,10 +23,13 @@ class MainMenu:
         self.menu_title: Optional[NeonText] = None
         self.menu_title_image: Optional[pygame.Surface] = None
         self.menu_title_rect: Optional[pygame.Rect] = None
-        self.menu_options = ["START GAME", "OPTIONS", "QUIT"]
+        self.menu_options = ["START GAME", "SELECT PROFILE", "OPTIONS", "QUIT"]
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self.menu_pulse_phase = 0.0
+        self.profile_name: Optional[str] = None
+        self.profile_level: Optional[int] = None
+        self.profile_font = pygame.font.Font(None, 20)
         self._initialize()
     
     def _initialize(self) -> None:
@@ -132,38 +135,26 @@ class MainMenu:
                 icon_y = button.position[1]
                 ControllerIcon.draw_a_button(self.screen, (icon_x, icon_y), size=35, selected=True)
         
-        # Draw hints below buttons (dynamic based on selected option)
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        last_button_y = self.menu_buttons[-1].position[1] if self.menu_buttons else config.SCREEN_HEIGHT // 2
-        hint_y = last_button_y + 80
-        
-        # Dynamic hint based on selected option
-        selected_option = self.get_selected_option()
-        if selected_option == "START GAME":
-            hint_text = "Press SPACE or A Button to Start"
-        elif selected_option == "OPTIONS":
-            hint_text = "Press SPACE or A Button (Coming Soon)"
-        else:  # QUIT
-            hint_text = "Press SPACE or A Button to Quit"
-        
-        hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
-        hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-        self.screen.blit(hint, hint_rect)
-        
-        # Navigation hint
-        nav_hint = hint_font.render("Use Arrow Keys or D-Pad to Navigate | ESC or B Button to Quit", True, config.COLOR_TEXT)
-        nav_hint_rect = nav_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-        self.screen.blit(nav_hint, nav_hint_rect)
-        
         # Draw controls info at bottom (smaller, less prominent)
         controls_y = config.SCREEN_HEIGHT - 120
-        controls_font = pygame.font.Font(None, 20)
         controls_text = [
             "Controls: Arrow Keys/WASD - Move | Space - Fire | Down/S - Shield",
             "Controller: Sticks - Move | R/ZR/B - Fire | A - Shield | L/ZL - Thrust"
         ]
         for i, line in enumerate(controls_text):
-            text = controls_font.render(line, True, (150, 150, 150))
+            text = self.profile_font.render(line, True, (150, 150, 150))
             text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, controls_y + i * 25))
             self.screen.blit(text, text_rect)
+
+        # Draw profile info above controls
+        if self.profile_name:
+            profile_text = f"Profile: {self.profile_name} | Level: {self.profile_level or '-'}"
+            profile_surface = self.profile_font.render(profile_text, True, (200, 200, 255))
+            profile_rect = profile_surface.get_rect(center=(config.SCREEN_WIDTH // 2, controls_y - 20))
+            self.screen.blit(profile_surface, profile_rect)
+
+    def set_profile_info(self, name: Optional[str], level: Optional[int]) -> None:
+        """Update the profile info shown on the menu."""
+        self.profile_name = name
+        self.profile_level = level
 

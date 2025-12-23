@@ -36,7 +36,7 @@
     "maxMazeSize": 40,
     "baseEnemyCount": 2,
     "enemyCountIncrement": 1,
-    "tutorialLevels": 1
+    "tutorialLevels": 4
   },
   "maze": {
     "wallThickness": 6,
