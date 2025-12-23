@@ -71,8 +71,6 @@ class Game:
         else:
             self.initial_start_level = None
         self.profile_manager = ProfileManager()
-        profile_level = self.profile_manager.get_active_level()
-        self.level = self.initial_start_level if self.initial_start_level else profile_level
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
         
@@ -866,16 +864,20 @@ class Game:
                 self.screen.blit(flash_overlay, (0, 0))
     
     def reset_scoring_to_profile_state(self) -> None:
-        """Reset scoring state while keeping saved profile progress."""
+        """Reset scoring state using the explicit START_LEVEL override first, then profile progress, else default."""
         self.scoring = ScoringSystem()
         profile = self.profile_manager.get_active_profile()
         if profile:
             self.scoring.total_score = profile.total_score
-            self.level = profile.level
-        elif self.initial_start_level:
-            self.level = self.initial_start_level
+
+        if self.initial_start_level is not None:
+            resolved_level = self.initial_start_level
+        elif profile and profile.level is not None:
+            resolved_level = profile.level
         else:
-            self.level = 1
+            resolved_level = 1
+
+        self.level = resolved_level
 
     def reset_quit_confirmation_selection(self) -> None:
         """Reset overlay selection back to the default option."""

@@ -11,6 +11,7 @@ import time
 import config
 if TYPE_CHECKING:
     from game import Game
+    from rendering.profile_selection_menu import ProfileSelectionMenu
 
 
 class StateHandler(ABC):
@@ -395,13 +396,15 @@ class LevelCompleteStateHandler(StateHandler):
             if direction == "up":
                 if game.quit_confirmation_selection > 0:
                     game.quit_confirmation_selection -= 1
-                self.last_navigation_time = current_time
-                return True
+                    self.last_navigation_time = current_time
+                    return True
+                return False
             if direction == "down":
                 if game.quit_confirmation_selection < 1:
                     game.quit_confirmation_selection += 1
-                self.last_navigation_time = current_time
-                return True
+                    self.last_navigation_time = current_time
+                    return True
+                return False
         return False
 
     def _apply_quit_selection(self, game: 'Game') -> bool:
@@ -436,41 +439,19 @@ class LevelCompleteStateHandler(StateHandler):
                 game.level_complete_quit_confirm = True
                 game.reset_quit_confirmation_selection()
                 return True
-        elif event.type == pygame.JOYHATMOTION:
-            # Handle d-pad navigation
-            hat_value = event.value
+        elif event.type in (pygame.JOYHATMOTION, pygame.JOYAXISMOTION):
             current_time = time.time()
-            if current_time - self.last_navigation_time >= self.navigation_debounce_interval:
-                if hat_value[1] == -1:  # D-pad up
-                    game.level_complete_menu.navigate_up()
-                    self.last_navigation_time = current_time
-                    return True
-                elif hat_value[1] == 1:  # D-pad down
-                    game.level_complete_menu.navigate_down()
-                    self.last_navigation_time = current_time
-                    return True
-        elif event.type == pygame.JOYAXISMOTION:
-            # Handle analog stick navigation (with debounce to prevent rapid navigation)
-            current_time = time.time()
-            if current_time - self.last_navigation_time >= self.navigation_debounce_interval:
-                if event.axis == 1:  # Left stick Y-axis
-                    if event.value < -config.CONTROLLER_DEADZONE:
-                        game.level_complete_menu.navigate_up()
-                        self.last_navigation_time = current_time
-                        return True
-                    elif event.value > config.CONTROLLER_DEADZONE:
-                        game.level_complete_menu.navigate_down()
-                        self.last_navigation_time = current_time
-                        return True
-                elif event.axis == 3:  # Right stick Y-axis
-                    if event.value < -config.CONTROLLER_DEADZONE:
-                        game.level_complete_menu.navigate_up()
-                        self.last_navigation_time = current_time
-                        return True
-                    elif event.value > config.CONTROLLER_DEADZONE:
-                        game.level_complete_menu.navigate_down()
-                        self.last_navigation_time = current_time
-                        return True
+            if current_time - self.last_navigation_time < self.navigation_debounce_interval:
+                return False
+            direction = game.input_handler.get_controller_menu_navigation()
+            if direction == "up":
+                game.level_complete_menu.navigate_up()
+                self.last_navigation_time = current_time
+                return True
+            if direction == "down":
+                game.level_complete_menu.navigate_down()
+                self.last_navigation_time = current_time
+                return True
         return False
 
 

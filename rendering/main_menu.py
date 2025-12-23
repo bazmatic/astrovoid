@@ -137,13 +137,12 @@ class MainMenu:
         
         # Draw controls info at bottom (smaller, less prominent)
         controls_y = config.SCREEN_HEIGHT - 120
-        controls_font = pygame.font.Font(None, 20)
         controls_text = [
             "Controls: Arrow Keys/WASD - Move | Space - Fire | Down/S - Shield",
             "Controller: Sticks - Move | R/ZR/B - Fire | A - Shield | L/ZL - Thrust"
         ]
         for i, line in enumerate(controls_text):
-            text = controls_font.render(line, True, (150, 150, 150))
+            text = self.profile_font.render(line, True, (150, 150, 150))
             text_rect = text.get_rect(center=(config.SCREEN_WIDTH // 2, controls_y + i * 25))
             self.screen.blit(text, text_rect)
 
