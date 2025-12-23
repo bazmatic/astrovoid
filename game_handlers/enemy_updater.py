@@ -8,6 +8,8 @@ from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flocker_neighbor_cache import FlockerNeighborCache
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
@@ -103,6 +105,48 @@ class EnemyUpdater:
             fired_projectile = replay_enemy.get_fired_projectile(player_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
+    
+    def update_flockers(
+        self,
+        flockers: List['FlockerEnemyShip'],
+        dt: float,
+        player_pos: Optional[Tuple[float, float]],
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem',
+        projectiles: List['Projectile']
+    ) -> None:
+        """Update flocker enemy ships with optimized neighbor caching.
+        
+        Args:
+            flockers: List of FlockerEnemyShip instances.
+            dt: Delta time since last update.
+            player_pos: Current player position.
+            maze: Maze instance for wall collision.
+            ship: Player ship for collision detection.
+            scoring: Scoring system for recording collisions.
+            projectiles: List to add fired projectiles to.
+        """
+        # Create and update shared neighbor cache for efficient flocking
+        from entities.flocker_neighbor_cache import FlockerNeighborCache
+        neighbor_cache = FlockerNeighborCache()
+        neighbor_cache.update(flockers)
+        
+        # Update each flocker using the shared cache
+        for idx, flocker in enumerate(flockers):
+            if not flocker.active:
+                continue
+            
+            # Update flocker with cached neighbors for optimal performance
+            flocker.update(dt, player_pos, None, neighbor_cache, idx)
+            
+            # Check flocker-wall collision
+            flocker.check_wall_collision(maze.walls, maze.spatial_grid)
+            
+            # Check flocker-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(flocker.get_pos(), flocker.radius, flocker):
+                    scoring.record_enemy_collision()
     
     def update_split_bosses(
         self,

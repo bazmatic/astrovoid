@@ -75,6 +75,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
     patrol = enemies_config.get('patrol', default_counts.patrol)
     aggressive = enemies_config.get('aggressive', default_counts.aggressive)
     replay = enemies_config.get('replay', default_counts.replay)
+    flocker = enemies_config.get('flocker', default_counts.flocker)
     egg = enemies_config.get('egg', default_counts.egg)
     
     # Calculate total from the sum of regular enemies
@@ -86,6 +87,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         patrol=patrol,
         aggressive=aggressive,
         replay=replay,
+        flocker=flocker,
         egg=egg
     )
 

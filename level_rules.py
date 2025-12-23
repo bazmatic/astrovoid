@@ -29,6 +29,7 @@ class EnemyCounts:
         patrol: Number of patrol enemies
         aggressive: Number of aggressive enemies
         replay: Number of replay enemy ships
+        flocker: Number of flocker enemy ships
         egg: Number of egg enemies
     """
     total: int
@@ -36,6 +37,7 @@ class EnemyCounts:
     patrol: int
     aggressive: int
     replay: int
+    flocker: int
     egg: int
 
 
@@ -139,6 +141,27 @@ def get_split_boss_count(level: int) -> int:
     effective_level = level - config.TUTORIAL_LEVELS
     # Continuous scaling with square root for diminishing returns
     count = config.SPLIT_BOSS_BASE_COUNT + config.SPLIT_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
+    return round(count)
+
+
+def get_flocker_count(level: int) -> int:
+    """Get number of flocker enemy ships for a level.
+    
+    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
+    This provides slow, diminishing returns scaling that continues indefinitely.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        Number of flocker enemies (0 for tutorial levels, then continuous scaling).
+    """
+    if level <= config.TUTORIAL_LEVELS:
+        return 0
+    # Difficulty scaling starts after tutorial levels
+    effective_level = level - config.TUTORIAL_LEVELS
+    # Continuous scaling with square root for diminishing returns
+    count = config.FLOCKER_ENEMY_BASE_COUNT + config.FLOCKER_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
     return round(count)
 
 
@@ -304,6 +327,7 @@ def get_enemy_counts(level: int) -> EnemyCounts:
     total = get_enemy_count(level)
     distribution = get_enemy_type_distribution(level, total)
     replay = get_replay_enemy_count(level)
+    flocker = get_flocker_count(level)
     egg = get_egg_count(level)
     
     return EnemyCounts(
@@ -312,6 +336,7 @@ def get_enemy_counts(level: int) -> EnemyCounts:
         patrol=distribution['patrol'],
         aggressive=distribution['aggressive'],
         replay=replay,
+        flocker=flocker,
         egg=egg
     )
 

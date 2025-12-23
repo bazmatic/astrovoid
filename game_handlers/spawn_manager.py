@@ -11,6 +11,7 @@ import level_rules
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.split_boss import SplitBoss
     from entities.command_recorder import CommandRecorder
     from game_handlers.entity_manager import EntityManager
@@ -168,6 +169,7 @@ class SpawnManager:
             List of SpawnConfig objects.
         """
         from entities.replay_enemy_ship import ReplayEnemyShip
+        from entities.flocker_enemy_ship import FlockerEnemyShip
         from entities.split_boss import SplitBoss
         from entities.mother_boss import MotherBoss
         from entities.egg import Egg
@@ -186,6 +188,16 @@ class SpawnManager:
                 factory_func=lambda pos, cr: ReplayEnemyShip(pos, cr),
                 requires_command_recorder=True,
                 post_create_hook=set_replay_index
+            ))
+        
+        # Flocker enemies
+        if enemy_counts.flocker > 0:
+            configs.append(SpawnConfig(
+                count=enemy_counts.flocker,
+                entity_list_attr="flockers",
+                factory_func=lambda pos, cr: FlockerEnemyShip(pos),
+                requires_command_recorder=False,
+                post_create_hook=None
             ))
         
         # SplitBoss enemies

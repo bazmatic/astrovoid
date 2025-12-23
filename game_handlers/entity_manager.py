@@ -8,6 +8,7 @@ from typing import List, Iterator, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.split_boss import SplitBoss
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
@@ -21,6 +22,7 @@ class EntityManager:
         """Initialize entity manager with empty lists."""
         self.enemies: List['Enemy'] = []
         self.replay_enemies: List['ReplayEnemyShip'] = []
+        self.flockers: List['FlockerEnemyShip'] = []
         self.split_bosses: List['SplitBoss'] = []
         self.mother_bosses: List['MotherBoss'] = []
         self.babies: List['Baby'] = []
@@ -30,6 +32,7 @@ class EntityManager:
         """Clear all enemy lists."""
         self.enemies.clear()
         self.replay_enemies.clear()
+        self.flockers.clear()
         self.split_bosses.clear()
         self.mother_bosses.clear()
         self.babies.clear()
@@ -44,6 +47,7 @@ class EntityManager:
         positions = []
         positions.extend([e.get_pos() for e in self.enemies])
         positions.extend([re.get_pos() for re in self.replay_enemies])
+        positions.extend([f.get_pos() for f in self.flockers])
         positions.extend([sb.get_pos() for sb in self.split_bosses])
         positions.extend([mb.get_pos() for mb in self.mother_bosses])
         positions.extend([baby.get_pos() for baby in self.babies])
@@ -62,6 +66,9 @@ class EntityManager:
         for replay_enemy in self.replay_enemies:
             if replay_enemy.active:
                 yield replay_enemy
+        for flocker in self.flockers:
+            if flocker.active:
+                yield flocker
         for split_boss in self.split_bosses:
             if split_boss.active:
                 yield split_boss

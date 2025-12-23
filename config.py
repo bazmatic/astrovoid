@@ -111,6 +111,22 @@ class ReplayEnemySettings:
 
 
 @dataclass
+class FlockerEnemySettings:
+    size: int
+    color: Tuple[int, int, int]
+    speedMultiplier: float
+    separationRadius: float
+    alignmentRadius: float
+    cohesionRadius: float
+    separationWeight: float
+    alignmentWeight: float
+    cohesionWeight: float
+    seekWeight: float
+    baseCount: int
+    scaleFactor: float
+
+
+@dataclass
 class BabySettings:
     size: int
     speedMultiplier: float
@@ -341,6 +357,7 @@ class Settings:
     maze: MazeSettings
     enemies: EnemySettings
     replayEnemy: ReplayEnemySettings
+    flockerEnemy: FlockerEnemySettings
     baby: BabySettings
     splitBoss: SplitBossSettings
     motherBoss: MotherBossSettings
@@ -427,6 +444,20 @@ def load_settings() -> Settings:
             color=_as_color(tuple(raw["replayEnemy"]["color"])),
             baseCount=raw["replayEnemy"]["baseCount"],
             scaleFactor=raw["replayEnemy"]["scaleFactor"]
+        ),
+        flockerEnemy=FlockerEnemySettings(
+            size=raw["flockerEnemy"]["size"],
+            color=_as_color(tuple(raw["flockerEnemy"]["color"])),
+            speedMultiplier=raw["flockerEnemy"]["speedMultiplier"],
+            separationRadius=raw["flockerEnemy"]["separationRadius"],
+            alignmentRadius=raw["flockerEnemy"]["alignmentRadius"],
+            cohesionRadius=raw["flockerEnemy"]["cohesionRadius"],
+            separationWeight=raw["flockerEnemy"]["separationWeight"],
+            alignmentWeight=raw["flockerEnemy"]["alignmentWeight"],
+            cohesionWeight=raw["flockerEnemy"]["cohesionWeight"],
+            seekWeight=raw["flockerEnemy"]["seekWeight"],
+            baseCount=raw["flockerEnemy"]["baseCount"],
+            scaleFactor=raw["flockerEnemy"]["scaleFactor"]
         ),
         baby=BabySettings(**raw["baby"]),
         splitBoss=SplitBossSettings(**raw["splitBoss"]),
@@ -570,6 +601,19 @@ REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
 REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
 REPLAY_ENEMY_BASE_COUNT = SETTINGS.replayEnemy.baseCount
 REPLAY_ENEMY_SCALE_FACTOR = SETTINGS.replayEnemy.scaleFactor
+
+FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
+FLOCKER_ENEMY_COLOR = SETTINGS.flockerEnemy.color
+FLOCKER_ENEMY_SPEED_MULTIPLIER = SETTINGS.flockerEnemy.speedMultiplier
+FLOCKER_ENEMY_SEPARATION_RADIUS = SETTINGS.flockerEnemy.separationRadius
+FLOCKER_ENEMY_ALIGNMENT_RADIUS = SETTINGS.flockerEnemy.alignmentRadius
+FLOCKER_ENEMY_COHESION_RADIUS = SETTINGS.flockerEnemy.cohesionRadius
+FLOCKER_ENEMY_SEPARATION_WEIGHT = SETTINGS.flockerEnemy.separationWeight
+FLOCKER_ENEMY_ALIGNMENT_WEIGHT = SETTINGS.flockerEnemy.alignmentWeight
+FLOCKER_ENEMY_COHESION_WEIGHT = SETTINGS.flockerEnemy.cohesionWeight
+FLOCKER_ENEMY_SEEK_WEIGHT = SETTINGS.flockerEnemy.seekWeight
+FLOCKER_ENEMY_BASE_COUNT = SETTINGS.flockerEnemy.baseCount
+FLOCKER_ENEMY_SCALE_FACTOR = SETTINGS.flockerEnemy.scaleFactor
 
 BABY_SIZE = SETTINGS.baby.size
 BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier
