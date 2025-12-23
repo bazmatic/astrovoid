@@ -288,6 +288,7 @@ class CollisionHandler:
         
         if projectile.check_circle_collision((ship.x, ship.y), ship.radius):
             scoring.record_enemy_collision()
+            scoring.record_enemy_bullet_hit()
             # Apply small velocity impulse to ship from projectile impact
             impact_force = config.PROJECTILE_IMPACT_FORCE * getattr(projectile, "impact_force_multiplier", 1.0)
             ship.vx += projectile.vx * impact_force

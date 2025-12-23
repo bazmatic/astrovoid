@@ -54,58 +54,19 @@ class MazeComplexityPresets:
         Returns:
             MazeGenerationConfig with parameters for the complexity level.
         """
-        if complexity == MazeComplexity.EMPTY:
-            return MazeGenerationConfig(
-                step_size=1,
-                passage_width=0,
-                clear_radius=0,
-                corner_clear_size=0,
-                extra_paths_multiplier=0,
-                grid_size_base=config.BASE_MAZE_SIZE,
-                grid_size_increment=config.MAZE_SIZE_INCREMENT
-            )
-        elif complexity == MazeComplexity.SIMPLE:
-            return MazeGenerationConfig(
-                step_size=3,
-                passage_width=2,
-                clear_radius=2,
-                corner_clear_size=4,
-                extra_paths_multiplier=5,
-                grid_size_base=config.BASE_MAZE_SIZE,
-                grid_size_increment=config.MAZE_SIZE_INCREMENT
-            )
-        elif complexity == MazeComplexity.NORMAL:
-            return MazeGenerationConfig(
-                step_size=5,
-                passage_width=4,
-                clear_radius=3,
-                corner_clear_size=6,
-                extra_paths_multiplier=10,
-                grid_size_base=config.BASE_MAZE_SIZE,
-                grid_size_increment=config.MAZE_SIZE_INCREMENT
-            )
-        elif complexity == MazeComplexity.COMPLEX:
-            return MazeGenerationConfig(
-                step_size=7,
-                passage_width=6,
-                clear_radius=4,
-                corner_clear_size=8,
-                extra_paths_multiplier=15,
-                grid_size_base=config.BASE_MAZE_SIZE,
-                grid_size_increment=config.MAZE_SIZE_INCREMENT
-            )
-        elif complexity == MazeComplexity.EXTREME:
-            return MazeGenerationConfig(
-                step_size=9,
-                passage_width=8,
-                clear_radius=5,
-                corner_clear_size=10,
-                extra_paths_multiplier=20,
-                grid_size_base=config.BASE_MAZE_SIZE,
-                grid_size_increment=config.MAZE_SIZE_INCREMENT
-            )
-        else:
+        preset = config.SETTINGS.maze.complexityPresets.get(complexity.name)
+        if not preset:
             raise ValueError(f"Unknown complexity level: {complexity}")
+
+        return MazeGenerationConfig(
+            step_size=preset.stepSize,
+            passage_width=preset.passageWidth,
+            clear_radius=preset.clearRadius,
+            corner_clear_size=preset.cornerClearSize,
+            extra_paths_multiplier=preset.extraPathsMultiplier,
+            grid_size_base=preset.gridSizeBase,
+            grid_size_increment=preset.gridSizeIncrement
+        )
     
     @staticmethod
     def get_complexity_from_level(level: int) -> MazeComplexity:

@@ -177,6 +177,12 @@ asterdroids/
     └── README.md          # Test documentation
 ```
 
+## Configuration
+
+- All the tuning constants (screen dimensions, enemy behavior, maze presets, UI colors, etc.) live in `config/settings.json`. Edit this file to tweak the experience and keep everything organized by section.
+- `config.py` loads the JSON into typed dataclasses and exposes the legacy uppercase names for backward compatibility (e.g., `config.SCREEN_WIDTH`) while also providing `config.SETTINGS` for new code that prefers structured access.
+- When updating `config/settings.json`, rerun the game or tests to reload the new configuration.
+
 ## Documentation
 
 - **[ARCHITECTURE.md](ARCHITECTURE.md)**: Detailed architecture documentation
