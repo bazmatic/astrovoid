@@ -10,6 +10,7 @@ import os
 from typing import Tuple, List, Optional, Callable, Dict
 import config
 from rendering.number_sprite import NumberSprite
+from utils.resource_path import resource_path
 
 
 class GaugeFrame:
@@ -33,14 +34,15 @@ class GaugeFrame:
     def _load_image(self) -> None:
         """Load the gauge frame image file."""
         try:
-            if not os.path.exists(self.image_path):
-                print(f"Warning: Gauge frame file not found: {self.image_path}")
+            resolved_path = resource_path(self.image_path)
+            if not os.path.exists(resolved_path):
+                print(f"Warning: Gauge frame file not found: {resolved_path}")
                 self.original_image = None
                 return
             
             # Load with alpha channel preserved
-            self.original_image = pygame.image.load(self.image_path).convert_alpha()
-            print(f"Gauge frame loaded successfully: {self.image_path}, size: {self.original_image.get_size()}")
+            self.original_image = pygame.image.load(resolved_path).convert_alpha()
+            print(f"Gauge frame loaded successfully: {resolved_path}, size: {self.original_image.get_size()}")
         except (pygame.error, FileNotFoundError) as e:
             print(f"Warning: Could not load gauge frame from {self.image_path}: {e}")
             self.original_image = None

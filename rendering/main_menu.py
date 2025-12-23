@@ -7,6 +7,7 @@ import pygame
 from typing import Optional
 import config
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
+from utils.resource_path import resource_path
 
 
 class MainMenu:
@@ -39,7 +40,7 @@ class MainMenu:
         
         # Load title graphic
         try:
-            self.menu_title_image = pygame.image.load("assets/title.png").convert_alpha()
+            self.menu_title_image = pygame.image.load(resource_path("assets/title.png")).convert_alpha()
             # Scale title image to half size (maintain aspect ratio)
             original_width = self.menu_title_image.get_width()
             original_height = self.menu_title_image.get_height()

@@ -9,6 +9,7 @@ import config
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
 from rendering.ui_elements import AnimatedStarRating
 from rendering.number_sprite import NumberSprite
+from utils.resource_path import resource_path
 
 
 class LevelCompleteMenu:
@@ -90,7 +91,7 @@ class LevelCompleteMenu:
         """Initialize level complete and failed graphics."""
         # Load level complete image
         try:
-            self.level_complete_image = pygame.image.load("assets/level_complete.png").convert_alpha()
+            self.level_complete_image = pygame.image.load(resource_path("assets/level_complete.png")).convert_alpha()
             # Scale image to 1/3 size (maintain aspect ratio)
             original_width = self.level_complete_image.get_width()
             original_height = self.level_complete_image.get_height()
@@ -104,7 +105,7 @@ class LevelCompleteMenu:
         
         # Load level failed image
         try:
-            self.level_failed_image = pygame.image.load("assets/level_failed.png").convert_alpha()
+            self.level_failed_image = pygame.image.load(resource_path("assets/level_failed.png")).convert_alpha()
             original_width = self.level_failed_image.get_width()
             original_height = self.level_failed_image.get_height()
             image_width = original_width * .4

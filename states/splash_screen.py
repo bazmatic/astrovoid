@@ -8,6 +8,7 @@ import pygame
 import os
 from typing import TYPE_CHECKING
 import config
+from utils.resource_path import resource_path
 
 if TYPE_CHECKING:
     from states.state_machine import StateMachine
@@ -27,7 +28,7 @@ class SplashScreenState:
         self.screen = screen
         
         # Load splash image
-        splash_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'assets', 'splash.png')
+        splash_path = resource_path('assets/splash.png')
         try:
             self.splash_image = pygame.image.load(splash_path).convert_alpha()
             # Scale to fit screen while maintaining aspect ratio

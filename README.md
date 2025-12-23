@@ -66,6 +66,50 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+## Building Distributables
+
+The project is set up to use PyInstaller to create standalone executables.
+
+### Prerequisites
+
+Install PyInstaller (included in requirements.txt):
+
+```bash
+pip install -r requirements.txt
+```
+
+### Building
+
+**Windows:**
+```bash
+build.bat
+```
+
+**Linux/macOS:**
+```bash
+chmod +x build.sh
+./build.sh
+```
+
+**Manual build:**
+```bash
+pyinstaller astrovoid.spec
+```
+
+The executable will be created in the `dist/` folder. On Windows, it will be `dist/astrovoid.exe`. On Linux/macOS, it will be `dist/astrovoid`.
+
+### Build Output
+
+- **One-file executable**: The build creates a single executable file that includes all dependencies and data files (assets, config, levels).
+- **No console window**: The executable runs without a console window (windowed application).
+- **All resources bundled**: Assets, configuration files, and level data are automatically included in the executable.
+
+### Notes
+
+- The build process includes all necessary files (assets, config, levels) automatically.
+- The executable is self-contained and doesn't require Python or any dependencies to be installed on the target system.
+- For cross-platform builds, you must build on each target platform (Windows builds on Windows, Linux builds on Linux, etc.).
+
 ## Controls
 
 - **Arrow Keys**: Rotate ship (Left/Right) and apply thrust (Up)

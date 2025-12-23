@@ -1,8 +1,9 @@
 {
   "screen": {
-    "width": 1480,
-    "height": 900,
-    "fps": 60
+    "width": 3840,
+    "height": 2160,
+    "fps": 60,
+    "fullscreen": true
   },
   "ship": {
     "size": 8,
@@ -178,7 +179,7 @@
     "thrustPlumeParticles": 5
   },
   "colors": {
-    "background": [10, 10, 20],
+    "background": [9,1,19],
     "ship": [100, 200, 255],
     "walls": [150, 150, 150],
     "enemyStatic": [255, 100, 100],
