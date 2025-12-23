@@ -22,7 +22,8 @@ def load_level_config(level: int) -> Optional[Dict]:
         Parsed JSON dictionary if file exists, None otherwise.
         Returns None on file not found or JSON parsing errors.
     """
-    config_path = os.path.join("levels", f"{level}.json")
+    from utils.resource_path import resource_path
+    config_path = resource_path(f"levels/{level}.json")
     
     if not os.path.exists(config_path):
         return None

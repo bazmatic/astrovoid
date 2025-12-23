@@ -17,6 +17,7 @@ class ScreenSettings:
     width: int
     height: int
     fps: int
+    fullscreen: bool
 
 
 @dataclass
@@ -358,7 +359,8 @@ class Settings:
 
 
 def _load_settings_json() -> dict:
-    path = Path(__file__).parent / "config" / "settings.json"
+    from utils.resource_path import resource_path
+    path = Path(resource_path("config/settings.json"))
     with path.open("r", encoding="utf-8") as fh:
         return json.load(fh)
 
@@ -511,6 +513,7 @@ STATES_DEFAULTS = {
 SCREEN_WIDTH = SETTINGS.screen.width
 SCREEN_HEIGHT = SETTINGS.screen.height
 FPS = SETTINGS.screen.fps
+SCREEN_FULLSCREEN = SETTINGS.screen.fullscreen
 
 SHIP_SIZE = SETTINGS.ship.size
 SHIP_ROTATION_SPEED = SETTINGS.ship.rotationSpeed

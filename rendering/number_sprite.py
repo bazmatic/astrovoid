@@ -7,6 +7,7 @@ digit image files (digit_0.png through digit_9.png).
 import pygame
 from typing import Tuple, Dict, Optional
 import os
+from utils.resource_path import resource_path
 
 
 class NumberSprite:
@@ -28,12 +29,13 @@ class NumberSprite:
         for digit in range(10):
             digit_path = f"{self.digit_path_prefix}{digit}.png"
             try:
-                if not os.path.exists(digit_path):
-                    print(f"Warning: Digit file not found: {digit_path}")
+                resolved_path = resource_path(digit_path)
+                if not os.path.exists(resolved_path):
+                    print(f"Warning: Digit file not found: {resolved_path}")
                     self.digit_sprites[digit] = None
                     continue
                 
-                digit_surface = pygame.image.load(digit_path).convert_alpha()
+                digit_surface = pygame.image.load(resolved_path).convert_alpha()
                 self.digit_sprites[digit] = digit_surface
             except (pygame.error, FileNotFoundError) as e:
                 print(f"Warning: Could not load digit {digit} from {digit_path}: {e}")
