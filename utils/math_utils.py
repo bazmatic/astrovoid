@@ -21,7 +21,10 @@ Usage:
 """
 
 import math
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from entities.base import GameEntity
 
 
 def distance(pos1: Tuple[float, float], pos2: Tuple[float, float]) -> float:
@@ -234,14 +237,18 @@ def get_wall_normal(
 def reflect_velocity(
     velocity: Tuple[float, float],
     normal: Tuple[float, float],
-    bounce_factor: float = 0.8
+    restitution: float = 0.85
 ) -> Tuple[float, float]:
     """Reflect a velocity vector off a surface with given normal.
+    
+    Uses coefficient of restitution for realistic energy loss on bounce.
+    This is a convenience function that wraps the physics calculation.
     
     Args:
         velocity: (vx, vy) velocity vector
         normal: (nx, ny) normalized normal vector pointing away from surface
-        bounce_factor: How much velocity is preserved (0.8 = 80% of speed retained)
+        restitution: Coefficient of restitution (0.0 = perfectly inelastic, 1.0 = perfectly elastic).
+                     Default 0.85 provides realistic bounce behavior.
     
     Returns:
         Reflected velocity vector (vx, vy)
@@ -256,8 +263,8 @@ def reflect_velocity(
     reflected_vx = vx - 2 * dot * nx
     reflected_vy = vy - 2 * dot * ny
     
-    # Apply bounce factor to reduce energy
-    return (reflected_vx * bounce_factor, reflected_vy * bounce_factor)
+    # Apply restitution (energy loss on bounce)
+    return (reflected_vx * restitution, reflected_vy * restitution)
 
 
 def resolve_circle_collision(
@@ -362,6 +369,120 @@ def resolve_circle_collision(
         (new_v2x, new_v2y),
         (separation_x, separation_y)
     )
+
+
+def calculate_entity_mass(radius: float) -> float:
+    """Calculate mass from radius using area as proxy.
+    
+    Mass is proportional to area (πr²), but we use r² directly
+    since the π constant cancels out in collision calculations.
+    
+    Args:
+        radius: Entity radius.
+        
+    Returns:
+        Mass value (radius squared).
+    """
+    return radius * radius
+
+
+def apply_circle_collision_physics(
+    entity1: 'GameEntity',
+    entity2: 'GameEntity',
+    restitution: float = 0.85
+) -> None:
+    """Apply physics-based collision response between two circular entities.
+    
+    This function applies conservation of momentum physics to both entities,
+    updating their velocities and positions to resolve the collision.
+    Uses proper physics laws: conservation of momentum and coefficient of restitution.
+    
+    Args:
+        entity1: First GameEntity object (must have x, y, vx, vy, radius attributes).
+        entity2: Second GameEntity object (must have x, y, vx, vy, radius attributes).
+        restitution: Coefficient of restitution (0.0 = perfectly inelastic, 1.0 = perfectly elastic).
+                     Default 0.85 provides realistic bounce behavior.
+    """
+    
+    # Calculate masses (use radius squared as proxy for mass, proportional to area)
+    mass1 = calculate_entity_mass(entity1.radius)
+    mass2 = calculate_entity_mass(entity2.radius)
+    
+    # Calculate new velocities and separation using physics
+    new_vel1, new_vel2, separation1 = resolve_circle_collision(
+        (entity1.x, entity1.y),
+        (entity1.vx, entity1.vy),
+        entity1.radius,
+        mass1,
+        (entity2.x, entity2.y),
+        (entity2.vx, entity2.vy),
+        entity2.radius,
+        mass2,
+        restitution
+    )
+    
+    # Update velocities
+    entity1.vx, entity1.vy = new_vel1
+    entity2.vx, entity2.vy = new_vel2
+    
+    # Separate objects to prevent overlap
+    # Separation is already calculated correctly in resolve_circle_collision
+    # separation1 is the vector for entity1, we need the opposite for entity2
+    if separation1[0] != 0.0 or separation1[1] != 0.0:
+        # Apply separation to entity1
+        entity1.x += separation1[0]
+        entity1.y += separation1[1]
+        
+        # Calculate separation for entity2 (opposite direction, proportional to mass ratio)
+        # The separation vector from resolve_circle_collision is for entity1
+        # Entity2 should move in opposite direction by (mass1 / total_mass) of total overlap
+        total_mass = mass1 + mass2
+        if total_mass > 0:
+            # Calculate total overlap from separation1 magnitude
+            separation1_mag = math.sqrt(separation1[0] * separation1[0] + separation1[1] * separation1[1])
+            if separation1_mag > 0:
+                # separation1 = overlap * (mass2 / total_mass)
+                # So total overlap = separation1_mag * (total_mass / mass2)
+                total_overlap = separation1_mag * (total_mass / mass2) if mass2 > 0 else separation1_mag
+                # Entity2 separation = overlap * (mass1 / total_mass) in opposite direction
+                separation2_mag = total_overlap * (mass1 / total_mass)
+                # Normalize separation direction and apply to entity2 (opposite direction)
+                sep_norm_x = separation1[0] / separation1_mag
+                sep_norm_y = separation1[1] / separation1_mag
+                entity2.x -= sep_norm_x * separation2_mag
+                entity2.y -= sep_norm_y * separation2_mag
+
+
+def apply_wall_collision_physics(
+    entity: 'GameEntity',
+    wall_normal: Tuple[float, float],
+    restitution: float = 0.85
+) -> None:
+    """Apply physics-based collision response for entity-wall collision.
+    
+    Uses the same physics principles as circle-circle collisions but treats
+    the wall as having infinite mass (immovable).
+    
+    Args:
+        entity: GameEntity object colliding with wall.
+        wall_normal: Normalized normal vector pointing away from wall.
+        restitution: Coefficient of restitution (0.0 = perfectly inelastic, 1.0 = perfectly elastic).
+    """
+    # Wall has infinite mass, so entity bounces off with velocity reflection
+    # Reflect velocity: v' = v - 2 * (v · n) * n
+    vx, vy = entity.vx, entity.vy
+    nx, ny = wall_normal
+    
+    # Dot product of velocity and normal
+    dot = vx * nx + vy * ny
+    
+    # Reflect velocity
+    reflected_vx = vx - 2 * dot * nx
+    reflected_vy = vy - 2 * dot * ny
+    
+    # Apply restitution (energy loss on bounce)
+    entity.vx = reflected_vx * restitution
+    entity.vy = reflected_vy * restitution
 
 
 def hsv_to_rgb(h: float, s: float, v: float) -> Tuple[int, int, int]:

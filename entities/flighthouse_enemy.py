@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import math
 import random
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, TYPE_CHECKING
 
 import pygame
 import config
+
+if TYPE_CHECKING:
+    from entities.base import GameEntity
 from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
@@ -19,7 +22,9 @@ from utils import (
     get_angle_to_point,
     line_line_collision,
     normalize_angle,
+    circle_circle_collision,
 )
+from utils.math_utils import apply_circle_collision_physics
 
 
 class FlighthouseEnemy(GameEntity, Collidable, Drawable):
@@ -189,13 +194,40 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         # Flighthouses are stationary; ignore wall collisions
         return False
 
-    def check_circle_collision(self, other_pos: Tuple[float, float], other_radius: float) -> bool:
-        from utils import circle_circle_collision
-
-        return circle_circle_collision(
+    def check_circle_collision(
+        self,
+        other_pos: Tuple[float, float],
+        other_radius: float,
+        other_entity: Optional['GameEntity'] = None
+    ) -> bool:
+        """Check collision with another circular entity.
+        
+        Uses proper elastic collision physics when other_entity is provided,
+        otherwise falls back to simple collision detection for backward compatibility.
+        
+        Note: Flighthouses are stationary (zero velocity) but still participate in physics.
+        
+        Args:
+            other_pos: Position of the other entity (x, y).
+            other_radius: Radius of the other entity.
+            other_entity: Optional GameEntity object. If provided, both objects'
+                         velocities will be updated using conservation of momentum.
+            
+        Returns:
+            True if collision occurred, False otherwise.
+        """
+        if not circle_circle_collision(
             (self.x, self.y), self.radius,
             other_pos, other_radius
-        )
+        ):
+            return False
+        
+        if other_entity is not None:
+            # Use proper physics with conservation of momentum
+            # Flighthouses are stationary (vx=0, vy=0) but still participate
+            apply_circle_collision_physics(self, other_entity, config.COLLISION_RESTITUTION)
+        
+        return True
 
     def draw(self, screen) -> None:
         if not self.active:

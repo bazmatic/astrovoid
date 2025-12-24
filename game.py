@@ -195,6 +195,11 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        # Explicitly reset velocity and previous position to prevent visual jumps
+        self.ship.vx = 0.0
+        self.ship.vy = 0.0
+        self.ship.prev_x = self.ship.x
+        self.ship.prev_y = self.ship.y
         # Set initial angle to point towards exit (opposite corner)
         exit_pos = (self.maze.exit.x, self.maze.exit.y)
         initial_angle = get_angle_to_point(self.maze.start_pos, exit_pos)

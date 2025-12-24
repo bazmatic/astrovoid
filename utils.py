@@ -196,28 +196,23 @@ def get_wall_normal(
 def reflect_velocity(
     velocity: Tuple[float, float],
     normal: Tuple[float, float],
-    bounce_factor: float = 0.8
+    restitution: float = 0.85
 ) -> Tuple[float, float]:
     """Reflect a velocity vector off a surface with given normal.
+    
+    Uses coefficient of restitution for realistic energy loss on bounce.
+    This function delegates to the implementation in utils.math_utils for consistency.
     
     Args:
         velocity: (vx, vy) velocity vector
         normal: (nx, ny) normalized normal vector pointing away from surface
-        bounce_factor: How much velocity is preserved (0.8 = 80% of speed retained)
+        restitution: Coefficient of restitution (0.0 = perfectly inelastic, 1.0 = perfectly elastic).
+                     Default 0.85 provides realistic bounce behavior.
     
     Returns:
         Reflected velocity vector (vx, vy)
     """
-    vx, vy = velocity
-    nx, ny = normal
-    
-    # Dot product of velocity and normal
-    dot = vx * nx + vy * ny
-    
-    # Reflect: v' = v - 2 * (v · n) * n
-    reflected_vx = vx - 2 * dot * nx
-    reflected_vy = vy - 2 * dot * ny
-    
-    # Apply bounce factor to reduce energy
-    return (reflected_vx * bounce_factor, reflected_vy * bounce_factor)
+    # Delegate to math_utils implementation for consistency
+    from utils.math_utils import reflect_velocity as _reflect_velocity
+    return _reflect_velocity(velocity, normal, restitution)
 

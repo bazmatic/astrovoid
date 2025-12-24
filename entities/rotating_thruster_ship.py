@@ -26,8 +26,8 @@ from utils import (
     get_wall_normal,
     get_closest_point_on_line,
     reflect_velocity,
-    resolve_circle_collision
 )
+from utils.math_utils import apply_circle_collision_physics, apply_wall_collision_physics
 from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
@@ -146,35 +146,28 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         # Clear thrusting flag at start of update (will be set again if apply_thrust is called this frame)
         self.thrusting = False
         
-        # Apply friction
-        self.vx *= config.SHIP_FRICTION
-        self.vy *= config.SHIP_FRICTION
+        # Apply friction and update position
+        self.apply_friction_and_update_position(config.SHIP_FRICTION, dt)
         
-        # Update position
-        self.x += self.vx * dt
-        self.y += self.vy * dt
-        
-        # Bounce off screen edges
-        bounce_factor = 0.85  # Retain 85% of velocity on bounce
-        
+        # Bounce off screen edges using physics
         # Check horizontal edges (left and right)
         if self.x < self.radius:
             self.x = self.radius
-            self.vx = -self.vx * bounce_factor
+            apply_wall_collision_physics(self, (1.0, 0.0), config.COLLISION_RESTITUTION)
             self.on_edge_collision()
         elif self.x > config.SCREEN_WIDTH - self.radius:
             self.x = config.SCREEN_WIDTH - self.radius
-            self.vx = -self.vx * bounce_factor
+            apply_wall_collision_physics(self, (-1.0, 0.0), config.COLLISION_RESTITUTION)
             self.on_edge_collision()
         
         # Check vertical edges (top and bottom)
         if self.y < self.radius:
             self.y = self.radius
-            self.vy = -self.vy * bounce_factor
+            apply_wall_collision_physics(self, (0.0, 1.0), config.COLLISION_RESTITUTION)
             self.on_edge_collision()
         elif self.y > config.SCREEN_HEIGHT - self.radius:
             self.y = config.SCREEN_HEIGHT - self.radius
-            self.vy = -self.vy * bounce_factor
+            apply_wall_collision_physics(self, (0.0, -1.0), config.COLLISION_RESTITUTION)
             self.on_edge_collision()
         
         # Update thrust particles (only when thrusting from previous frame)
@@ -302,12 +295,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
                     self.x += normal[0] * push_distance
                     self.y += normal[1] * push_distance
                     
-                    # Reflect velocity
-                    self.vx, self.vy = reflect_velocity(
-                        (self.vx, self.vy),
-                        normal,
-                        bounce_factor=0.85
-                    )
+                    # Reflect velocity using physics
+                    apply_wall_collision_physics(self, normal, config.COLLISION_RESTITUTION)
                     
                     # Notify subclass of collision (hook for damage, sound, etc.)
                     self.on_wall_collision()
@@ -336,12 +325,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
             self.x += normal[0] * push_distance
             self.y += normal[1] * push_distance
             
-            # Reflect velocity off the wall
-            self.vx, self.vy = reflect_velocity(
-                (self.vx, self.vy),
-                normal,
-                bounce_factor=0.85  # Retain 85% of speed on bounce
-            )
+            # Reflect velocity off the wall using physics
+            apply_wall_collision_physics(self, normal, config.COLLISION_RESTITUTION)
             
             # Notify subclass of collision (hook for damage, sound, etc.)
             self.on_wall_collision()
@@ -375,51 +360,7 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         ):
             if other_entity is not None:
                 # Use proper physics with conservation of momentum
-                # Use radius as proxy for mass (proportional to area)
-                mass1 = self.radius * self.radius
-                mass2 = other_radius * other_radius
-                
-                # Calculate new velocities and separation
-                new_vel1, new_vel2, separation = resolve_circle_collision(
-                    (self.x, self.y),
-                    (self.vx, self.vy),
-                    self.radius,
-                    mass1,
-                    other_pos,
-                    (other_entity.vx, other_entity.vy),
-                    other_radius,
-                    mass2,
-                    config.COLLISION_RESTITUTION
-                )
-                
-                # Update velocities
-                self.vx, self.vy = new_vel1
-                other_entity.vx, other_entity.vy = new_vel2
-                
-                # Separate objects to prevent overlap
-                if separation[0] != 0.0 or separation[1] != 0.0:
-                    # Apply separation to object 1 (self)
-                    self.x += separation[0]
-                    self.y += separation[1]
-                    
-                    # Calculate separation for object 2 (other_entity)
-                    # The separation vector is for object 1, which is overlap * (mass2 / total_mass)
-                    # So object 2 should move by overlap * (mass1 / total_mass) in opposite direction
-                    total_mass = mass1 + mass2
-                    if total_mass > 0:
-                        # Calculate total overlap from separation magnitude
-                        separation_mag = math.sqrt(separation[0] * separation[0] + separation[1] * separation[1])
-                        if separation_mag > 0:
-                            # separation_mag = overlap * (mass2 / total_mass)
-                            # So: overlap = separation_mag * (total_mass / mass2)
-                            total_overlap = separation_mag * (total_mass / mass2) if mass2 > 0 else separation_mag
-                            # Object 2 separation = overlap * (mass1 / total_mass)
-                            other_separation_mag = total_overlap * (mass1 / total_mass)
-                            # Normalize separation direction and apply to object 2 (opposite direction)
-                            sep_norm_x = separation[0] / separation_mag
-                            sep_norm_y = separation[1] / separation_mag
-                            other_entity.x -= sep_norm_x * other_separation_mag
-                            other_entity.y -= sep_norm_y * other_separation_mag
+                apply_circle_collision_physics(self, other_entity, config.COLLISION_RESTITUTION)
             else:
                 # Backward compatibility: simple push-back
                 dx = self.x - other_pos[0]

@@ -63,6 +63,20 @@ class GameEntity(ABC):
         """
         return self.radius
     
+    def apply_friction_and_update_position(self, friction: float, dt: float) -> None:
+        """Apply friction to velocity and update position.
+        
+        This is a common pattern used by many entities. Extracted to avoid duplication.
+        
+        Args:
+            friction: Friction coefficient to apply (0.0-1.0).
+            dt: Delta time since last update.
+        """
+        self.vx *= friction
+        self.vy *= friction
+        self.x += self.vx * dt
+        self.y += self.vy * dt
+    
     @abstractmethod
     def update(self, dt: float) -> None:
         """Update entity state.

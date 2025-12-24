@@ -18,6 +18,7 @@ from utils import (
     distance,
     distance_squared
 )
+from utils.math_utils import apply_circle_collision_physics, apply_wall_collision_physics
 from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
@@ -175,35 +176,42 @@ class Enemy(GameEntity, Collidable, Drawable):
                 (self.x, self.y), self.radius,
                 segment[0], segment[1]
             ):
-                # For static enemies, bounce off walls
-                if self.type == "static":
-                    # Calculate wall direction vector
-                    wall_start, wall_end = segment
-                    wall_dx = wall_end[0] - wall_start[0]
-                    wall_dy = wall_end[1] - wall_start[1]
-                    wall_length = math.sqrt(wall_dx * wall_dx + wall_dy * wall_dy)
+                # Calculate wall direction vector
+                wall_start, wall_end = segment
+                wall_dx = wall_end[0] - wall_start[0]
+                wall_dy = wall_end[1] - wall_start[1]
+                wall_length = math.sqrt(wall_dx * wall_dx + wall_dy * wall_dy)
+                
+                if wall_length > 0:
+                    # Normalize wall direction
+                    wall_nx = wall_dx / wall_length
+                    wall_ny = wall_dy / wall_length
                     
-                    if wall_length > 0:
-                        # Normalize wall direction
-                        wall_nx = wall_dx / wall_length
-                        wall_ny = wall_dy / wall_length
+                    # Calculate normal (perpendicular to wall, pointing away from wall)
+                    normal_x = -wall_ny
+                    normal_y = wall_nx
+                    
+                    # Check which side of wall entity is on, flip normal if needed
+                    to_entity_x = self.x - wall_start[0]
+                    to_entity_y = self.y - wall_start[1]
+                    dot_normal = to_entity_x * normal_x + to_entity_y * normal_y
+                    if dot_normal < 0:
+                        normal_x = -normal_x
+                        normal_y = -normal_y
+                    
+                    # For static enemies, bounce off walls
+                    if self.type == "static":
+                        # Reflect velocity using physics
+                        apply_wall_collision_physics(self, (normal_x, normal_y), config.COLLISION_RESTITUTION)
                         
-                        # Calculate normal (perpendicular to wall, pointing away from wall)
-                        normal_x = -wall_ny
-                        normal_y = wall_nx
-                        
-                        # Check which side of wall entity is on, flip normal if needed
-                        to_entity_x = self.x - wall_start[0]
-                        to_entity_y = self.y - wall_start[1]
-                        dot_normal = to_entity_x * normal_x + to_entity_y * normal_y
-                        if dot_normal < 0:
-                            normal_x = -normal_x
-                            normal_y = -normal_y
-                        
-                        # Reflect velocity
-                        dot = self.vx * normal_x + self.vy * normal_y
-                        self.vx -= 2 * dot * normal_x
-                        self.vy -= 2 * dot * normal_y
+                        # Move entity away from wall to prevent overlap
+                        overlap_distance = self.radius + 1.0
+                        self.x += normal_x * overlap_distance
+                        self.y += normal_y * overlap_distance
+                    else:
+                        # For dynamic enemies (patrol, aggressive), also bounce off walls
+                        # This prevents them from passing through walls
+                        apply_wall_collision_physics(self, (normal_x, normal_y), config.COLLISION_RESTITUTION)
                         
                         # Move entity away from wall to prevent overlap
                         overlap_distance = self.radius + 1.0
@@ -216,21 +224,34 @@ class Enemy(GameEntity, Collidable, Drawable):
     def check_circle_collision(
         self,
         other_pos: Tuple[float, float],
-        other_radius: float
+        other_radius: float,
+        other_entity: Optional['GameEntity'] = None
     ) -> bool:
         """Check collision with another circular entity.
+        
+        Uses proper elastic collision physics when other_entity is provided,
+        otherwise falls back to simple collision detection for backward compatibility.
         
         Args:
             other_pos: Position of the other entity (x, y).
             other_radius: Radius of the other entity.
+            other_entity: Optional GameEntity object. If provided, both objects'
+                         velocities will be updated using conservation of momentum.
             
         Returns:
             True if collision occurred, False otherwise.
         """
-        return circle_circle_collision(
+        if not circle_circle_collision(
             (self.x, self.y), self.radius,
             other_pos, other_radius
-        )
+        ):
+            return False
+        
+        if other_entity is not None:
+            # Use proper physics with conservation of momentum
+            apply_circle_collision_physics(self, other_entity, config.COLLISION_RESTITUTION)
+        
+        return True
     
     def destroy(self) -> None:
         """Destroy the enemy."""

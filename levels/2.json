@@ -1,9 +1,9 @@
 {
-  "seed": 100,
+  "seed": 101,
   "enemies": {
-    "static": 3,
-    "patrol": 1,
-    "aggressive": 1,
+    "static": 0,
+    "patrol": 3,
+    "aggressive": 0,
     "replay": 0,
     "split_boss": 0,
     "mother_boss": 0,

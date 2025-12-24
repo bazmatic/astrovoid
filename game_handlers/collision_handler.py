@@ -325,10 +325,13 @@ class CollisionHandler:
             scoring.record_enemy_collision()
             scoring.record_enemy_bullet_hit()
             self.sound_manager.play_bad_hit()
-            # Apply small velocity impulse to ship from projectile impact
-            impact_force = config.PROJECTILE_IMPACT_FORCE * getattr(projectile, "impact_force_multiplier", 1.0)
-            ship.vx += projectile.vx * impact_force
-            ship.vy += projectile.vy * impact_force
+            # Apply physics-based collision (projectile has very small mass)
+            # Use proper conservation of momentum for realistic impact
+            from utils.math_utils import apply_circle_collision_physics, calculate_entity_mass
+            # Projectiles have very small mass compared to ship
+            # Use a reduced restitution for projectile impacts (more inelastic)
+            projectile_restitution = 0.3  # Projectiles stick/transfer more energy
+            apply_circle_collision_physics(ship, projectile, projectile_restitution)
             return True
         
         return False

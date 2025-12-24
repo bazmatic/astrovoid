@@ -188,7 +188,7 @@ class EnemyUpdater:
 
             # Check flighthouse-ship collision (skip if shield is active)
             if not ship.is_shield_active():
-                if ship.check_circle_collision(flighthouse.get_pos(), flighthouse.radius):
+                if ship.check_circle_collision(flighthouse.get_pos(), flighthouse.radius, flighthouse):
                     scoring.record_enemy_collision()
     
     def update_split_bosses(

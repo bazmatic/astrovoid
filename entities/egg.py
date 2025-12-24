@@ -14,6 +14,7 @@ from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
 from utils import circle_line_collision, circle_circle_collision
+from utils.math_utils import apply_circle_collision_physics, apply_wall_collision_physics
 from rendering import visual_effects
 
 if TYPE_CHECKING:
@@ -72,13 +73,8 @@ class Egg(GameEntity, Collidable, Drawable):
         if not self.active or self.has_popped:
             return
         
-        # Apply velocity to position
-        self.x += self.vx * dt
-        self.y += self.vy * dt
-        
-        # Apply friction
-        self.vx *= config.FRICTION_COEFFICIENT
-        self.vy *= config.FRICTION_COEFFICIENT
+        # Apply friction and update position using shared method
+        self.apply_friction_and_update_position(config.FRICTION_COEFFICIENT, dt)
         
         # Stop if velocity is too small
         if abs(self.vx) < config.MIN_VELOCITY_THRESHOLD:
@@ -266,10 +262,8 @@ class Egg(GameEntity, Collidable, Drawable):
                         normal_x = -normal_x
                         normal_y = -normal_y
                     
-                    # Reflect velocity
-                    dot = self.vx * normal_x + self.vy * normal_y
-                    self.vx -= 2 * dot * normal_x
-                    self.vy -= 2 * dot * normal_y
+                    # Reflect velocity using physics
+                    apply_wall_collision_physics(self, (normal_x, normal_y), config.COLLISION_RESTITUTION)
                     
                     # Move entity away from wall to prevent overlap
                     overlap_distance = self.radius + 1.0  # Small buffer
@@ -283,21 +277,34 @@ class Egg(GameEntity, Collidable, Drawable):
     def check_circle_collision(
         self,
         other_pos: Tuple[float, float],
-        other_radius: float
+        other_radius: float,
+        other_entity: Optional['GameEntity'] = None
     ) -> bool:
         """Check collision with another circular entity.
+        
+        Uses proper elastic collision physics when other_entity is provided,
+        otherwise falls back to simple collision detection for backward compatibility.
         
         Args:
             other_pos: Position of the other entity (x, y).
             other_radius: Radius of the other entity.
+            other_entity: Optional GameEntity object. If provided, both objects'
+                         velocities will be updated using conservation of momentum.
             
         Returns:
             True if collision occurred, False otherwise.
         """
-        return circle_circle_collision(
+        if not circle_circle_collision(
             self.get_pos(), self.radius,
             other_pos, other_radius
-        )
+        ):
+            return False
+        
+        if other_entity is not None:
+            # Use proper physics with conservation of momentum
+            apply_circle_collision_physics(self, other_entity, config.COLLISION_RESTITUTION)
+        
+        return True
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the egg as a translucent, spherical water droplet.

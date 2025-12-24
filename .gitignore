@@ -23,4 +23,5 @@ Thumbs.db
 
 # Game specific
 *.log
+profiles.json
 
