@@ -59,7 +59,7 @@ class TestScoreCalculator:
             shots_fired=0,
             fuel_used=0
         )
-        expected_bonus = 2 * config.COLLISION_PENALTY
+        expected_bonus = 2 * config.ENEMY_DESTRUCTION_BONUS
         assert result["enemy_destruction_bonus"] == expected_bonus
         assert result["final_score"] == config.MAX_LEVEL_SCORE + expected_bonus
     
@@ -100,7 +100,7 @@ class TestScoreCalculator:
         )
         time_penalty = 5.0 * config.TIME_PENALTY_RATE
         collision_penalty = 2 * config.COLLISION_PENALTY
-        enemy_bonus = 1 * config.COLLISION_PENALTY
+        enemy_bonus = 1 * config.ENEMY_DESTRUCTION_BONUS
         ammo_penalty = 5 * config.AMMO_PENALTY_RATE
         fuel_penalty = 50 * config.FUEL_PENALTY_RATE
         

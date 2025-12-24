@@ -50,6 +50,7 @@ class ScoringSettings:
     wallCollisionPenalty: int
     powerupCrystalBonus: int
     enemyBulletPenalty: int
+    enemyDestructionBonus: int
 
 
 @dataclass
@@ -608,6 +609,7 @@ FUEL_PENALTY_RATE = SETTINGS.scoring.fuelPenaltyRate
 WALL_COLLISION_PENALTY = SETTINGS.scoring.wallCollisionPenalty
 POWERUP_CRYSTAL_BONUS = SETTINGS.scoring.powerupCrystalBonus
 ENEMY_BULLET_PENALTY = SETTINGS.scoring.enemyBulletPenalty
+ENEMY_DESTRUCTION_BONUS = SETTINGS.scoring.enemyDestructionBonus
 
 BASE_MAZE_SIZE = SETTINGS.difficulty.baseMazeSize
 MAZE_SIZE_INCREMENT = SETTINGS.difficulty.mazeSizeIncrement

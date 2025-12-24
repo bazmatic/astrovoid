@@ -25,7 +25,7 @@ class Ship(RotatingThrusterShip):
     
     Attributes:
         angle: Current facing angle in degrees (0 = right, 90 = down).
-        fuel: Current fuel remaining.
+        fuel: Energy used (for scoring purposes, starts at 0 and increments).
         ammo: Current ammunition remaining.
         damaged: Whether the ship is currently in a damaged state.
         damage_timer: Frames remaining in damaged state.
@@ -38,7 +38,7 @@ class Ship(RotatingThrusterShip):
             start_pos: Starting position as (x, y) tuple.
         """
         super().__init__(start_pos, config.SHIP_SIZE)
-        self.fuel = config.INITIAL_FUEL
+        self.fuel = 0  # Energy used (for scoring), starts at 0
         self.ammo = config.INITIAL_AMMO
         self.damaged = False
         self.damage_timer = 0
@@ -47,7 +47,7 @@ class Ship(RotatingThrusterShip):
         self.sound_manager = SoundManager()  # Initialize sound manager
         self.shield_active = False
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
-        self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no fuel consumed during this period
+        self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no energy consumed during this period
         self.game_started = False  # Flag to prevent shield timer countdown until game starts
         self.gun_upgrade_level = 0  # Powerup level: 0 = base, 1 = faster fire, 2 = fan effect, 3 = super fast
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
@@ -58,17 +58,14 @@ class Ship(RotatingThrusterShip):
         """Apply thrust in current direction.
         
         Returns:
-            True if fuel was consumed, False if out of fuel.
+            True if thrust was applied, False otherwise.
         """
-        if self.fuel <= 0:
-            return False
-        
         # Apply thrust using base class implementation
         result = super().apply_thrust()
         
         if result:
-            # Consume fuel
-            self.fuel -= config.FUEL_CONSUMPTION_PER_THRUST
+            # Track energy used for scoring
+            self.fuel += config.FUEL_CONSUMPTION_PER_THRUST
             
             # Start thruster sound (will only start if not already playing)
             self.sound_manager.start_thruster()
@@ -113,7 +110,7 @@ class Ship(RotatingThrusterShip):
             if self.powerup_flash_phase >= 2 * math.pi:
                 self.powerup_flash_phase -= 2 * math.pi
         
-        # Update shield phase and consume fuel when shield is active
+        # Update shield phase and track energy when shield is active
         if self.shield_active:
             self.shield_phase += 0.3  # Speed of pulse animation
             if self.shield_phase >= 2 * math.pi:
@@ -126,13 +123,8 @@ class Ship(RotatingThrusterShip):
                 if self.shield_initial_timer <= 0:
                     self.shield_active = False
             elif self.game_started:
-                # Consume fuel while shield is active (only after initial period)
-                self.fuel -= config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
-                
-                # Deactivate shield automatically when fuel reaches 0
-                if self.fuel <= 0:
-                    self.fuel = 0
-                    self.shield_active = False
+                # Track energy used while shield is active (only after initial period)
+                self.fuel += config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
         
         # Manage thruster sound: stop if we were thrusting in previous frame but apply_thrust wasn't called this frame
         # was_thrusting indicates if apply_thrust was called in previous frame
@@ -566,7 +558,7 @@ class Ship(RotatingThrusterShip):
                                      (int(plume_x), int(plume_y)), size)
     
     def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font, potential_score: Optional[float] = None, max_score: float = 100.0, level: Optional[int] = None, time_seconds: Optional[float] = None) -> None:
-        """Draw ship UI (level, time, fuel, ammo, score) using circular gauges.
+        """Draw ship UI (level, time, ammo, score) using circular gauges.
         
         Args:
             screen: The pygame Surface to draw on.
@@ -591,11 +583,10 @@ class Ship(RotatingThrusterShip):
         GAUGE_START_Y = TIME_Y + GAUGE_RADIUS * 2 + 50  # Push gauges farther down
         GAUGE_SPACING = 170  # Equal spacing between all radial gauges
         GAUGE_Y_POSITIONS = {
-            'fuel': GAUGE_START_Y,
-            'score': GAUGE_START_Y + GAUGE_SPACING,
-            'ammo': GAUGE_START_Y + (GAUGE_SPACING * 2)
+            'score': GAUGE_START_Y,
+            'ammo': GAUGE_START_Y + GAUGE_SPACING
         }
-        GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 3)  # Below all gauges
+        GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 2)  # Below all gauges
         EMPTY_COLOR = (50, 50, 50)
         
         def draw_gauge(
@@ -644,18 +635,6 @@ class Ship(RotatingThrusterShip):
                 text_color=config.COLOR_TEXT,
                 label_text="TIME"
             )
-        
-        # Fuel gauge
-        fuel_percent = max(0, min(1, self.fuel / config.INITIAL_FUEL))
-        fuel_color = UIElementRenderer._calculate_percentage_color(
-            fuel_percent,
-            high_color=(100, 200, 100),
-            medium_color=(100, 200, 100),
-            low_color=(200, 100, 100),
-            high_threshold=0.3,
-            medium_threshold=0.3
-        )
-        draw_gauge(GAUGE_Y_POSITIONS['fuel'], fuel_percent, str(int(self.fuel)), fuel_color, "FUEL")
         
         # Score gauge (if provided)
         if potential_score is not None:

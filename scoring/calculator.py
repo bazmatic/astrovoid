@@ -53,8 +53,8 @@ class ScoreCalculator:
         # Collision penalty (significant reduction per enemy collision only, not walls)
         collision_penalty = enemy_collisions * config.COLLISION_PENALTY
         
-        # Enemy destruction bonus (gain points equal to collision penalty for each enemy destroyed)
-        enemy_destruction_bonus = enemies_destroyed * config.COLLISION_PENALTY
+        # Enemy destruction bonus (gain points for each enemy destroyed)
+        enemy_destruction_bonus = enemies_destroyed * config.ENEMY_DESTRUCTION_BONUS
         
         # Ammo penalty (minor reduction per shot)
         ammo_penalty = shots_fired * config.AMMO_PENALTY_RATE

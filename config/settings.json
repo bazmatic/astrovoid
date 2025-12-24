@@ -29,7 +29,8 @@
     "ammoPenaltyRate": 0.1,
     "fuelPenaltyRate": 0.01,
     "wallCollisionPenalty": 1,
-    "powerupCrystalBonus": 5
+    "powerupCrystalBonus": 20,
+    "enemyDestructionBonus": 20
   },
   "difficulty": {
     "baseMazeSize": 10,
@@ -320,6 +321,6 @@
     }
   },
   "game": {
-    "criticalWarningThreshold": 7
+    "criticalWarningThreshold": 20
   }
 }

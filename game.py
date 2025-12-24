@@ -41,7 +41,7 @@ from utils.math_utils import get_angle_to_point
 
 class Game:
     """Main game class managing state and game loop."""
-    CRITICAL_WARNING_THRESHOLD = config.SETTINGS.game.criticalWarningThreshold  # Points remaining before warning tone starts
+    CRITICAL_WARNING_THRESHOLD = config.SETTINGS.game.criticalWarningThreshold
     
     def __init__(self, screen: pygame.Surface):
         """Initialize game."""
@@ -123,6 +123,12 @@ class Game:
             on_star_gained=self.sound_manager.play_star_gained
         )
         self.critical_warning_active = False
+        self.game_over_active = False  # Track if game over sequence is active
+        self.game_frozen = False  # Track if game action is frozen (score reached zero)
+        self.game_over_start_time = 0.0  # Time when game over sequence started
+        self.game_over_fade_duration = 2.0  # Duration of fade to black (seconds)
+        self.game_over_text_delay = 2.0  # Delay before showing "GAME OVER" text (seconds)
+        self.game_over_text_duration = 2.0  # Duration to show "GAME OVER" text (seconds)
         self.profile_selection_menu = ProfileSelectionMenu(screen, self.profile_manager)
         
         # Menu UI components
@@ -608,28 +614,54 @@ class Game:
         )
         potential_score = potential['potential_score']
         self._update_critical_warning(potential_score)
-        if potential_score <= 0:
-            self.complete_level(success=False)
-            return
+        
+        # When score reaches zero, freeze all action and start fade
+        if potential_score <= 0 and not self.game_frozen:
+            self.game_frozen = True
+            self._start_game_over_sequence(current_time)
+        
+        # If game is frozen, don't update entities (action is frozen)
+        if self.game_frozen:
+            # Update game over sequence timing
+            if self.game_over_active:
+                elapsed = current_time - self.game_over_start_time
+                # Check if sequence is complete (fade + text display)
+                if elapsed >= self.game_over_fade_duration + self.game_over_text_delay + self.game_over_text_duration:
+                    self.complete_level(success=False)
+                    self.game_over_active = False
+                    self.game_frozen = False
+            return  # Don't update game entities when frozen
         
         # Update star indicator (handles change detection and audio feedback)
         score_percentage = potential.get('score_percentage', 0.0)
         self.star_indicator.update(score_percentage)
-        
-        # Check game over conditions
-        if self.ship.fuel <= 0 and abs(self.ship.vx) < 0.1 and abs(self.ship.vy) < 0.1:
-            # Out of fuel and stopped
-            pass  # Could trigger game over here if desired
 
     def _update_critical_warning(self, potential_score: float) -> None:
         """Start/stop critical warning sound based on remaining potential score."""
-        if potential_score <= self.CRITICAL_WARNING_THRESHOLD:
+        # Only warn while there are still points/energy remaining
+        if 0 < potential_score <= self.CRITICAL_WARNING_THRESHOLD:
             if not self.critical_warning_active:
                 self.sound_manager.start_critical_warning()
                 self.critical_warning_active = True
+            else:
+                # Periodic check: verify sound is still playing
+                channel_busy = self.sound_manager.critical_warning_channel.get_busy() if self.sound_manager.critical_warning_channel else False
+                if not channel_busy:
+                    # Sound stopped unexpectedly, restart it
+                    self.sound_manager.start_critical_warning()
         elif self.critical_warning_active:
             self.sound_manager.stop_critical_warning()
             self.critical_warning_active = False
+    
+    def _start_game_over_sequence(self, current_time: float) -> None:
+        """Start the game over sequence: freeze action, fade to black, power down sound, then GAME OVER text."""
+        self.game_over_active = True
+        self.game_over_start_time = current_time
+        # Stop all sounds for dramatic effect
+        self.sound_manager.stop_all_sounds()
+        self.critical_warning_active = False
+        # Play power down sound
+        self.sound_manager.play_power_down()
     
     def complete_level(self, success: bool = True) -> None:
         """Handle level completion or failure.
@@ -804,7 +836,36 @@ class Game:
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
         # GameIndicators is kept for potential future use but currently doesn't draw anything
+        
+        # Draw game over sequence (fade to black and text)
+        if self.game_over_active:
+            self._draw_game_over_sequence()
     
+    
+    def _draw_game_over_sequence(self) -> None:
+        """Draw game over sequence: fade to black and GAME OVER text."""
+        current_time = time.time()
+        elapsed = current_time - self.game_over_start_time
+        
+        # Calculate fade progress (0.0 to 1.0)
+        fade_progress = min(1.0, elapsed / self.game_over_fade_duration)
+        
+        # Create fade overlay (black with increasing alpha)
+        fade_alpha = int(255 * fade_progress)
+        if fade_alpha > 0:
+            fade_surface = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+            fade_surface.fill((0, 0, 0, fade_alpha))
+            self.screen.blit(fade_surface, (0, 0))
+        
+        # Show "GAME OVER" text after fade delay
+        if elapsed >= self.game_over_fade_duration + self.game_over_text_delay:
+            # Render "GAME OVER" text
+            # Use large, bold font
+            game_over_font = pygame.font.Font(None, 120)
+            game_over_text = game_over_font.render("GAME OVER", True, (255, 255, 255))
+            text_rect = game_over_text.get_rect(center=(self.screen.get_width() // 2, 
+                                                         self.screen.get_height() // 2))
+            self.screen.blit(game_over_text, text_rect)
     
     def draw_exit_explosion(self) -> None:
         """Draw spectacular exit explosion effect that fills the screen with light."""

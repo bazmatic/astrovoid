@@ -44,31 +44,30 @@ class TestShipRotation:
 class TestShipThrust:
     """Tests for ship thrust mechanics."""
     
-    def test_apply_thrust_with_fuel(self):
-        """Thrust should work when fuel is available."""
+    def test_apply_thrust_tracks_energy(self):
+        """Thrust should work and track energy used."""
         ship = Ship((100, 100))
         initial_vx = ship.vx
         initial_vy = ship.vy
-        initial_fuel = ship.fuel
+        initial_energy = ship.fuel
         
         result = ship.apply_thrust()
         
         assert result is True
         assert ship.vx != initial_vx or ship.vy != initial_vy  # Velocity changed
-        assert ship.fuel < initial_fuel  # Fuel consumed
+        assert ship.fuel > initial_energy  # Energy used increments
         assert ship.thrusting is True  # Thrusting flag set
     
-    def test_apply_thrust_no_fuel(self):
-        """Thrust should fail when out of fuel."""
+    def test_apply_thrust_always_works(self):
+        """Thrust should always work regardless of energy level."""
         ship = Ship((100, 100))
-        ship.fuel = 0
+        ship.fuel = 1000  # Set high energy used
         
         result = ship.apply_thrust()
         
-        assert result is False
-        assert ship.vx == 0.0
-        assert ship.vy == 0.0
-        assert ship.fuel == 0
+        assert result is True
+        assert ship.vx != 0.0 or ship.vy != 0.0  # Velocity changed
+        assert ship.fuel > 1000  # Energy continues to increment
     
     def test_apply_thrust_direction(self):
         """Thrust should apply in ship's facing direction."""
@@ -92,14 +91,14 @@ class TestShipThrust:
         speed = math.sqrt(ship.vx * ship.vx + ship.vy * ship.vy)
         assert speed <= config.SHIP_MAX_SPEED + 0.1  # Allow small floating point error
     
-    def test_thrust_consumes_fuel(self):
-        """Each thrust should consume fuel."""
+    def test_thrust_tracks_energy(self):
+        """Each thrust should track energy used."""
         ship = Ship((100, 100))
-        initial_fuel = ship.fuel
+        initial_energy = ship.fuel
         
         ship.apply_thrust()
         
-        assert ship.fuel == initial_fuel - config.FUEL_CONSUMPTION_PER_THRUST
+        assert ship.fuel == initial_energy + config.FUEL_CONSUMPTION_PER_THRUST
 
 
 class TestShipUpdate:

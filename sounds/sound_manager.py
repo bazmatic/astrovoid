@@ -831,43 +831,52 @@ class SoundManager:
         return sound
 
     def _generate_critical_warning_sound(self) -> Optional[pygame.mixer.Sound]:
-        """Generate a longer descending warning tone to loop while score nears zero."""
+        """Generate a slow, pleasant sine wave to loop while score nears zero.
+        
+        Creates a gentle, slow sine wave that's pleasant to listen to as a warning.
+        """
         if not config.SOUND_ENABLED:
             return None
 
         sample_rate = config.SOUND_SAMPLE_RATE
-        segment_duration = 0.6
-        base_freqs = [440.0, 360.0, 300.0, 250.0, 210.0]
-        segments = []
-
-        for idx, start_freq in enumerate(base_freqs):
-            duration = segment_duration
-            num_samples = int(sample_rate * duration)
-            t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
-            progress = t_array / duration
-            end_freq = start_freq * 0.45
-            freq_curve = start_freq * np.power(end_freq / start_freq, progress)
-
-            vibrato = 0.08 * np.sin(2 * math.pi * 4.0 * t_array)
-            phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
-
-            tone = np.sin(phase)
-            tone += 0.3 * np.sin(phase * 2)
-            tone += 0.15 * np.sin(phase * 3)
-
-            envelope = np.clip(np.sqrt(1.0 - progress), 0.0, 1.0) * np.exp(-progress * 2.0)
-            amplitude = 1.0 - idx * 0.08
-            segment = tone * envelope * amplitude
-            segments.append(segment)
-
-        samples = np.concatenate(segments)
-        samples = np.clip(samples, -1.0, 1.0)
+        # Create a slow, pleasant sine wave
+        cycle_duration = 2.0  # Slow 2-second cycle for pleasant sound
+        num_cycles = 1  # Single cycle for seamless loop
+        total_duration = cycle_duration * num_cycles
+        num_samples = int(sample_rate * total_duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        
+        # Pleasant sine wave parameters
+        base_freq = 220.0  # A3 note - lower, more mellow
+        # Slow modulation with more variation
+        modulation_rate = 0.8  # Hz - slow but noticeable modulation
+        modulation_depth = 0.15  # More pitch variation for interest
+        
+        # Generate slow sine wave with gentle modulation
+        modulation = modulation_depth * np.sin(2 * math.pi * modulation_rate * t_array)
+        freq_curve = base_freq * (1.0 + modulation)
+        phase = np.cumsum(freq_curve / sample_rate) * 2 * math.pi
+        
+        # Pure sine wave (no harmonics for pleasant sound)
+        samples = np.sin(phase).astype(np.float32)
+        
+        # No fade - let pygame handle seamless looping
+        # Removing fade to ensure sound is audible and loops properly
+        
+        # Normalize and clip
+        max_amp = np.max(np.abs(samples))
+        if max_amp > 0:
+            samples = samples / max_amp * 1.0  # Full amplitude for maximum audibility
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+        
+        # Convert to stereo
         stereo = np.stack([samples, samples], axis=1)
         stereo_int16 = (stereo * 16383).astype(np.int16)
 
         sound = pygame.sndarray.make_sound(stereo_int16)
         if sound:
-            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.75)
+            volume = 1.0  # Full volume for maximum audibility
+            sound.set_volume(volume)
         return sound
 
     def start_critical_warning(self) -> None:
@@ -883,8 +892,11 @@ class SoundManager:
 
         if self.critical_warning_channel is None:
             self.critical_warning_channel = pygame.mixer.Channel(5)
+            self.critical_warning_channel.set_volume(1.0)  # Ensure channel volume is at maximum
 
-        if not self.critical_warning_channel.get_busy():
+        channel_busy = self.critical_warning_channel.get_busy()
+        if not channel_busy:
+            # Play the warning sound with infinite loops
             self.critical_warning_channel.play(self.critical_warning_sound, loops=-1)
 
     def stop_critical_warning(self) -> None:
@@ -1222,5 +1234,78 @@ class SoundManager:
             # Try to use a channel that won't interfere with other sounds
             tweet_channel = pygame.mixer.Channel(7)
             tweet_channel.play(sound)
+
+    def _generate_power_down_sound(self) -> Optional[pygame.mixer.Sound]:
+        """Generate a descending power-down sound like an electric motor spinning down."""
+        if not config.SOUND_ENABLED:
+            return None
+
+        sample_rate = config.SOUND_SAMPLE_RATE
+        duration = 2.0  # 2 seconds for dramatic power-down
+        num_samples = int(sample_rate * duration)
+        t_array = np.arange(num_samples, dtype=np.float32) / sample_rate
+        progress = t_array / duration
+
+        # Descending frequency sweep (motor spinning down)
+        start_freq = 400.0  # Start at mid-range
+        end_freq = 80.0     # End at low rumble
+        freq_curve = start_freq * np.power(end_freq / start_freq, progress)
+
+        # Add slight vibrato for motor-like character
+        vibrato_rate = 8.0  # Hz
+        vibrato_depth = 0.05
+        vibrato = vibrato_depth * np.sin(2 * math.pi * vibrato_rate * t_array)
+
+        # Generate phase with frequency modulation
+        phase = np.cumsum(freq_curve * (1.0 + vibrato) / sample_rate) * 2 * math.pi
+
+        # Main tone with harmonics for motor character
+        tone = np.sin(phase)
+        tone += 0.4 * np.sin(phase * 2)   # Second harmonic
+        tone += 0.2 * np.sin(phase * 3)   # Third harmonic
+        tone += 0.1 * np.sin(phase * 4)   # Fourth harmonic
+
+        # Add filtered noise for motor texture
+        white_noise = np.random.normal(0.0, 1.0, num_samples).astype(np.float32)
+        filtered_noise = np.zeros(num_samples, dtype=np.float32)
+        for i in range(num_samples):
+            filter_width = max(5, int(sample_rate / (freq_curve[i] * 2)))
+            filter_width = min(filter_width, 100)
+            start_idx = max(0, i - filter_width // 2)
+            end_idx = min(num_samples, i + filter_width // 2 + 1)
+            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+
+        # Mix tone and noise (motor has both tonal and noisy components)
+        tone_mix = 0.7
+        noise_mix = 0.3
+        mixed = tone * tone_mix + filtered_noise * noise_mix
+
+        # Envelope: quick attack, then slow decay (motor takes time to spin down)
+        attack = np.clip(progress / 0.05, 0.0, 1.0)  # Quick start
+        decay = np.exp(-progress * 1.5)
+        envelope = attack * decay
+
+        # Apply envelope and normalize
+        samples = mixed * envelope
+        samples = np.clip(samples, -1.0, 1.0).astype(np.float32)
+
+        # Convert to stereo
+        stereo = np.stack([samples, samples], axis=1)
+        stereo_int16 = (stereo * 16383).astype(np.int16)
+        sound = pygame.sndarray.make_sound(stereo_int16)
+        if sound:
+            sound.set_volume(config.SHOOT_SOUND_VOLUME * 0.8)  # Moderate volume
+        return sound
+
+    def play_power_down(self) -> None:
+        """Play power-down sound when ship runs out of energy."""
+        if not config.SOUND_ENABLED:
+            return
+
+        sound = self._generate_power_down_sound()
+        if sound:
+            # Use channel 2 (enemy destroy channel), safe during game over
+            power_down_channel = pygame.mixer.Channel(2)
+            power_down_channel.play(sound)
 
 

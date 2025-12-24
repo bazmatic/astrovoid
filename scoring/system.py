@@ -79,27 +79,25 @@ class ScoringSystem:
     def calculate_level_score(
         self,
         completion_time: float,
-        remaining_fuel: int,
+        energy_used: int,
         remaining_ammo: int
     ) -> Dict[str, float]:
         """Calculate final score for completed level.
         
         Args:
             completion_time: Time taken to complete level in seconds.
-            remaining_fuel: Fuel remaining at completion.
+            energy_used: Energy consumed during the level.
             remaining_ammo: Ammo remaining at completion.
             
         Returns:
             Dictionary containing score breakdown and final score.
         """
-        fuel_used = config.INITIAL_FUEL - remaining_fuel
-        
         result = ScoreCalculator.calculate_score(
             elapsed_time=completion_time,
             enemy_collisions=self.enemy_collisions,
             enemies_destroyed=self.enemies_destroyed,
             shots_fired=self.shots_fired,
-            fuel_used=fuel_used,
+            fuel_used=energy_used,
             wall_collisions=self.wall_collisions,
             powerups_collected=self.powerup_crystals_collected,
             enemy_bullet_hits=self.enemy_bullet_hits
@@ -149,28 +147,27 @@ class ScoringSystem:
     def calculate_current_potential_score(
         self,
         current_time: float,
-        remaining_fuel: int,
+        energy_used: int,
         remaining_ammo: int
     ) -> Dict[str, float]:
         """Calculate potential score based on current performance (real-time).
         
         Args:
             current_time: Current timestamp.
-            remaining_fuel: Current fuel remaining.
+            energy_used: Energy consumed so far.
             remaining_ammo: Current ammo remaining.
             
         Returns:
             Dictionary containing potential score breakdown and percentage.
         """
         elapsed_time = self.get_current_time(current_time)
-        fuel_used = config.INITIAL_FUEL - remaining_fuel
         
         result = ScoreCalculator.calculate_score(
             elapsed_time=elapsed_time,
             enemy_collisions=self.enemy_collisions,
             enemies_destroyed=self.enemies_destroyed,
             shots_fired=self.shots_fired,
-            fuel_used=fuel_used,
+            fuel_used=energy_used,
             wall_collisions=self.wall_collisions,
             powerups_collected=self.powerup_crystals_collected,
             enemy_bullet_hits=self.enemy_bullet_hits
