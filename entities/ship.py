@@ -54,6 +54,14 @@ class Ship(RotatingThrusterShip):
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
         self.powerup_flash_phase = 0.0
     
+    def is_enemy_ship(self) -> bool:
+        """Check if this ship is an enemy ship.
+        
+        Returns:
+            False - this is the player ship, not an enemy.
+        """
+        return False
+    
     def apply_thrust(self) -> bool:
         """Apply thrust in current direction.
         
