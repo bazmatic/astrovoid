@@ -37,3 +37,4 @@ class Baby(ReplayEnemyShip):
         return config.SHIP_MAX_SPEED / 2 # * config.BABY_SPEED_MULTIPLIER
 
 
+

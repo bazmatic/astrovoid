@@ -351,6 +351,7 @@ class UISettings:
     splashFadeInDuration: float
     splashFadeOutDuration: float
     splashVideoSpeedMultiplier: float
+    splashVideoEnabled: bool
     neonAsterStart: Tuple[int, int, int]
     neonAsterEnd: Tuple[int, int, int]
     neonVoidStart: Tuple[int, int, int]
@@ -555,6 +556,7 @@ def load_settings() -> Settings:
             splashFadeInDuration=raw["ui"]["splashFadeInDuration"],
             splashFadeOutDuration=raw["ui"]["splashFadeOutDuration"],
             splashVideoSpeedMultiplier=raw["ui"]["splashVideoSpeedMultiplier"],
+            splashVideoEnabled=raw["ui"]["splashVideoEnabled"],
             neonAsterStart=_as_color(tuple(raw["ui"]["neonAsterStart"])),
             neonAsterEnd=_as_color(tuple(raw["ui"]["neonAsterEnd"])),
             neonVoidStart=_as_color(tuple(raw["ui"]["neonVoidStart"])),
@@ -811,6 +813,7 @@ SPLASH_DISPLAY_DURATION = SETTINGS.ui.splashDisplayDuration
 SPLASH_FADE_IN_DURATION = SETTINGS.ui.splashFadeInDuration
 SPLASH_FADE_OUT_DURATION = SETTINGS.ui.splashFadeOutDuration
 SPLASH_VIDEO_SPEED_MULTIPLIER = SETTINGS.ui.splashVideoSpeedMultiplier
+SPLASH_VIDEO_ENABLED = SETTINGS.ui.splashVideoEnabled
 
 COLOR_NEON_ASTER_START = SETTINGS.ui.neonAsterStart
 COLOR_NEON_ASTER_END = SETTINGS.ui.neonAsterEnd

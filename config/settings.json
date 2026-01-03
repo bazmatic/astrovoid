@@ -295,6 +295,7 @@
     "splashFadeInDuration": 1.0,
     "splashFadeOutDuration": 0.8,
     "splashVideoSpeedMultiplier": 1,
+    "splashVideoEnabled": false,
     "neonAsterStart": [255, 215, 0],
     "neonAsterEnd": [255, 140, 0],
     "neonVoidStart": [100, 200, 255],

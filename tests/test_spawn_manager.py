@@ -66,3 +66,4 @@ def test_flocker_spawns_are_clustered():
     max_dist = max_dist_from_centroid(used)
     assert max_dist <= 3.0
 
+
