@@ -129,7 +129,7 @@ class EnemyUpdater:
         hunter=None
     ) -> None:
         """Update flocker enemy ships with optimized neighbor caching.
-        
+
         Args:
             flockers: List of FlockerEnemyShip instances.
             dt: Delta time since last update.
@@ -144,36 +144,36 @@ class EnemyUpdater:
         from entities.flocker_neighbor_cache import FlockerNeighborCache
         neighbor_cache = FlockerNeighborCache()
         neighbor_cache.update(flockers)
-        
-        # First pass: update all flockers (this resets just_fired flags)
-        for idx, flocker in enumerate(flockers):
+
         targets = {}
 
+        # First pass: update all flockers (this resets just_fired flags)
+        for idx, flocker in enumerate(flockers):
             if not flocker.active:
                 continue
-            
-            # Update flocker with cached neighbors for optimal performance
             target = nearest_friendly(flocker, ship, hunter)
             target_pos = target.get_pos() if target is not None else None
             targets[idx] = target_pos
+
+            # Update flocker with cached neighbors for optimal performance
             flocker.update(dt, target_pos, None, neighbor_cache, idx, sound_manager)
-        
+
         # Second pass: check for firing (allows neighbors to see each other's firing state)
         for idx, flocker in enumerate(flockers):
             if not flocker.active:
                 continue
-            
-            # Check if flocker fired a projectile
             target_pos = targets.get(idx)
+
+            # Check if flocker fired a projectile
             fired_projectile = flocker.get_fired_projectile(
                 target_pos, neighbor_cache, idx, flockers
             )
             if fired_projectile:
                 projectiles.append(fired_projectile)
-            
+
             # Check flocker-wall collision
             flocker.check_wall_collision(maze.walls, maze.spatial_grid)
-            
+
             # Check flocker-ship collision (skip if shield is active)
             if not ship.is_shield_active():
                 if ship.check_circle_collision(flocker.get_pos(), flocker.radius, flocker):
