@@ -1,0 +1,2 @@
+# Optional hunter pilot; requires Python >=3.10. Base game does not import it.
+typesafe-sdk==0.7.2

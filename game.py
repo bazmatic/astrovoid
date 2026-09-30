@@ -39,6 +39,14 @@ from game_handlers.state_handlers import StateHandlerRegistry
 from utils.math_utils import get_angle_to_point
 
 
+from entities.hunter_ship import HunterShip
+from hunter.controller import HunterController
+from hunter.perception import HunterPerception
+from hunter.spawn import resolve_hunter_spawn, reserve_hunter_clearance
+from hunter.worker import PilotWorker
+import logging
+
+
 class Game:
     """Main game class managing state and game loop."""
     CRITICAL_WARNING_THRESHOLD = config.SETTINGS.game.criticalWarningThreshold
@@ -73,6 +81,10 @@ class Game:
         self.profile_manager = ProfileManager()
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
+        self.hunter = None
+        self.hunter_controller = None
+        self.hunter_perception = None
+        self.hunter_worker = None
         
         # Entity management
         self.entity_manager = EntityManager()
@@ -163,6 +175,7 @@ class Game:
     
     def start_level(self) -> None:
         """Start a new level."""
+        self._close_hunter()
         # Store total score before starting level (for replay functionality)
         self.total_score_before_level = self.scoring.get_total_score()
         
@@ -223,6 +236,20 @@ class Game:
         spawn_positions = self.maze.get_valid_spawn_positions(
             enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
         )
+        hunter_pos = None
+        try:
+            hunter_pos = resolve_hunter_spawn(
+                level_config.get_level_hunter_config(self.level), self.maze, self.ship)
+        except ValueError as exc:
+            logging.getLogger(__name__).warning('Hunter disabled: %s', exc)
+        spawn_positions = reserve_hunter_clearance(spawn_positions, hunter_pos, config.SHIP_SIZE)
+        if hunter_pos is not None:
+            self.hunter = HunterShip(hunter_pos)
+            self.hunter_perception = HunterPerception()
+            if self.hunter_worker is None:
+                self.hunter_worker = PilotWorker()
+            self.hunter_controller = HunterController(self.hunter_worker)
+
         self.spawn_manager.spawn_all_enemies(
             self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count
         )
@@ -263,6 +290,37 @@ class Game:
                 pass
         
     
+    def _close_hunter(self) -> None:
+        if self.hunter_controller is not None:
+            self.hunter_controller.close()
+        self.hunter = None
+        self.hunter_controller = None
+        self.hunter_perception = None
+
+    def _update_hunter(self, dt) -> None:
+        if self.hunter is None or self.hunter_controller is None:
+            return
+        if not self.hunter.active:
+            self.hunter_controller.close()
+            return
+        if not self.player_has_moved:
+            self.hunter_controller.tick(None, running=False)
+            return
+        def observe(now, generation):
+            return self.hunter_perception.observe(
+                self.hunter, self.maze, self.ship,
+                list(self.entity_manager.get_all_active_enemies()), self.projectiles,
+                self.hunter_controller.action, now, generation)
+        action = self.hunter_controller.tick(observe)
+        bullet = self.hunter.step(dt, action)
+        if bullet is not None:
+            self.projectiles.append(bullet)
+        self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
+
+    def _stop_dead_hunter(self) -> None:
+        if self.hunter is not None and not self.hunter.active:
+            self.hunter_controller.close()
+
     def handle_events(self) -> None:
         """Handle pygame events."""
         for event in pygame.event.get():
@@ -298,6 +356,13 @@ class Game:
     
     def update(self, dt: float) -> None:
         """Update game state."""
+        hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
+                          and not self.exit_explosion_active and not self.game_frozen
+                          and not self.game_over_active)
+        if self.hunter_controller is not None and not hunter_running:
+            self.hunter_controller.tick(None, running=False)
+            if self.hunter is not None:
+                self.hunter.pilot_thrusting = False
         # Update splash screen
         if self.state == config.STATE_SPLASH:
             if self.splash_screen:
@@ -512,27 +577,29 @@ class Game:
         # Only update enemies after player has made their first move
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
         if self.player_has_moved:
+            if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
+                self._update_hunter(dt)
             # Update all enemy types using EnemyUpdater
             self.enemy_updater.update_enemies(
-                self.enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+                self.enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_replay_enemies(
-                self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+                self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_flighthouses(
                 self.flighthouses, dt, player_pos, self.maze, self.ship, self.scoring, self.flockers
             )
             self.enemy_updater.update_flockers(
-                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager
+                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
             )
             self.enemy_updater.update_split_bosses(
-                self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+                self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_mother_bosses(
-                self.mother_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.eggs
+                self.mother_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.eggs, hunter=self.hunter
             )
             self.enemy_updater.update_babies(
-                self.babies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles
+                self.babies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_eggs(
                 self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
@@ -543,6 +610,11 @@ class Game:
                 self.replay_enemies, self.flockers, self.split_bosses, self.mother_bosses, self.babies
             )
         
+        if self.player_has_moved:
+            self.collision_handler.handle_hunter_contacts(
+                self.hunter, self.ship, self.entity_manager.get_all_active_enemies())
+            self._stop_dead_hunter()
+
         # Update projectiles and handle collisions
         active_projectiles = []
         for projectile in self.projectiles:
@@ -552,7 +624,7 @@ class Game:
                 continue
             
             # Check projectile-wall collision (use spatial grid)
-            # Only player projectiles can damage walls
+            # Friendly projectiles can damage walls
             if not projectile.is_enemy:
                 hit_wall = projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
                 if hit_wall:
@@ -566,7 +638,11 @@ class Game:
             if self.collision_handler.handle_projectile_ship_collision(projectile, self.ship, self.scoring):
                 continue  # Projectile destroyed, skip adding to active list
             
-            # Check projectile-enemy collisions (only for player projectiles)
+            if self.collision_handler.handle_projectile_hunter_collision(projectile, self.hunter):
+                self._stop_dead_hunter()
+                continue
+
+            # Friendly projectile-enemy collisions share normal destruction effects.
             if self.collision_handler.handle_projectile_enemy_collisions(
                 projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals
             ):
@@ -680,6 +756,7 @@ class Game:
             success: True if level was completed successfully (reached exit),
                      False if level failed (score reached zero)
         """
+        self._close_hunter()
         current_time = time.time()
         completion_time = self.scoring.get_current_time(current_time)
         self.sound_manager.stop_critical_warning()
@@ -813,6 +890,16 @@ class Game:
             if egg.active:
                 egg.draw(self.screen)
         
+        if self.hunter is not None and self.hunter.active:
+            self.hunter.draw(self.screen)
+            status = self.hunter_controller.status
+            label = self.small_font.render(
+                f'Hunter {self.hunter.health}/{self.hunter.settings.health} - {status}',
+                True, self.hunter.COLOR)
+            x = min(max(0, self.hunter.x-label.get_width()/2), config.SCREEN_WIDTH-label.get_width())
+            y = max(0, self.hunter.y-self.hunter.radius-label.get_height()-5)
+            self.screen.blit(label, (x,y))
+
         # Draw powerup crystals
         for crystal in self.powerup_crystals:
             if crystal.active:
@@ -974,12 +1061,19 @@ class Game:
 
     def run(self) -> None:
         """Main game loop."""
-        while self.running:
-            dt_ms = self.clock.tick(config.FPS)
-            # Normalize delta time: 1.0 = 60fps, scales movement for frame independence
-            dt = dt_ms / (1000.0 / config.FPS)
+        try:
+            while self.running:
+                dt_ms = self.clock.tick(config.FPS)
+                # Normalize delta time: 1.0 = 60fps, scales movement for frame independence
+                dt = dt_ms / (1000.0 / config.FPS)
             
-            self.handle_events()
-            self.update(dt)
-            self.draw()
+                self.handle_events()
+                self.update(dt)
+                self.draw()
 
+
+        finally:
+            self._close_hunter()
+            if self.hunter_worker is not None:
+                self.hunter_worker.close()
+                self.hunter_worker.join(2.0)

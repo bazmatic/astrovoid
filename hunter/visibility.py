@@ -73,7 +73,26 @@ def local_segments(origin, segments, radius):
             ends = tuple(sorted((_at(a, d, clip[0]), _at(a, d, clip[1]))))
             key = tuple(round(v, 7) for p in ends for v in p)
             result[key] = ends
-    return list(result.values())
+    # Maze conversion emits separate edges for every wall cell. Coalesce
+    # contiguous collinear edges before visibility work; their union is exact.
+    groups, diagonal = {}, []
+    for a,b in result.values():
+        if abs(a[0]-b[0]) < EPS:
+            groups.setdefault(('v',round(a[0],7)),[]).append((a[1],b[1]))
+        elif abs(a[1]-b[1]) < EPS:
+            groups.setdefault(('h',round(a[1],7)),[]).append((a[0],b[0]))
+        else:
+            diagonal.append((a,b))
+    for (axis,fixed),intervals in groups.items():
+        merged = []
+        for lo,hi in sorted(intervals):
+            if merged and lo <= merged[-1][1]+EPS:
+                merged[-1] = (merged[-1][0],max(hi,merged[-1][1]))
+            else:
+                merged.append((lo,hi))
+        for lo,hi in merged:
+            diagonal.append(((fixed,lo),(fixed,hi)) if axis == 'v' else ((lo,fixed),(hi,fixed)))
+    return diagonal
 
 
 def _intervals(origin, segment, walls, radius):

@@ -340,6 +340,33 @@ class CollisionHandler:
         
         return False
     
+    def handle_projectile_hunter_collision(self, projectile, hunter) -> bool:
+        """Enemy bullets damage the hunter without changing player statistics."""
+        if hunter is None or not hunter.active or not projectile.active or not projectile.is_enemy:
+            return False
+        if not projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
+            return False
+        projectile.active = False
+        from utils.math_utils import apply_circle_collision_physics
+        apply_circle_collision_physics(hunter, projectile, 0.3)
+        if hunter.take_damage():
+            self.sound_manager.play_enemy_destroy()
+        else:
+            self.sound_manager.play_bad_hit()
+        return True
+
+    def handle_hunter_contacts(self, hunter, player, enemies) -> None:
+        if hunter is None or not hunter.active:
+            return
+        if player is not None and player.active:
+            hunter.check_circle_collision(player.get_pos(), player.radius, player)
+        for enemy in enemies:
+            if not hunter.active:
+                break
+            if enemy.active and hunter.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
+                if hunter.take_damage():
+                    self.sound_manager.play_enemy_destroy()
+
     def handle_ship_crystal_collision(
         self,
         ship: 'Ship',

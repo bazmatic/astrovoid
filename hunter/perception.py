@@ -85,7 +85,9 @@ class HunterPerception:
         bullets = [self._contact(p,origin,'enemy' if p.is_enemy else 'friendly')
                    for p in projectiles if p.active and visible_point(origin,p.get_pos(),walls,radius)]
         bullets.sort(key=lambda c:(c['distance'],c['id']))
-        remembered_cells = self._observe_map(origin,maze,walls,radius,now)
+        visible_walls = visible_wall_portions(origin,walls,radius)
+        # Frontmost wall portions cast the same shadows as occluded geometry.
+        remembered_cells = self._observe_map(origin,maze,visible_walls,radius,now)
         state = {
             'self': {'position': list(origin), 'velocity': [hunter.vx,hunter.vy],
                      'heading': hunter.angle, 'health': hunter.health,
@@ -94,7 +96,7 @@ class HunterPerception:
             'snapshot_at': now,
             'visible_contacts': contacts[:self.settings.max_contacts],
             'visible_projectiles': bullets[:self.settings.max_projectiles],
-            'visible_walls': visible_wall_portions(origin,walls,radius),
+            'visible_walls': visible_walls,
             'remembered_contacts': [dict(contact,age=now-seen_at)
                                     for contact,seen_at in self.contacts.values()],
             'remembered_cells': remembered_cells,

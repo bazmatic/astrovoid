@@ -4,6 +4,8 @@ This module provides a unified interface for updating all enemy types,
 eliminating code duplication in the main game loop.
 """
 
+from game_handlers.combat_targets import nearest_friendly
+
 from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
@@ -34,7 +36,8 @@ class EnemyUpdater:
         maze: 'Maze',
         ship: 'Ship',
         scoring: 'ScoringSystem',
-        projectiles: List['Projectile']
+        projectiles: List['Projectile'],
+        hunter=None
     ) -> None:
         """Update regular enemies.
         
@@ -50,8 +53,10 @@ class EnemyUpdater:
         for enemy in enemies:
             if not enemy.active:
                 continue
+            target = nearest_friendly(enemy, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
             
-            enemy.update(dt, player_pos, maze.walls)
+            enemy.update(dt, target_pos, maze.walls)
             
             # Check enemy-ship collision (skip if shield is active)
             if not ship.is_shield_active():
@@ -59,7 +64,7 @@ class EnemyUpdater:
                     scoring.record_enemy_collision()
             
             # Check if enemy fired a projectile
-            fired_projectile = enemy.get_fired_projectile(player_pos)
+            fired_projectile = enemy.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
     
@@ -71,7 +76,8 @@ class EnemyUpdater:
         maze: 'Maze',
         ship: 'Ship',
         scoring: 'ScoringSystem',
-        projectiles: List['Projectile']
+        projectiles: List['Projectile'],
+        hunter=None
     ) -> None:
         """Update replay enemy ships.
         
@@ -87,8 +93,10 @@ class EnemyUpdater:
         for replay_enemy in replay_enemies:
             if not replay_enemy.active:
                 continue
+            target = nearest_friendly(replay_enemy, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
             
-            replay_enemy.update(dt, player_pos)
+            replay_enemy.update(dt, target_pos)
             
             # Check replay enemy-wall collision
             # This uses the replay enemy's own state and is completely independent
@@ -104,7 +112,7 @@ class EnemyUpdater:
                     replay_enemy.trigger_blink()
             
             # Check if replay enemy fired a projectile
-            fired_projectile = replay_enemy.get_fired_projectile(player_pos)
+            fired_projectile = replay_enemy.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
     
@@ -117,7 +125,8 @@ class EnemyUpdater:
         ship: 'Ship',
         scoring: 'ScoringSystem',
         projectiles: List['Projectile'],
-        sound_manager: Optional['SoundManager'] = None
+        sound_manager: Optional['SoundManager'] = None,
+        hunter=None
     ) -> None:
         """Update flocker enemy ships with optimized neighbor caching.
         
@@ -138,11 +147,16 @@ class EnemyUpdater:
         
         # First pass: update all flockers (this resets just_fired flags)
         for idx, flocker in enumerate(flockers):
+        targets = {}
+
             if not flocker.active:
                 continue
             
             # Update flocker with cached neighbors for optimal performance
-            flocker.update(dt, player_pos, None, neighbor_cache, idx, sound_manager)
+            target = nearest_friendly(flocker, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
+            targets[idx] = target_pos
+            flocker.update(dt, target_pos, None, neighbor_cache, idx, sound_manager)
         
         # Second pass: check for firing (allows neighbors to see each other's firing state)
         for idx, flocker in enumerate(flockers):
@@ -150,8 +164,9 @@ class EnemyUpdater:
                 continue
             
             # Check if flocker fired a projectile
+            target_pos = targets.get(idx)
             fired_projectile = flocker.get_fired_projectile(
-                player_pos, neighbor_cache, idx, flockers
+                target_pos, neighbor_cache, idx, flockers
             )
             if fired_projectile:
                 projectiles.append(fired_projectile)
@@ -199,7 +214,8 @@ class EnemyUpdater:
         maze: 'Maze',
         ship: 'Ship',
         scoring: 'ScoringSystem',
-        projectiles: List['Projectile']
+        projectiles: List['Projectile'],
+        hunter=None
     ) -> None:
         """Update SplitBoss enemies.
         
@@ -215,8 +231,10 @@ class EnemyUpdater:
         for split_boss in split_bosses:
             if not split_boss.active:
                 continue
+            target = nearest_friendly(split_boss, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
             
-            split_boss.update(dt, player_pos)
+            split_boss.update(dt, target_pos)
             
             # Check SplitBoss-wall collision
             split_boss.check_wall_collision(maze.walls, maze.spatial_grid)
@@ -227,7 +245,7 @@ class EnemyUpdater:
                     scoring.record_enemy_collision()
             
             # Check if SplitBoss fired a projectile
-            fired_projectile = split_boss.get_fired_projectile(player_pos)
+            fired_projectile = split_boss.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
     
@@ -239,7 +257,8 @@ class EnemyUpdater:
         maze: 'Maze',
         ship: 'Ship',
         scoring: 'ScoringSystem',
-        projectiles: List['Projectile']
+        projectiles: List['Projectile'],
+        hunter=None
     ) -> None:
         """Update Baby enemies.
         
@@ -255,8 +274,10 @@ class EnemyUpdater:
         for baby in babies:
             if not baby.active:
                 continue
+            target = nearest_friendly(baby, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
             
-            baby.update(dt, player_pos)
+            baby.update(dt, target_pos)
             
             # Check baby-wall collision
             baby.check_wall_collision(maze.walls, maze.spatial_grid)
@@ -267,7 +288,7 @@ class EnemyUpdater:
                     scoring.record_enemy_collision()
             
             # Check if baby fired a projectile
-            fired_projectile = baby.get_fired_projectile(player_pos)
+            fired_projectile = baby.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
     
@@ -320,7 +341,8 @@ class EnemyUpdater:
         ship: 'Ship',
         scoring: 'ScoringSystem',
         projectiles: List['Projectile'],
-        eggs: List['Egg']
+        eggs: List['Egg'],
+        hunter=None
     ) -> None:
         """Update Mother Boss enemies.
         
@@ -337,8 +359,10 @@ class EnemyUpdater:
         for mother_boss in mother_bosses:
             if not mother_boss.active:
                 continue
+            target = nearest_friendly(mother_boss, ship, hunter)
+            target_pos = target.get_pos() if target is not None else None
             
-            mother_boss.update(dt, player_pos)
+            mother_boss.update(dt, target_pos)
             
             # Try to lay an egg
             mother_boss.lay_egg(eggs)
@@ -352,7 +376,7 @@ class EnemyUpdater:
                     scoring.record_enemy_collision()
             
             # Check if Mother Boss fired a projectile
-            fired_projectile = mother_boss.get_fired_projectile(player_pos)
+            fired_projectile = mother_boss.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
 
