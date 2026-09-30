@@ -192,3 +192,9 @@ def get_maze_grid_size(level: int) -> int:
     # Fetch default grid size from level_rules
     return level_rules.get_maze_grid_size(level)
 
+
+
+def get_level_hunter_config(level: int):
+    """Return optional hunter configuration; absent/null levels have no hunter."""
+    data = load_level_config(level)
+    return data.get('hunter') if data else None
