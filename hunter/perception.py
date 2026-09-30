@@ -93,8 +93,10 @@ class HunterPerception:
         remembered_cells = self._observe_map(origin,maze,visible_walls,radius,now)
         state = {
             'self': {'position': list(origin), 'velocity': [hunter.vx,hunter.vy],
-                     'heading': hunter.angle, 'health': hunter.health,
+                     'heading': hunter.angle, 'health': hunter.health, 'radius': hunter.radius,
                      'cooldown_seconds': hunter.fire_remaining},
+            'cell_size': maze.cell_size_x,
+            'sensor_range': radius,
             'previous_action': asdict(previous_action),
             'snapshot_at': now,
             'visible_contacts': contacts[:self.settings.max_contacts],

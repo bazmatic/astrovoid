@@ -7,12 +7,13 @@ from hunter.jev_pilot import JevPilot, create_client, PilotUnavailable
 
 
 @pytest.mark.parametrize('choice', list(ACTIONS))
-def test_jev_translates_typed_combined_action(choice):
+def test_jev_translates_typed_control_choices(choice):
     class Client:
         async def system_one(self, **kwargs):
-            assert kwargs['state'] == {'visible_contacts': []}
-            assert len(kwargs['questions']['pilot']['criteria']) == 12
-            return SimpleNamespace(choices={'pilot':SimpleNamespace(choice=choice,confidence=.8)})
+            assert kwargs['state']['visible_contacts'] == []
+            assert set(kwargs['questions']) == {'turn','thrust','fire'}
+            return SimpleNamespace(choices={k:SimpleNamespace(choice=v,confidence=.8)
+                for k,v in zip(('turn','thrust','fire'),choice.split('_'))})
     decision = asyncio.run(JevPilot(Client()).decide(PilotObservation(1,10,json.dumps({'visible_contacts':[]}))))
     assert decision.action == ACTIONS[choice]
     assert decision.confidence == .8
@@ -22,7 +23,8 @@ def test_jev_translates_typed_combined_action(choice):
 def test_invalid_model_outputs_rejected(choice,confidence):
     class Client:
         async def system_one(self, **kwargs):
-            return SimpleNamespace(choices={'pilot':SimpleNamespace(choice=choice,confidence=confidence)})
+            return SimpleNamespace(choices={k:SimpleNamespace(choice=v,confidence=confidence)
+                for k,v in zip(('turn','thrust','fire'),choice.split('_'))})
     with pytest.raises((ValueError,KeyError)):
         asyncio.run(JevPilot(Client()).decide(PilotObservation(1,0,'{}')))
 
@@ -39,11 +41,12 @@ def test_real_sdk_serializes_request_and_parses_wire_response():
     def respond(request):
         body = json.loads(request.content)
         assert body['model'] == 'jev-latest'
-        assert len(body['questions']['pilot']['criteria']) == 12
+        assert set(body['questions']) == {'turn','thrust','fire'}
         return httpx.Response(200, json={
-            'model':'jev-latest', 'usage':{}, 'answers':{'pilot':{
-                'type':'choice','choice':'none_thrust_fire','confidence':.9,
-                'probabilities':{'none_thrust_fire':1.}}}})
+            'model':'jev-latest', 'usage':{}, 'answers':{k:{
+                'type':'choice','choice':v,'confidence':.9,
+                'probabilities':{v:1.}} for k,v in
+                zip(('turn','thrust','fire'),('none','thrust','fire'))}})
     async def exercise():
         async with sdk.AsyncTypeSafeClient(api_key='test-local',model='jev-latest',
                 transport=httpx.MockTransport(respond),retry=sdk.RetryPolicy(max_retries=0)) as client:

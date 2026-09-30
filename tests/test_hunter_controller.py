@@ -75,3 +75,19 @@ def test_transient_backoff_does_not_extend_inputs():
     c.tick(observe)
     assert len(w.sent) == 2
     assert c.action == NEUTRAL
+
+
+def test_slow_response_cannot_hold_a_turn_through_a_half_circle():
+    from entities.hunter_ship import HunterShip
+    now,w,c,observe = setup()
+    ship = HunterShip((100,100))
+    c.tick(observe)
+    now[0] = 10.4
+    w.result = PilotResult(c.generation,10,10.4,PilotDecision(ACTIONS['left_thrust_fire']))
+    for frame in range(18):
+        now[0] = 10.4 + frame/60
+        ship.step(1,c.tick(observe))
+    assert 0 < (360-ship.angle)%360 <= 35
+    assert c.action.thrust and c.action.fire
+    # The next snapshot must see the completed steering pulse.
+    assert w.sent[-1].snapshot_at >= 10.5

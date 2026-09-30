@@ -23,7 +23,8 @@ class Client:
         self.entered.set()
         if self.blocked:
             await asyncio.sleep(5)
-        return SimpleNamespace(choices={'pilot':SimpleNamespace(choice='left_thrust_fire',confidence=.9)})
+        return SimpleNamespace(choices={k:SimpleNamespace(choice=v,confidence=.9)
+            for k,v in zip(('turn','thrust','fire'),('left','thrust','fire'))})
     async def aclose(self):
         self.closed.set()
 

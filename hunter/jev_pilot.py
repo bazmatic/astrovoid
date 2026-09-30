@@ -3,21 +3,35 @@ import json
 import math
 import os
 from hunter.model import ACTIONS, PilotDecision
+from hunter.pilot_sensors import pilot_state
 
-PILOT_INSTRUCTIONS = (
-    'Pilot an allied hunter that independently explores and destroys enemies. '
-    'Choose simultaneous turning, thrust and firing for the action horizon. '
-    'Coordinates increase right and down; heading 0 points right, 90 down. '
-    'Turn -1 means left (decrease heading), 0 holds, +1 means right. '
-    'Thrust accelerates along heading; coast keeps momentum subject to friction '
-    'and collision. Fire repeats forward shots only when cooldown permits. '
-    'Velocity and projectile speed are pixels per normalised frame; fps is supplied. '
-    'Avoid walls and hostile fire. Seek enemies or explore observed open exits. '
-    'The player is friendly. Remembered sightings are stale; ages are seconds. '
-    'Unknown geometry is not necessarily open. Map edges contain observed '
-    '[start fraction, end fraction, blocked] portions, with gaps meaning unknown. '
-    'Top/bottom edges run left to right; left/right edges run top to bottom.'
-)
+PILOT_QUESTIONS = {
+    'turn': {
+        'type': 'choice',
+        'instructions': 'Pilot an allied hunter. Choose one short steering pulse. '
+            'Directions are relative to your nose. Pursue visible enemies; when none '
+            'are visible, explore clear space toward unvisited cells or remembered enemies. '
+            'Avoid blocked space. Stop turning when facing your destination. '
+            'A pulse turns about 30 degrees, then holds heading.',
+        'criteria': {
+            'left': 'Turn left toward an enemy or open exploration route on your left.',
+            'none': 'Hold heading: an enemy or open exploration route is ahead.',
+            'right': 'Turn right toward an enemy or open exploration route on your right.'}},
+    'thrust': {
+        'type': 'choice',
+        'instructions': 'Choose whether to accelerate forward now. Thrust adds momentum '
+            'and coasting does not brake. Use the space ahead and current speed.',
+        'criteria': {
+            'thrust': 'Space ahead is clear and speed is slow: accelerate forward.',
+            'coast': 'Space ahead is close or blocked, or speed is fast: stop accelerating.'}},
+    'fire': {
+        'type': 'choice',
+        'instructions': 'Choose whether to fire forward at a currently visible enemy. '
+            'Remembered enemies are not confirmed targets. The player is friendly.',
+        'criteria': {
+            'fire': 'A visible enemy is ahead: shoot.',
+            'hold': 'No visible enemy is ahead: hold fire.'}},
+}
 
 
 class PilotUnavailable(Exception):
@@ -46,16 +60,16 @@ class JevPilot:
 
     async def decide(self, observation):
         result = await self.client.system_one(
-            state=json.loads(observation.state_json),
-            questions={'pilot': {
-                'type': 'choice', 'instructions': PILOT_INSTRUCTIONS,
-                'criteria': {name: {'turn':action.turn,'thrust':action.thrust,'fire':action.fire}
-                             for name,action in ACTIONS.items()},
-            }})
-        answer = result.choices['pilot']
-        action = ACTIONS[answer.choice]
-        confidence = getattr(answer, 'confidence', None)
-        if confidence is not None and (type(confidence) not in (int,float)
-                                      or not math.isfinite(confidence) or not 0 <= confidence <= 1):
-            raise ValueError('invalid confidence')
-        return PilotDecision(action,confidence)
+            state=pilot_state(json.loads(observation.state_json)),
+            questions=PILOT_QUESTIONS)
+        answers = [result.choices[name] for name in ('turn','thrust','fire')]
+        action = ACTIONS['_'.join(answer.choice for answer in answers)]
+        confidences = []
+        for answer in answers:
+            confidence = getattr(answer, 'confidence', None)
+            if confidence is not None:
+                if (type(confidence) not in (int,float) or
+                        not math.isfinite(confidence) or not 0 <= confidence <= 1):
+                    raise ValueError('invalid confidence')
+                confidences.append(confidence)
+        return PilotDecision(action, min(confidences) if confidences else None)

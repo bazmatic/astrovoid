@@ -24,6 +24,7 @@ ACTIONS = {
 class HunterSettings:
     request_interval: float = 0.250
     action_ttl: float = 0.750
+    turn_pulse: float = 0.100
     request_timeout: float = 1.0
     sensor_cells: float = 4.0
     max_contacts: int = 24

@@ -2,7 +2,7 @@
 import itertools
 import logging
 import time
-from hunter.model import HunterSettings, NEUTRAL
+from hunter.model import HunterSettings, NEUTRAL, PilotAction
 
 log = logging.getLogger(__name__)
 _generations = itertools.count()
@@ -14,6 +14,7 @@ class HunterController:
         self.generation = next(_generations)
         self.action = NEUTRAL
         self.action_expires_at = 0.0
+        self.turn_expires_at = 0.0
         self.next_request_at = 0.0
         self.failures = 0
         self.unavailable = False
@@ -27,6 +28,7 @@ class HunterController:
         self.generation = next(_generations)
         self.action = NEUTRAL
         self.action_expires_at = 0.0
+        self.turn_expires_at = 0.0
         self.next_request_at = 0.0
         self.worker.cancel()
 
@@ -63,6 +65,11 @@ class HunterController:
                 if accepted:
                     self.action = result.decision.action
                     self.action_expires_at = result.snapshot_at+self.settings.action_ttl
+                    # Release steering independently of network latency. Wait for
+                    # the pulse to finish before observing the next heading.
+                    self.turn_expires_at = min(self.action_expires_at, now+self.settings.turn_pulse)
+                    if self.action.turn:
+                        self.next_request_at = max(self.next_request_at, self.turn_expires_at)
                     self.ever_accepted = True
                     self.accepted += 1
                 else:
@@ -70,6 +77,8 @@ class HunterController:
                 log.debug('Hunter decision latency=%.3f age=%.3f accepted=%s confidence=%s',
                           result.finished_at-result.snapshot_at,age,accepted,
                           result.decision.confidence if result.decision else None)
+        if now >= self.turn_expires_at:
+            self.action = PilotAction(0, self.action.thrust, self.action.fire)
         if now >= self.action_expires_at:
             self.action = NEUTRAL
         if not self.unavailable and not self.worker.busy and now >= self.next_request_at:
