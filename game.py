@@ -309,7 +309,9 @@ class Game:
         def observe(now, generation):
             return self.hunter_perception.observe(
                 self.hunter, self.maze, self.ship,
-                list(self.entity_manager.get_all_active_enemies()), self.projectiles,
+                [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
+                 self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs)
+                 for enemy in group], self.projectiles,
                 self.hunter_controller.action, now, generation)
         action = self.hunter_controller.tick(observe)
         bullet = self.hunter.step(dt, action)

@@ -259,3 +259,34 @@ MIT License
 Copyright (c) 2025 Barry Earsman
 
 See [LICENSE](LICENSE) file for details.
+
+## Optional Jev hunter ally
+
+A level can include one independent allied ship piloted by TypeSafe's Jev model.
+Jev chooses turning, thrust and firing from local sensors and remembered sightings.
+Enemies can target and destroy it. It has three hit points, no friendly fire, and
+starts with fresh memory each level. Hunter kills do not award personal kill points.
+
+The optional pilot requires Python 3.10+ (the base game does not require the SDK):
+
+```bash
+venv/bin/python -m pip install -r requirements-hunter.txt
+```
+
+Set `TYPESAFE_API_KEY` in the launch environment. `TYPESAFE_DEFAULT_MODEL` optionally
+selects a model; the default is `jev-latest`. To enter the key privately for one run:
+
+```bash
+venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
+```
+
+Opt in through a level's JSON file; see [level configuration](levels/README.md).
+No existing level enables the hunter automatically. It starts when you make your
+first move. Its cyan label shows health and `active`, `waiting`, `coasting`, or
+`unavailable` pilot status. Without a key/SDK, a configured hunter coasts with an
+unavailable pilot; levels without a hunter run normally offline.
+
+Decisions are requested at most four times per second, with one request in flight.
+Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
+thrust and firing while momentum continues. Requests time out after one second.
+There is no local autopilot fallback. Constants are in `hunter/model.py`.

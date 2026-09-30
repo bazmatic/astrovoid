@@ -49,3 +49,21 @@ def test_real_sdk_serializes_request_and_parses_wire_response():
                 transport=httpx.MockTransport(respond),retry=sdk.RetryPolicy(max_retries=0)) as client:
             return await JevPilot(client).decide(PilotObservation(1,0,'{}'))
     assert asyncio.run(exercise()).action == ACTIONS['none_thrust_fire']
+
+
+def test_game_import_does_not_require_sdk_or_key():
+    import subprocess
+    import sys
+    code = '''
+import builtins
+original = builtins.__import__
+def without_sdk(name, *args, **kwargs):
+    if name.startswith('typesafe_sdk'):
+        raise ImportError('SDK intentionally absent')
+    return original(name, *args, **kwargs)
+builtins.__import__ = without_sdk
+from game import Game
+from hunter.worker import PilotWorker
+assert Game is not None
+'''
+    subprocess.run([sys.executable,'-c',code],check=True,capture_output=True,text=True)

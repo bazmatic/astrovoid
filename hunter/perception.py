@@ -67,6 +67,9 @@ class HunterPerception:
             if not visible_point(origin, entity.get_pos(), walls, radius):
                 continue
             if not entity.active:
+                known_id = self._ids.get(entity)
+                if known_id is not None:
+                    self.contacts.pop(known_id,None)
                 continue
             friendly = entity is player
             contact = self._contact(entity, origin, 'friendly' if friendly else 'enemy')
@@ -97,8 +100,7 @@ class HunterPerception:
             'visible_contacts': contacts[:self.settings.max_contacts],
             'visible_projectiles': bullets[:self.settings.max_projectiles],
             'visible_walls': visible_walls,
-            'remembered_contacts': [dict(contact,age=now-seen_at)
-                                    for contact,seen_at in self.contacts.values()],
+            'remembered_contacts': self._remembered_contacts(origin,now),
             'remembered_cells': remembered_cells,
             'physics': {'fps':config.FPS,'speed_limit':hunter.max_speed,
                         'rotation_per_frame':hunter.current_rotation_speed,
@@ -109,6 +111,15 @@ class HunterPerception:
         }
         return PilotObservation(generation,now,json.dumps(state,separators=(',',':'),allow_nan=False))
 
+    def _remembered_contacts(self, origin, now):
+        result = []
+        for contact, seen_at in self.contacts.values():
+            dx,dy = contact['position'][0]-origin[0],contact['position'][1]-origin[1]
+            result.append(dict(contact, age=now-seen_at, relative_position=[dx,dy],
+                               distance=math.hypot(dx,dy),
+                               bearing=math.degrees(math.atan2(dy,dx)) % 360))
+        return result
+
     def _observe_map(self, origin, maze, walls, radius, now):
         sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
         current = (int((origin[0]-ox)//sx),int((origin[1]-oy)//sy))
@@ -116,10 +127,11 @@ class HunterPerception:
         max_col = min(maze.grid_width-1,int((origin[0]+radius-ox)//sx))
         min_row = max(0,int((origin[1]-radius-oy)//sy))
         max_row = min(maze.grid_height-1,int((origin[1]+radius-oy)//sy))
+        edge_cache = {}
         for row in range(min_row,max_row+1):
             for col in range(min_col,max_col+1):
                 bounds = (ox+col*sx,oy+row*sy,ox+(col+1)*sx,oy+(row+1)*sy)
-                edges = visible_cell_edges(origin,bounds,walls,radius)
+                edges = visible_cell_edges(origin,bounds,walls,radius,edge_cache)
                 if not any(edges.values()) and (col,row) != current:
                     continue
                 cell = self.cells.setdefault((col,row), {'edges':{},'visits':0,'last_visit':None})

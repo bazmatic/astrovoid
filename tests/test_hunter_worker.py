@@ -58,3 +58,44 @@ def test_timeout_and_cancel_allow_no_overlapping_request():
     finally:
         worker.close()
         worker.join(2)
+
+
+def test_repeated_cancellation_waits_for_client_cleanup():
+    closing = threading.Event()
+    release = threading.Event()
+    class SlowClose(Client):
+        async def aclose(self):
+            closing.set()
+            while not release.is_set():
+                await asyncio.sleep(.001)
+            await super().aclose()
+    client = SlowClose(True)
+    worker = PilotWorker(lambda:client)
+    try:
+        worker.submit(PilotObservation(1,time.monotonic(),'{}'))
+        assert client.entered.wait(1)
+        worker.cancel()
+        assert closing.wait(1)
+        worker.cancel()
+        assert not worker.submit(PilotObservation(2,time.monotonic(),'{}'))
+        release.set()
+        wait_until(lambda:not worker.busy)
+        assert client.closed.is_set()
+        assert worker.poll() is None
+    finally:
+        release.set()
+        worker.close()
+        worker.join(2)
+
+
+def test_restart_before_first_request_does_not_leave_worker_busy():
+    client = Client()
+    worker = PilotWorker(lambda:client)
+    try:
+        worker.cancel()  # Restart a level before the player has moved.
+        assert worker.submit(PilotObservation(2,time.monotonic(),'{}'))
+        wait_until(lambda:not worker.busy)
+        assert worker.poll().decision is not None
+    finally:
+        worker.close()
+        worker.join(2)

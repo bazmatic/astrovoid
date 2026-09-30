@@ -69,3 +69,13 @@ def test_hidden_wall_destruction_does_not_update_memory_until_reobserved():
     changed = next(c for c in seen['remembered_cells'] if c['cell']==[1,1])
     assert not any(part[2] for part in changed['edges']['right'])
     assert changed['visits']==2
+
+
+def test_observed_death_removes_old_hidden_sighting():
+    p,h,m = HunterPerception(),HunterShip((150,150)),maze()
+    enemy = Enemy((250,150),'patrol',1)
+    read(p,h,m,[enemy],0)
+    m.walls = [WallSegment((200,0),(200,900),3)]
+    enemy.x=160
+    enemy.active=False
+    assert not read(p,h,m,[enemy],1)['remembered_contacts']

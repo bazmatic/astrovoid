@@ -12,6 +12,11 @@
 
 Approved source: `docs/superpowers/specs/2026-09-30-jev-hunter-design.md`, commit `92ee283`.
 
+**Execution status:** Tasks 1–11 implemented and verified on `feat/jev-hunter`.
+The original checklist below records the proposed sequence; completed work,
+implementation adjustments, live measurements and baseline test exceptions are
+recorded in [the validation report](../validation/2026-09-30-jev-hunter.md).
+
 ## Repository facts and execution rules
 
 - `game.py` owns level creation, update, projectile collisions, drawing, and shutdown. `game/__init__.py` loads that file; there is no separate level manager.

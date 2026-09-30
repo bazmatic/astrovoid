@@ -14,6 +14,7 @@ class PilotWorker:
         self._busy = False
         self._closed = False
         self._epoch = 0
+        self._handled_epoch = 0
         self._loop = None
         self._thread = None
         self._task = None
@@ -75,7 +76,7 @@ class PilotWorker:
             permanent = isinstance(exc,PilotUnavailable) or status in (401,403)
             if isinstance(exc,PilotUnavailable):
                 category = str(exc)  # Only our fixed local categories, never SDK error text.
-            elif isinstance(exc,asyncio.TimeoutError):
+            elif isinstance(exc,asyncio.TimeoutError) or type(exc).__name__ == 'TypeSafeAPITimeoutError':
                 category = 'timeout'
             elif status in (401,403):
                 category = 'authentication'
@@ -85,8 +86,6 @@ class PilotWorker:
                 category = 'request_failed'
             result = PilotResult(observation.generation,observation.snapshot_at,self.clock(),
                                  error=category,permanent=permanent)
-        else:
-            pass
         if epoch == self._epoch and not self._closed:
             self._results.put(result)
 
@@ -106,8 +105,8 @@ class PilotWorker:
         self._cleaning = False
         self._reset_client = False
         with self._lock:
-            self._busy = False
-            closed = self._closed
+            self._busy = self._epoch != self._handled_epoch
+            closed = self._closed and not self._busy
         if closed:
             self._loop.stop()
 
@@ -123,13 +122,16 @@ class PilotWorker:
                 return
             self._epoch += 1
             if self._loop is None:
+                self._handled_epoch = self._epoch
                 return
             self._busy = True
-            self._loop.call_soon_threadsafe(self._cancel_on_loop)
+            self._loop.call_soon_threadsafe(self._cancel_on_loop, self._epoch)
         while self.poll() is not None:
             pass
 
-    def _cancel_on_loop(self):
+    def _cancel_on_loop(self, epoch):
+        with self._lock:
+            self._handled_epoch = max(self._handled_epoch, epoch)
         self._reset_client = True
         if self._cleaning:
             return
@@ -147,7 +149,7 @@ class PilotWorker:
             self._closed = True
             self._epoch += 1
             if self._loop is not None:
-                self._loop.call_soon_threadsafe(self._cancel_on_loop)
+                self._loop.call_soon_threadsafe(self._cancel_on_loop, self._epoch)
 
     def join(self, timeout=2.0):
         if self._thread:

@@ -25,6 +25,8 @@ def collect_tree(source: Path, target: str) -> list[tuple[str, str]]:
 
 DATA_FILES = [
     (str(PROJECT_ROOT / "config" / "settings.json"), "config"),
+    # main.py loads this file explicitly to avoid the game package name clash.
+    (str(PROJECT_ROOT / "game.py"), "."),
 ]
 
 for name in ("assets", "sounds", "levels"):
@@ -35,7 +37,10 @@ A = Analysis(
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=DATA_FILES,
-    hiddenimports=[],
+    hiddenimports=[
+        "entities.hunter_ship", "hunter.controller", "hunter.perception",
+        "hunter.spawn", "hunter.worker",
+    ],
     hookspath=[],
     runtime_hooks=[],
     excludes=[],
@@ -55,7 +60,8 @@ CONSOLE_MODE = not (IS_MACOS and not ONEFILE_BUILD)
 EXECUTABLE = EXE(
     PYZ_ARCHIVE,
     A.scripts,
-    [],
+    A.binaries if ONEFILE_BUILD else [],
+    A.datas if ONEFILE_BUILD else [],
     exclude_binaries=not ONEFILE_BUILD,
     name="AstroVoid",
     debug=False,
