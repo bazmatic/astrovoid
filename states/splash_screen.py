@@ -204,18 +204,34 @@ class SplashScreenState:
                     self.fade_in_complete = True
                 else:
                     self.alpha = fade_progress
+            elif self.fade_out_started:
+                # Fade out the image (when video is disabled)
+                fade_out_progress = self.time_elapsed / config.SPLASH_FADE_OUT_DURATION
+                if fade_out_progress >= 1.0:
+                    # Mark for transition
+                    self.alpha = 0.0
+                    self.should_transition = True
+                else:
+                    self.alpha = 1.0 - fade_out_progress
             else:
-                # Wait for image display duration, then switch to video
+                # Wait for image display duration, then switch to video (if enabled)
                 wait_time = config.SPLASH_DISPLAY_DURATION - config.SPLASH_FADE_IN_DURATION
                 if self.time_elapsed >= wait_time and not self.video_started:
-                    # Switch to video
-                    self.showing_image = False
-                    self.video_started = True
-                    self.time_elapsed = 0.0  # Reset timer for video phase
-                    self.video_time_accumulator = 0.0
-                    self.alpha = 1.0
-                    if not self._load_video():
-                        # If video fails to load, skip to fade out
+                    # Check if video is enabled
+                    if config.SPLASH_VIDEO_ENABLED:
+                        # Switch to video
+                        self.showing_image = False
+                        self.video_started = True
+                        self.time_elapsed = 0.0  # Reset timer for video phase
+                        self.video_time_accumulator = 0.0
+                        self.alpha = 1.0
+                        if not self._load_video():
+                            # If video fails to load, skip to fade out
+                            self.video_complete = True
+                            self.fade_out_started = True
+                            self.time_elapsed = 0.0  # Reset timer for fade out
+                    else:
+                        # Video disabled, skip directly to fade out
                         self.video_complete = True
                         self.fade_out_started = True
                         self.time_elapsed = 0.0  # Reset timer for fade out
@@ -280,18 +296,30 @@ class SplashScreenState:
         Args:
             event: The pygame event to handle.
         """
-        # Skip on any input (keyboard or controller)
+        # Handle ESC key to immediately skip to menu
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            # ESC always immediately transitions to menu
+            self.should_transition = True
+            return
+        
+        # Skip on any other input (keyboard or controller)
         if event.type == pygame.KEYDOWN or event.type == pygame.JOYBUTTONDOWN:
             if self.showing_image and self.fade_in_complete:
-                # Skip image and go to video
-                self.showing_image = False
-                self.video_started = True
-                self.time_elapsed = 0.0
-                self.video_time_accumulator = 0.0
-                self.alpha = 1.0
-                if not self._load_video():
+                # Skip image and go to video (if enabled) or fade out
+                if config.SPLASH_VIDEO_ENABLED:
+                    self.showing_image = False
+                    self.video_started = True
+                    self.time_elapsed = 0.0
+                    self.video_time_accumulator = 0.0
+                    self.alpha = 1.0
+                    if not self._load_video():
+                        self.video_complete = True
+                        self.fade_out_started = True
+                else:
+                    # Video disabled, skip directly to fade out
                     self.video_complete = True
                     self.fade_out_started = True
+                    self.time_elapsed = 0.0
             elif not self.showing_image and not self.video_complete:
                 # Skip video and go to fade out
                 self.video_complete = True

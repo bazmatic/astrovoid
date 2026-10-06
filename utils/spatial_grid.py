@@ -246,3 +246,4 @@ class SpatialGrid:
                     self.grid[row][col].add(wall_index)
 
 
+

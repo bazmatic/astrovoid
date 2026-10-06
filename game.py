@@ -609,11 +609,6 @@ class Game:
             self.enemy_updater.update_eggs(
                 self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
             )
-            
-            # Handle enemy-to-enemy avoidance after all enemies are updated
-            self.enemy_updater.handle_enemy_to_enemy_avoidance(
-                self.replay_enemies, self.flockers, self.split_bosses, self.mother_bosses, self.babies
-            )
         
         if self.player_has_moved:
             self.collision_handler.handle_hunter_contacts(
