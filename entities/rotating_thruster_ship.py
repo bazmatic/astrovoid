@@ -11,9 +11,12 @@ and add additional features like fuel management, sound effects, etc.
 import pygame
 import math
 import random
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import config
+
+if TYPE_CHECKING:
+    from entities.base import GameEntity
 from utils import (
     angle_to_radians,
     normalize_angle,
@@ -400,6 +403,156 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         (e.g., damage, sound, visual feedback).
         """
         pass
+    
+    def is_enemy_ship(self) -> bool:
+        """Check if this ship is an enemy ship (not the player ship).
+        
+        Returns:
+            True if this is an enemy ship, False if it's the player ship.
+            Default implementation returns True (enemy ships).
+        """
+        return True
+    
+    def avoid_enemy_ships(self, other_entities: List['GameEntity']) -> None:
+        """Avoid contact with other enemy ships.
+        
+        This method checks for nearby enemy ships and applies avoidance
+        forces to prevent collisions. Only applies to enemy ships, not
+        the player ship.
+        
+        Args:
+            other_entities: List of other game entities to check against.
+        """
+        if not self.is_enemy_ship():
+            return  # Player ship doesn't avoid enemies
+        
+        avoidance_radius = (self.radius + config.SHIP_SIZE) * 1.5  # Check slightly beyond collision radius
+        avoidance_radius_sq = avoidance_radius * avoidance_radius
+        
+        avoidance_force_x = 0.0
+        avoidance_force_y = 0.0
+        neighbor_count = 0
+        
+        for other in other_entities:
+            if not other.active or other is self:
+                continue
+            
+            # Check if other entity is an enemy ship (not player ship)
+            if not isinstance(other, RotatingThrusterShip):
+                continue
+            
+            if not other.is_enemy_ship():
+                continue  # Skip player ship
+            
+            # Check distance
+            dx = self.x - other.x
+            dy = self.y - other.y
+            dist_sq = dx * dx + dy * dy
+            
+            if dist_sq > 0.0 and dist_sq < avoidance_radius_sq:
+                # Calculate avoidance force (stronger when closer)
+                dist = math.sqrt(dist_sq)
+                # Normalize direction
+                if dist > 0.0:
+                    force_x = dx / dist
+                    force_y = dy / dist
+                    # Weight by inverse distance (closer = stronger)
+                    weight = 1.0 / dist
+                    avoidance_force_x += force_x * weight
+                    avoidance_force_y += force_y * weight
+                    neighbor_count += 1
+        
+        # Apply avoidance force if we have neighbors
+        if neighbor_count > 0:
+            # Normalize combined force
+            force_magnitude = math.sqrt(avoidance_force_x * avoidance_force_x + avoidance_force_y * avoidance_force_y)
+            if force_magnitude > 0.0:
+                avoidance_force_x /= force_magnitude
+                avoidance_force_y /= force_magnitude
+                
+                # Apply avoidance as velocity adjustment
+                # Use a configurable avoidance strength
+                avoidance_strength = config.ENEMY_AVOIDANCE_STRENGTH if hasattr(config, 'ENEMY_AVOIDANCE_STRENGTH') else 2.0
+                self.vx += avoidance_force_x * avoidance_strength
+                self.vy += avoidance_force_y * avoidance_strength
+                
+                # Also check for actual collisions and use physics if colliding
+                for other in other_entities:
+                    if not other.active or other is self:
+                        continue
+                    
+                    if not isinstance(other, RotatingThrusterShip):
+                        continue
+                    
+                    if not other.is_enemy_ship():
+                        continue
+                    
+                    # Check for actual collision
+                    if self.check_circle_collision(other.get_pos(), other.radius, other):
+                        # Collision physics already applied by check_circle_collision
+                        pass
+    
+    def draw_thrust_plume(self, screen: pygame.Surface, min_length: float = 0.0) -> None:
+        """Draw the particle trail and flickering cone behind the ship.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+            min_length: Shortest cone to draw, for ships whose engine is on at low speed.
+        """
+        # Draw enhanced thrust visualization (only when actively thrusting)
+        # Check if we have active thrust particles (from previous frame's thrust)
+        # or if thrusting flag is currently set (from this frame's apply_thrust call)
+        has_thrust_effect = self.thrusting or len(self.thrust_particles) > 0 or min_length > 0
+        if has_thrust_effect:
+            angle_rad = angle_to_radians(self.angle)
+            base_x = self.x - math.cos(angle_rad) * self.radius * 0.8
+            base_y = self.y - math.sin(angle_rad) * self.radius * 0.8
+            
+            # Calculate speed for plume length
+            speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
+            
+            # Draw particle trail
+            for particle in self.thrust_particles:
+                particle_x = self.x + particle['x']
+                particle_y = self.y + particle['y']
+                life_ratio = particle['life'] / config.THRUST_PLUME_LENGTH
+                
+                # Color gradient: yellow -> orange -> red
+                if life_ratio > 0.6:
+                    color = (255, 255, 100)  # Yellow
+                elif life_ratio > 0.3:
+                    color = (255, 180, 50)   # Orange
+                else:
+                    color = (255, 100, 50)   # Red
+                
+                size = int(particle['size'] * life_ratio)
+                if size > 0:
+                    pygame.draw.circle(screen, color, 
+                                     (int(particle_x), int(particle_y)), size)
+            
+            # Draw cone-shaped thrust plume
+            plume_length = max(min_length, min(config.THRUST_PLUME_LENGTH, speed * 2))
+            for i in range(config.THRUST_PLUME_PARTICLES):
+                t = i / config.THRUST_PLUME_PARTICLES
+                plume_x = base_x - math.cos(angle_rad) * plume_length * t
+                plume_y = base_y - math.sin(angle_rad) * plume_length * t
+                
+                # Size decreases along plume
+                size = int(4 * (1 - t))
+                if size > 0:
+                    # Color gradient
+                    if t < 0.3:
+                        color = (255, 255, 150)  # Bright yellow
+                    elif t < 0.6:
+                        color = (255, 200, 50)   # Orange
+                    else:
+                        color = (255, 100, 0)    # Red
+                    
+                    # Add some randomness for flicker
+                    flicker = random.uniform(0.8, 1.0)
+                    flicker_color = tuple(int(c * flicker) for c in color)
+                    pygame.draw.circle(screen, flicker_color,
+                                     (int(plume_x), int(plume_y)), size)
     
     def get_vertices(self) -> List[Tuple[float, float]]:
         """Get ship vertices for rendering (triangle shape).

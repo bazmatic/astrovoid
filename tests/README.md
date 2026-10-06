@@ -109,3 +109,21 @@ def test_new_functionality():
     # Assert
     assert result == expected_value
 ```
+
+## Hunter verification
+
+Run the hunter suite without live inference:
+
+```bash
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy venv/bin/python -m pytest tests/test_hunter_*.py -q
+```
+
+Tests cover local visibility, remembered geometry and sightings, input expiry,
+request cancellation, combat attribution, enemy retargeting, level restart and
+pause/resume. Clocks and decision clients are injected. The SDK transport test
+uses a local mock and is skipped when the optional SDK is absent. No test makes
+a paid request or requires an API key.
+
+Enable debug logging for `hunter.controller` during manual experiments to inspect
+request latency, action age, confidence and accepted/discarded results. Logs do
+not include API keys or request bodies.

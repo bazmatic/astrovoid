@@ -42,7 +42,8 @@ class Projectile(GameEntity, Collidable, Drawable):
         impact_force_multiplier: float = 1.0,
         glow_color: Optional[Tuple[int, int, int]] = None,
         glow_radius_multiplier: float = 1.0,
-        glow_intensity: float = 0.0
+        glow_intensity: float = 0.0,
+        *, source: Optional[str] = None
     ):
         """Initialize projectile at position with given angle.
         
@@ -72,7 +73,13 @@ class Projectile(GameEntity, Collidable, Drawable):
         super().__init__(start_pos, size, vx, vy)
         self.angle = angle
         self.lifetime = config.PROJECTILE_LIFETIME
-        self.is_enemy = is_enemy
+        resolved_source = source if source is not None else ('enemy' if is_enemy else 'player')
+        if resolved_source not in {'player', 'hunter', 'enemy'}:
+            raise ValueError('unknown projectile source')
+        if is_enemy and resolved_source != 'enemy':
+            raise ValueError('enemy flag conflicts with projectile source')
+        self.source = resolved_source
+        self.is_enemy = resolved_source == 'enemy'
         self.is_upgraded = is_upgraded
         self.dynamic_color = dynamic_color
         self.enhanced_glow_intensity = enhanced_glow_intensity

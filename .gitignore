@@ -25,3 +25,5 @@ Thumbs.db
 *.log
 profiles.json
 
+# Private machine-local credentials (never commit)
+/.astrovoid-local/

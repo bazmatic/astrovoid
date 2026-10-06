@@ -13,6 +13,9 @@ if TYPE_CHECKING:
 def calculate_fire_cooldown(ship: 'Ship') -> int:
     """Calculate fire cooldown based on ship's gun upgrade level.
     
+    Each power-up increases firing rate by 10%, which means cooldown is reduced by 10%.
+    Formula: cooldown = base_cooldown / (1.1^upgrade_level)
+    
     Args:
         ship: The player ship.
         
@@ -22,13 +25,9 @@ def calculate_fire_cooldown(ship: 'Ship') -> int:
     base_cooldown = config.SETTINGS.powerups.fireRateBaseCooldown
     upgrade_level = ship.get_gun_upgrade_level()
     
-    multipliers = config.SETTINGS.powerups.fireRateMultipliers
-    if upgrade_level == 1:
-        return int(base_cooldown / multipliers.level1)
-    elif upgrade_level == 2:
-        return int(base_cooldown / multipliers.level2)
-    elif upgrade_level == 3:
-        return int(base_cooldown / multipliers.level3)
+    # Each power-up increases firing rate by 10% (reduces cooldown by 10%)
+    # Level 0: 1.0, Level 1: 1.1, Level 2: 1.21, Level 3: 1.331, etc.
+    rate_multiplier = 1.1 ** upgrade_level
     
-    return base_cooldown
+    return int(base_cooldown / rate_multiplier)
 

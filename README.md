@@ -259,3 +259,50 @@ MIT License
 Copyright (c) 2025 Barry Earsman
 
 See [LICENSE](LICENSE) file for details.
+
+## Jev hunter ally
+
+A level can include one independent allied ship piloted by TypeSafe's Jev model.
+Jev chooses turning, thrust and firing from local sensors and remembered sightings.
+Enemies can target and destroy it. It has three hit points, no friendly fire, and
+starts with fresh memory each level. Hunter kills do not award personal kill points.
+
+The optional pilot requires Python 3.10+ (the base game does not require the SDK):
+
+```bash
+venv/bin/python -m pip install -r requirements-hunter.txt
+```
+
+Set `TYPESAFE_API_KEY` in the launch environment. `TYPESAFE_DEFAULT_MODEL` optionally
+selects a model; the default is `jev-latest`. To enter the key privately for one run:
+
+```bash
+venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
+```
+
+Opt in through a level's JSON file; see [level configuration](levels/README.md).
+One hunter appears on every level; `game.hunterLevelInterval` in `config/settings.json` spaces them out. It starts when you make your
+first move. It is indestructible: enemy shots and contact knock it about without
+damaging it. Without a key/SDK, the hunter coasts with an unavailable pilot.
+
+Decisions are requested at most four times per second, with one request in flight.
+Steering is held like a key: a turn continues until a later decision releases or
+reverses it, and the held steering is part of what the pilot is told. The hunter
+turns at half the player's rate so that decisions arriving a few times a second
+can stop a turn on target.
+
+Alongside its sensor readings the pilot is given worked calculations: time to wall
+impact when coasting, a braking solution (safe speed for the wall on its course and
+the attitude needed to slow down), and a lead-aim firing solution for each visible enemy.
+
+Whenever no enemy is in sight the hunter follows the player: it is given the next
+waypoint on a route through the maze to the player's ship and holds station when it
+arrives. It does not explore on its own.
+Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
+thrust and firing while momentum continues. Requests time out after one second.
+There is no local autopilot fallback. Constants are in `hunter/model.py`.
+
+For the local setup, run `./run-hunter.sh` to select level 1. Both this launcher
+and `./run.sh` read `.astrovoid-local/typesafe-api-key` when no API key is already
+set in the environment. That directory is ignored by Git; the local key file
+should remain readable only by its owner. The launcher reads it as plain data.

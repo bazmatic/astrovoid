@@ -291,6 +291,7 @@
     "levelCompleteStarSize": 45
   },
   "ui": {
+    "splashEnabled": false,
     "splashDisplayDuration": 3.5,
     "splashFadeInDuration": 1.0,
     "splashFadeOutDuration": 0.8,
@@ -322,6 +323,7 @@
     }
   },
   "game": {
-    "criticalWarningThreshold": 20
+    "criticalWarningThreshold": 20,
+    "hunterLevelInterval": 1
   }
 }

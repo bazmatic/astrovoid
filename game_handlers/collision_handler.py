@@ -45,6 +45,10 @@ class CollisionHandler:
         self.scoring = scoring
         self.command_recorder = command_recorder
     
+    def _record_projectile_kill(self, projectile) -> None:
+        if projectile.source == 'player':
+            self.scoring.record_enemy_destroyed()
+
     def handle_projectile_enemy_collisions(
         self,
         projectile: 'Projectile',
@@ -97,7 +101,7 @@ class CollisionHandler:
                         if enemy.take_damage():
                             enemy.destroy()
                             self.sound_manager.play_enemy_destroy()
-                            self.scoring.record_enemy_destroyed()
+                            self._record_projectile_kill(projectile)
                             
                             # Spawn powerup crystal with probability
                             if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -107,7 +111,7 @@ class CollisionHandler:
                         # Non-static enemies destroyed immediately (existing behavior)
                         enemy.destroy()
                         self.sound_manager.play_enemy_destroy()
-                        self.scoring.record_enemy_destroyed()
+                        self._record_projectile_kill(projectile)
                         
                         # Spawn powerup crystal with probability
                         if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -123,7 +127,7 @@ class CollisionHandler:
                     enemy_pos = replay_enemy.get_pos()
                     replay_enemy.active = False
                     self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
+                    self._record_projectile_kill(projectile)
                     
                     # Spawn powerup crystal with probability
                     if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -139,7 +143,7 @@ class CollisionHandler:
                     flocker_pos = flocker.get_pos()
                     flocker.active = False
                     self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
+                    self._record_projectile_kill(projectile)
                     
                     # Spawn powerup crystal with probability
                     if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -156,7 +160,7 @@ class CollisionHandler:
                     if flighthouse.take_damage():
                         flighthouse.destroy()
                         self.sound_manager.play_enemy_destroy()
-                        self.scoring.record_enemy_destroyed()
+                        self._record_projectile_kill(projectile)
                         if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
                             crystal = PowerupCrystal(fh_pos)
                             powerup_crystals.append(crystal)
@@ -174,7 +178,7 @@ class CollisionHandler:
                         # SplitBoss destroyed - spawn two ReplayEnemyShip instances
                         split_boss.active = False
                         self.sound_manager.play_enemy_destroy()
-                        self.scoring.record_enemy_destroyed()
+                        self._record_projectile_kill(projectile)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -196,7 +200,7 @@ class CollisionHandler:
                         # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
                         mother_boss.active = False
                         self.sound_manager.play_enemy_destroy()
-                        self.scoring.record_enemy_destroyed()
+                        self._record_projectile_kill(projectile)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -213,7 +217,7 @@ class CollisionHandler:
                     baby_pos = baby.get_pos()
                     baby.active = False
                     self.sound_manager.play_enemy_destroy()
-                    self.scoring.record_enemy_destroyed()
+                    self._record_projectile_kill(projectile)
                     
                     # Spawn powerup crystal with probability
                     if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -237,7 +241,7 @@ class CollisionHandler:
                     if egg.take_damage():
                         egg.destroy()  # Destroy egg without spawning Replay Enemies
                         self.sound_manager.play_enemy_destroy()
-                        self.scoring.record_enemy_destroyed()
+                        self._record_projectile_kill(projectile)
                         
                         # Spawn powerup crystal with probability
                         if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -336,6 +340,33 @@ class CollisionHandler:
         
         return False
     
+    def handle_projectile_hunter_collision(self, projectile, hunter) -> bool:
+        """Enemy bullets damage the hunter without changing player statistics."""
+        if hunter is None or not hunter.active or not projectile.active or not projectile.is_enemy:
+            return False
+        if not projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
+            return False
+        projectile.active = False
+        from utils.math_utils import apply_circle_collision_physics
+        apply_circle_collision_physics(hunter, projectile, 0.3)
+        if hunter.take_damage():
+            self.sound_manager.play_enemy_destroy()
+        else:
+            self.sound_manager.play_bad_hit()
+        return True
+
+    def handle_hunter_contacts(self, hunter, player, enemies) -> None:
+        if hunter is None or not hunter.active:
+            return
+        if player is not None and player.active:
+            hunter.check_circle_collision(player.get_pos(), player.radius, player)
+        for enemy in enemies:
+            if not hunter.active:
+                break
+            if enemy.active and hunter.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
+                if hunter.take_damage():
+                    self.sound_manager.play_enemy_destroy()
+
     def handle_ship_crystal_collision(
         self,
         ship: 'Ship',

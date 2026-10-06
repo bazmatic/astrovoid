@@ -103,3 +103,28 @@ If a level has no configuration file, the game will:
 
 - Use the level number as the random seed
 - Calculate enemy counts using the formulas in `level_rules.py`
+
+## Allied hunter
+
+Every level spawns one Jev-controlled hunter automatically at a safe cell near the player.
+This is `game.hunterLevelInterval` in `config/settings.json`: `1` is every level, `3` every
+third level (3, 6, 9, ...), and `0` turns the schedule off. A level also gets a hunter, whatever its number, when it has a
+top-level entry placing one, which sets the spawn location too:
+
+```json
+"hunter": {"spawn_cell": [2, 3]}
+```
+
+The numbers are zero-based **column, row**, not screen pixels. The example must
+be adjusted to a free cell in that level's generated maze. The hunter spawns at
+the cell centre. It must fit clear of walls and the player's spawn. Enemy spawn
+positions are reserved away from it, including clearance for larger bosses.
+Invalid overrides log a diagnostic and fall back to automatic placement.
+
+Omit `hunter` or use `null` to leave the level to the schedule, with automatic placement. Arrays, counts and extra configuration
+keys are not supported. At most one hunter spawns per level; it stays dead after
+destruction and resets on a level restart. It does not count as an enemy or block
+the exit portal. Its shots damage enemies and destructible walls; it does not
+collect upgrades or contribute personal player kill points.
+
+API setup is documented in the main README. Never put an API key in level JSON.
