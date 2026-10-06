@@ -24,8 +24,7 @@ BUTTON_SELECTED_SCALE = 1.06
 BUTTON_FADE_MS = 140
 BUTTON_TEXT_IDLE = (160, 160, 190)
 
-# Button skins keyed by (width, height); dialogs rebuild their buttons every
-# frame, so the cache lives at module level rather than on the instance
+# Button skins keyed by (width, height), shared by all buttons of that size
 _button_skin_cache: dict = {}
 
 
@@ -426,6 +425,26 @@ class ConfirmationDialog:
         self.title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
         self.button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
         self.hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
+        # Buttons are kept between frames so their selection fade can play
+        self._buttons: Optional[Tuple[Button, Button]] = None
+    
+    def _get_buttons(
+        self,
+        confirm_position: Tuple[int, int],
+        cancel_position: Tuple[int, int],
+        width: int,
+        height: int
+    ) -> Tuple[Button, Button]:
+        """Get the confirm and cancel buttons, creating them on first use."""
+        if self._buttons is None:
+            self._buttons = (
+                Button(self.confirm_label, confirm_position, self.button_font, width=width, height=height),
+                Button(self.cancel_label, cancel_position, self.button_font, width=width, height=height)
+            )
+        confirm_button, cancel_button = self._buttons
+        confirm_button.position = confirm_position
+        cancel_button.position = cancel_position
+        return confirm_button, cancel_button
     
     def draw(
         self,
@@ -487,14 +506,14 @@ class ConfirmationDialog:
         """Draw buttons side by side."""
         button_y = dialog_y + 150
         
-        # Confirm button (left)
-        confirm_button = Button(
-            self.confirm_label,
+        confirm_button, cancel_button = self._get_buttons(
             (config.SCREEN_WIDTH // 2 - 120, button_y),
-            self.button_font,
+            (config.SCREEN_WIDTH // 2 + 120, button_y),
             width=180,
             height=50
         )
+        
+        # Confirm button (left)
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
@@ -506,13 +525,6 @@ class ConfirmationDialog:
         self.screen.blit(confirm_hint, confirm_hint_rect)
         
         # Cancel button (right)
-        cancel_button = Button(
-            self.cancel_label,
-            (config.SCREEN_WIDTH // 2 + 120, button_y),
-            self.button_font,
-            width=180,
-            height=50
-        )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
         
@@ -532,14 +544,14 @@ class ConfirmationDialog:
         """Draw buttons stacked vertically."""
         button_y = dialog_y + 150
         
-        # Confirm button (top)
-        confirm_button = Button(
-            self.confirm_label,
+        confirm_button, cancel_button = self._get_buttons(
             (config.SCREEN_WIDTH // 2, button_y),
-            self.button_font,
+            (config.SCREEN_WIDTH // 2, button_y + 100),
             width=400,
             height=50
         )
+        
+        # Confirm button (top)
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
@@ -551,13 +563,6 @@ class ConfirmationDialog:
         self.screen.blit(confirm_hint, confirm_hint_rect)
         
         # Cancel button (bottom)
-        cancel_button = Button(
-            self.cancel_label,
-            (config.SCREEN_WIDTH // 2, button_y + 100),
-            self.button_font,
-            width=400,
-            height=50
-        )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
         

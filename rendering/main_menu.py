@@ -12,8 +12,11 @@ from rendering.visual_effects import create_radial_gradient_surface
 from utils.resource_path import resource_path
 
 
-# Layout is authored for a 1080px-high screen and scaled to the real height
+# Layout is authored for a 1080px-high screen and scaled to the real height.
+# REFERENCE_WIDTH is the narrowest screen that layout fits; narrower (e.g.
+# portrait) screens scale down by width instead so nothing runs off the sides
 REFERENCE_HEIGHT = 1080
+REFERENCE_WIDTH = 1200
 TITLE_HEIGHT_FRACTION = 0.34
 TITLE_CENTER_Y_FRACTION = 0.23
 TITLE_FLOAT_SPEED = 0.9
@@ -47,7 +50,7 @@ class MainMenu:
         self.menu_pulse_phase = 0.0
         self.profile_name: Optional[str] = None
         self.profile_level: Optional[int] = None
-        self.scale = config.SCREEN_HEIGHT / REFERENCE_HEIGHT
+        self.scale = min(config.SCREEN_HEIGHT / REFERENCE_HEIGHT, config.SCREEN_WIDTH / REFERENCE_WIDTH)
         self.profile_font = pygame.font.Font(None, self._scaled(28))
         self.menu_time = 0.0
         self.backdrop: Optional[pygame.Surface] = None
@@ -72,8 +75,8 @@ class MainMenu:
         try:
             title_image = pygame.image.load(resource_path("assets/title.png")).convert()
             title_image.fill(TITLE_BACKGROUND_COLOR, special_flags=pygame.BLEND_RGB_SUB)
-            # Scale title image relative to screen height (maintain aspect ratio)
-            title_height = int(config.SCREEN_HEIGHT * TITLE_HEIGHT_FRACTION)
+            # Scale title image with the layout (maintain aspect ratio)
+            title_height = self._scaled(REFERENCE_HEIGHT * TITLE_HEIGHT_FRACTION)
             title_width = int(title_image.get_width() * title_height / title_image.get_height())
             self.menu_title_image = pygame.transform.smoothscale(title_image, (title_width, title_height))
             self.menu_title_rect = self.menu_title_image.get_rect(center=title_center)
