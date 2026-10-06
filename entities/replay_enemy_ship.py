@@ -77,6 +77,19 @@ class ReplayEnemyShip(RotatingThrusterShip):
     EYE_HIGHLIGHT_COLOR = (255, 150, 150)
     PUPIL_COLOR = (40, 0, 10)
     PUPIL_SIZE_RATIO = 0.45
+    # Death animation: the squid withdraws into its mantle like a snail into
+    # its shell. Each stage is a (start, end) span of death_progress.
+    DEATH_DURATION = 36.0  # Frames (0.6 seconds at 60 FPS)
+    DEATH_EYES_CLOSE = (0.0, 0.15)
+    DEATH_ARMS_RETRACT = (0.0, 0.5)
+    DEATH_LONG_TENTACLES_RETRACT = (0.2, 0.7)
+    DEATH_FINS_FOLD = (0.15, 0.55)
+    DEATH_HEAD_RETRACT = (0.4, 0.7)
+    DEATH_MANTLE_SHRINK = (0.6, 0.95)
+    DEATH_HEAD_HIDDEN_X = 0.1  # Where the head ends up, inside the mantle
+    DEATH_PIVOT_X = 0.3  # Point the mantle shrinks towards
+    DEATH_BEAD_RADIUS = 0.2  # Bright bead left as the mantle closes
+    DEATH_FRICTION = 0.85  # Velocity kept per frame while the remnant coasts
     MAX_SPEED_MULTIPLIER = 0.3
     # Blink animation constants
     BLINK_INTERVAL_MIN = 180  # Minimum frames between blinks (3 seconds at 60 FPS)
@@ -202,6 +215,19 @@ class ReplayEnemyShip(RotatingThrusterShip):
             self.fire_cooldown -= 1
         
         super().update(dt)
+        self._update_tentacles(dt)
+    
+    def _death_stage(self, span: Tuple[float, float]) -> float:
+        """Eased progress (0.0 to 1.0) through one stage of the death animation."""
+        start, end = span
+        t = max(0.0, min(1.0, (self.death_progress - start) / (end - start)))
+        return t * t * (3.0 - 2.0 * t)
+    
+    def update_death(self, dt: float) -> None:
+        """Advance the withdrawal: coast to a stop while everything reels in."""
+        super().update_death(dt)
+        self.apply_friction_and_update_position(self.DEATH_FRICTION, dt)
+        self.blink_state = 1.0 - self._death_stage(self.DEATH_EYES_CLOSE)
         self._update_tentacles(dt)
     
     def apply_thrust(self) -> bool:
@@ -462,9 +488,12 @@ class ReplayEnemyShip(RotatingThrusterShip):
         cos_angle = math.cos(angle_rad)
         sin_angle = math.sin(angle_rad)
         rear_angle = angle_rad + math.pi
-        segment = self._tentacle_segment_length()
+        full_segment = self._tentacle_segment_length()
+        arm_scale = 1.0 - self._death_stage(self.DEATH_ARMS_RETRACT)
+        long_scale = 1.0 - self._death_stage(self.DEATH_LONG_TENTACLES_RETRACT)
+        anchor_x = self.TENTACLE_ANCHOR_X + self._head_x() - self.HEAD_X
         spread = math.radians(self.TENTACLE_SPREAD_ANGLE) * (1.0 - self.TENTACLE_JET_CLOSE * self.jet)
-        spread *= 0.85 + 0.15 * math.sin(self.pulse_phase)
+        spread *= (0.85 + 0.15 * math.sin(self.pulse_phase)) * arm_scale
         wiggle = math.radians(self.TENTACLE_WIGGLE_ANGLE)
         
         if not self.tentacles:
@@ -477,9 +506,8 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         for k, chain in enumerate(self.tentacles):
             side = k / (self.TENTACLE_COUNT - 1) * 2.0 - 1.0  # -1.0 to 1.0 across the body
-            anchor = self._to_world(
-                self.TENTACLE_ANCHOR_X, side * self.TENTACLE_ANCHOR_SPREAD, cos_angle, sin_angle
-            )
+            segment = full_segment * (long_scale if k in self.LONG_TENTACLE_INDICES else arm_scale)
+            anchor = self._to_world(anchor_x, side * self.TENTACLE_ANCHOR_SPREAD, cos_angle, sin_angle)
             # Snap to the rest pose on first use or after a jump (e.g. respawn)
             snap = distance(chain[0], anchor) > self.radius * 3
             chain[0] = anchor
@@ -516,18 +544,51 @@ class ReplayEnemyShip(RotatingThrusterShip):
         """Half-width of the mantle (radius units) at u (0 = collar, 1 = tip)."""
         bulge = 0.82 + 0.18 * math.sin(math.pi * min(1.0, u * 1.6))
         taper = max(0.0, 1.0 - u ** 2.2) ** 0.6
-        return self.MANTLE_HALF_WIDTH * bulge * taper * (1.0 - self.MANTLE_CONTRACT_WIDTH * contraction)
+        # A dying mantle keeps its width longer than its length, rounding into a bead
+        shrink = (1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)) ** 0.6
+        return self.MANTLE_HALF_WIDTH * bulge * taper * (1.0 - self.MANTLE_CONTRACT_WIDTH * contraction) * shrink
     
     def _mantle_x(self, u: float, contraction: float) -> float:
         """Local x (radius units) of the mantle at u (0 = collar, 1 = tip)."""
         tip_x = self.MANTLE_TIP_X * (1.0 + self.MANTLE_CONTRACT_STRETCH * contraction)
-        return self.MANTLE_BASE_X + (tip_x - self.MANTLE_BASE_X) * u
+        x = self.MANTLE_BASE_X + (tip_x - self.MANTLE_BASE_X) * u
+        shrink = 1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)
+        return self.DEATH_PIVOT_X + (x - self.DEATH_PIVOT_X) * shrink
+    
+    def _head_x(self) -> float:
+        """Local x (radius units) of the head, which slides into the mantle on death."""
+        retract = self._death_stage(self.DEATH_HEAD_RETRACT)
+        return self.HEAD_X + (self.DEATH_HEAD_HIDDEN_X - self.HEAD_X) * retract
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the replay enemy as a squid: finned mantle, head and trailing arms."""
         if not self.active:
             return
+        self._draw_squid(screen)
+    
+    def draw_death(self, screen: pygame.Surface) -> None:
+        """Draw the squid withdrawing into its mantle, then a bead that winks out."""
+        if not self.is_dying:
+            return
+        self._draw_squid(screen)
         
+        closing = self._death_stage(self.DEATH_MANTLE_SHRINK)
+        if closing <= 0.0:
+            return
+        # The bead swells as the mantle closes, then shrinks over the last frames
+        fade = min(1.0, (1.0 - self.death_progress) / (1.0 - self.DEATH_MANTLE_SHRINK[1]))
+        angle_rad = angle_to_radians(self.angle)
+        bead_x, bead_y = self._to_world(self.DEATH_PIVOT_X, 0.0, math.cos(angle_rad), math.sin(angle_rad))
+        bead_radius = self.radius * self.DEATH_BEAD_RADIUS * closing * fade
+        glow_alpha = int(200 * closing * fade) // 20 * 20  # Stepped to keep the glow cache small
+        if glow_alpha > 0:
+            glow_surf = visual_effects.create_soft_glow_surface(self.radius * 1.2, self.SPOT_COLOR, glow_alpha)
+            screen.blit(glow_surf, (bead_x - glow_surf.get_width() // 2, bead_y - glow_surf.get_height() // 2))
+        if bead_radius >= 0.5:
+            pygame.draw.circle(screen, (255, 255, 255), (int(bead_x), int(bead_y)), max(1, int(round(bead_radius))))
+    
+    def _draw_squid(self, screen: pygame.Surface) -> None:
+        """Draw the squid in its current pose, alive or part-way through dying."""
         if not self.tentacles:
             self._update_tentacles(0.0)
         
@@ -537,24 +598,33 @@ class ReplayEnemyShip(RotatingThrusterShip):
         base_color = config.REPLAY_ENEMY_COLOR
         contraction = self._get_contraction()
         
-        glow_surf = visual_effects.create_soft_glow_surface(
-            self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER, base_color,
-            int(255 * config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER)
-        )
-        glow_x, glow_y = self._to_world(0.2, 0.0, cos_angle, sin_angle)
-        screen.blit(glow_surf, (glow_x - glow_surf.get_width() // 2, glow_y - glow_surf.get_height() // 2))
+        mantle_left = 1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)
+        if mantle_left > 0.0:
+            glow_alpha = 255 * config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
+            if mantle_left < 1.0:
+                glow_alpha = glow_alpha * mantle_left // 10 * 10  # Stepped to keep the glow cache small
+            glow_surf = visual_effects.create_soft_glow_surface(
+                self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER, base_color, int(glow_alpha)
+            )
+            glow_x, glow_y = self._to_world(0.2, 0.0, cos_angle, sin_angle)
+            screen.blit(glow_surf, (glow_x - glow_surf.get_width() // 2, glow_y - glow_surf.get_height() // 2))
         
         self._draw_tentacles(screen, base_color)
         self._draw_fins(screen, base_color, contraction, cos_angle, sin_angle)
         self._draw_head(screen, base_color, cos_angle, sin_angle)
-        self._draw_mantle(screen, base_color, contraction, cos_angle, sin_angle)
-        self._draw_spots(screen, base_color, contraction, cos_angle, sin_angle)
+        if mantle_left > 0.05:
+            self._draw_mantle(screen, base_color, contraction, cos_angle, sin_angle)
+        if mantle_left > 0.6:
+            self._draw_spots(screen, base_color, contraction, cos_angle, sin_angle)
         
-        eye_size = self.radius * self.EYE_SIZE_MULTIPLIER
-        eye_x = self.HEAD_X * self.radius
-        eye_offset = self.radius * self.EYE_SPACING_MULTIPLIER * 0.5
-        self._draw_eye(screen, (eye_x, -eye_offset), eye_size, cos_angle, sin_angle)
-        self._draw_eye(screen, (eye_x, eye_offset), eye_size, cos_angle, sin_angle)
+        # Eyes shrink away as the head slides under the mantle
+        head_out = 1.0 - self._death_stage(self.DEATH_HEAD_RETRACT)
+        if head_out > 0.3:
+            eye_size = self.radius * self.EYE_SIZE_MULTIPLIER * head_out
+            eye_x = self._head_x() * self.radius
+            eye_offset = self.radius * self.EYE_SPACING_MULTIPLIER * 0.5 * head_out
+            self._draw_eye(screen, (eye_x, -eye_offset), eye_size, cos_angle, sin_angle)
+            self._draw_eye(screen, (eye_x, eye_offset), eye_size, cos_angle, sin_angle)
     
     def _draw_tentacles(self, screen: pygame.Surface, base_color: Tuple[int, int, int]) -> None:
         """Draw each tentacle chain as a tapered ribbon with a lit centre line."""
@@ -564,6 +634,8 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         for k, chain in enumerate(self.tentacles):
             is_long = k in self.LONG_TENTACLE_INDICES
+            if distance(chain[0], chain[1]) < 0.3:
+                continue  # Fully reeled in
             side = k / (self.TENTACLE_COUNT - 1) * 2.0 - 1.0
             # Outer arms are darker so the bundle reads as rounded
             color = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.45 + 0.4 * (1.0 - abs(side)))
@@ -613,6 +685,9 @@ class ReplayEnemyShip(RotatingThrusterShip):
         edge = visual_effects.interpolate_color(base_color, (255, 255, 255), 0.3)
         # Fins sweep in as the mantle squeezes
         fin_width = self.FIN_WIDTH * (1.0 - 0.35 * contraction)
+        fin_width *= 1.0 - self._death_stage(self.DEATH_FINS_FOLD)
+        if fin_width <= 0.01:
+            return
         
         for sign in (-1.0, 1.0):
             outer = []
@@ -639,8 +714,11 @@ class ReplayEnemyShip(RotatingThrusterShip):
         sin_angle: float
     ) -> None:
         """Draw the head that joins the mantle to the arms."""
-        head_x, head_y = self._to_world(self.HEAD_X, 0.0, cos_angle, sin_angle)
-        head_radius = self.radius * self.HEAD_RADIUS
+        retract = self._death_stage(self.DEATH_HEAD_RETRACT)
+        if retract >= 1.0:
+            return
+        head_x, head_y = self._to_world(self._head_x(), 0.0, cos_angle, sin_angle)
+        head_radius = self.radius * self.HEAD_RADIUS * (1.0 - 0.5 * retract)
         shade = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.55)
         pygame.draw.circle(screen, shade, (int(head_x), int(head_y)), max(1, int(head_radius)))
         pygame.draw.circle(screen, base_color, (int(head_x), int(head_y)), max(1, int(head_radius * 0.6)))

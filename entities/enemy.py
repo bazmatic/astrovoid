@@ -253,10 +253,6 @@ class Enemy(GameEntity, Collidable, Drawable):
         
         return True
     
-    def destroy(self) -> None:
-        """Destroy the enemy."""
-        self.active = False
-    
     def take_damage(self) -> bool:
         """Take damage from a projectile hit.
         

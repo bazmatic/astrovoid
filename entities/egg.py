@@ -172,10 +172,6 @@ class Egg(GameEntity, Collidable, Drawable):
         # Deactivate egg after popping
         self.active = False
     
-    def destroy(self) -> None:
-        """Destroy the egg (called when hit by bullet)."""
-        self.active = False
-    
     def take_damage(self) -> bool:
         """Take damage from a projectile hit.
         

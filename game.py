@@ -609,6 +609,7 @@ class Game:
             self.enemy_updater.update_eggs(
                 self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
             )
+            self.entity_manager.update_dying(dt)
         
         if self.player_has_moved:
             self.collision_handler.handle_hunter_contacts(
@@ -889,6 +890,9 @@ class Game:
         for egg in self.eggs:
             if egg.active:
                 egg.draw(self.screen)
+        
+        # Draw death animations of enemies that were just killed
+        self.entity_manager.draw_dying(self.screen)
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)

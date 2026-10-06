@@ -76,9 +76,6 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
     def get_radius(self) -> float:
         return self.radius
 
-    def destroy(self) -> None:
-        self.active = False
-
     def take_damage(self) -> bool:
         self.hit_points -= 1
         return self.hit_points <= 0
