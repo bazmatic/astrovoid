@@ -8,7 +8,83 @@ import pygame
 import math
 from typing import Tuple, Optional, Callable
 import config
-from rendering.visual_effects import draw_neon_text, draw_button_glow, Starfield, MenuParticleSystem
+from rendering.visual_effects import (
+    draw_neon_text,
+    draw_button_glow,
+    interpolate_color,
+    Starfield,
+    MenuParticleSystem
+)
+
+
+# Accent gradient for selected buttons, matching the title logo (cyan to magenta)
+BUTTON_ACCENT_START = config.COLOR_NEON_VOID_START
+BUTTON_ACCENT_END = (255, 90, 220)
+BUTTON_SELECTED_SCALE = 1.06
+BUTTON_FADE_MS = 140
+BUTTON_TEXT_IDLE = (160, 160, 190)
+
+# Button skins keyed by (width, height), shared by all buttons of that size
+_button_skin_cache: dict = {}
+
+
+def _accent_gradient(size: Tuple[int, int]) -> pygame.Surface:
+    """Create a horizontal accent gradient surface."""
+    width, height = size
+    surface = pygame.Surface(size, pygame.SRCALPHA)
+    for x in range(width):
+        color = interpolate_color(BUTTON_ACCENT_START, BUTTON_ACCENT_END, x / max(1, width - 1))
+        pygame.draw.line(surface, color, (x, 0), (x, height))
+    return surface
+
+
+def _build_button_skins(width: int, height: int) -> Tuple[pygame.Surface, pygame.Surface, pygame.Surface]:
+    """Build the idle panel, selected panel and selected glow for a button size.
+    
+    Returns:
+        (idle, selected, glow) surfaces. The selected panel is larger than the
+        idle one by BUTTON_SELECTED_SCALE and the glow is larger again.
+    """
+    radius = max(2, int(height * 0.3))
+    border = max(2, height // 22)
+    supersample = 2  # Panels are drawn oversized and scaled down for smooth corners
+    
+    def panel_rects(panel_width: int, panel_height: int) -> Tuple[pygame.Rect, pygame.Rect]:
+        outer = pygame.Rect(0, 0, panel_width * supersample, panel_height * supersample)
+        inner = outer.inflate(-border * 2 * supersample, -border * 2 * supersample)
+        return outer, inner
+    
+    # Idle: dark translucent panel with a faint outline
+    outer, inner = panel_rects(width, height)
+    idle = pygame.Surface(outer.size, pygame.SRCALPHA)
+    pygame.draw.rect(idle, (110, 110, 165, 120), outer, border_radius=radius * supersample)
+    pygame.draw.rect(idle, (20, 16, 40, 150), inner, border_radius=(radius - border) * supersample)
+    idle = pygame.transform.smoothscale(idle, (width, height))
+    
+    # Selected: brighter panel with a gradient border
+    selected_width = int(round(width * BUTTON_SELECTED_SCALE))
+    selected_height = int(round(height * BUTTON_SELECTED_SCALE))
+    outer, inner = panel_rects(selected_width, selected_height)
+    ring = pygame.Surface(outer.size, pygame.SRCALPHA)
+    pygame.draw.rect(ring, (255, 255, 255, 255), outer, border_radius=radius * supersample)
+    pygame.draw.rect(ring, (0, 0, 0, 0), inner, border_radius=(radius - border) * supersample)
+    ring.blit(_accent_gradient(outer.size), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    selected = pygame.Surface(outer.size, pygame.SRCALPHA)
+    pygame.draw.rect(selected, (36, 24, 72, 220), inner, border_radius=(radius - border) * supersample)
+    selected.blit(ring, (0, 0))
+    selected = pygame.transform.smoothscale(selected, (selected_width, selected_height))
+    
+    # Glow: rounded rects stepping inwards from transparent to bright
+    glow_pad = max(4, int(height * 0.3))
+    glow_rect = pygame.Rect(0, 0, selected_width + glow_pad * 2, selected_height + glow_pad * 2)
+    glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
+    for step in range(glow_pad):
+        alpha = int(120 * ((step + 1) / glow_pad) ** 2)
+        layer_rect = glow_rect.inflate(-step * 2, -step * 2)
+        pygame.draw.rect(glow, (255, 255, 255, alpha), layer_rect, border_radius=radius + glow_pad - step)
+    glow.blit(_accent_gradient(glow_rect.size), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    
+    return idle, selected, glow
 
 
 class ControllerIcon:
@@ -138,6 +214,8 @@ class Button:
         # State
         self.selected = False
         self.hover = False
+        self._selection_blend: Optional[float] = None  # 0.0 idle to 1.0 selected
+        self._last_draw_ticks = 0
     
     def get_rect(self) -> pygame.Rect:
         """Get button rectangle.
@@ -172,39 +250,44 @@ class Button:
         """
         rect = self.get_rect()
         
-        # Draw glow if selected
-        if self.selected:
-            draw_button_glow(
-                screen,
-                rect,
-                config.COLOR_BUTTON_GLOW,
-                config.BUTTON_GLOW_INTENSITY,
-                pulse_phase
-            )
+        skins = _button_skin_cache.get((self.width, self.height))
+        if skins is None:
+            skins = _build_button_skins(self.width, self.height)
+            _button_skin_cache[(self.width, self.height)] = skins
+        idle_skin, selected_skin, glow_skin = skins
         
-        # Draw button background
-        bg_color = (40, 40, 60) if not self.selected else (60, 60, 90)
-        pygame.draw.rect(screen, bg_color, rect)
-        border_color = (100, 100, 100) if not self.selected else config.COLOR_TEXT
-        pygame.draw.rect(screen, border_color, rect, 2)
+        # Ease towards the selected/idle look (snaps on the first draw)
+        now = pygame.time.get_ticks()
+        target = 1.0 if self.selected else 0.0
+        if self._selection_blend is None:
+            self._selection_blend = target
+        else:
+            step = (now - self._last_draw_ticks) / BUTTON_FADE_MS
+            if self._selection_blend < target:
+                self._selection_blend = min(target, self._selection_blend + step)
+            else:
+                self._selection_blend = max(target, self._selection_blend - step)
+        self._last_draw_ticks = now
+        blend = self._selection_blend
+        
+        # Draw idle panel, cross-fading out as the button becomes selected
+        if blend < 1.0:
+            idle_skin.set_alpha(int(255 * (1.0 - blend)))
+            screen.blit(idle_skin, rect)
+        
+        # Draw pulsing glow and selected panel
+        if blend > 0.0:
+            pulse = 0.5 + 0.5 * math.sin(pulse_phase)
+            glow_skin.set_alpha(int(255 * blend * (0.55 + 0.45 * pulse)))
+            screen.blit(glow_skin, glow_skin.get_rect(center=rect.center))
+            selected_skin.set_alpha(int(255 * blend))
+            screen.blit(selected_skin, selected_skin.get_rect(center=rect.center))
         
         # Draw text (dimmed if not selected)
-        text_color = (150, 150, 150) if not self.selected else config.COLOR_TEXT
+        text_color = interpolate_color(BUTTON_TEXT_IDLE, config.COLOR_TEXT, blend)
         text_surface = self.font.render(self.text, True, text_color)
         text_rect = text_surface.get_rect(center=self.position)
         screen.blit(text_surface, text_rect)
-        
-        # Draw selection indicator (arrow)
-        if self.selected:
-            arrow_size = 15
-            arrow_x = rect.left - arrow_size - 10
-            arrow_y = self.position[1]
-            points = [
-                (arrow_x, arrow_y),
-                (arrow_x + arrow_size, arrow_y - arrow_size // 2),
-                (arrow_x + arrow_size, arrow_y + arrow_size // 2)
-            ]
-            pygame.draw.polygon(screen, config.COLOR_BUTTON_GLOW, points)
 
 
 class AnimatedBackground:
@@ -342,6 +425,26 @@ class ConfirmationDialog:
         self.title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
         self.button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
         self.hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
+        # Buttons are kept between frames so their selection fade can play
+        self._buttons: Optional[Tuple[Button, Button]] = None
+    
+    def _get_buttons(
+        self,
+        confirm_position: Tuple[int, int],
+        cancel_position: Tuple[int, int],
+        width: int,
+        height: int
+    ) -> Tuple[Button, Button]:
+        """Get the confirm and cancel buttons, creating them on first use."""
+        if self._buttons is None:
+            self._buttons = (
+                Button(self.confirm_label, confirm_position, self.button_font, width=width, height=height),
+                Button(self.cancel_label, cancel_position, self.button_font, width=width, height=height)
+            )
+        confirm_button, cancel_button = self._buttons
+        confirm_button.position = confirm_position
+        cancel_button.position = cancel_position
+        return confirm_button, cancel_button
     
     def draw(
         self,
@@ -403,14 +506,14 @@ class ConfirmationDialog:
         """Draw buttons side by side."""
         button_y = dialog_y + 150
         
-        # Confirm button (left)
-        confirm_button = Button(
-            self.confirm_label,
+        confirm_button, cancel_button = self._get_buttons(
             (config.SCREEN_WIDTH // 2 - 120, button_y),
-            self.button_font,
+            (config.SCREEN_WIDTH // 2 + 120, button_y),
             width=180,
             height=50
         )
+        
+        # Confirm button (left)
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
@@ -422,13 +525,6 @@ class ConfirmationDialog:
         self.screen.blit(confirm_hint, confirm_hint_rect)
         
         # Cancel button (right)
-        cancel_button = Button(
-            self.cancel_label,
-            (config.SCREEN_WIDTH // 2 + 120, button_y),
-            self.button_font,
-            width=180,
-            height=50
-        )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
         
@@ -448,14 +544,14 @@ class ConfirmationDialog:
         """Draw buttons stacked vertically."""
         button_y = dialog_y + 150
         
-        # Confirm button (top)
-        confirm_button = Button(
-            self.confirm_label,
+        confirm_button, cancel_button = self._get_buttons(
             (config.SCREEN_WIDTH // 2, button_y),
-            self.button_font,
+            (config.SCREEN_WIDTH // 2, button_y + 100),
             width=400,
             height=50
         )
+        
+        # Confirm button (top)
         confirm_button.selected = selection_index == 0
         confirm_button.draw(self.screen, menu_pulse_phase)
         
@@ -467,13 +563,6 @@ class ConfirmationDialog:
         self.screen.blit(confirm_hint, confirm_hint_rect)
         
         # Cancel button (bottom)
-        cancel_button = Button(
-            self.cancel_label,
-            (config.SCREEN_WIDTH // 2, button_y + 100),
-            self.button_font,
-            width=400,
-            height=50
-        )
         cancel_button.selected = selection_index == 1
         cancel_button.draw(self.screen, menu_pulse_phase)
         
