@@ -191,7 +191,7 @@
     "babySpawnMax": 3
   },
   "momentum": {
-    "staticEnemyHitPoints": 2,
+    "staticEnemyHitPoints": 3,
     "transferFactor": 0.3,
     "frictionCoefficient": 0.98,
     "minVelocityThreshold": 0.1

@@ -12,6 +12,7 @@ import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.command_recorder import CommandRecorder, CommandType
 from entities.projectile import Projectile
+from entities.tentacle_chain import drag_chain
 from rendering import visual_effects
 from utils import angle_to_radians, get_angle_to_point, normalize_angle, distance
 
@@ -28,31 +29,68 @@ class ReplayEnemyShip(RotatingThrusterShip):
     """
     
     
-    # Drawing constants
-    BODY_RADIUS_MULTIPLIER = 0.6  # Body radius multiplier
-    BODY_OVAL_WIDTH_MULTIPLIER = 1.1  # Width of oval (perpendicular to facing direction)
-    BODY_OVAL_HEIGHT_MULTIPLIER = 1.0  # Height of oval (along facing direction) - makes it longer front-to-back
+    # Drawing constants (lengths are multiples of the ship radius, in local
+    # coordinates: x along the facing direction, y across it)
+    MANTLE_TIP_X = 1.0  # Pointed front of the mantle
+    MANTLE_BASE_X = -0.3  # Open collar at the back of the mantle
+    MANTLE_HALF_WIDTH = 0.46
+    MANTLE_PROFILE_POINTS = 14  # Outline points per side
+    MANTLE_CONTRACT_WIDTH = 0.22  # Width lost at full contraction
+    MANTLE_CONTRACT_STRETCH = 0.08  # Length gained at full contraction
+    MANTLE_IDLE_CONTRACTION = 0.25  # Breathing depth when not thrusting
+    FIN_START = 0.5  # Fin span along the mantle (0 = collar, 1 = tip)
+    FIN_END = 0.97
+    FIN_WIDTH = 0.42
+    FIN_POINTS = 9
+    HEAD_X = -0.45
+    HEAD_RADIUS = 0.3
     TENTACLE_COUNT = 8  # Number of tentacles
-    TENTACLE_SPREAD_ANGLE = 100  # Degrees - how wide the tentacles spread
-    TENTACLE_BASE_LENGTH = 0.4  # Base length multiplier (times body radius)
-    TENTACLE_PULSE_AMPLITUDE = 0.3  # Length pulse amplitude (30% variation)
-    TENTACLE_PULSE_SPEED = 0.2  # Animation speed in radians per second
-    TENTACLE_BASE_WIDTH_MULTIPLIER = 0.6  # Base width multiplier (times body radius)
-    TENTACLE_TIP_WIDTH_MULTIPLIER = 0.08  # Tip width multiplier (times body radius)
-    TENTACLE_COLOR = (150, 100, 255)  # Tentacle color
-    BODY_GLOW_INTENSITY_MULTIPLIER = 0.5
-    BODY_GLOW_RADIUS_MULTIPLIER = 0.4
-    BODY_TEXTURE_LINES = 6  # Number of longitudinal curved lines
-    BODY_TEXTURE_LINE_COLOR = (120, 80, 220)  # Darker purple for texture lines
+    LONG_TENTACLE_INDICES = (2, 5)  # The two feeding tentacles with glowing clubs
+    TENTACLE_SEGMENTS = 6
+    LONG_TENTACLE_SEGMENTS = 10
+    TENTACLE_LENGTH = 1.3  # Length of a regular arm
+    TENTACLE_ANCHOR_X = -0.62
+    TENTACLE_ANCHOR_SPREAD = 0.2  # Half-width of the row of arm roots
+    TENTACLE_SPREAD_ANGLE = 50  # Degrees - fan half-angle of the relaxed arms
+    TENTACLE_JET_CLOSE = 0.75  # How far the fan closes at full jet
+    TENTACLE_WIGGLE_ANGLE = 28  # Degrees - travelling wave amplitude at the tips
+    TENTACLE_STIFFNESS_BASE = 0.45  # Pull towards the rest pose at the root
+    TENTACLE_STIFFNESS_TIP = 0.2  # ... and at the tip
+    TENTACLE_BASE_HALF_WIDTH = 0.085
+    TENTACLE_TIP_HALF_WIDTH = 0.02
+    TENTACLE_CLUB_RADIUS = 0.11
+    PULSE_SPEED = 0.07  # Idle animation speed in radians per frame
+    JET_PULSE_SPEED = 0.2  # Extra animation speed at full jet
+    JET_GAIN = 0.12  # Jet added per thrust
+    JET_DECAY = 0.94  # Jet kept per frame
+    BODY_GLOW_INTENSITY_MULTIPLIER = 1.2
+    BODY_GLOW_RADIUS_MULTIPLIER = 1.8
+    SPOT_ROWS = (-0.5, 0.0, 0.5)  # Rows of light spots across the mantle width
+    SPOTS_PER_ROW = 5
+    SPOT_RADIUS = 0.055
+    SPOT_COLOR = (110, 255, 235)  # Bioluminescent teal
+    SHADOW_COLOR = (20, 10, 50)
     EYE_SIZE_MULTIPLIER = 0.2
-    EYE_SPACING_MULTIPLIER = 0.4
-    EYE_FORWARD_OFFSET_MULTIPLIER = 0.5
+    EYE_SPACING_MULTIPLIER = 0.56
     EYE_HIGHLIGHT_OFFSET_MULTIPLIER = 0.6  # Offset multiplier for eye highlight (closer to edge for visibility)
     EYE_HIGHLIGHT_SIZE_RATIO = 0.3
-    THRUST_BASE_OFFSET_MULTIPLIER = 0.8
-    OUTLINE_COLOR = (150, 100, 255)
     EYE_COLOR = (255, 0, 0)
     EYE_HIGHLIGHT_COLOR = (255, 150, 150)
+    PUPIL_COLOR = (40, 0, 10)
+    PUPIL_SIZE_RATIO = 0.45
+    # Death animation: the squid withdraws into its mantle like a snail into
+    # its shell. Each stage is a (start, end) span of death_progress.
+    DEATH_DURATION = 36.0  # Frames (0.6 seconds at 60 FPS)
+    DEATH_EYES_CLOSE = (0.0, 0.15)
+    DEATH_ARMS_RETRACT = (0.0, 0.5)
+    DEATH_LONG_TENTACLES_RETRACT = (0.2, 0.7)
+    DEATH_FINS_FOLD = (0.15, 0.55)
+    DEATH_HEAD_RETRACT = (0.4, 0.7)
+    DEATH_MANTLE_SHRINK = (0.6, 0.95)
+    DEATH_HEAD_HIDDEN_X = 0.1  # Where the head ends up, inside the mantle
+    DEATH_PIVOT_X = 0.3  # Point the mantle shrinks towards
+    DEATH_BEAD_RADIUS = 0.2  # Bright bead left as the mantle closes
+    DEATH_FRICTION = 0.85  # Velocity kept per frame while the remnant coasts
     MAX_SPEED_MULTIPLIER = 0.3
     # Blink animation constants
     BLINK_INTERVAL_MIN = 180  # Minimum frames between blinks (3 seconds at 60 FPS)
@@ -70,7 +108,11 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.command_recorder = command_recorder
         self.current_replay_index = 0
         self.fire_cooldown: int = 0
-        self.pulse_phase: float = 0.0  # Animation phase for tentacle pulsing
+        self.pulse_phase: float = 0.0  # Animation phase for mantle and tentacles
+        self.jet: float = 0.0  # 0.0 drifting, 1.0 jetting hard
+        # One chain of world-space points per tentacle, built on first use
+        # because subclasses change the radius after construction
+        self.tentacles: List[List[Tuple[float, float]]] = []
         # Blink animation state
         self.blink_timer: float = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
         self.blink_state: float = 1.0  # 1.0 = fully open, 0.0 = fully closed
@@ -121,9 +163,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
         replay_commands = self.command_recorder.get_replay_commands()
         command_count = self.command_recorder.get_command_count()
         
-        # Update pulse phase for tentacle animation
-        self.pulse_phase += dt * self.TENTACLE_PULSE_SPEED
-        
         # Update blink animation
         damage_fraction = self.get_damage_fraction()
         interval_multiplier = self._get_blink_interval_multiplier(damage_fraction)
@@ -165,6 +204,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         
         if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
             super().update(dt)
+            self._update_tentacles(dt)
             return
         
         if replay_commands:
@@ -176,6 +216,27 @@ class ReplayEnemyShip(RotatingThrusterShip):
             self.fire_cooldown -= 1
         
         super().update(dt)
+        self._update_tentacles(dt)
+    
+    def _death_stage(self, span: Tuple[float, float]) -> float:
+        """Eased progress (0.0 to 1.0) through one stage of the death animation."""
+        start, end = span
+        t = max(0.0, min(1.0, (self.death_progress - start) / (end - start)))
+        return t * t * (3.0 - 2.0 * t)
+    
+    def update_death(self, dt: float) -> None:
+        """Advance the withdrawal: coast to a stop while everything reels in."""
+        super().update_death(dt)
+        self.apply_friction_and_update_position(self.DEATH_FRICTION, dt)
+        self.blink_state = 1.0 - self._death_stage(self.DEATH_EYES_CLOSE)
+        self._update_tentacles(dt)
+    
+    def apply_thrust(self) -> bool:
+        """Apply thrust and kick the jet animation."""
+        applied = super().apply_thrust()
+        if applied:
+            self.jet = min(1.0, self.jet + self.JET_GAIN)
+        return applied
     
     def _execute_command(self, command_type: CommandType, player_pos: Optional[Tuple[float, float]] = None) -> None:
         """Execute a replay command."""
@@ -236,8 +297,19 @@ class ReplayEnemyShip(RotatingThrusterShip):
         # Get eye position in world space
         eye_x, eye_y = self._rotate_and_translate_point(eye_pos, cos_angle, sin_angle)
         
+        glow_surf = visual_effects.create_soft_glow_surface(eye_size * 2.4, self.EYE_COLOR, 150)
+        screen.blit(glow_surf, (eye_x - glow_surf.get_width() // 2, eye_y - glow_surf.get_height() // 2))
+        
         # Draw eye as normal circle (always full size)
         pygame.draw.circle(screen, self.EYE_COLOR, (eye_x, eye_y), int(eye_size))
+        
+        # Pupil sits slightly forward so the squid looks where it is heading
+        pupil_offset = eye_size * 0.25
+        pygame.draw.circle(
+            screen, self.PUPIL_COLOR,
+            (int(eye_x + cos_angle * pupil_offset), int(eye_y + sin_angle * pupil_offset)),
+            max(1, int(eye_size * self.PUPIL_SIZE_RATIO))
+        )
         
         # Draw highlight only when eyes are mostly open
         if self.blink_state > 0.3:
@@ -386,176 +458,318 @@ class ReplayEnemyShip(RotatingThrusterShip):
             return None
         return self._check_and_fire_at_player(player_pos)
     
+    
+    def _to_world(self, local_x: float, local_y: float, cos_angle: float, sin_angle: float) -> Tuple[float, float]:
+        """Convert a local point (in radius units) to world coordinates."""
+        lx = local_x * self.radius
+        ly = local_y * self.radius
+        return (self.x + lx * cos_angle - ly * sin_angle, self.y + lx * sin_angle + ly * cos_angle)
+    
+    def _tentacle_segment_length(self) -> float:
+        """Length of one tentacle segment in pixels."""
+        return self.radius * self.TENTACLE_LENGTH / self.TENTACLE_SEGMENTS
+    
+    def _get_contraction(self) -> float:
+        """Mantle contraction (0.0 relaxed, 1.0 fully squeezed)."""
+        breathing = 0.5 + 0.5 * math.sin(self.pulse_phase)
+        depth = self.MANTLE_IDLE_CONTRACTION + (1.0 - self.MANTLE_IDLE_CONTRACTION) * self.jet
+        return breathing * depth
+    
+    def _update_tentacles(self, dt: float) -> None:
+        """Advance the animation and drag the tentacle chains behind the body.
+        
+        Each chain follows its root like a towed rope, so the arms stream out
+        when the squid moves and swing wide when it turns. A pull towards a
+        fanned, wiggling rest pose keeps them alive when it drifts.
+        """
+        self.pulse_phase += dt * (self.PULSE_SPEED + self.JET_PULSE_SPEED * self.jet)
+        self.jet *= self.JET_DECAY ** dt
+        
+        angle_rad = angle_to_radians(self.angle)
+        cos_angle = math.cos(angle_rad)
+        sin_angle = math.sin(angle_rad)
+        rear_angle = angle_rad + math.pi
+        full_segment = self._tentacle_segment_length()
+        arm_scale = 1.0 - self._death_stage(self.DEATH_ARMS_RETRACT)
+        long_scale = 1.0 - self._death_stage(self.DEATH_LONG_TENTACLES_RETRACT)
+        anchor_x = self.TENTACLE_ANCHOR_X + self._head_x() - self.HEAD_X
+        spread = math.radians(self.TENTACLE_SPREAD_ANGLE) * (1.0 - self.TENTACLE_JET_CLOSE * self.jet)
+        spread *= (0.85 + 0.15 * math.sin(self.pulse_phase)) * arm_scale
+        wiggle = math.radians(self.TENTACLE_WIGGLE_ANGLE)
+        
+        if not self.tentacles:
+            self.tentacles = [
+                [(self.x, self.y)] * (
+                    (self.LONG_TENTACLE_SEGMENTS if k in self.LONG_TENTACLE_INDICES else self.TENTACLE_SEGMENTS) + 1
+                )
+                for k in range(self.TENTACLE_COUNT)
+            ]
+        
+        for k, chain in enumerate(self.tentacles):
+            side = k / (self.TENTACLE_COUNT - 1) * 2.0 - 1.0  # -1.0 to 1.0 across the body
+            segment = full_segment * (long_scale if k in self.LONG_TENTACLE_INDICES else arm_scale)
+            anchor = self._to_world(anchor_x, side * self.TENTACLE_ANCHOR_SPREAD, cos_angle, sin_angle)
+            # Snap to the rest pose on first use or after a jump (e.g. respawn)
+            snap = distance(chain[0], anchor) > self.radius * 3
+            
+            def rest_angle(i: int, t: float, side: float = side, k: int = k) -> float:
+                angle = rear_angle - side * spread * (1.0 - 0.45 * t)
+                return angle + math.sin(self.pulse_phase * 1.7 - i * 0.8 + k * 1.9) * wiggle * t
+            
+            drag_chain(
+                chain, anchor, segment, rest_angle,
+                self.TENTACLE_STIFFNESS_BASE, self.TENTACLE_STIFFNESS_TIP, snap
+            )
+    
+    def _mantle_half_width(self, u: float, contraction: float) -> float:
+        """Half-width of the mantle (radius units) at u (0 = collar, 1 = tip)."""
+        bulge = 0.82 + 0.18 * math.sin(math.pi * min(1.0, u * 1.6))
+        taper = max(0.0, 1.0 - u ** 2.2) ** 0.6
+        # A dying mantle keeps its width longer than its length, rounding into a bead
+        shrink = (1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)) ** 0.6
+        return self.MANTLE_HALF_WIDTH * bulge * taper * (1.0 - self.MANTLE_CONTRACT_WIDTH * contraction) * shrink
+    
+    def _mantle_x(self, u: float, contraction: float) -> float:
+        """Local x (radius units) of the mantle at u (0 = collar, 1 = tip)."""
+        tip_x = self.MANTLE_TIP_X * (1.0 + self.MANTLE_CONTRACT_STRETCH * contraction)
+        x = self.MANTLE_BASE_X + (tip_x - self.MANTLE_BASE_X) * u
+        shrink = 1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)
+        return self.DEATH_PIVOT_X + (x - self.DEATH_PIVOT_X) * shrink
+    
+    def _head_x(self) -> float:
+        """Local x (radius units) of the head, which slides into the mantle on death."""
+        retract = self._death_stage(self.DEATH_HEAD_RETRACT)
+        return self.HEAD_X + (self.DEATH_HEAD_HIDDEN_X - self.HEAD_X) * retract
+    
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw the replay enemy ship as an octopus with streaming tentacles."""
+        """Draw the replay enemy as a squid: finned mantle, head and trailing arms."""
         if not self.active:
             return
+        self._draw_squid(screen)
+    
+    def draw_death(self, screen: pygame.Surface) -> None:
+        """Draw the squid withdrawing into its mantle, then a bead that winks out."""
+        if not self.is_dying:
+            return
+        self._draw_squid(screen)
+        
+        closing = self._death_stage(self.DEATH_MANTLE_SHRINK)
+        if closing <= 0.0:
+            return
+        # The bead swells as the mantle closes, then shrinks over the last frames
+        fade = min(1.0, (1.0 - self.death_progress) / (1.0 - self.DEATH_MANTLE_SHRINK[1]))
+        angle_rad = angle_to_radians(self.angle)
+        bead_x, bead_y = self._to_world(self.DEATH_PIVOT_X, 0.0, math.cos(angle_rad), math.sin(angle_rad))
+        bead_radius = self.radius * self.DEATH_BEAD_RADIUS * closing * fade
+        glow_alpha = int(200 * closing * fade) // 20 * 20  # Stepped to keep the glow cache small
+        if glow_alpha > 0:
+            glow_surf = visual_effects.create_soft_glow_surface(self.radius * 1.2, self.SPOT_COLOR, glow_alpha)
+            screen.blit(glow_surf, (bead_x - glow_surf.get_width() // 2, bead_y - glow_surf.get_height() // 2))
+        if bead_radius >= 0.5:
+            pygame.draw.circle(screen, (255, 255, 255), (int(bead_x), int(bead_y)), max(1, int(round(bead_radius))))
+    
+    def _draw_squid(self, screen: pygame.Surface) -> None:
+        """Draw the squid in its current pose, alive or part-way through dying."""
+        if not self.tentacles:
+            self._update_tentacles(0.0)
         
         angle_rad = angle_to_radians(self.angle)
         cos_angle = math.cos(angle_rad)
         sin_angle = math.sin(angle_rad)
         base_color = config.REPLAY_ENEMY_COLOR
-        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
+        contraction = self._get_contraction()
         
-        self._draw_tentacles(screen)
-        
-        # Draw oval body (longer front-to-back)
-        oval_width = body_radius * 2 * self.BODY_OVAL_WIDTH_MULTIPLIER
-        oval_height = body_radius * 2 * self.BODY_OVAL_HEIGHT_MULTIPLIER
-        
-        # Create surface for rotated oval (larger to accommodate rotation)
-        surface_size = int(max(oval_width, oval_height) * 1.5) + 4
-        oval_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
-        surface_center = surface_size // 2
-        oval_rect = pygame.Rect(
-            surface_center - int(oval_width // 2),
-            surface_center - int(oval_height // 2),
-            int(oval_width),
-            int(oval_height)
-        )
-        
-        # Draw glow (still circular for simplicity)
-        visual_effects.draw_glow_circle(
-            screen, (self.x, self.y), body_radius, base_color,
-            glow_radius=self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER,
-            intensity=config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
-        )
-        
-        # Draw filled oval
-        pygame.draw.ellipse(oval_surface, base_color, oval_rect)
-        
-        # Draw longitudinal curved texture lines
-        self._draw_body_texture(oval_surface, oval_rect, surface_center)
-        
-        # Draw outline
-        pygame.draw.ellipse(oval_surface, self.OUTLINE_COLOR, oval_rect, 2)
-        
-        # Rotate oval to match ship's facing direction
-        rotated_surface = pygame.transform.rotate(oval_surface, -self.angle)
-        rotated_rect = rotated_surface.get_rect(center=(int(self.x), int(self.y)))
-        screen.blit(rotated_surface, rotated_rect)
-        
-        eye_size = self.radius * self.EYE_SIZE_MULTIPLIER
-        eye_spacing = self.radius * self.EYE_SPACING_MULTIPLIER
-        eye_forward_offset = body_radius * self.EYE_FORWARD_OFFSET_MULTIPLIER
-        
-        left_eye_pos = (eye_forward_offset, -eye_spacing * 0.5)
-        right_eye_pos = (eye_forward_offset, eye_spacing * 0.5)
-        self._draw_eye(screen, left_eye_pos, eye_size, cos_angle, sin_angle)
-        self._draw_eye(screen, right_eye_pos, eye_size, cos_angle, sin_angle)
-    
-    def _draw_tentacles(self, screen: pygame.Surface) -> None:
-        """Draw short, stubby tentacles that pulse behind the ship."""
-        body_radius = self.radius * self.BODY_RADIUS_MULTIPLIER
-        # Get the ship's facing direction (where eyes are)
-        forward_angle_rad = angle_to_radians(self.angle)
-        # Tentacles are behind (180 degrees opposite of facing direction)
-        rear_angle_rad = forward_angle_rad + math.pi
-        
-        # Calculate pulse factor for length (0.7 to 1.0 range)
-        length_pulse_factor = 0.7 + 0.3 * (1.0 + math.sin(self.pulse_phase)) / 2.0
-        
-        # Calculate pulse factor for width (more dramatic: 0.4 to 1.0 range)
-        width_pulse_factor = 0.4 + 0.6 * (1.0 + math.sin(self.pulse_phase * 1.5)) / 2.0
-        
-        # Base tentacle length (short and stubby)
-        base_length = body_radius * self.TENTACLE_BASE_LENGTH
-        current_length = base_length * length_pulse_factor
-        
-        # Spread angle for tentacles
-        spread_rad = math.radians(self.TENTACLE_SPREAD_ANGLE)
-        
-        for tentacle_idx in range(self.TENTACLE_COUNT):
-            # Calculate tentacle angle (spread around rear direction)
-            angle_offset = (tentacle_idx / self.TENTACLE_COUNT) * spread_rad - spread_rad / 2
-            tentacle_angle = rear_angle_rad + angle_offset
-            
-            # Base position on body edge (on the rear side of the ship)
-            base_x = self.x + math.cos(tentacle_angle) * body_radius
-            base_y = self.y + math.sin(tentacle_angle) * body_radius
-            
-            # Tip position (extending further backward from base, away from ship center)
-            # Extend in the same direction as tentacle_angle (which points rearward)
-            tip_x = base_x + math.cos(tentacle_angle) * current_length
-            tip_y = base_y + math.sin(tentacle_angle) * current_length
-            
-            # Width pulses more dramatically (independent of length pulse)
-            base_width = body_radius * self.TENTACLE_BASE_WIDTH_MULTIPLIER
-            tip_width = body_radius * self.TENTACLE_TIP_WIDTH_MULTIPLIER
-            width = int(base_width * width_pulse_factor)
-            width = max(int(tip_width), width)  # Ensure minimum width
-            
-            # Draw tentacle as a simple line
-            pygame.draw.line(
-                screen,
-                self.TENTACLE_COLOR,
-                (int(base_x), int(base_y)),
-                (int(tip_x), int(tip_y)),
-                width
+        mantle_left = 1.0 - self._death_stage(self.DEATH_MANTLE_SHRINK)
+        if mantle_left > 0.0:
+            glow_alpha = 255 * config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER
+            if mantle_left < 1.0:
+                glow_alpha = glow_alpha * mantle_left // 10 * 10  # Stepped to keep the glow cache small
+            glow_surf = visual_effects.create_soft_glow_surface(
+                self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER, base_color, int(glow_alpha)
             )
+            glow_x, glow_y = self._to_world(0.2, 0.0, cos_angle, sin_angle)
+            screen.blit(glow_surf, (glow_x - glow_surf.get_width() // 2, glow_y - glow_surf.get_height() // 2))
+        
+        self._draw_tentacles(screen, base_color)
+        self._draw_fins(screen, base_color, contraction, cos_angle, sin_angle)
+        self._draw_head(screen, base_color, cos_angle, sin_angle)
+        if mantle_left > 0.05:
+            self._draw_mantle(screen, base_color, contraction, cos_angle, sin_angle)
+        if mantle_left > 0.6:
+            self._draw_spots(screen, base_color, contraction, cos_angle, sin_angle)
+        
+        # Eyes shrink away as the head slides under the mantle
+        head_out = 1.0 - self._death_stage(self.DEATH_HEAD_RETRACT)
+        if head_out > 0.3:
+            eye_size = self.radius * self.EYE_SIZE_MULTIPLIER * head_out
+            eye_x = self._head_x() * self.radius
+            eye_offset = self.radius * self.EYE_SPACING_MULTIPLIER * 0.5 * head_out
+            self._draw_eye(screen, (eye_x, -eye_offset), eye_size, cos_angle, sin_angle)
+            self._draw_eye(screen, (eye_x, eye_offset), eye_size, cos_angle, sin_angle)
     
-    def _draw_body_texture(self, surface: pygame.Surface, oval_rect: pygame.Rect, surface_center: int) -> None:
-        """Draw longitudinal curved texture lines on the body for 3D effect.
+    def _draw_tentacles(self, screen: pygame.Surface, base_color: Tuple[int, int, int]) -> None:
+        """Draw each tentacle chain as a tapered ribbon with a lit centre line."""
+        highlight = visual_effects.interpolate_color(base_color, (255, 255, 255), 0.35)
+        base_half_width = self.radius * self.TENTACLE_BASE_HALF_WIDTH
+        tip_half_width = self.radius * self.TENTACLE_TIP_HALF_WIDTH
         
-        Args:
-            surface: The surface to draw on.
-            oval_rect: Rectangle defining the oval bounds.
-            surface_center: Center coordinate of the surface (both x and y are the same).
+        for k, chain in enumerate(self.tentacles):
+            is_long = k in self.LONG_TENTACLE_INDICES
+            if distance(chain[0], chain[1]) < 0.3:
+                continue  # Fully reeled in
+            side = k / (self.TENTACLE_COUNT - 1) * 2.0 - 1.0
+            # Outer arms are darker so the bundle reads as rounded
+            color = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.45 + 0.4 * (1.0 - abs(side)))
+            root_half_width = base_half_width * (0.7 if is_long else 1.0)
+            
+            left = []
+            right = []
+            last = len(chain) - 1
+            for i, (px, py) in enumerate(chain):
+                ax, ay = chain[max(0, i - 1)]
+                bx, by = chain[min(last, i + 1)]
+                tx = bx - ax
+                ty = by - ay
+                length = math.hypot(tx, ty) or 1.0
+                t = i / last
+                half_width = root_half_width + (tip_half_width - root_half_width) * t
+                nx = -ty / length * half_width
+                ny = tx / length * half_width
+                left.append((px + nx, py + ny))
+                right.append((px - nx, py - ny))
+            
+            pygame.draw.polygon(screen, color, left + right[::-1])
+            pygame.draw.aalines(screen, highlight if is_long else color, False, chain)
+            
+            if is_long:
+                self._draw_tentacle_club(screen, chain[-1], k)
+    
+    def _draw_tentacle_club(self, screen: pygame.Surface, tip: Tuple[float, float], index: int) -> None:
+        """Draw the glowing club at the end of a feeding tentacle."""
+        club_radius = max(1.5, self.radius * self.TENTACLE_CLUB_RADIUS)
+        glow_surf = visual_effects.create_soft_glow_surface(club_radius * 3.5, self.SPOT_COLOR, 140)
+        screen.blit(glow_surf, (tip[0] - glow_surf.get_width() // 2, tip[1] - glow_surf.get_height() // 2))
+        flicker = 0.5 + 0.5 * math.sin(self.pulse_phase * 3.0 + index)
+        color = visual_effects.interpolate_color(self.SPOT_COLOR, (255, 255, 255), flicker * 0.7)
+        pygame.draw.circle(screen, color, (int(tip[0]), int(tip[1])), max(1, int(round(club_radius))))
+    
+    def _draw_fins(
+        self,
+        screen: pygame.Surface,
+        base_color: Tuple[int, int, int],
+        contraction: float,
+        cos_angle: float,
+        sin_angle: float
+    ) -> None:
+        """Draw the two rippling fins near the mantle tip."""
+        fill = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.6)
+        edge = visual_effects.interpolate_color(base_color, (255, 255, 255), 0.3)
+        # Fins sweep in as the mantle squeezes
+        fin_width = self.FIN_WIDTH * (1.0 - 0.35 * contraction)
+        fin_width *= 1.0 - self._death_stage(self.DEATH_FINS_FOLD)
+        if fin_width <= 0.01:
+            return
+        
+        for sign in (-1.0, 1.0):
+            outer = []
+            for j in range(self.FIN_POINTS):
+                s = j / (self.FIN_POINTS - 1)
+                u = self.FIN_START + (self.FIN_END - self.FIN_START) * s
+                ripple = 1.0 + 0.18 * math.sin(self.pulse_phase * 2.5 - s * 3.0)
+                # Widest towards the rear of the fin, like a squid's rhombic fins
+                lobe = math.sin(math.pi * s ** 0.75) ** 0.7
+                y = self._mantle_half_width(u, contraction) * 0.6 + fin_width * lobe * ripple
+                outer.append(self._to_world(self._mantle_x(u, contraction), sign * y, cos_angle, sin_angle))
+            inner = [
+                self._to_world(self._mantle_x(self.FIN_END, contraction), 0.0, cos_angle, sin_angle),
+                self._to_world(self._mantle_x(self.FIN_START, contraction), 0.0, cos_angle, sin_angle),
+            ]
+            pygame.draw.polygon(screen, fill, outer + inner)
+            pygame.draw.aalines(screen, edge, False, outer)
+    
+    def _draw_head(
+        self,
+        screen: pygame.Surface,
+        base_color: Tuple[int, int, int],
+        cos_angle: float,
+        sin_angle: float
+    ) -> None:
+        """Draw the head that joins the mantle to the arms."""
+        retract = self._death_stage(self.DEATH_HEAD_RETRACT)
+        if retract >= 1.0:
+            return
+        head_x, head_y = self._to_world(self._head_x(), 0.0, cos_angle, sin_angle)
+        head_radius = self.radius * self.HEAD_RADIUS * (1.0 - 0.5 * retract)
+        shade = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.55)
+        pygame.draw.circle(screen, shade, (int(head_x), int(head_y)), max(1, int(head_radius)))
+        pygame.draw.circle(screen, base_color, (int(head_x), int(head_y)), max(1, int(head_radius * 0.6)))
+    
+    def _draw_mantle(
+        self,
+        screen: pygame.Surface,
+        base_color: Tuple[int, int, int],
+        contraction: float,
+        cos_angle: float,
+        sin_angle: float
+    ) -> None:
+        """Draw the mantle as nested bands, dark at the edge and bright along the spine."""
+        white = (255, 255, 255)
+        layers = (
+            (1.0, visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.55)),
+            (0.8, base_color),
+            (0.52, visual_effects.interpolate_color(base_color, white, 0.25)),
+            (0.22, visual_effects.interpolate_color(base_color, white, 0.5)),
+        )
+        steps = self.MANTLE_PROFILE_POINTS
+        outline = []
+        for layer_index, (scale, color) in enumerate(layers):
+            # Inner bands stop short of the collar and tip
+            inset = 0.05 * layer_index
+            left = []
+            right = []
+            for j in range(steps + 1):
+                s = j / steps
+                u = inset + (1.0 - 2.0 * inset) * s
+                half_width = self._mantle_half_width(u, contraction) * scale
+                if layer_index:
+                    half_width *= math.sin(math.pi * s) ** 0.4
+                x = self._mantle_x(u, contraction)
+                left.append(self._to_world(x, -half_width, cos_angle, sin_angle))
+                right.append(self._to_world(x, half_width, cos_angle, sin_angle))
+            points = left + right[::-1]
+            pygame.draw.polygon(screen, color, points)
+            if not layer_index:
+                outline = points
+        
+        rim = visual_effects.interpolate_color(base_color, white, 0.4)
+        pygame.draw.aalines(screen, rim, True, outline)
+    
+    def _draw_spots(
+        self,
+        screen: pygame.Surface,
+        base_color: Tuple[int, int, int],
+        contraction: float,
+        cos_angle: float,
+        sin_angle: float
+    ) -> None:
+        """Draw light spots that pulse in a wave from the tip to the collar.
+        
+        Damaged bosses burn brighter, up to white-hot.
         """
-        oval_width = oval_rect.width
-        oval_height = oval_rect.height
-        center_x = center_y = surface_center
-        
-        # Draw curved lines that follow the oval shape longitudinally
-        num_lines = self.BODY_TEXTURE_LINES
-        line_spacing = oval_width / (num_lines + 1)
-        
         damage_fraction = self.get_damage_fraction()
         glow_factor = min(1.0, damage_fraction * config.MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX)
-        base_color = self.BODY_TEXTURE_LINE_COLOR
-        if glow_factor > 0:
-            line_color = tuple(min(255, int(c + (255 - c) * glow_factor)) for c in base_color)
-        else:
-            line_color = base_color
-
-        for i in range(num_lines):
-            # X position of line (spread across width)
-            line_x_offset = (i + 1) * line_spacing - oval_width / 2
-            
-            # Create curved line using multiple segments
-            num_segments = 20
-            points = []
-            
-            for seg in range(num_segments + 1):
-                # Progress along the length (0.0 to 1.0)
-                t = seg / num_segments
-                
-                # Y position along the oval height
-                y_pos = center_y - oval_height / 2 + t * oval_height
-                
-                # Calculate x offset that curves with the oval shape
-                # Use a sine wave to create a gentle curve
-                curve_amplitude = oval_width * 0.15 * math.sin(t * math.pi)
-                x_pos = center_x + line_x_offset + curve_amplitude * math.sin(self.pulse_phase * 0.5 + i * 0.3)
-                
-                # Check if point is within oval bounds (simple ellipse check)
-                dx_from_center = (x_pos - center_x) / (oval_width / 2)
-                dy_from_center = (y_pos - center_y) / (oval_height / 2)
-                distance_from_center = math.sqrt(dx_from_center * dx_from_center + dy_from_center * dy_from_center)
-                
-                if distance_from_center <= 1.0:
-                    points.append((int(x_pos), int(y_pos)))
-            
-            # Draw dotted line
-            if len(points) > 1:
-                for j in range(len(points) - 1):
-                    # Draw every other segment to create dotted effect
-                    if j % 3 < 2:  # Draw 2 out of 3 segments
-                        pygame.draw.line(
-                            surface,
-                            line_color,
-                            points[j],
-                            points[j + 1],
-                            2
-                        )
-    
+        dim = visual_effects.interpolate_color(base_color, self.SHADOW_COLOR, 0.35)
+        
+        for row_index, row in enumerate(self.SPOT_ROWS):
+            for j in range(self.SPOTS_PER_ROW):
+                # Centre row is offset so the spots form a diamond pattern
+                u = 0.14 + 0.62 * (j + (0.5 if row == 0.0 else 0.0)) / self.SPOTS_PER_ROW
+                brightness = (0.5 + 0.5 * math.sin(self.pulse_phase * 2.0 + j * 1.1 + row_index * 0.5)) ** 2
+                brightness = max(brightness, glow_factor)
+                color = visual_effects.interpolate_color(dim, self.SPOT_COLOR, brightness)
+                if glow_factor > 0:
+                    color = visual_effects.interpolate_color(color, (255, 255, 255), glow_factor)
+                y = row * self._mantle_half_width(u, contraction)
+                spot_x, spot_y = self._to_world(self._mantle_x(u, contraction), y, cos_angle, sin_angle)
+                spot_radius = self.radius * self.SPOT_RADIUS * (0.7 + 0.5 * brightness)
+                pygame.draw.circle(screen, color, (int(spot_x), int(spot_y)), max(1, int(round(spot_radius))))

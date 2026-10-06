@@ -99,7 +99,7 @@ class CollisionHandler:
                         
                         # Take damage - returns True if destroyed
                         if enemy.take_damage():
-                            enemy.destroy()
+                            enemy.die()
                             self.sound_manager.play_enemy_destroy()
                             self._record_projectile_kill(projectile)
                             
@@ -109,7 +109,7 @@ class CollisionHandler:
                                 powerup_crystals.append(crystal)
                     else:
                         # Non-static enemies destroyed immediately (existing behavior)
-                        enemy.destroy()
+                        enemy.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
@@ -125,7 +125,7 @@ class CollisionHandler:
             if replay_enemy.active and projectile.active:
                 if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
                     enemy_pos = replay_enemy.get_pos()
-                    replay_enemy.active = False
+                    replay_enemy.die()
                     self.sound_manager.play_enemy_destroy()
                     self._record_projectile_kill(projectile)
                     
@@ -141,7 +141,7 @@ class CollisionHandler:
             if flocker.active and projectile.active:
                 if projectile.check_circle_collision(flocker.get_pos(), flocker.radius):
                     flocker_pos = flocker.get_pos()
-                    flocker.active = False
+                    flocker.die()
                     self.sound_manager.play_enemy_destroy()
                     self._record_projectile_kill(projectile)
                     
@@ -158,7 +158,7 @@ class CollisionHandler:
                 if projectile.check_circle_collision(flighthouse.get_pos(), flighthouse.radius):
                     fh_pos = flighthouse.get_pos()
                     if flighthouse.take_damage():
-                        flighthouse.destroy()
+                        flighthouse.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
@@ -176,7 +176,7 @@ class CollisionHandler:
                     # Take damage - returns True if destroyed
                     if split_boss.take_damage():
                         # SplitBoss destroyed - spawn two ReplayEnemyShip instances
-                        split_boss.active = False
+                        split_boss.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
@@ -198,7 +198,7 @@ class CollisionHandler:
                     # Take damage - returns True if destroyed
                     if mother_boss.take_damage():
                         # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
-                        mother_boss.active = False
+                        mother_boss.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
@@ -215,7 +215,7 @@ class CollisionHandler:
             if baby.active and projectile.active:
                 if projectile.check_circle_collision(baby.get_pos(), baby.radius):
                     baby_pos = baby.get_pos()
-                    baby.active = False
+                    baby.die()
                     self.sound_manager.play_enemy_destroy()
                     self._record_projectile_kill(projectile)
                     
@@ -239,7 +239,7 @@ class CollisionHandler:
                     
                     # Take damage - returns True if destroyed
                     if egg.take_damage():
-                        egg.destroy()  # Destroy egg without spawning Replay Enemies
+                        egg.die()  # Destroy egg without spawning Replay Enemies
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         

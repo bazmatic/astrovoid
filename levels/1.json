@@ -1,10 +1,10 @@
 {
   "seed": 100,
   "enemies": {
-    "static": 0,
+    "static": 4,
     "patrol": 0,
     "aggressive": 0,
-    "replay": 4,
+    "replay": 0,
     "flocker": 0,
     "flighthouse": 0,
     "split_boss": 0,

@@ -19,6 +19,7 @@ from maze.positioning import MazePositionCalculator
 from maze.converter import GridToWallsConverter
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
+from rendering.wall_renderer import WallRenderer
 
 
 class RecursiveBacktrackingGenerator:
@@ -267,6 +268,7 @@ class Maze:
         # Convert grid to wall segments
         converter = GridToWallsConverter(self.position_calculator)
         self.walls = converter.convert(self.grid)
+        self.wall_renderer = WallRenderer()
         
         # Create spatial grid for efficient collision detection
         self.spatial_grid = SpatialGrid(
@@ -365,17 +367,7 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        # Draw only active wall segments as individual lines
-        for wall_segment in self.walls:
-            if wall_segment.active:
-                # Draw wall segment as a line with thickness
-                pygame.draw.line(
-                    screen,
-                    config.COLOR_WALLS,
-                    (int(wall_segment.start[0]), int(wall_segment.start[1])),
-                    (int(wall_segment.end[0]), int(wall_segment.end[1])),
-                    config.WALL_THICKNESS
-                )
+        self.wall_renderer.draw(screen, self.walls)
         
         # Draw exit marker
         if self.exit.active:

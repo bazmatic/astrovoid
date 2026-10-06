@@ -88,4 +88,33 @@ class EntityManager:
         for egg in self.eggs:
             if egg.active:
                 yield egg
-
+    
+    def get_all_enemies(self) -> Iterator:
+        """Get iterator over every enemy, active or not.
+        
+        Yields:
+            Enemy instances from all lists.
+        """
+        for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
+                      self.split_bosses, self.mother_bosses, self.babies, self.eggs):
+            yield from group
+    
+    def update_dying(self, dt: float) -> None:
+        """Advance the death animation of every enemy that is dying.
+        
+        Args:
+            dt: Delta time since last update.
+        """
+        for enemy in self.get_all_enemies():
+            if enemy.is_dying:
+                enemy.update_death(dt)
+    
+    def draw_dying(self, screen) -> None:
+        """Draw the death animation of every enemy that is dying.
+        
+        Args:
+            screen: The pygame Surface to draw on.
+        """
+        for enemy in self.get_all_enemies():
+            if enemy.is_dying:
+                enemy.draw_death(screen)

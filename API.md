@@ -49,7 +49,7 @@ Enemy entity with configurable behavior.
 **Methods:**
 
 - `update(dt: float, player_pos: Optional[Tuple], walls: Optional[List]) -> None`: Update enemy
-- `destroy() -> None`: Destroy the enemy
+- `die() -> None`: Kill the enemy and start its death animation, if it has one
 - `check_wall_collision(walls: List) -> bool`: Check wall collision
 - `check_circle_collision(pos: Tuple, radius: float) -> bool`: Check entity collision
 
