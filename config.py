@@ -292,6 +292,8 @@ class PowerupBeyondLevel3:
     speedIncrement: float
     glowIntensityIncrement: float
     hueRotation: float
+    fireRateGrowth: float
+    minFireCooldown: int
 
 
 @dataclass

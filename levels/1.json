@@ -1,5 +1,4 @@
 {
-  "seed": 100,
   "enemies": {
     "static": 4,
     "patrol": 0,
@@ -11,12 +10,5 @@
     "mother_boss": 0,
     "egg": 0
   },
-  "maze": {
-    "complexity": "extreme",
-    "grid_size": 15
-  },
-  "seed": 100,
-  "hunter": {
-    "spawn_cell": [12, 4]
-  }
+  "seed": 100
 }

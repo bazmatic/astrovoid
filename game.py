@@ -317,6 +317,8 @@ class Game:
                  for enemy in group], self.projectiles,
                 self.hunter_controller.action, now, generation)
         action = self.hunter_controller.tick(observe)
+        if self.hunter_controller.status != 'active':
+            self.hunter.cancel_burst()
         bullet = self.hunter.step(dt, action)
         if bullet is not None:
             self.projectiles.append(bullet)
@@ -368,6 +370,7 @@ class Game:
             self.hunter_controller.tick(None, running=False)
             if self.hunter is not None:
                 self.hunter.pilot_thrusting = False
+                self.hunter.cancel_burst()
         # Update splash screen
         if self.state == config.STATE_SPLASH:
             if self.splash_screen:
@@ -902,6 +905,8 @@ class Game:
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)
+            if self.hunter_controller is not None:
+                self.hunter.draw_status(self.screen, self.small_font, self.hunter_controller.status)
 
         # Draw powerup crystals
         for crystal in self.powerup_crystals:

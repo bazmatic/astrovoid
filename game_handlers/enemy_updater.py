@@ -4,7 +4,7 @@ This module provides a unified interface for updating all enemy types,
 eliminating code duplication in the main game loop.
 """
 
-from game_handlers.combat_targets import nearest_friendly
+from game_handlers.combat_targets import nearest_friendly_pos
 
 from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
@@ -55,8 +55,7 @@ class EnemyUpdater:
         for enemy in enemies:
             if not enemy.active:
                 continue
-            target = nearest_friendly(enemy, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(enemy, ship, hunter)
             
             enemy.update(dt, target_pos, maze.walls)
             
@@ -95,8 +94,7 @@ class EnemyUpdater:
         for replay_enemy in replay_enemies:
             if not replay_enemy.active:
                 continue
-            target = nearest_friendly(replay_enemy, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(replay_enemy, ship, hunter)
             
             replay_enemy.update(dt, target_pos)
             
@@ -153,8 +151,7 @@ class EnemyUpdater:
         for idx, flocker in enumerate(flockers):
             if not flocker.active:
                 continue
-            target = nearest_friendly(flocker, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(flocker, ship, hunter)
             targets[idx] = target_pos
 
             # Update flocker with cached neighbors for optimal performance
@@ -233,8 +230,7 @@ class EnemyUpdater:
         for split_boss in split_bosses:
             if not split_boss.active:
                 continue
-            target = nearest_friendly(split_boss, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(split_boss, ship, hunter)
             
             split_boss.update(dt, target_pos)
             
@@ -276,8 +272,7 @@ class EnemyUpdater:
         for baby in babies:
             if not baby.active:
                 continue
-            target = nearest_friendly(baby, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(baby, ship, hunter)
             
             baby.update(dt, target_pos)
             
@@ -361,8 +356,7 @@ class EnemyUpdater:
         for mother_boss in mother_bosses:
             if not mother_boss.active:
                 continue
-            target = nearest_friendly(mother_boss, ship, hunter)
-            target_pos = target.get_pos() if target is not None else None
+            target_pos = nearest_friendly_pos(mother_boss, ship, hunter)
             
             mother_boss.update(dt, target_pos)
             
