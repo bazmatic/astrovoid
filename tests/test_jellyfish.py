@@ -198,11 +198,6 @@ class TestDeath:
         assert enemy.is_dying
         assert enemy.DEATH_DURATION == Jellyfish.DEATH_DURATION
 
-    def test_static_still_vanishes_at_once(self):
-        enemy = Enemy(POS, "static")
-        enemy.die()
-        assert not enemy.is_dying
-
     def test_bell_collapses(self):
         jelly = make_jelly().jellyfish
         assert jelly.bell_length_scale(0.0) == pytest.approx(1.0)

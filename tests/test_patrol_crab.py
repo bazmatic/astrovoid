@@ -167,6 +167,9 @@ class TestDrawing:
     def test_draws_wider_along_travel_axis(self):
         """Body and legs spread along the patrol line, like a crab walking sideways."""
         enemy = make_patrol(angle=0.0)
+        # Pin the pose: legs mid-stride and the claw held out along the patrol line
+        enemy.crab.walk_phase = 0.0
+        enemy.crab.claw_angle = 0.0
         screen = blank_screen()
         enemy.draw(screen, None)
         bounds = pygame.mask.from_surface(screen, 254).get_bounding_rects()[0].unionall(
@@ -206,11 +209,6 @@ class TestDeath:
         enemy.die()
         assert not enemy.active
         assert enemy.is_dying
-
-    def test_static_vanishes_at_once(self):
-        enemy = Enemy(POS, "static")
-        enemy.die()
-        assert not enemy.is_dying
 
     def test_flips_onto_back(self):
         enemy = make_patrol()
