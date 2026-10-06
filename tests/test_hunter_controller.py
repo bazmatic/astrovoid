@@ -77,17 +77,27 @@ def test_transient_backoff_does_not_extend_inputs():
     assert c.action == NEUTRAL
 
 
-def test_slow_response_cannot_hold_a_turn_through_a_half_circle():
+def test_turn_is_held_until_replaced_or_expired():
     from entities.hunter_ship import HunterShip
     now,w,c,observe = setup()
     ship = HunterShip((100,100))
     c.tick(observe)
-    now[0] = 10.4
-    w.result = PilotResult(c.generation,10,10.4,PilotDecision(ACTIONS['left_thrust_fire']))
-    for frame in range(18):
-        now[0] = 10.4 + frame/60
+    now[0] = 10.1
+    w.result = PilotResult(c.generation,10,10.1,PilotDecision(ACTIONS['left_thrust_fire']))
+    for frame in range(12):
+        now[0] = 10.1 + frame/60
         ship.step(1,c.tick(observe))
-    assert 0 < (360-ship.angle)%360 <= 35
-    assert c.action.thrust and c.action.fire
-    # The next snapshot must see the completed steering pulse.
-    assert w.sent[-1].snapshot_at >= 10.5
+    # Steering stays held for every frame, like a key held down.
+    assert (360-ship.angle)%360 == 12*ship.current_rotation_speed
+    assert c.action == ACTIONS['left_thrust_fire']
+    # The next observation reports the steering still being held.
+    assert w.sent[-1].snapshot_at > 10.1
+    w.result = PilotResult(c.generation,w.sent[-1].snapshot_at,now[0],
+                           PilotDecision(ACTIONS['none_thrust_fire']))
+    angle = ship.angle
+    ship.step(1,c.tick(observe))
+    assert ship.angle == angle
+    w.result = PilotResult(c.generation,now[0],now[0],PilotDecision(ACTIONS['right_coast_hold']))
+    c.tick(observe)
+    now[0] += c.settings.action_ttl
+    assert c.tick(observe) == NEUTRAL

@@ -68,7 +68,7 @@ class Game:
             font=self.small_font
         )
         
-        self.state = config.STATE_SPLASH
+        self.state = config.STATE_SPLASH if config.SPLASH_ENABLED else config.STATE_MENU
         # Check for START_LEVEL environment variable
         start_level = os.getenv('START_LEVEL')
         if start_level:
@@ -148,7 +148,8 @@ class Game:
         self.level_complete_menu = LevelCompleteMenu(screen)
         self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
-        self._initialize_splash_screen()
+        if config.SPLASH_ENABLED:
+            self._initialize_splash_screen()
         self.reset_scoring_to_profile_state()
         self.quit_confirmation_selection = 0
     
@@ -237,11 +238,13 @@ class Game:
             enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
         )
         hunter_pos = None
-        try:
-            hunter_pos = resolve_hunter_spawn(
-                level_config.get_level_hunter_config(self.level), self.maze, self.ship)
-        except ValueError as exc:
-            logging.getLogger(__name__).warning('Hunter disabled: %s', exc)
+        if level_config.level_has_hunter(self.level):
+            try:
+                hunter_pos = resolve_hunter_spawn(
+                    level_config.get_level_hunter_config(self.level), self.maze, self.ship)
+            except ValueError as exc:
+                logging.getLogger(__name__).warning('Hunter spawn override rejected: %s; using automatic placement', exc)
+                hunter_pos = resolve_hunter_spawn(None, self.maze, self.ship)
         spawn_positions = reserve_hunter_clearance(spawn_positions, hunter_pos, config.SHIP_SIZE)
         if hunter_pos is not None:
             self.hunter = HunterShip(hunter_pos)
@@ -894,13 +897,6 @@ class Game:
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)
-            status = self.hunter_controller.status
-            label = self.small_font.render(
-                f'Hunter {self.hunter.health}/{self.hunter.settings.health} - {status}',
-                True, self.hunter.COLOR)
-            x = min(max(0, self.hunter.x-label.get_width()/2), config.SCREEN_WIDTH-label.get_width())
-            y = max(0, self.hunter.y-self.hunter.radius-label.get_height()-5)
-            self.screen.blit(label, (x,y))
 
         # Draw powerup crystals
         for crystal in self.powerup_crystals:

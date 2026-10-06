@@ -70,3 +70,30 @@ from hunter.worker import PilotWorker
 assert Game is not None
 '''
     subprocess.run([sys.executable,'-c',code],check=True,capture_output=True,text=True)
+
+
+def test_request_includes_observation_history_and_units_for_every_question():
+    from entities.hunter_ship import HunterShip
+    from hunter.perception import HunterPerception
+    from hunter.model import NEUTRAL
+    from tests.test_hunter_perception import maze
+    ship,perception = HunterShip((150,150)),HunterPerception()
+    for now in range(4):
+        observation = perception.observe(ship,maze(),None,[],[],NEUTRAL,now,1)
+    class Client:
+        async def system_one(self, **kwargs):
+            state = kwargs['state']
+            assert state['snapshot_at_seconds'] == 3
+            assert [s['snapshot_at_seconds'] for s in state['previous_states']] == [0,1,2]
+            assert state['speed_metres_per_second'] == 0
+            assert state['velocity_heading_degrees'] is None
+            assert state['motion']['direction'] is None
+            assert state['motion']['velocity_metres_per_second'] == {'x':0,'y':0}
+            for question in kwargs['questions'].values():
+                assert 'metres per second' in question['instructions']
+                assert 'degrees per second' in question['instructions']
+                assert 'oldest first' in question['instructions']
+                assert 'motion vector' in question['instructions']
+            return SimpleNamespace(choices={k:SimpleNamespace(choice=v,confidence=.8)
+                for k,v in zip(('turn','thrust','fire'),('none','coast','hold'))})
+    asyncio.run(JevPilot(Client()).decide(observation))

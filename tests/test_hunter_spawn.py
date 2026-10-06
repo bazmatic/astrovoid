@@ -17,6 +17,7 @@ def test_optional_hunter_and_clearance():
     maze = SimpleNamespace(grid_width=5, grid_height=5, grid=[[0]*5 for _ in range(5)],
         walls=[], position_calculator=SimpleNamespace(grid_center_to_screen=lambda x,y:(x*100+50,y*100+50)))
     player = SimpleNamespace(x=50, y=50, radius=config.SHIP_SIZE)
+    assert resolve_hunter_spawn(None, maze, player) == (150,50)
     assert resolve_hunter_spawn({'spawn_cell':[2, 3]}, maze, player) == (250,350)
     for cell in ([0,0], [-1,1], [5,1]):
         with pytest.raises(ValueError):

@@ -4,6 +4,7 @@ This module handles loading per-level configuration files that can override
 default seed and enemy counts. Levels without config files use default behavior.
 """
 
+import config
 import json
 import os
 from typing import Optional, Dict
@@ -195,6 +196,14 @@ def get_maze_grid_size(level: int) -> int:
 
 
 def get_level_hunter_config(level: int):
-    """Return optional hunter configuration; absent/null levels have no hunter."""
+    """Return optional hunter spawn override; absent/null uses automatic placement."""
     data = load_level_config(level)
     return data.get('hunter') if data else None
+
+
+def level_has_hunter(level: int) -> bool:
+    """A hunter flies every Nth level, and on any level whose config places one."""
+    if get_level_hunter_config(level) is not None:
+        return True
+    interval = config.HUNTER_LEVEL_INTERVAL
+    return interval > 0 and level % interval == 0

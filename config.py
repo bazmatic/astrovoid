@@ -347,6 +347,7 @@ class UIFonts:
 
 @dataclass
 class UISettings:
+    splashEnabled: bool
     splashDisplayDuration: float
     splashFadeInDuration: float
     splashFadeOutDuration: float
@@ -367,6 +368,7 @@ class UISettings:
 @dataclass
 class GameSettings:
     criticalWarningThreshold: int
+    hunterLevelInterval: int
 
 
 @dataclass
@@ -551,6 +553,7 @@ def load_settings() -> Settings:
         powerups=powerup_settings,
         starAnimation=StarAnimationSettings(**raw["starAnimation"]),
         ui=UISettings(
+            splashEnabled=raw["ui"]["splashEnabled"],
             splashDisplayDuration=raw["ui"]["splashDisplayDuration"],
             splashFadeInDuration=raw["ui"]["splashFadeInDuration"],
             splashFadeOutDuration=raw["ui"]["splashFadeOutDuration"],
@@ -807,6 +810,7 @@ STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
 STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]
 
+SPLASH_ENABLED = SETTINGS.ui.splashEnabled
 SPLASH_DISPLAY_DURATION = SETTINGS.ui.splashDisplayDuration
 SPLASH_FADE_IN_DURATION = SETTINGS.ui.splashFadeInDuration
 SPLASH_FADE_OUT_DURATION = SETTINGS.ui.splashFadeOutDuration
@@ -832,3 +836,6 @@ FONT_SIZE_TITLE = SETTINGS.ui.fonts.title
 FONT_SIZE_SUBTITLE = SETTINGS.ui.fonts.subtitle
 FONT_SIZE_BUTTON = SETTINGS.ui.fonts.button
 FONT_SIZE_HINT = SETTINGS.ui.fonts.hint
+
+# Allied hunter: one appears on every Nth level (0 disables the schedule)
+HUNTER_LEVEL_INTERVAL = SETTINGS.game.hunterLevelInterval

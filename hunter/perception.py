@@ -2,33 +2,13 @@
 import json
 import math
 import weakref
+from collections import deque
+from hunter.pilot_sensors import pilot_state
 from dataclasses import asdict
 import config
 from hunter.model import HunterSettings, PilotObservation
-from hunter.visibility import local_segments, visible_point, visible_wall_portions, visible_cell_edges
-
-
-def _replace_intervals(old, observed):
-    """Replace only observed portions, retaining stale knowledge elsewhere."""
-    result = list(old)
-    for lo, hi, blocked in observed:
-        keep = []
-        for a,b,value in result:
-            if b <= lo or a >= hi:
-                keep.append([a,b,value])
-            else:
-                if a < lo:
-                    keep.append([a,lo,value])
-                if b > hi:
-                    keep.append([hi,b,value])
-        result = keep + [[lo,hi,blocked]]
-    merged = []
-    for a,b,value in sorted(result):
-        if merged and merged[-1][2] == value and abs(merged[-1][1]-a) < 1e-7:
-            merged[-1][1] = b
-        else:
-            merged.append([a,b,value])
-    return merged
+from utils.math_utils import line_line_collision
+from hunter.visibility import local_segments, visible_point, visible_wall_portions
 
 
 class HunterPerception:
@@ -40,8 +20,10 @@ class HunterPerception:
         self._ids = weakref.WeakKeyDictionary()
         self._next_id = 0
         self.contacts = {}
-        self.cells = {}
-        self._previous_cell = None
+        self._history = deque(maxlen=3)
+        self._history_generation = None
+        self._links = {}
+        self._links_walls = None
 
     def _id(self, entity):
         if entity not in self._ids:
@@ -89,8 +71,6 @@ class HunterPerception:
                    for p in projectiles if p.active and visible_point(origin,p.get_pos(),walls,radius)]
         bullets.sort(key=lambda c:(c['distance'],c['id']))
         visible_walls = visible_wall_portions(origin,walls,radius)
-        # Frontmost wall portions cast the same shadows as occluded geometry.
-        remembered_cells = self._observe_map(origin,maze,visible_walls,radius,now)
         state = {
             'self': {'position': list(origin), 'velocity': [hunter.vx,hunter.vy],
                      'heading': hunter.angle, 'health': hunter.health, 'radius': hunter.radius,
@@ -103,15 +83,82 @@ class HunterPerception:
             'visible_projectiles': bullets[:self.settings.max_projectiles],
             'visible_walls': visible_walls,
             'remembered_contacts': self._remembered_contacts(origin,now),
-            'remembered_cells': remembered_cells,
             'physics': {'fps':config.FPS,'speed_limit':hunter.max_speed,
                         'rotation_per_frame':hunter.current_rotation_speed,
-                        'thrust_per_frame':config.SHIP_THRUST_FORCE,
+                        'thrust_per_frame':hunter.thrust_force,
                         'friction_per_frame':config.SHIP_FRICTION,
-                        'projectile_speed':config.PROJECTILE_SPEED},
-            'action_horizon_seconds': self.settings.request_interval,
+                        'projectile_speed':config.PROJECTILE_SPEED,
+                        'projectile_lifetime':config.PROJECTILE_LIFETIME,
+                        'projectile_radius':config.PROJECTILE_SIZE},
+            # A choice made from this snapshot lands roughly one round trip later.
+            'action_horizon_seconds': max(self.settings.request_interval,
+                                          self.settings.decision_delay),
         }
+        if player is not None and player.active:
+            state['follow_player'] = self._route_to_player(origin,player,maze,walls,radius)
+        if self._history_generation != generation:
+            self._history.clear()
+            self._history_generation = generation
+        state['previous_states'] = list(self._history)
+        self._history.append(pilot_state(state))
         return PilotObservation(generation,now,json.dumps(state,separators=(',',':'),allow_nan=False))
+
+    def _route_to_player(self, origin, player, maze, walls, radius):
+        """The player guides the hunter in: a cell route through the maze and its next waypoint."""
+        sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
+        grid = getattr(maze,'grid',None)
+        active = [w for w in maze.walls if w.active]
+        if self._links_walls != len(active):
+            self._links,self._links_walls = {},len(active)
+
+        def cell(pos):
+            return (min(maze.grid_width-1,max(0,int((pos[0]-ox)//sx))),
+                    min(maze.grid_height-1,max(0,int((pos[1]-oy)//sy))))
+
+        def centre(c):
+            return (ox+(c[0]+.5)*sx,oy+(c[1]+.5)*sy)
+
+        def linked(a, b):
+            key = (a,b) if a < b else (b,a)
+            if key not in self._links:
+                near = active
+                if getattr(maze,'spatial_grid',None) is not None:
+                    near = maze.spatial_grid.get_walls_along_path(centre(a),centre(b),1)
+                self._links[key] = not (
+                    grid is not None and (grid[a[1]][a[0]] or grid[b[1]][b[0]])
+                ) and not any(w.active and line_line_collision(centre(a),centre(b),w.start,w.end)
+                              for w in near)
+            return self._links[key]
+
+        start,goal = cell(origin),cell(player.get_pos())
+        came,frontier = {start:None},deque([start])
+        while frontier and goal not in came:
+            here = frontier.popleft()
+            for dx,dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                there = (here[0]+dx,here[1]+dy)
+                if (0 <= there[0] < maze.grid_width and 0 <= there[1] < maze.grid_height
+                        and there not in came and linked(here,there)):
+                    came[there] = here
+                    frontier.append(there)
+        target = tuple(player.get_pos())
+        route = []
+        if goal in came:
+            step = goal
+            while step != start:
+                route.append(centre(step))
+                step = came[step]
+        # Head for the furthest point of the route that is in plain sight.
+        points = [target]+route
+        waypoint = next((p for p in points if visible_point(origin,p,walls,radius)),
+                        route[-1] if route else target)
+        legs = [tuple(origin)]+route[::-1]+[target]
+        dx,dy = waypoint[0]-origin[0],waypoint[1]-origin[1]
+        return {'waypoint':list(waypoint), 'bearing':math.degrees(math.atan2(dy,dx)) % 360,
+                'waypoint_distance':math.hypot(dx,dy),
+                'route_distance':(sum(math.dist(a,b) for a,b in zip(legs,legs[1:]))
+                                  if goal in came else None),
+                'player_distance':math.dist(origin,target),
+                'player_visible':waypoint == target}
 
     def _remembered_contacts(self, origin, now):
         result = []
@@ -120,47 +167,4 @@ class HunterPerception:
             result.append(dict(contact, age=now-seen_at, relative_position=[dx,dy],
                                distance=math.hypot(dx,dy),
                                bearing=math.degrees(math.atan2(dy,dx)) % 360))
-        return result
-
-    def _observe_map(self, origin, maze, walls, radius, now):
-        sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
-        current = (int((origin[0]-ox)//sx),int((origin[1]-oy)//sy))
-        min_col = max(0,int((origin[0]-radius-ox)//sx))
-        max_col = min(maze.grid_width-1,int((origin[0]+radius-ox)//sx))
-        min_row = max(0,int((origin[1]-radius-oy)//sy))
-        max_row = min(maze.grid_height-1,int((origin[1]+radius-oy)//sy))
-        edge_cache = {}
-        for row in range(min_row,max_row+1):
-            for col in range(min_col,max_col+1):
-                bounds = (ox+col*sx,oy+row*sy,ox+(col+1)*sx,oy+(row+1)*sy)
-                edges = visible_cell_edges(origin,bounds,walls,radius,edge_cache)
-                if not any(edges.values()) and (col,row) != current:
-                    continue
-                cell = self.cells.setdefault((col,row), {'edges':{},'visits':0,'last_visit':None})
-                for name,parts in edges.items():
-                    if parts:
-                        cell['edges'][name] = _replace_intervals(cell['edges'].get(name,[]),parts)
-                if (col,row) == current:
-                    if current != self._previous_cell:
-                        cell['visits'] += 1
-                    cell['last_visit'] = now
-        self._previous_cell = current
-        ordered = sorted(self.cells, key=lambda c:((ox+(c[0]+.5)*sx-origin[0])**2 +
-                                                  (oy+(c[1]+.5)*sy-origin[1])**2,c))
-        result = []
-        directions = {'left':(-1,0),'right':(1,0),'top':(0,-1),'bottom':(0,1)}
-        for coord in ordered[:self.settings.max_sent_cells]:
-            cell = self.cells[coord]
-            exits = []
-            for edge,parts in cell['edges'].items():
-                dx,dy = directions[edge]
-                neighbor = (coord[0]+dx,coord[1]+dy)
-                if (0 <= neighbor[0] < maze.grid_width and 0 <= neighbor[1] < maze.grid_height
-                        and not self.cells.get(neighbor,{}).get('visits',0)):
-                    if any(not blocked for lo,hi,blocked in parts):
-                        exits.append(edge)
-            result.append({'cell':list(coord), 'center':[ox+(coord[0]+.5)*sx,oy+(coord[1]+.5)*sy],
-                           'edges':cell['edges'], 'visits':cell['visits'],
-                           'last_visit_age':None if cell['last_visit'] is None else now-cell['last_visit'],
-                           'unexplored_exits':exits})
         return result

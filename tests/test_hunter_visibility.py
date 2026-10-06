@@ -1,5 +1,5 @@
 import pytest
-from hunter.visibility import visible_point, visible_wall_portions, visible_cell_edges
+from hunter.visibility import visible_point, visible_wall_portions
 
 
 def test_wall_hides_contact_and_range_limits_visibility():
@@ -21,10 +21,3 @@ def test_wall_portions_clip_range_and_hidden_ends():
         assert b[0]**2+b[1]**2 <= 100.00001
         if a[0] == 8:
             assert not (-3.19 < (a[1]+b[1])/2 < 3.19)
-
-
-def test_cell_edges_do_not_reveal_hidden_side():
-    walls = [((5.,-20.),(5.,20.))]
-    edges = visible_cell_edges((0,0), (4,-1,6,1), walls, 10)
-    assert not edges['right']
-    assert edges['left']

@@ -2,6 +2,7 @@ from unittest.mock import Mock
 from entities.projectile import Projectile
 from entities.enemy import Enemy
 from game_handlers.collision_handler import CollisionHandler
+from hunter.model import HunterSettings
 
 
 def test_projectile_source_preserves_existing_calls():
@@ -25,7 +26,7 @@ def test_hostile_bullets_consumed_even_during_immunity_and_no_friendly_fire():
     from entities.hunter_ship import HunterShip
     scoring = Mock()
     handler = CollisionHandler(Mock(),scoring,Mock())
-    hunter = HunterShip((200,200))
+    hunter = HunterShip((200,200), HunterSettings(indestructible=False))
     for source in ('player','hunter'):
         assert not handler.handle_projectile_hunter_collision(Projectile((200,200),0,source=source),hunter)
     for _ in range(2):
@@ -55,7 +56,7 @@ def test_hunter_boss_kill_still_spawns_children():
 def test_friendly_contact_bounces_without_damage_and_hostile_contact_hurts():
     from entities.hunter_ship import HunterShip
     from entities.ship import Ship
-    hunter = HunterShip((300,300))
+    hunter = HunterShip((300,300), HunterSettings(indestructible=False))
     player = Ship((301,300))
     handler = CollisionHandler(Mock(),Mock(),Mock())
     handler.handle_hunter_contacts(hunter,player,[])

@@ -24,16 +24,20 @@ ACTIONS = {
 class HunterSettings:
     request_interval: float = 0.250
     action_ttl: float = 0.750
-    turn_pulse: float = 0.100
+    thrust_multiplier: float = 0.25
+    turn_rate_multiplier: float = 0.5
+    decision_delay: float = 0.300
     request_timeout: float = 1.0
     sensor_cells: float = 4.0
     max_contacts: int = 24
     max_projectiles: int = 32
     max_memory_contacts: int = 32
     contact_ttl: float = 10.0
-    max_sent_cells: int = 64
     health: int = 3
+    indestructible: bool = True
     fire_interval: float = 0.250
+    burst_size: int = 3
+    burst_spacing: float = 0.050
     damage_immunity: float = 0.500
 
 

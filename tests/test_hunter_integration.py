@@ -42,12 +42,25 @@ def game(monkeypatch):
     pygame.quit()
 
 
-def test_level_hunter_is_optional_and_invalid_config_disables(game,monkeypatch):
+def test_hunter_flies_every_third_level_and_wherever_a_level_places_one(game,monkeypatch):
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
+    monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',3)
+    for level in range(1,10):
+        game.level = level
+        game.start_level()
+        assert (game.hunter is not None) == (level % 3 == 0)
+    assert game.hunter_worker is not None
+    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[4,4]})
+    game.level = 1
     game.start_level()
-    assert game.hunter is None
-    assert game.hunter_worker is None
+    assert game.hunter is not None
+    # An invalid override still gets a hunter at a safe default cell.
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[-1,0]})
+    game.start_level()
+    assert game.hunter is not None
+    monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',0)
+    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
+    game.level = 3
     game.start_level()
     assert game.hunter is None
 

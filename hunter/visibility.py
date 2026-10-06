@@ -146,34 +146,3 @@ def visible_wall_portions(origin, segments, radius):
         for lo, hi in _merge(_intervals(origin, (a,b), walls, radius)):
             result.append((_at(a, _sub(b,a), lo), _at(a, _sub(b,a), hi)))
     return result
-
-
-def _on_segment(point, a, b):
-    d, f = _sub(b,a), _sub(point,a)
-    return (abs(_cross(d,f)) < EPS and
-            min(a[0],b[0])-EPS <= point[0] <= max(a[0],b[0])+EPS and
-            min(a[1],b[1])-EPS <= point[1] <= max(a[1],b[1])+EPS)
-
-
-def visible_cell_edges(origin, cell_bounds, segments, radius, cache=None):
-    """Return observed [start fraction, end fraction, blocked] edge intervals."""
-    x0,y0,x1,y1 = cell_bounds
-    edges = {'top': ((x0,y0),(x1,y0)), 'bottom': ((x0,y1),(x1,y1)),
-             'left': ((x0,y0),(x0,y1)), 'right': ((x1,y0),(x1,y1))}
-    result = {}
-    for name, (a,b) in edges.items():
-        if cache is not None and (a,b) in cache:
-            result[name] = cache[(a,b)]
-            continue
-        parts = []
-        for lo,hi in _intervals(origin, (a,b), segments, radius):
-            mid = _at(a, _sub(b,a), (lo+hi)/2)
-            blocked = any(_on_segment(mid,c,e) for c,e in segments)
-            if parts and parts[-1][2] == blocked and abs(parts[-1][1]-lo) < EPS:
-                parts[-1][1] = hi
-            else:
-                parts.append([lo,hi,blocked])
-        result[name] = parts
-        if cache is not None:
-            cache[(a,b)] = parts
-    return result

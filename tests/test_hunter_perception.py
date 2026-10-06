@@ -52,25 +52,6 @@ def test_visible_empty_position_removes_sighting():
     assert not read(p,h,m,[],1)['remembered_contacts']
 
 
-def test_hidden_wall_destruction_does_not_update_memory_until_reobserved():
-    p,h,m = HunterPerception(),HunterShip((150,150)),maze()
-    wall = WallSegment((200,100),(200,200),3)
-    m.walls = [wall]
-    first = read(p,h,m,[],0)
-    old = next(c for c in first['remembered_cells'] if c['cell']==[1,1])
-    assert any(part[2] for part in old['edges']['right'])
-    h.x=h.y=850
-    wall.active=False
-    hidden = read(p,h,m,[],1)
-    same = next(c for c in hidden['remembered_cells'] if c['cell']==[1,1])
-    assert same['edges']['right'] == old['edges']['right']
-    h.x=h.y=150
-    seen = read(p,h,m,[],2)
-    changed = next(c for c in seen['remembered_cells'] if c['cell']==[1,1])
-    assert not any(part[2] for part in changed['edges']['right'])
-    assert changed['visits']==2
-
-
 def test_observed_death_removes_old_hidden_sighting():
     p,h,m = HunterPerception(),HunterShip((150,150)),maze()
     enemy = Enemy((250,150),'patrol',1)

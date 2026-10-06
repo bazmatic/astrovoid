@@ -1,4 +1,4 @@
-"""Opt-in level configuration and safe spawn reservation."""
+"""Level spawn overrides, automatic placement, and safe spawn reservation."""
 import math
 import config
 from utils.math_utils import circle_line_collision
@@ -19,7 +19,16 @@ def parse_hunter_cell(value):
 def resolve_hunter_spawn(value, maze, player):
     cell = parse_hunter_cell(value)
     if cell is None:
-        return None
+        candidates = [(col,row) for row in range(maze.grid_height)
+                      for col in range(maze.grid_width) if not maze.grid[row][col]]
+        candidates.sort(key=lambda cell: math.dist(
+            maze.position_calculator.grid_center_to_screen(*cell), (player.x,player.y)))
+        for candidate in candidates:
+            try:
+                return resolve_hunter_spawn({'spawn_cell':list(candidate)}, maze, player)
+            except ValueError:
+                continue
+        raise ValueError('no safe hunter spawn exists in this maze')
     col, row = cell
     if not (0 <= col < maze.grid_width and 0 <= row < maze.grid_height):
         raise ValueError('hunter.spawn_cell is outside the maze')
