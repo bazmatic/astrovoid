@@ -12,6 +12,7 @@ import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.command_recorder import CommandRecorder, CommandType
 from entities.projectile import Projectile
+from entities.tentacle_chain import drag_chain
 from rendering import visual_effects
 from utils import angle_to_radians, get_angle_to_point, normalize_angle, distance
 
@@ -510,35 +511,15 @@ class ReplayEnemyShip(RotatingThrusterShip):
             anchor = self._to_world(anchor_x, side * self.TENTACLE_ANCHOR_SPREAD, cos_angle, sin_angle)
             # Snap to the rest pose on first use or after a jump (e.g. respawn)
             snap = distance(chain[0], anchor) > self.radius * 3
-            chain[0] = anchor
-            last = len(chain) - 1
-            for i in range(1, len(chain)):
-                t = i / last
-                rest_angle = rear_angle - side * spread * (1.0 - 0.45 * t)
-                rest_angle += math.sin(self.pulse_phase * 1.7 - i * 0.8 + k * 1.9) * wiggle * t
-                prev_x, prev_y = chain[i - 1]
-                rest_x = prev_x + math.cos(rest_angle) * segment
-                rest_y = prev_y + math.sin(rest_angle) * segment
-                
-                dx = chain[i][0] - prev_x
-                dy = chain[i][1] - prev_y
-                length = math.hypot(dx, dy)
-                if snap or length < 1e-6:
-                    chain[i] = (rest_x, rest_y)
-                    continue
-                
-                stiffness = self.TENTACLE_STIFFNESS_BASE + (self.TENTACLE_STIFFNESS_TIP - self.TENTACLE_STIFFNESS_BASE) * t
-                # Blend the dragged position towards the rest pose, then
-                # restore the segment length
-                dx = dx / length * segment
-                dy = dy / length * segment
-                dx += (rest_x - prev_x - dx) * stiffness
-                dy += (rest_y - prev_y - dy) * stiffness
-                length = math.hypot(dx, dy)
-                if length < 1e-6:
-                    chain[i] = (rest_x, rest_y)
-                else:
-                    chain[i] = (prev_x + dx / length * segment, prev_y + dy / length * segment)
+            
+            def rest_angle(i: int, t: float, side: float = side, k: int = k) -> float:
+                angle = rear_angle - side * spread * (1.0 - 0.45 * t)
+                return angle + math.sin(self.pulse_phase * 1.7 - i * 0.8 + k * 1.9) * wiggle * t
+            
+            drag_chain(
+                chain, anchor, segment, rest_angle,
+                self.TENTACLE_STIFFNESS_BASE, self.TENTACLE_STIFFNESS_TIP, snap
+            )
     
     def _mantle_half_width(self, u: float, contraction: float) -> float:
         """Half-width of the mantle (radius units) at u (0 = collar, 1 = tip)."""

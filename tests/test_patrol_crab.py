@@ -207,9 +207,8 @@ class TestDeath:
         assert not enemy.active
         assert enemy.is_dying
 
-    @pytest.mark.parametrize("enemy_type", ["static", "aggressive"])
-    def test_other_types_vanish_at_once(self, enemy_type):
-        enemy = Enemy(POS, enemy_type)
+    def test_static_vanishes_at_once(self):
+        enemy = Enemy(POS, "static")
         enemy.die()
         assert not enemy.is_dying
 

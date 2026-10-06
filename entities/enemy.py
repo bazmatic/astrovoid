@@ -28,6 +28,7 @@ from entities.enemy_strategies import (
     AggressiveEnemyStrategy
 )
 from entities.patrol_crab import PatrolCrab
+from entities.jellyfish import Jellyfish
 from rendering import visual_effects
 
 
@@ -42,10 +43,8 @@ class Enemy(GameEntity, Collidable, Drawable):
         speed: Movement speed (for dynamic enemies).
         angle: Current facing angle in degrees.
         crab: Crab body for patrol enemies, None for other types.
+        jellyfish: Jellyfish body for aggressive enemies, None for other types.
     """
-    
-    PATROL_DEATH_DURATION = 42.0  # Frames (0.7 seconds at 60 FPS)
-    PATROL_DEATH_FRICTION = 0.8  # Velocity kept per frame while the dead crab slides
     
     def __init__(self, pos: Tuple[float, float], enemy_type: str = "static", level: int = 1):
         """Initialize enemy at position with specified type.
@@ -93,23 +92,26 @@ class Enemy(GameEntity, Collidable, Drawable):
         self.pulse_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
         self.is_alert = False  # Alert state for aggressive enemies
         self.crab: Optional[PatrolCrab] = PatrolCrab(self) if enemy_type == "patrol" else None
+        self.jellyfish: Optional[Jellyfish] = Jellyfish(self) if enemy_type == "aggressive" else None
+        # The creature that animates and draws this enemy; static enemies have none
+        self._body = self.crab or self.jellyfish
     
     @property
     def DEATH_DURATION(self) -> float:
-        """Only patrol enemies have a death animation so far."""
-        return self.PATROL_DEATH_DURATION if self.crab else 0.0
+        """Enemies drawn as creatures get that creature's death animation."""
+        return self._body.DEATH_DURATION if self._body else 0.0
     
     def update_death(self, dt: float) -> None:
-        """Advance the death animation: a dead crab slides to a stop."""
+        """Advance the death animation: the remains slide to a stop."""
         super().update_death(dt)
-        if self.crab:
-            self.apply_friction_and_update_position(self.PATROL_DEATH_FRICTION, dt)
-            self.crab.update_death(dt)
+        if self._body:
+            self.apply_friction_and_update_position(self._body.DEATH_FRICTION, dt)
+            self._body.update_death(self, dt)
     
     def draw_death(self, screen: pygame.Surface) -> None:
         """Draw the death animation."""
-        if self.crab and self.is_dying:
-            self.crab.draw_death(screen, self)
+        if self._body and self.is_dying:
+            self._body.draw_death(screen, self)
     
     def update(
         self,
@@ -128,8 +130,8 @@ class Enemy(GameEntity, Collidable, Drawable):
             return
         
         self.strategy.update(self, dt, player_pos, walls)
-        if self.crab:
-            self.crab.update(self, dt, player_pos)
+        if self._body:
+            self._body.update(self, dt, player_pos)
         
         # Update pulse animation
         pulse_speed = config.ENEMY_PULSE_SPEED
@@ -317,89 +319,50 @@ class Enemy(GameEntity, Collidable, Drawable):
             self.y < -screen_margin or self.y > config.SCREEN_HEIGHT + screen_margin):
             return  # Skip drawing if far off-screen
         
-        if self.crab:
-            self.crab.draw(screen, self)
+        if self._body:
+            self._body.draw(screen, self)
             return
         
-        # Cache trigonometric calculations
+        # Only static enemies are drawn below; the other types have a body
         sin_pulse = math.sin(self.pulse_phase)
-        cos_pulse = math.cos(self.pulse_phase)
-        sin_pulse_2x = math.sin(self.pulse_phase * 2)
         
         # Calculate pulsing radius and color intensity
         pulse_factor = 1.0 + config.ENEMY_PULSE_AMPLITUDE * sin_pulse
         current_radius = self.radius * pulse_factor
         
-        # Base color
-        base_color = config.COLOR_ENEMY_STATIC if self.type == "static" else config.COLOR_ENEMY_DYNAMIC
-        
-        # Adjust color based on pulse and alert state (use cached sin value)
+        # Adjust color based on pulse (use cached sin value)
         color_intensity = 0.8 + 0.2 * (sin_pulse * 0.5 + 0.5)
-        if self.is_alert:
-            # Brighter and more intense when alert
-            color_intensity = 1.0
-            base_color = tuple(min(255, int(c * 1.3)) for c in base_color)
+        color = tuple(int(c * color_intensity) for c in config.COLOR_ENEMY_STATIC)
         
-        color = tuple(int(c * color_intensity) for c in base_color)
-        
-        # Draw glow effect (more intense when alert)
-        glow_intensity = 0.2
-        if self.is_alert:
-            glow_intensity = 0.5
+        # Draw glow effect
         visual_effects.draw_glow_circle(
             screen, (self.x, self.y), current_radius, color,
-            glow_radius=current_radius * 0.3, intensity=glow_intensity
+            glow_radius=current_radius * 0.3, intensity=0.2
         )
         
         # Draw main circle
         pygame.draw.circle(screen, color, (int(self.x), int(self.y)), int(current_radius))
         
-        # Draw border (flashing when alert, use cached sin value)
-        border_color = (255, 255, 255)
-        if self.is_alert:
-            # Flashing border
-            flash = int(255 * (sin_pulse_2x * 0.5 + 0.5))
-            border_color = (flash, flash // 2, flash // 2)
-        pygame.draw.circle(screen, border_color, (int(self.x), int(self.y)), int(current_radius), 2)
+        # Draw border
+        pygame.draw.circle(screen, (255, 255, 255), (int(self.x), int(self.y)), int(current_radius), 2)
         
-        # Type-specific visuals (cache trigonometric calculations)
-        if self.type == "static":
-            # Angular/spiky pattern - draw radial spikes
-            num_spikes = 8
-            spike_angle_base = self.pulse_phase * 10
-            spike_length = current_radius * 0.6
-            for i in range(num_spikes):
-                spike_angle = (i * 360 / num_spikes) + spike_angle_base
-                spike_rad = angle_to_radians(spike_angle)
-                cos_spike = math.cos(spike_rad)
-                sin_spike = math.sin(spike_rad)
-                spike_x = self.x + cos_spike * spike_length
-                spike_y = self.y + sin_spike * spike_length
-                pygame.draw.line(screen, (255, 150, 150),
-                               (int(self.x), int(self.y)),
-                               (int(spike_x), int(spike_y)), 2)
-        
-        elif self.type == "aggressive":
-            # Jagged/warning appearance - draw warning stripes (cache calculations)
-            num_stripes = 6
-            stripe_angle_base = self.pulse_phase * 15
-            for i in range(num_stripes):
-                stripe_angle = (i * 360 / num_stripes) + stripe_angle_base
-                stripe_rad = angle_to_radians(stripe_angle)
-                cos_stripe = math.cos(stripe_rad)
-                sin_stripe = math.sin(stripe_rad)
-                stripe_x1 = self.x + cos_stripe * current_radius * 0.3
-                stripe_y1 = self.y + sin_stripe * current_radius * 0.3
-                stripe_x2 = self.x + cos_stripe * current_radius * 0.9
-                stripe_y2 = self.y + sin_stripe * current_radius * 0.9
-                # Alternate colors for warning effect
-                stripe_color = (255, 200, 100) if i % 2 == 0 else (255, 100, 50)
-                pygame.draw.line(screen, stripe_color,
-                               (int(stripe_x1), int(stripe_y1)),
-                               (int(stripe_x2), int(stripe_y2)), 2)
-        
+        # Angular/spiky pattern - draw radial spikes
+        num_spikes = 8
+        spike_angle_base = self.pulse_phase * 10
+        spike_length = current_radius * 0.6
+        for i in range(num_spikes):
+            spike_angle = (i * 360 / num_spikes) + spike_angle_base
+            spike_rad = angle_to_radians(spike_angle)
+            cos_spike = math.cos(spike_rad)
+            sin_spike = math.sin(spike_rad)
+            spike_x = self.x + cos_spike * spike_length
+            spike_y = self.y + sin_spike * spike_length
+            pygame.draw.line(screen, (255, 150, 150),
+                           (int(self.x), int(self.y)),
+                           (int(spike_x), int(spike_y)), 2)
+    
         # Draw geometric patterns (cache calculations)
-        # Radial lines from center (all types)
+        # Radial lines from center
         num_radial = 6
         radial_angle_base = self.pulse_phase * 5
         radial_length = current_radius * 0.4
@@ -414,21 +377,6 @@ class Enemy(GameEntity, Collidable, Drawable):
             pygame.draw.line(screen, pattern_color,
                            (int(self.x), int(self.y)),
                            (int(radial_x), int(radial_y)), 1)
-        
-        # Draw movement direction indicator for dynamic enemies (white line)
-        if self.type != "static":
-            angle_rad = angle_to_radians(self.angle)
-            cos_angle = math.cos(angle_rad)
-            sin_angle = math.sin(angle_rad)
-            indicator_x = self.x + cos_angle * current_radius
-            indicator_y = self.y + sin_angle * current_radius
-            # Always use white for movement direction indicator
-            indicator_color = (255, 255, 255)
-            pygame.draw.line(
-                screen, indicator_color,
-                (int(self.x), int(self.y)),
-                (int(indicator_x), int(indicator_y)), 2
-            )
 
 
 def create_enemies(level: int, spawn_positions: List[Tuple[float, float]]) -> List[Enemy]:

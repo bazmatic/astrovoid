@@ -77,6 +77,8 @@ class PatrolCrab:
     BELLY_COLOR = (255, 225, 190)
     CHARGE_COLOR = (255, 255, 120)
     # Death animation, as (start, end) spans of the enemy's death_progress
+    DEATH_DURATION = 42.0  # Frames (0.7 seconds at 60 FPS)
+    DEATH_FRICTION = 0.8  # Velocity kept per frame while the dead crab slides
     DEATH_FLIP = (0.0, 0.4)
     DEATH_CURL = (0.25, 0.7)
     DEATH_FADE = (0.65, 1.0)
@@ -136,7 +138,7 @@ class PatrolCrab:
         self.fire_flash = 1.0
         self.charge = 0.0
 
-    def update_death(self, dt: float) -> None:
+    def update_death(self, enemy: 'Enemy', dt: float) -> None:
         """Let the claw go limp while the crab dies."""
         self.charge *= 0.8
         self.fire_flash = max(0.0, self.fire_flash - dt / self.FIRE_FLASH_FRAMES)
