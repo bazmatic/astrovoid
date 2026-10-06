@@ -57,3 +57,24 @@ def test_one_trigger_pull_fires_a_burst_of_three_then_cools_down():
     second = 1+2*spacing+cooldown
     assert held == [1, 1+spacing, 1+2*spacing, second, second+spacing, second+2*spacing]
     assert HunterShip((200,200)).step(1, fire).source == 'hunter'
+
+
+def test_cancelled_burst_fires_no_further_shots():
+    ship = HunterShip((200,200))
+    assert ship.step(1, ACTIONS['none_coast_fire'])
+    ship.cancel_burst()
+    assert not any(ship.step(1, NEUTRAL) for _ in range(30))
+
+
+def test_status_label_shows_pilot_status_and_mortal_health():
+    import pygame
+    pygame.font.init()
+    font, screen = pygame.font.Font(None, 24), pygame.Surface((400,400))
+    rendered = []
+    class Spy:
+        def render(self, text, *args):
+            rendered.append(text)
+            return font.render(text, *args)
+    HunterShip((200,200)).draw_status(screen, Spy(), 'unavailable')
+    HunterShip((200,200), MORTAL).draw_status(screen, Spy(), 'active')
+    assert rendered == ['unavailable', 'active  +++']

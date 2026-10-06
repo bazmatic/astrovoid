@@ -106,7 +106,6 @@ class HunterPerception:
     def _route_to_player(self, origin, player, maze, walls, radius):
         """The player guides the hunter in: a cell route through the maze and its next waypoint."""
         sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
-        grid = getattr(maze,'grid',None)
         active = [w for w in maze.walls if w.active]
         if self._links_walls != len(active):
             self._links,self._links_walls = {},len(active)
@@ -119,15 +118,16 @@ class HunterPerception:
             return (ox+(c[0]+.5)*sx,oy+(c[1]+.5)*sy)
 
         def linked(a, b):
+            # Judged by live wall segments, not maze.grid: destroying a wall
+            # removes its segments but leaves the generated grid untouched.
             key = (a,b) if a < b else (b,a)
             if key not in self._links:
                 near = active
                 if getattr(maze,'spatial_grid',None) is not None:
                     near = maze.spatial_grid.get_walls_along_path(centre(a),centre(b),1)
-                self._links[key] = not (
-                    grid is not None and (grid[a[1]][a[0]] or grid[b[1]][b[0]])
-                ) and not any(w.active and line_line_collision(centre(a),centre(b),w.start,w.end)
-                              for w in near)
+                self._links[key] = not any(
+                    w.active and line_line_collision(centre(a),centre(b),w.start,w.end)
+                    for w in near)
             return self._links[key]
 
         start,goal = cell(origin),cell(player.get_pos())

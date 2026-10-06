@@ -60,3 +60,28 @@ def test_observed_death_removes_old_hidden_sighting():
     enemy.x=160
     enemy.active=False
     assert not read(p,h,m,[enemy],1)['remembered_contacts']
+
+
+def test_route_follows_an_opening_blasted_through_a_wall_cell():
+    from entities.ship import Ship
+    world = maze()
+    # Column 2 is solid wall in the generated grid, built as per-cell edges.
+    world.grid = [[1 if x == 2 else 0 for x in range(10)] for _ in range(10)]
+    edges = {}
+    for y in range(10):
+        left = WallSegment((200,y*100),(200,y*100+100),3)
+        right = WallSegment((300,y*100),(300,y*100+100),3)
+        edges[y] = (left,right)
+        world.walls += [left,right,WallSegment((200,y*100),(300,y*100),3),
+                        WallSegment((200,y*100+100),(300,y*100+100),3)]
+    p,h,player = HunterPerception(),HunterShip((150,150)),Ship((350,150))
+
+    def route():
+        obs = p.observe(h,world,player,[],[],NEUTRAL,0,1)
+        return json.loads(obs.state_json)['follow_player']['route_distance']
+
+    assert route() is None
+    for wall in edges[1]:
+        wall.active = False
+    # The grid still marks the cell as wall; the destroyed edges open it.
+    assert route() == 200
