@@ -656,23 +656,7 @@ class Game:
         # Replace projectiles list with active ones
         self.projectiles = active_projectiles
         
-        # Update powerup crystals
-        active_crystals = []
-        player_pos = (self.ship.x, self.ship.y) if self.ship else None
-        for crystal in self.powerup_crystals:
-            if not crystal.active:
-                continue
-            
-            crystal.update(dt, player_pos)
-            
-            # Check ship-crystal collision
-            if self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring):
-                continue  # Crystal collected, don't add to active list
-            
-            if crystal.active:
-                active_crystals.append(crystal)
-        
-        self.powerup_crystals = active_crystals
+        self._update_powerup_crystals(dt)
         
         # Check exit reached
         if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
@@ -843,6 +827,28 @@ class Game:
         
         pygame.display.flip()
     
+    def _update_powerup_crystals(self, dt: float) -> None:
+        """Update powerup crystals and collect any the ship touches.
+        
+        A collected crystal stays in the list until its burst has played.
+        
+        Args:
+            dt: Delta time since last update.
+        """
+        remaining = []
+        player_pos = (self.ship.x, self.ship.y) if self.ship else None
+        for crystal in self.powerup_crystals:
+            if crystal.active:
+                crystal.update(dt, player_pos)
+                self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring)
+            elif crystal.is_dying:
+                crystal.update_death(dt)
+            
+            if crystal.active or crystal.is_dying:
+                remaining.append(crystal)
+        
+        self.powerup_crystals = remaining
+    
     def draw_game(self) -> None:
         """Draw game play screen."""
         if not self.maze or not self.ship:
@@ -901,6 +907,8 @@ class Game:
         for crystal in self.powerup_crystals:
             if crystal.active:
                 crystal.draw(self.screen)
+            elif crystal.is_dying:
+                crystal.draw_death(self.screen)
         
         # Draw projectiles
         for projectile in self.projectiles:
