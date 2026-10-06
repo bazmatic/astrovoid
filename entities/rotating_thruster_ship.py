@@ -87,6 +87,17 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
             Maximum speed value.
         """
         return config.SHIP_MAX_SPEED
+
+    @property
+    def thrust_force(self) -> float:
+        """Get the acceleration applied per thrust frame.
+
+        Subclasses can override this to provide a different thrust.
+
+        Returns:
+            Thrust force value.
+        """
+        return config.SHIP_THRUST_FORCE
     
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
@@ -113,8 +124,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         """
         # Calculate thrust vector
         angle_rad = angle_to_radians(self.angle)
-        thrust_x = math.cos(angle_rad) * config.SHIP_THRUST_FORCE
-        thrust_y = math.sin(angle_rad) * config.SHIP_THRUST_FORCE
+        thrust_x = math.cos(angle_rad) * self.thrust_force
+        thrust_y = math.sin(angle_rad) * self.thrust_force
         
         # Apply thrust
         self.vx += thrust_x

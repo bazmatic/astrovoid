@@ -30,16 +30,9 @@ class HunterShip(RotatingThrusterShip):
     def thrust_force(self):
         return config.SHIP_THRUST_FORCE * self.settings.thrust_multiplier
 
-    def apply_thrust(self):
-        angle = math.radians(self.angle)
-        self.vx += math.cos(angle) * self.thrust_force
-        self.vy += math.sin(angle) * self.thrust_force
-        speed = math.hypot(self.vx, self.vy)
-        if speed > self.max_speed:
-            self.vx *= self.max_speed / speed
-            self.vy *= self.max_speed / speed
-        self.thrusting = True
-        return True
+    def cancel_burst(self):
+        """Drop the rest of a burst once no live pilot decision backs the trigger."""
+        self.burst_remaining = 0
 
     def step(self, dt, action):
         if not self.active:
@@ -92,3 +85,11 @@ class HunterShip(RotatingThrusterShip):
         # the cone open while the pilot's engine is on.
         self.draw_thrust_plume(
             screen, config.THRUST_PLUME_LENGTH * 0.6 if self.pilot_thrusting else 0.0)
+
+    def draw_status(self, screen, font, status):
+        """Label the hunter with its pilot status and, when mortal, its health."""
+        if not self.active:
+            return
+        label = status if self.settings.indestructible else f'{status}  {"+" * self.health}'
+        text = font.render(label, True, self.COLOR)
+        screen.blit(text, text.get_rect(midtop=(round(self.x), round(self.y + self.radius + 6))))
