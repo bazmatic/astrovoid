@@ -497,3 +497,46 @@ def draw_button_glow(
             pygame.draw.rect(glow_surf, glow_color, (0, 0, glow_rect.width, glow_rect.height), layer_size + 1)
             screen.blit(glow_surf, glow_rect.topleft)
 
+
+
+def create_radial_gradient_surface(
+    size: Tuple[int, int],
+    color: Tuple[int, int, int],
+    center_alpha: int,
+    edge_alpha: int = 0,
+    falloff: float = 2.0
+) -> pygame.Surface:
+    """Create a soft elliptical gradient of a single color.
+    
+    The gradient is built at low resolution and scaled up, so it is cheap to
+    create at any size. Intended to be created once and cached by the caller.
+    
+    Args:
+        size: (width, height) of the returned surface.
+        color: Gradient color.
+        center_alpha: Alpha at the center (0-255).
+        edge_alpha: Alpha at and beyond the ellipse edge (0-255).
+        falloff: Exponent shaping the blend; above 1 concentrates
+            center_alpha near the middle, below 1 spreads it outwards.
+        
+    Returns:
+        Surface with per-pixel alpha.
+    """
+    width, height = max(1, int(size[0])), max(1, int(size[1]))
+    low_width = 128
+    low_height = max(8, int(low_width * height / width))
+    low = pygame.Surface((low_width, low_height), pygame.SRCALPHA)
+    low.fill((*color, edge_alpha))
+    
+    # Drawing on an SRCALPHA surface overwrites pixels, so shrinking ellipses
+    # from the edge inwards leave behind a stepped gradient
+    steps = 48
+    for step in range(steps):
+        t = step / (steps - 1)
+        alpha = int(edge_alpha + (center_alpha - edge_alpha) * (t ** falloff))
+        fraction = 1.0 - step / steps
+        ellipse_rect = pygame.Rect(0, 0, int(low_width * fraction), int(low_height * fraction))
+        ellipse_rect.center = (low_width // 2, low_height // 2)
+        pygame.draw.ellipse(low, (*color, alpha), ellipse_rect)
+    
+    return pygame.transform.smoothscale(low, (width, height))
