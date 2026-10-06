@@ -20,9 +20,6 @@ REFERENCE_WIDTH = 1200
 TITLE_HEIGHT_FRACTION = 0.34
 TITLE_CENTER_Y_FRACTION = 0.23
 TITLE_FLOAT_SPEED = 0.9
-# The title image has an opaque near-black background; subtracting it lets the
-# image be blended additively over the backdrop without a visible rectangle
-TITLE_BACKGROUND_COLOR = (14, 6, 26)
 
 CONTROL_ROWS = [
     ("KEYBOARD", [("ARROWS / WASD", "Move"), ("SPACE", "Fire"), ("DOWN / S", "Shield")]),
@@ -73,11 +70,14 @@ class MainMenu:
         # Load title graphic
         title_center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * TITLE_CENTER_Y_FRACTION))
         try:
-            title_image = pygame.image.load(resource_path("assets/title.png")).convert()
-            title_image.fill(TITLE_BACKGROUND_COLOR, special_flags=pygame.BLEND_RGB_SUB)
+            title_image = pygame.image.load(resource_path("assets/title.png")).convert_alpha()
             # Scale title image with the layout (maintain aspect ratio)
             title_height = self._scaled(REFERENCE_HEIGHT * TITLE_HEIGHT_FRACTION)
             title_width = int(title_image.get_width() * title_height / title_image.get_height())
+            max_title_width = self._scaled(REFERENCE_WIDTH - 96)
+            if title_width > max_title_width:
+                title_height = round(title_height * max_title_width / title_width)
+                title_width = max_title_width
             self.menu_title_image = pygame.transform.smoothscale(title_image, (title_width, title_height))
             self.menu_title_rect = self.menu_title_image.get_rect(center=title_center)
             # Soft halo behind the title, baked into the static backdrop
@@ -91,7 +91,7 @@ class MainMenu:
             # Fallback to text if image not found
             title_font = pygame.font.Font(None, self._scaled(config.FONT_SIZE_TITLE * 2))
             self.menu_title = NeonText(
-                "ASTRO VOID",
+                "SQUIDDLER",
                 title_font,
                 title_center,
                 config.COLOR_NEON_ASTER_START,
@@ -253,7 +253,7 @@ class MainMenu:
         if self.menu_title_image is not None:
             float_phase = self.menu_time * TITLE_FLOAT_SPEED
             title_rect = self.menu_title_rect.move(0, int(math.sin(float_phase) * self._scaled(6)))
-            self.screen.blit(self.menu_title_image, title_rect, special_flags=pygame.BLEND_RGB_ADD)
+            self.screen.blit(self.menu_title_image, title_rect)
         elif self.menu_title:
             self.menu_title.draw(self.screen)
         

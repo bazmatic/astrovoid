@@ -1,7 +1,7 @@
 @echo off
 REM Build script for Windows to create distributable executable using PyInstaller
 
-echo Building ASTRO VOID executable...
+echo Building Squiddler executable...
 echo.
 
 REM Check if PyInstaller is installed
@@ -13,7 +13,7 @@ if errorlevel 1 (
 
 REM Build the executable using python -m PyInstaller (more reliable on Windows)
 REM --clean flag automatically removes build artifacts and cache
-python -m PyInstaller astrovoid.spec --clean
+python -m PyInstaller pyinstaller.spec --clean
 
 if errorlevel 1 (
     echo.

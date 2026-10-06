@@ -1,4 +1,4 @@
-# ASTRO VOID
+# Squiddler
 
 A skill-based space navigation game built with Pygame. Navigate procedurally-generated mazes using classic Asteroids-style momentum-based flight mechanics. Balance speed, fuel conservation, precision flying, and combat efficiency to achieve high scores.
 
@@ -93,10 +93,10 @@ chmod +x build.sh
 
 **Manual build:**
 ```bash
-pyinstaller astrovoid.spec
+pyinstaller pyinstaller.spec
 ```
 
-The executable will be created in the `dist/` folder. On Windows, it will be `dist/astrovoid.exe`. On Linux/macOS, it will be `dist/astrovoid`.
+The executable will be created in the `dist/` folder. On Windows, it will be `dist/Squiddler/Squiddler.exe`. On Linux/macOS, it will be `dist/Squiddler/Squiddler`.
 
 ### Build Output
 

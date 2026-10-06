@@ -1,5 +1,5 @@
 # -*- mode: python -*-
-"""PyInstaller spec for bundling ASTRO VOID."""
+"""PyInstaller spec for bundling Squiddler."""
 
 from pathlib import Path
 import os
@@ -63,7 +63,7 @@ EXECUTABLE = EXE(
     A.binaries if ONEFILE_BUILD else [],
     A.datas if ONEFILE_BUILD else [],
     exclude_binaries=not ONEFILE_BUILD,
-    name="AstroVoid",
+    name="Squiddler",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -80,5 +80,5 @@ if not ONEFILE_BUILD:
         A.datas,
         strip=False,
         upx=True,
-        name="AstroVoid",
+        name="Squiddler",
     )

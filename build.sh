@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build script for Linux/macOS to create distributable executable using PyInstaller
 
-echo "Building ASTRO VOID executable..."
+echo "Building Squiddler executable..."
 echo
 
 # Check if PyInstaller is installed
@@ -14,7 +14,7 @@ fi
 rm -rf build dist
 
 # Build the executable using python -m PyInstaller (more reliable)
-python -m PyInstaller astrovoid.spec
+python -m PyInstaller pyinstaller.spec
 
 if [ $? -ne 0 ]; then
     echo
