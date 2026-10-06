@@ -38,6 +38,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
     BEAM_CORE_ANGLE_FRACTION = 0.35  # Width of the bright core relative to the cone
     BEAM_ALERT_BOOST = 1.6  # Beam brightness multiplier when alert
     BASE_SIDES = 8
+    BASE_WALL_THICKNESS = 0.14
     HOUSING_RADIUS = 0.58
     LAMP_RADIUS = 0.26
     HOOD_POINTS = ((0.15, -0.5), (0.98, -0.3), (0.98, 0.3), (0.15, 0.5))  # Lamp hood, x along facing
@@ -316,7 +317,28 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         """Convert a point in radius units (x along facing) to world coordinates."""
         lx = point[0] * self.radius
         ly = point[1] * self.radius
-        return (self.x + lx * cos_angle - ly * sin_angle, self.y + lx * sin_angle + ly * cos_angle)
+        # Measured from the whole-pixel centre so every part lines up
+        return (int(self.x) + lx * cos_angle - ly * sin_angle, int(self.y) + lx * sin_angle + ly * cos_angle)
+
+    def _base_outline(self, center: Tuple[int, int], radius: float, inset: int = 0) -> List[Tuple[int, int]]:
+        """Corners of the base, snapped to the pixel grid.
+        
+        Offsets are rounded before being added to the whole-pixel centre, so
+        opposite corners land on mirror-image pixels. An inset moves every
+        side inwards by that many pixels, rounded separately so the wall
+        between the two outlines is the same thickness on every side.
+        """
+        # Moving a side in by `inset` moves its corners in by this much
+        corner_inset = inset / math.cos(math.pi / self.BASE_SIDES)
+        points = []
+        for i in range(self.BASE_SIDES):
+            corner_angle = math.pi / self.BASE_SIDES + i * 2 * math.pi / self.BASE_SIDES
+            cos_corner, sin_corner = math.cos(corner_angle), math.sin(corner_angle)
+            points.append((
+                center[0] + int(round(cos_corner * radius)) - int(round(cos_corner * corner_inset)),
+                center[1] + int(round(sin_corner * radius)) - int(round(sin_corner * corner_inset)),
+            ))
+        return points
 
     def draw(self, screen) -> None:
         """Draw the flighthouse as a lighthouse seen from above.
@@ -339,21 +361,17 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         self._draw_beam(screen, base_color, 1.0 - alert)
         self._draw_beam(screen, self.ALERT_COLOR, alert * throb * self.BEAM_ALERT_BOOST)
 
-        # Faceted base with a slow breathing pulse
-        pulse = 1.0 + 0.04 * math.sin(self._anim_time * 3.0)
-        base_radius = self.radius * pulse
+        # Faceted base. It is drawn as a filled wall with a filled floor inset
+        # in it, which keeps the wall the same thickness on every side.
         accent = visual_effects.interpolate_color(base_color, self.ALERT_COLOR, alert * throb)
-        base_points = [
-            (
-                self.x + math.cos(math.pi / self.BASE_SIDES + i * 2 * math.pi / self.BASE_SIDES) * base_radius,
-                self.y + math.sin(math.pi / self.BASE_SIDES + i * 2 * math.pi / self.BASE_SIDES) * base_radius,
-            )
-            for i in range(self.BASE_SIDES)
-        ]
+        wall = max(2, int(round(self.radius * self.BASE_WALL_THICKNESS)))
         glow = visual_effects.create_soft_glow_surface(self.radius * 2.2, base_color, 70)
         screen.blit(glow, glow.get_rect(center=center))
-        pygame.draw.polygon(screen, visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.18), base_points)
-        pygame.draw.polygon(screen, accent, base_points, 2)
+        pygame.draw.polygon(screen, accent, self._base_outline(center, self.radius))
+        pygame.draw.polygon(
+            screen, visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.18),
+            self._base_outline(center, self.radius, inset=wall)
+        )
 
         # Rotating lamp housing and hood
         housing_color = visual_effects.interpolate_color(self.SHADOW_COLOR, base_color, 0.45)
@@ -377,8 +395,8 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         for i in range(self.max_hit_points):
             pip_angle = -math.pi / 2 + i * 2 * math.pi / self.max_hit_points
             pip_pos = (
-                int(self.x + math.cos(pip_angle) * self.radius * self.PIP_ORBIT),
-                int(self.y + math.sin(pip_angle) * self.radius * self.PIP_ORBIT),
+                center[0] + int(round(math.cos(pip_angle) * self.radius * self.PIP_ORBIT)),
+                center[1] + int(round(math.sin(pip_angle) * self.radius * self.PIP_ORBIT)),
             )
             pygame.draw.circle(screen, self.SHADOW_COLOR, pip_pos, pip_radius + 1)
             pygame.draw.circle(screen, accent if i < self.hit_points else unlit, pip_pos, pip_radius)

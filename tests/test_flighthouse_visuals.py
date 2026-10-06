@@ -147,3 +147,36 @@ class TestDrawing:
         flighthouse.active = False
         flighthouse.draw(screen)
         assert screen.get_bounding_rect().width == 0
+
+
+class TestBaseShape:
+    """The base is a neat, steady octagon on the pixel grid."""
+
+    def outline_reach(self, anim_time, pos=(400.4, 300.7)):
+        """Distance from the centre to the outer wall, right/left/down, in pixels."""
+        flighthouse = make_flighthouse(angle=270.0, pos=pos)  # Hood and beam point up, out of the way
+        flighthouse._anim_time = anim_time
+        screen = pygame.Surface((800, 600), pygame.SRCALPHA)
+        flighthouse.draw(screen)
+        solid = pygame.mask.from_surface(screen, 254)
+        cx, cy = int(flighthouse.x), int(flighthouse.y)
+        reach = []
+        for dx, dy in ((1, 0), (-1, 0), (0, 1)):
+            reach.append(max(r for r in range(1, 40) if solid.get_at((cx + dx * r, cy + dy * r))))
+        return reach
+
+    def test_walls_are_symmetric(self):
+        right, left, down = self.outline_reach(0.0)
+        assert right == left == down
+
+    def test_walls_do_not_move(self):
+        shapes = {tuple(self.outline_reach(step * 0.07)) for step in range(40)}
+        assert len(shapes) == 1
+
+    def test_outline_points_are_mirror_symmetric(self):
+        flighthouse = make_flighthouse()
+        points = flighthouse._base_outline((400, 300), flighthouse.radius)
+        offsets = {(x - 400, y - 300) for x, y in points}
+        assert len(offsets) == FlighthouseEnemy.BASE_SIDES
+        assert offsets == {(-x, y) for x, y in offsets} == {(x, -y) for x, y in offsets}
+        assert offsets == {(y, x) for x, y in offsets}
