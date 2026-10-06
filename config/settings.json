@@ -278,7 +278,9 @@
       "sizeIncrement": 0.05,
       "speedIncrement": 0.05,
       "glowIntensityIncrement": 0.1,
-      "hueRotation": 30
+      "hueRotation": 30,
+      "fireRateGrowth": 1.1,
+      "minFireCooldown": 40
     },
     "rotationSpeedMultiplier": 1.2
   },
