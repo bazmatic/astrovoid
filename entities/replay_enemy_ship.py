@@ -16,23 +16,6 @@ from rendering import visual_effects
 from utils import angle_to_radians, get_angle_to_point, normalize_angle, distance
 
 
-_soft_glow_cache: dict = {}
-
-
-def _get_soft_glow(radius: float, color: Tuple[int, int, int], alpha: int) -> pygame.Surface:
-    """Get a cached glow that is brightest at the centre and fades to nothing."""
-    radius_px = max(2, int(round(radius)))
-    key = (radius_px, color, alpha)
-    surf = _soft_glow_cache.get(key)
-    if surf is None:
-        surf = pygame.Surface((radius_px * 2, radius_px * 2), pygame.SRCALPHA)
-        for r in range(radius_px, 0, -1):
-            falloff = (1.0 - r / radius_px) ** 2
-            pygame.draw.circle(surf, (*color, int(alpha * falloff)), (radius_px, radius_px), r)
-        _soft_glow_cache[key] = surf
-    return surf
-
-
 class ReplayEnemyShip(RotatingThrusterShip):
     """Enemy ship that replays player commands from a fixed-size action window.
     
@@ -287,7 +270,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         # Get eye position in world space
         eye_x, eye_y = self._rotate_and_translate_point(eye_pos, cos_angle, sin_angle)
         
-        glow_surf = _get_soft_glow(eye_size * 2.4, self.EYE_COLOR, 150)
+        glow_surf = visual_effects.create_soft_glow_surface(eye_size * 2.4, self.EYE_COLOR, 150)
         screen.blit(glow_surf, (eye_x - glow_surf.get_width() // 2, eye_y - glow_surf.get_height() // 2))
         
         # Draw eye as normal circle (always full size)
@@ -554,7 +537,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         base_color = config.REPLAY_ENEMY_COLOR
         contraction = self._get_contraction()
         
-        glow_surf = _get_soft_glow(
+        glow_surf = visual_effects.create_soft_glow_surface(
             self.radius * self.BODY_GLOW_RADIUS_MULTIPLIER, base_color,
             int(255 * config.SHIP_GLOW_INTENSITY * self.BODY_GLOW_INTENSITY_MULTIPLIER)
         )
@@ -611,7 +594,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
     def _draw_tentacle_club(self, screen: pygame.Surface, tip: Tuple[float, float], index: int) -> None:
         """Draw the glowing club at the end of a feeding tentacle."""
         club_radius = max(1.5, self.radius * self.TENTACLE_CLUB_RADIUS)
-        glow_surf = _get_soft_glow(club_radius * 3.5, self.SPOT_COLOR, 140)
+        glow_surf = visual_effects.create_soft_glow_surface(club_radius * 3.5, self.SPOT_COLOR, 140)
         screen.blit(glow_surf, (tip[0] - glow_surf.get_width() // 2, tip[1] - glow_surf.get_height() // 2))
         flicker = 0.5 + 0.5 * math.sin(self.pulse_phase * 3.0 + index)
         color = visual_effects.interpolate_color(self.SPOT_COLOR, (255, 255, 255), flicker * 0.7)

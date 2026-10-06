@@ -153,6 +153,32 @@ def create_glow_surface(
     return surf
 
 
+_soft_glow_cache: dict = {}
+
+
+def create_soft_glow_surface(radius: float, color: Tuple[int, int, int], alpha: int) -> pygame.Surface:
+    """Create a glow that is brightest at the centre and fades to nothing (cached).
+    
+    Args:
+        radius: Outer radius of the glow.
+        color: Glow color (R, G, B).
+        alpha: Alpha at the centre (0 to 255).
+        
+    Returns:
+        Surface with glow effect, centred on the surface.
+    """
+    radius_px = max(2, int(round(radius)))
+    key = (radius_px, color, alpha)
+    surf = _soft_glow_cache.get(key)
+    if surf is None:
+        surf = pygame.Surface((radius_px * 2, radius_px * 2), pygame.SRCALPHA)
+        for r in range(radius_px, 0, -1):
+            falloff = (1.0 - r / radius_px) ** 2
+            pygame.draw.circle(surf, (*color, int(alpha * falloff)), (radius_px, radius_px), r)
+        _soft_glow_cache[key] = surf
+    return surf
+
+
 def draw_glow_circle(
     screen: pygame.Surface,
     center: Tuple[float, float],
