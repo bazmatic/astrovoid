@@ -330,7 +330,7 @@ Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
 thrust and firing while momentum continues. Requests time out after one second.
 There is no local autopilot fallback. Constants are in `hunter/model.py`.
 
-For the local setup, run `./run-hunter.sh` to select level 1. Both this launcher
+For the local setup, run `./run-hunter.sh` to select level 4, the first with the hunter. Both this launcher
 and `./run.sh` read `.astrovoid-local/typesafe-api-key` when no API key is already
 set in the environment. That directory is ignored by Git; the local key file
 should remain readable only by its owner. The launcher reads it as plain data.

@@ -228,7 +228,7 @@ class Game:
         random.seed(seed)
         # Note: Seed is set before maze generation to ensure reproducible mazes
         
-        # Get maze complexity from level config (None will use level-based default)
+        # Get maze complexity (from the level file, or calculated if it has none)
         maze_complexity = level_config.get_maze_complexity(self.level)
         
         # Get maze grid size (always returns a value, calculated if not in config)

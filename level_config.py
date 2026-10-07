@@ -159,35 +159,29 @@ def get_level_egg_count(level: int) -> int:
     return get_enemy_counts(level).egg
 
 
-def get_maze_complexity(level: int) -> Optional[MazeComplexity]:
+def get_maze_complexity(level: int) -> MazeComplexity:
     """Get maze complexity for a level.
     
     Args:
         level: Current level number (1-based).
         
     Returns:
-        MazeComplexity from config if present, None otherwise (will use level-based default).
+        MazeComplexity from config if present and valid, otherwise default from level_rules.
     """
     config = load_level_config(level)
-    if not config or 'maze' not in config or 'complexity' not in config['maze']:
-        return None
+    if config and 'maze' in config and 'complexity' in config['maze']:
+        complexity_map = {
+            'empty': MazeComplexity.EMPTY,
+            'simple': MazeComplexity.SIMPLE,
+            'normal': MazeComplexity.NORMAL,
+            'complex': MazeComplexity.COMPLEX,
+            'extreme': MazeComplexity.EXTREME,
+        }
+        complexity_str = str(config['maze']['complexity']).lower()
+        if complexity_str in complexity_map:
+            return complexity_map[complexity_str]
     
-    complexity_str = config['maze']['complexity'].lower()
-    
-    # Map string values to enum
-    complexity_map = {
-        'empty': MazeComplexity.EMPTY,
-        'simple': MazeComplexity.SIMPLE,
-        'normal': MazeComplexity.NORMAL,
-        'complex': MazeComplexity.COMPLEX,
-        'extreme': MazeComplexity.EXTREME,
-    }
-    
-    if complexity_str in complexity_map:
-        return complexity_map[complexity_str]
-    
-    # Invalid value, return None to use default
-    return None
+    return level_rules.get_maze_complexity(level)
 
 
 def get_maze_grid_size(level: int) -> int:

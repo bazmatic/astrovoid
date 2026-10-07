@@ -168,3 +168,26 @@ def test_an_ordinary_level_has_an_open_exit(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(static=3))
     start(game, 3)  # before the hunter's first level, so no pilot is started
     assert game.maze.exit.is_activated
+
+
+def interior_wall_cells(maze):
+    return sum(bool(maze.grid[row][col])
+               for row in range(1, maze.grid_height - 1) for col in range(1, maze.grid_width - 1))
+
+
+@pytest.mark.parametrize('level', [30, 36, 42])
+def test_an_endless_boss_level_is_played_in_an_open_arena(game, monkeypatch, level):
+    no_level_files(monkeypatch)
+    start(game, level)
+    assert game.maze.grid_width == 16
+    assert interior_wall_cells(game.maze) == 0
+
+
+def test_a_level_without_a_file_gets_its_maze_complexity_from_the_rules(monkeypatch):
+    from maze.config import MazeComplexity
+    no_level_files(monkeypatch)
+    assert level_config.get_maze_complexity(3) == MazeComplexity.SIMPLE
+    assert level_config.get_maze_complexity(9) == MazeComplexity.NORMAL
+    assert level_config.get_maze_complexity(30) == MazeComplexity.EMPTY
+    monkeypatch.setattr(level_config, 'load_level_config', lambda level: {'maze': {'complexity': 'nonsense'}})
+    assert level_config.get_maze_complexity(9) == MazeComplexity.NORMAL
