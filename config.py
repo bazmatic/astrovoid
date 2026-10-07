@@ -99,6 +99,8 @@ class EnemySettings:
     fireIntervalMin: int
     fireIntervalMax: int
     fireRange: float
+    maxFireRange: float
+    startClearance: float
     replayFireAngleTolerance: float
 
 
@@ -674,6 +676,10 @@ ENEMY_SHIFT_DURATION_MAX = SETTINGS.enemies.shiftDurationMax
 ENEMY_FIRE_INTERVAL_MIN = SETTINGS.enemies.fireIntervalMin
 ENEMY_FIRE_INTERVAL_MAX = SETTINGS.enemies.fireIntervalMax
 ENEMY_FIRE_RANGE = SETTINGS.enemies.fireRange
+# Fire range grows with the level but never past this
+ENEMY_MAX_FIRE_RANGE = SETTINGS.enemies.maxFireRange
+# No enemy spawns within this distance of the player's start
+ENEMY_START_CLEARANCE = SETTINGS.enemies.startClearance
 REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = SETTINGS.enemies.replayFireAngleTolerance
 
 REPLAY_ENEMY_WINDOW_SIZE = SETTINGS.replayEnemy.windowSize

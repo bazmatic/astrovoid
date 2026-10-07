@@ -372,7 +372,7 @@ def get_enemy_fire_range(level: int) -> float:
         
     Returns:
         Maximum distance to player for firing (pixels).
-        Range increases as level increases.
+        Range increases as level increases, up to ENEMY_MAX_FIRE_RANGE.
     """
     # Base range from config
     base_range = config.ENEMY_FIRE_RANGE
@@ -384,7 +384,7 @@ def get_enemy_fire_range(level: int) -> float:
     # Increase range by 5% per effective level
     effective_level = level - config.TUTORIAL_LEVELS
     range_multiplier = 1.0 + (effective_level - 1) * 0.05
-    return base_range * range_multiplier
+    return min(base_range * range_multiplier, config.ENEMY_MAX_FIRE_RANGE)
 
 
 def get_enemy_counts(level: int) -> EnemyCounts:

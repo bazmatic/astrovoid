@@ -108,6 +108,8 @@
     "fireIntervalMin": 60,
     "fireIntervalMax": 300,
     "fireRange": 400,
+    "maxFireRange": 600,
+    "startClearance": 300,
     "replayFireAngleTolerance": 30.0
   },
   "replayEnemy": {
