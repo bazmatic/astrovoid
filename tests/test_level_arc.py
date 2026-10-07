@@ -1,7 +1,13 @@
 """The designed arc, levels 1 to 24: every level has a file and the files keep the pacing rules."""
+import math
+from unittest.mock import Mock
+
+import pygame
 import pytest
 
+import config
 import level_config
+import level_rules
 from level_rules import anemones_that_fit
 
 ARC = range(1, 25)
@@ -75,3 +81,42 @@ def test_anemones_fit_the_maze(level):
 def test_the_hunter_flies_from_level_four_except_on_boss_levels():
     without = [level for level in ARC if not level_config.level_has_hunter(level)]
     assert without == [1, 2, 3] + BOSS_LEVELS
+
+
+@pytest.fixture
+def game(tmp_path, monkeypatch):
+    from game import Game
+    from profiles import ProfileManager
+
+    pygame.init()
+    screen = pygame.display.set_mode((1352, 878))
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    monkeypatch.setattr(config, 'SPLASH_ENABLED', False)
+    monkeypatch.delenv('START_LEVEL', raising=False)
+    manager = ProfileManager(tmp_path / 'profiles.json')
+    monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
+    monkeypatch.setitem(Game.__init__.__globals__, 'SoundManager', Mock)
+    monkeypatch.setattr(level_config, 'level_has_hunter', lambda _: False)
+    game = Game(screen)
+    yield game
+    game._close_hunter()
+
+
+@pytest.mark.parametrize('level', list(ARC) + [25, 30, 36, 42, 47, 66])
+def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level):
+    counts = level_config.get_level_enemy_counts(level) or level_rules.get_enemy_counts(level)
+    asked_for = {
+        'enemies': counts.static + counts.patrol + counts.aggressive,
+        'replay_enemies': counts.replay, 'flockers': counts.flocker, 'flighthouses': counts.flighthouse,
+        'eggs': counts.egg, 'anemones': level_config.get_level_anemone_count(level),
+        'split_bosses': level_config.get_level_split_boss_count(level),
+        'mother_bosses': level_config.get_level_mother_boss_count(level)}
+    game.level = level
+
+    game.start_level()
+
+    placed = {name: len(getattr(game.entity_manager, name)) for name in asked_for}
+    assert placed == asked_for
+    for enemy in game.entity_manager.get_all_enemies():
+        assert math.dist(enemy.get_pos(), game.maze.start_pos) >= config.ENEMY_START_CLEARANCE
