@@ -33,10 +33,13 @@ class FiringSolution:
 @dataclass(frozen=True)
 class HunterSettings:
     request_interval: float = 0.250
-    action_ttl: float = 0.750
+    # A decision is held until the next one lands. Decisions run back to back,
+    # so that is two round trips after its snapshot; this covers a slow 0.7 s pair.
+    action_ttl: float = 1.500
     thrust_multiplier: float = 0.25
     turn_rate_multiplier: float = 0.5
-    decision_delay: float = 0.300
+    # How far ahead "at next decision" readings look: the measured median round trip.
+    decision_delay: float = 0.450
     request_timeout: float = 1.0
     sensor_cells: float = 4.0
     max_contacts: int = 24
