@@ -41,6 +41,7 @@ from utils.math_utils import get_angle_to_point
 
 from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
+from hunter.fire_control import find_firing_solution
 from hunter.perception import HunterPerception
 from hunter.spawn import resolve_hunter_spawn, reserve_hunter_clearance
 from hunter.worker import PilotWorker
@@ -319,7 +320,13 @@ class Game:
         action = self.hunter_controller.tick(observe)
         if self.hunter_controller.status != 'active':
             self.hunter.cancel_burst()
-        bullet = self.hunter.step(dt, action)
+        # Fire control is only consulted while the pilot is engaging something.
+        solution = None
+        if action.track or action.fire or self.hunter.burst_remaining:
+            solution = find_firing_solution(
+                self.hunter, list(self.entity_manager.get_all_active_enemies()),
+                self.maze, self.hunter.settings)
+        bullet = self.hunter.step(dt, action, solution)
         if bullet is not None:
             self.projectiles.append(bullet)
         self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
@@ -905,8 +912,6 @@ class Game:
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)
-            if self.hunter_controller is not None:
-                self.hunter.draw_status(self.screen, self.small_font, self.hunter_controller.status)
 
         # Draw powerup crystals
         for crystal in self.powerup_crystals:

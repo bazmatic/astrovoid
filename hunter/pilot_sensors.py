@@ -1,5 +1,6 @@
 """Translate sensed geometry into body-relative readings, without choosing controls."""
 import math
+from hunter.course import course_correction
 from hunter.visibility import visible_point
 
 
@@ -12,8 +13,19 @@ def direction(bearing, heading):
     return 'left' if error < 0 else 'right'
 
 
-def off_nose(bearing, heading):
-    return round((bearing-heading+180) % 360-180,1)
+def off_nose(bearing, heading, digits=1):
+    error = (bearing-heading+180) % 360-180
+    return error if digits is None else round(error,digits)
+
+
+def nose_miss_distance(relative, velocity, heading, shot_speed, shot_lifetime):
+    """How close a shot along the nose passes to a steady target's centre, or None if it never arrives."""
+    nose = math.radians(heading)
+    ux,uy = math.cos(nose)*shot_speed-velocity[0],math.sin(nose)*shot_speed-velocity[1]
+    closest = (relative[0]*ux+relative[1]*uy)/(ux*ux+uy*uy)
+    if not 0 < closest <= shot_lifetime:
+        return None
+    return math.hypot(relative[0]-ux*closest,relative[1]-uy*closest)
 
 
 def firing_solution(relative, velocity, shot_speed):
@@ -50,8 +62,10 @@ def pilot_state(state):
     # The held steering input keeps rotating the nose until a later decision replaces it,
     # so bearings are also given relative to where the nose will be by then.
     turn = state.get('previous_action',{}).get('turn',0)
+    tracking = state.get('previous_action',{}).get('track',False)
     turn_step = rotation_speed*state.get('action_horizon_seconds',.25)
-    turning = {'direction':'left' if turn < 0 else 'right' if turn > 0 else 'none',
+    turning = {'direction':('track' if tracking else
+                            'left' if turn < 0 else 'right' if turn > 0 else 'none'),
                'degrees_per_decision':turn_step}
     next_heading = heading+turn*turn_step
 
@@ -72,11 +86,7 @@ def pilot_state(state):
             [relative[i]+(velocity[i]-own_velocity[i])*horizon_frames for i in (0,1)],
             velocity,shot_speed)
         # A shot along the present nose: how close does it pass to the contact?
-        nose = math.radians(heading)
-        ux,uy = math.cos(nose)*shot_speed-velocity[0],math.sin(nose)*shot_speed-velocity[1]
-        closest = (relative[0]*ux+relative[1]*uy)/(ux*ux+uy*uy)
-        miss = (math.hypot(relative[0]-ux*closest,relative[1]-uy*closest)
-                if 0 < closest <= shot_lifetime else None)
+        miss = nose_miss_distance(relative,velocity,heading,shot_speed,shot_lifetime)
         reach = c.get('radius',10)+physics.get('projectile_radius',3)
         return {'lead_degrees_off_nose':off_nose(now[1],heading),
                 'lead_degrees_off_nose_at_next_decision':
@@ -207,7 +217,33 @@ def pilot_state(state):
                   'route_distance_metres':follow['route_distance'],
                   'player_visible':follow['player_visible'],
                   # Close enough to keep station without running the player down.
-                  'alongside':follow['player_visible'] and follow['player_distance'] < cell_size}
+                  'alongside':follow['player_visible'] and follow['player_distance'] < cell_size,
+                  'course':None}
+        if not follow['alongside']:
+            # The turn and burn that aim the ship's motion at the waypoint. The speed
+            # it may arrive at is what it could still shed before the wall beyond the
+            # waypoint, allowing for a full swing of the nose to brake.
+            raw = state['follow_player']
+            thrust = physics.get('thrust_per_frame',.0375)
+            deceleration = thrust*fps*fps
+            reaction = state.get('action_horizon_seconds',.25)+180/rotation_speed
+            room = clearance(raw['bearing'])
+            limit = min(speed_limit*fps,
+                        deceleration*(math.sqrt(reaction*reaction+2*room/deceleration)-reaction))
+            correction = course_correction(
+                origin,velocity,heading,raw['waypoint'],thrust=thrust,speed_limit=limit/fps,
+                rotation_per_frame=physics.get('rotation_per_frame',5),
+                friction=physics.get('friction_per_frame',1))
+            if correction is not None:
+                follow['course'] = {
+                    # A burn shorter than half a decision cannot be flown; leave it.
+                    'burn_needed':correction.burn_frames >= horizon_frames/2,
+                    'burn_degrees_off_nose':round(correction.degrees_off_nose,1),
+                    'burn_degrees_off_nose_at_next_decision':
+                        off_nose(correction.heading_degrees,next_heading),
+                    'burn_seconds':round(correction.burn_frames/fps,2),
+                    'speed_after_metres_per_second':round(correction.final_speed*fps,1),
+                    'speed_limit_metres_per_second':round(limit,1)}
     return {'snapshot_at_seconds':state.get('snapshot_at',0),
             'speed_metres_per_second':speed*fps,
             'heading_degrees':heading % 360,
