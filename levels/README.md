@@ -104,6 +104,17 @@ If a level has no configuration file, the game will:
 - Use the level number as the random seed
 - Calculate enemy counts using the formulas in `level_rules.py`
 
+## Anemones
+
+An anemone is rooted to one spot and pulls the player's ship toward it. By default a
+level has none before level 4, then four, with one more every two levels up to eight
+(`anemone.firstLevel`, `baseCount`, `levelsPerExtra` and `maxCount` in
+`config/settings.json`). A small maze gets fewer: their fields of pull together cover at
+most 40% of it (`maxCoverage`). Set `"anemone": n` inside `enemies` to choose the number
+for a level, which is then used as given; `0` removes them. None is ever placed where it
+could reach the player's starting position.
+
+
 ## Allied hunter
 
 Every level spawns one Jev-controlled hunter automatically at a safe cell near the player.
@@ -119,7 +130,7 @@ The numbers are zero-based **column, row**, not screen pixels. The example must
 be adjusted to a free cell in that level's generated maze. The hunter spawns at
 the cell centre. It must fit clear of walls and the player's spawn. Enemy spawn
 positions are reserved away from it, including clearance for larger bosses.
-Invalid overrides log a diagnostic and fall back to automatic placement.
+Invalid overrides log a diagnostic and fall back to automatic placement. Automatic placement puts the hunter in the safe open cell furthest from the player.
 
 Omit `hunter` or use `null` to leave the level to the schedule, with automatic placement. Arrays, counts and extra configuration
 keys are not supported. At most one hunter spawns per level; it stays dead after

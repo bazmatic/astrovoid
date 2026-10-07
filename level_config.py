@@ -9,7 +9,7 @@ import json
 import os
 from typing import Optional, Dict
 import level_rules
-from level_rules import EnemyCounts, get_enemy_counts, get_split_boss_count, get_egg_count, get_flighthouse_count
+from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts, get_split_boss_count, get_egg_count, get_flighthouse_count
 from maze.config import MazeComplexity
 
 
@@ -79,6 +79,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
     flocker = enemies_config.get('flocker', default_counts.flocker)
     flighthouse = enemies_config.get('flighthouse', default_counts.flighthouse)
     egg = enemies_config.get('egg', default_counts.egg)
+    anemone = get_level_anemone_count(level)
     
     # Calculate total from the sum of regular enemies
     total = static + patrol + aggressive
@@ -91,8 +92,25 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         replay=replay,
         flocker=flocker,
         flighthouse=flighthouse,
-        egg=egg
+        egg=egg,
+        anemone=anemone
     )
+
+
+def get_level_anemone_count(level: int) -> int:
+    """Get anemone count for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        The number the level's config asks for, taken as given. Otherwise the
+        number from level_rules, held to what the level's maze has room for.
+    """
+    config = load_level_config(level)
+    if config and 'anemone' in config.get('enemies', {}):
+        return max(0, int(config['enemies']['anemone']))
+    return min(get_anemone_count(level), anemones_that_fit(get_maze_grid_size(level)))
 
 
 def get_level_split_boss_count(level: int) -> int:

@@ -49,6 +49,7 @@ class SpawnManager:
             entity_manager: Entity manager to add spawned enemies to.
         """
         self.entity_manager = entity_manager
+        self._anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None
     
     def _update_available_positions(
         self,
@@ -118,7 +119,14 @@ class SpawnManager:
         config: SpawnConfig,
         available_positions: List[Tuple[float, float]]
     ) -> List[Tuple[float, float]]:
-        """Select spawn positions with special handling for flockers."""
+        """Select spawn positions with special handling for flockers and anemones."""
+        if config.entity_list_attr == "anemones" and self._anemone_keep_clear is not None:
+            (clear_x, clear_y), distance = self._anemone_keep_clear
+            available_positions = [
+                pos for pos in available_positions
+                if math.hypot(pos[0] - clear_x, pos[1] - clear_y) > distance
+            ]
+        
         spawn_count = min(config.count, len(available_positions))
         if spawn_count <= 0:
             return []
@@ -160,7 +168,8 @@ class SpawnManager:
         command_recorder: 'CommandRecorder',
         enemy_counts: 'EnemyCounts',
         split_boss_count: int,
-        mother_boss_count: int
+        mother_boss_count: int,
+        anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -171,7 +180,11 @@ class SpawnManager:
             enemy_counts: Enemy count configuration.
             split_boss_count: Number of SplitBoss enemies to spawn.
             mother_boss_count: Number of Mother Boss enemies to spawn.
+            anemone_keep_clear: Optional (position, distance); no anemone is placed
+                within that distance of the position (the player's start and its reach).
         """
+        self._anemone_keep_clear = anemone_keep_clear
+        
         # Clear existing enemies
         self.entity_manager.clear_all()
         
@@ -219,6 +232,7 @@ class SpawnManager:
         from entities.split_boss import SplitBoss
         from entities.mother_boss import MotherBoss
         from entities.egg import Egg
+        from entities.anemone import Anemone
         
         def set_replay_index(entity):
             """Post-create hook to set replay index."""
@@ -287,6 +301,17 @@ class SpawnManager:
                 requires_command_recorder=False,
                 post_create_hook=None
             ))
+        
+        # Anemone enemies
+        if enemy_counts.anemone > 0:
+            configs.append(SpawnConfig(
+                count=enemy_counts.anemone,
+                entity_list_attr="anemones",
+                factory_func=lambda pos, cr: Anemone(pos),
+                requires_command_recorder=False,
+                post_create_hook=None
+            ))
+        
         
         return configs
     

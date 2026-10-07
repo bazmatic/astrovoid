@@ -5,26 +5,20 @@ This module handles the rendering of the main menu screen.
 
 import math
 import pygame
-from typing import List, Optional, Tuple
+from typing import Optional, Tuple
 import config
-from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon, BUTTON_ACCENT_START
+from rendering.fonts import get_font
+from rendering.menu_components import (
+    AnimatedBackground, NeonText, Button, BUTTON_ACCENT_START, REFERENCE_HEIGHT, REFERENCE_WIDTH,
+    build_menu_backdrop, menu_scale, render_pill
+)
 from rendering.visual_effects import create_radial_gradient_surface
 from utils.resource_path import resource_path
 
 
-# Layout is authored for a 1080px-high screen and scaled to the real height.
-# REFERENCE_WIDTH is the narrowest screen that layout fits; narrower (e.g.
-# portrait) screens scale down by width instead so nothing runs off the sides
-REFERENCE_HEIGHT = 1080
-REFERENCE_WIDTH = 1200
 TITLE_HEIGHT_FRACTION = 0.34
 TITLE_CENTER_Y_FRACTION = 0.23
 TITLE_FLOAT_SPEED = 0.9
-
-CONTROL_ROWS = [
-    ("KEYBOARD", [("ARROWS / WASD", "Move"), ("SPACE", "Fire"), ("DOWN / S", "Shield")]),
-    ("CONTROLLER", [("STICKS", "Move"), ("R / ZR / B", "Fire"), ("A", "Shield"), ("L / ZL", "Thrust")]),
-]
 
 
 class MainMenu:
@@ -41,17 +35,16 @@ class MainMenu:
         self.menu_title: Optional[NeonText] = None
         self.menu_title_image: Optional[pygame.Surface] = None
         self.menu_title_rect: Optional[pygame.Rect] = None
-        self.menu_options = ["START GAME", "SELECT PROFILE", "OPTIONS", "QUIT"]
+        self.menu_options = ["START GAME", "LEVELS", "SELECT PROFILE", "CONTROLS", "QUIT"]
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self.menu_pulse_phase = 0.0
         self.profile_name: Optional[str] = None
         self.profile_level: Optional[int] = None
-        self.scale = min(config.SCREEN_HEIGHT / REFERENCE_HEIGHT, config.SCREEN_WIDTH / REFERENCE_WIDTH)
-        self.profile_font = pygame.font.Font(None, self._scaled(28))
+        self.scale = menu_scale()
+        self.profile_font = get_font(self._scaled(28))
         self.menu_time = 0.0
         self.backdrop: Optional[pygame.Surface] = None
-        self.controls_surface: Optional[pygame.Surface] = None
         self.profile_badge: Optional[pygame.Surface] = None
         self._profile_badge_key: Optional[Tuple[Optional[str], Optional[int]]] = None
         self._initialize()
@@ -65,7 +58,7 @@ class MainMenu:
         # Create animated background
         self.menu_background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         
-        self.backdrop = self._build_backdrop()
+        self.backdrop = build_menu_backdrop(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         
         # Load title graphic
         title_center = (config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * TITLE_CENTER_Y_FRACTION))
@@ -89,7 +82,7 @@ class MainMenu:
             self.backdrop.blit(halo, halo.get_rect(center=title_center))
         except (pygame.error, FileNotFoundError):
             # Fallback to text if image not found
-            title_font = pygame.font.Font(None, self._scaled(config.FONT_SIZE_TITLE * 2))
+            title_font = get_font(self._scaled(config.FONT_SIZE_TITLE * 2))
             self.menu_title = NeonText(
                 "SQUIDDLER",
                 title_font,
@@ -101,12 +94,12 @@ class MainMenu:
             self.menu_title_image = None
         
         # Create buttons for all menu options
-        button_font = pygame.font.Font(None, self._scaled(40))
+        button_font = get_font(self._scaled(40))
         self.menu_buttons = []
         
         # Position buttons in a group beneath the title
-        start_y = int(config.SCREEN_HEIGHT * 0.5)
-        button_spacing = self._scaled(84)
+        start_y = int(config.SCREEN_HEIGHT * 0.46)
+        button_spacing = self._scaled(80)
         
         for i, option_text in enumerate(self.menu_options):
             button = Button(
@@ -120,92 +113,6 @@ class MainMenu:
             self.menu_buttons.append(button)
         
         self.backdrop = self.backdrop.convert()
-        self.controls_surface = self._build_controls_surface()
-    
-    def _build_backdrop(self) -> pygame.Surface:
-        """Build the static backdrop: nebula tint and vignette over the background color."""
-        width, height = config.SCREEN_WIDTH, config.SCREEN_HEIGHT
-        # Composed without an alpha channel and converted afterwards so every
-        # pixel is opaque. The display surface can carry alpha, and pygame
-        # copies rather than blends per-pixel-alpha surfaces onto pixels whose
-        # alpha is 0, which would turn everything drawn on top into solid blocks
-        backdrop = pygame.Surface((width, height), 0, 24)
-        backdrop.fill(config.COLOR_BACKGROUND)
-        
-        # Nebula clouds as (color, alpha, center fraction, size fraction)
-        clouds = [
-            ((90, 40, 170), 70, (0.5, 0.42), (1.1, 1.2)),
-            ((30, 90, 190), 45, (0.24, 0.2), (0.8, 0.9)),
-            ((190, 50, 150), 40, (0.8, 0.78), (0.8, 0.9)),
-        ]
-        for color, alpha, center, size in clouds:
-            cloud = create_radial_gradient_surface((int(width * size[0]), int(height * size[1])), color, alpha)
-            backdrop.blit(cloud, cloud.get_rect(center=(int(width * center[0]), int(height * center[1]))))
-        
-        vignette = create_radial_gradient_surface((width, height), (0, 0, 0), 0, edge_alpha=150, falloff=0.6)
-        backdrop.blit(vignette, (0, 0))
-        return backdrop
-    
-    def _render_pill(
-        self,
-        text: str,
-        text_color: Tuple[int, int, int],
-        outline_color: Tuple[int, int, int],
-        padding: Tuple[int, int]
-    ) -> pygame.Surface:
-        """Render text inside an outlined pill."""
-        text_surface = self.profile_font.render(text, True, text_color)
-        pill = pygame.Surface(
-            (text_surface.get_width() + padding[0] * 2, text_surface.get_height() + padding[1] * 2),
-            pygame.SRCALPHA
-        )
-        radius = pill.get_height() // 2
-        border = max(1, self._scaled(1.5))
-        pygame.draw.rect(pill, (*outline_color, 255), pill.get_rect(), border_radius=radius)
-        pygame.draw.rect(pill, (24, 20, 48, 200), pill.get_rect().inflate(-border * 2, -border * 2), border_radius=radius - border)
-        pill.blit(text_surface, text_surface.get_rect(center=pill.get_rect().center))
-        return pill
-    
-    def _build_controls_surface(self) -> pygame.Surface:
-        """Build the static controls legend: one row of key hints per input device."""
-        label_gap = self._scaled(22)
-        action_gap = self._scaled(9)
-        hint_gap = self._scaled(28)
-        row_gap = self._scaled(12)
-        key_padding = (self._scaled(10), self._scaled(5))
-        
-        # Each row is a label followed by (x offset within the row, surface) pieces
-        rows: List[Tuple[pygame.Surface, List[Tuple[int, pygame.Surface]]]] = []
-        label_width = 0
-        hints_width = 0
-        row_height = 0
-        for label, hints in CONTROL_ROWS:
-            label_surface = self.profile_font.render(label, True, (110, 120, 170))
-            label_width = max(label_width, label_surface.get_width())
-            pieces: List[Tuple[int, pygame.Surface]] = []
-            x = 0
-            for key_text, action_text in hints:
-                key_surface = self._render_pill(key_text, (210, 225, 255), (90, 110, 170), key_padding)
-                action_surface = self.profile_font.render(action_text, True, (160, 160, 185))
-                pieces.append((x, key_surface))
-                x += key_surface.get_width() + action_gap
-                pieces.append((x, action_surface))
-                x += action_surface.get_width() + hint_gap
-                row_height = max(row_height, key_surface.get_height())
-            hints_width = max(hints_width, x - hint_gap)
-            rows.append((label_surface, pieces))
-        
-        surface = pygame.Surface(
-            (label_width + label_gap + hints_width, row_height * len(rows) + row_gap * (len(rows) - 1)),
-            pygame.SRCALPHA
-        )
-        for i, (label_surface, pieces) in enumerate(rows):
-            center_y = i * (row_height + row_gap) + row_height // 2
-            # Labels are right-aligned so the key hints share a left edge
-            surface.blit(label_surface, label_surface.get_rect(midright=(label_width, center_y)))
-            for x, piece in pieces:
-                surface.blit(piece, piece.get_rect(midleft=(label_width + label_gap + x, center_y)))
-        return surface
     
     def navigate_up(self) -> None:
         """Navigate to the previous menu option."""
@@ -262,25 +169,21 @@ class MainMenu:
             button.selected = (i == self.menu_selected_index)
             button.draw(self.screen, self.menu_pulse_phase)
         
-        # Draw controls legend at bottom
-        controls_rect = self.controls_surface.get_rect(
-            midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(48))
-        )
-        self.screen.blit(self.controls_surface, controls_rect)
-
-        # Draw profile badge above controls
+        # Draw profile badge at the bottom
         if self.profile_name:
             badge_key = (self.profile_name, self.profile_level)
             if self.profile_badge is None or self._profile_badge_key != badge_key:
-                self.profile_badge = self._render_pill(
+                self.profile_badge = render_pill(
+                    self.profile_font,
                     f"{self.profile_name.upper()}   \u00b7   LEVEL {self.profile_level or '-'}",
                     (215, 225, 255),
                     BUTTON_ACCENT_START,
-                    (self._scaled(20), self._scaled(8))
+                    (self._scaled(20), self._scaled(8)),
+                    max(1, self._scaled(1.5))
                 )
                 self._profile_badge_key = badge_key
             badge_rect = self.profile_badge.get_rect(
-                midbottom=(config.SCREEN_WIDTH // 2, controls_rect.top - self._scaled(24))
+                midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(56))
             )
             self.screen.blit(self.profile_badge, badge_rect)
 

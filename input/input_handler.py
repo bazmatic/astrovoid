@@ -259,6 +259,10 @@ class InputHandler:
         
         return False
     
+    def is_controller_restart_pressed(self, button: int) -> bool:
+        """Y (button 3) retries the current level."""
+        return bool(self.controllers) and button == 3
+
     def is_controller_quit_pressed(self, button: int) -> bool:
         """Check if controller quit button was pressed.
         

@@ -13,6 +13,7 @@ from entities.mother_boss import MotherBoss
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.egg import Egg
+from entities.anemone import Anemone
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
@@ -32,6 +33,7 @@ def make_all_enemies():
         MotherBoss(POS, recorder),
         FlockerEnemyShip(POS),
         FlighthouseEnemy(POS),
+        Anemone(POS),
         Egg(POS),
     ]
 
@@ -169,6 +171,7 @@ class TestGameIntegration:
     def test_projectile_kill_starts_squid_death(self):
         handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
         squid = make_squid()
+        squid.hit_points = 1
         projectile = Projectile(POS, 0.0)
         hit = handler.handle_projectile_enemy_collisions(
             projectile, [], [squid], [], [], [], [], [], [], []

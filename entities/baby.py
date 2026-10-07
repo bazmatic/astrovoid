@@ -30,6 +30,9 @@ class Baby(ReplayEnemyShip):
         super().__init__(start_pos, command_recorder)
         # Override radius to be smaller
         self.radius = config.BABY_SIZE
+        # Babies stay fragile: one hit, however tough the grown squids are
+        self.hit_points = 1
+        self.max_hit_points = 1
     
     @property
     def max_speed(self) -> float:

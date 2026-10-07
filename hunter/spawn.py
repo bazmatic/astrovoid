@@ -21,7 +21,8 @@ def resolve_hunter_spawn(value, maze, player):
     if cell is None:
         candidates = [(col,row) for row in range(maze.grid_height)
                       for col in range(maze.grid_width) if not maze.grid[row][col]]
-        candidates.sort(key=lambda cell: math.dist(
+        # Furthest from the player first, so the hunter starts well away and has to come and help
+        candidates.sort(key=lambda cell: -math.dist(
             maze.position_calculator.grid_center_to_screen(*cell), (player.x,player.y)))
         for candidate in candidates:
             try:

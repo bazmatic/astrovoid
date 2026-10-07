@@ -32,6 +32,7 @@ class EnemyCounts:
         flocker: Number of flocker enemy ships
         flighthouse: Number of flighthouse enemies
         egg: Number of egg enemies
+        anemone: Number of anemone enemies
     """
     total: int
     static: int
@@ -41,6 +42,7 @@ class EnemyCounts:
     flocker: int
     flighthouse: int
     egg: int
+    anemone: int = 0
 
 
 @dataclass
@@ -174,6 +176,31 @@ def get_flighthouse_count(level: int) -> int:
     effective_level = level - config.TUTORIAL_LEVELS
     count = config.FLIGHTHOUSE_ENEMY_BASE_COUNT + config.FLIGHTHOUSE_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
     return round(count)
+
+
+def get_anemone_count(level: int) -> int:
+    """Get number of anemone enemies for a level.
+    
+    None before the first level they appear on, then a base number plus one
+    more every few levels, up to a maximum.
+    """
+    if level < config.ANEMONE_FIRST_LEVEL:
+        return 0
+    extra = (level - config.ANEMONE_FIRST_LEVEL) // config.ANEMONE_LEVELS_PER_EXTRA
+    return min(config.ANEMONE_MAX_COUNT, config.ANEMONE_BASE_COUNT + extra)
+
+
+def anemones_that_fit(grid_size: int) -> int:
+    """Get the most anemones a maze has room for.
+    
+    Their fields of pull together may cover only a share of the maze, so a
+    small maze is not blanketed. There is always room for one.
+    
+    Args:
+        grid_size: Width and height of the maze in cells.
+    """
+    field_cells = math.pi * config.ANEMONE_REACH_CELLS ** 2
+    return max(1, int(config.ANEMONE_MAX_COVERAGE * grid_size * grid_size / field_cells))
 
 
 def get_egg_count(level: int) -> int:
@@ -375,6 +402,7 @@ def get_enemy_counts(level: int) -> EnemyCounts:
     flocker = get_flocker_count(level)
     flighthouse = get_flighthouse_count(level)
     egg = get_egg_count(level)
+    anemone = get_anemone_count(level)
     
     return EnemyCounts(
         total=total,
@@ -384,7 +412,8 @@ def get_enemy_counts(level: int) -> EnemyCounts:
         replay=replay,
         flocker=flocker,
         flighthouse=flighthouse,
-        egg=egg
+        egg=egg,
+        anemone=anemone
     )
 
 

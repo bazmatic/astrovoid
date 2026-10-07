@@ -4,40 +4,72 @@ This module handles the rendering of the level complete/failed screen.
 """
 
 import pygame
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple
 import config
-from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
+from rendering.fonts import get_font
+from rendering.menu_components import (
+    AnimatedBackground, Button, TEXT_LABEL, as_light, build_menu_backdrop, menu_scale, render_hint_row,
+    render_title
+)
 from rendering.ui_elements import AnimatedStarRating
 from rendering.number_sprite import NumberSprite
 from utils.resource_path import resource_path
+from utils.formatting import format_time
+from profiles import LevelResult
+
+
+def comparison_lines(result: Optional[LevelResult], score: int, elapsed: float) -> Tuple[str, str]:
+    """Time and score captions describing this clear against the previous best."""
+    if result is None:
+        return '', ''
+    if result.first_clear:
+        return 'FIRST CLEAR', ''
+    previous = result.previous_best
+    time_line = ('NEW BEST' if result.new_best_time else
+                 f'BEST {format_time(previous.time)}  {round(elapsed, 1) - previous.time:+.1f}s')
+    score_line = ('NEW BEST' if result.new_best_score else
+                  f'BEST {previous.score}  {int(score) - previous.score:+d}')
+    return time_line, score_line
 
 
 class LevelCompleteMenu:
     """Handles level complete/failed screen rendering."""
-    
+
     def __init__(self, screen: pygame.Surface):
         """Initialize level complete menu.
-        
+
         Args:
             screen: The pygame Surface to draw on.
         """
         self.screen = screen
+        self.scale = menu_scale()
         self.level_complete_background: Optional[AnimatedBackground] = None
-        self.level_complete_image: Optional[pygame.Surface] = None
-        self.level_complete_rect: Optional[pygame.Rect] = None
-        self.level_failed_image: Optional[pygame.Surface] = None
-        self.level_failed_rect: Optional[pygame.Rect] = None
+        self.backdrop = build_menu_backdrop(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+        # Banner artwork (or a text heading if the file is missing), keyed by success
+        self.banners: Dict[bool, pygame.Surface] = {}
+        # Banners that are artwork on a dark background, and so are added to the screen as light
+        self._banner_is_light: Dict[bool, bool] = {}
+        self._level_numbers: Dict[Tuple[int, int], Optional[pygame.Surface]] = {}
         self.menu_pulse_phase = 0.0
-        self.small_font = pygame.font.Font(None, 24)
+        self.label_font = get_font(self._scaled(26), bold=True)
+        self.comparison_font = get_font(self._scaled(21))
+        self.value_font = get_font(self._scaled(52), bold=True)
+        self.hints = render_hint_row(
+            get_font(self._scaled(28)), [("ARROWS", "Navigate"), ("SPACE / A", "Select"), ("R", "Retry level")]
+        )
         self.number_sprite = NumberSprite()
         self.menu_options: list[str] = []
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self._initialize()
-    
+
+    def _scaled(self, value: float) -> int:
+        """Scale a reference-layout length to the current screen size."""
+        return max(1, int(round(value * self.scale)))
+
     def set_options(self, level_succeeded: bool) -> None:
         """Set menu options based on level success status.
-        
+
         Args:
             level_succeeded: True if level was completed successfully.
         """
@@ -47,78 +79,134 @@ class LevelCompleteMenu:
             self.menu_options = ["RETRY LEVEL", "MAIN MENU"]
         self.menu_selected_index = 0
         self._create_buttons()
-    
+
     def _create_buttons(self) -> None:
         """Create buttons for current menu options."""
-        button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
+        button_font = get_font(self._scaled(40))
         self.menu_buttons = []
-        
-        button_y = config.SCREEN_HEIGHT // 2 + 150
-        button_spacing = 80
-        
+
         for i, option_text in enumerate(self.menu_options):
             button = Button(
                 option_text,
-                (config.SCREEN_WIDTH // 2, button_y + i * button_spacing),
+                (0, 0),  # Placed from the layout when drawn
                 button_font,
-                width=350,
-                height=60
+                width=self._scaled(440),
+                height=self._scaled(64)
             )
             button.selected = (i == self.menu_selected_index)
             self.menu_buttons.append(button)
-    
+
     def navigate_up(self) -> None:
         """Navigate to the previous menu option."""
         if self.menu_selected_index > 0:
             self.menu_selected_index -= 1
-    
+
     def navigate_down(self) -> None:
         """Navigate to the next menu option."""
         if self.menu_selected_index < len(self.menu_options) - 1:
             self.menu_selected_index += 1
-    
+
     def get_selected_option(self) -> str:
         """Get the currently selected menu option.
-        
+
         Returns:
             The text of the currently selected option.
         """
         if not self.menu_options:
             return ""
         return self.menu_options[self.menu_selected_index]
-    
+
     def _initialize(self) -> None:
-        """Initialize level complete and failed graphics."""
-        # Load level complete image
-        try:
-            self.level_complete_image = pygame.image.load(resource_path("assets/level_complete.png")).convert_alpha()
-            # Scale image to 1/3 size (maintain aspect ratio)
-            original_width = self.level_complete_image.get_width()
-            original_height = self.level_complete_image.get_height()
-            image_width = original_width // 3
-            image_height = original_height // 3
-            self.level_complete_image = pygame.transform.scale(self.level_complete_image, (image_width, image_height))
-            self.level_complete_rect = self.level_complete_image.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
-        except (pygame.error, FileNotFoundError):
-            self.level_complete_image = None
-            self.level_complete_rect = None
-        
-        # Load level failed image
-        try:
-            self.level_failed_image = pygame.image.load(resource_path("assets/level_failed.png")).convert_alpha()
-            original_width = self.level_failed_image.get_width()
-            original_height = self.level_failed_image.get_height()
-            image_width = original_width * .4
-            image_height = original_height * .4
-            self.level_failed_image = pygame.transform.scale(self.level_failed_image, (image_width, image_height))
-            self.level_failed_rect = self.level_failed_image.get_rect(center=(config.SCREEN_WIDTH // 2, 200))
-        except (pygame.error, FileNotFoundError):
-            self.level_failed_image = None
-            self.level_failed_rect = None
-    
+        """Load the level complete and failed banners."""
+        # (file, text fallback, height on the reference layout)
+        sources = {
+            True: ("assets/level_complete.png", "LEVEL COMPLETE", 330),
+            False: ("assets/level_failed.png", "LEVEL FAILED", 400),
+        }
+        for succeeded, (path, fallback_text, reference_height) in sources.items():
+            try:
+                image = pygame.image.load(resource_path(path)).convert_alpha()
+                # Trim transparent margins so the layout works from the artwork itself
+                image = image.subsurface(image.get_bounding_rect())
+                height = self._scaled(reference_height)
+                width = int(image.get_width() * height / image.get_height())
+                self.banners[succeeded] = as_light(pygame.transform.smoothscale(image, (width, height)))
+                self._banner_is_light[succeeded] = True
+            except (pygame.error, FileNotFoundError):
+                self.banners[succeeded] = render_title(get_font(self._scaled(110)), fallback_text)
+                self._banner_is_light[succeeded] = False
+
+    def _level_number(self, level: int, height: int) -> Optional[pygame.Surface]:
+        """Get the level number in the digit artwork, as light to add to the screen."""
+        key = (level, height)
+        if key not in self._level_numbers:
+            number = self.number_sprite.render_number(level)
+            if number is not None:
+                width = int(number.get_width() * height / number.get_height())
+                number = as_light(pygame.transform.smoothscale(number, (width, height)))
+            self._level_numbers[key] = number
+        return self._level_numbers[key]
+
+    def layout(self, level_succeeded: bool) -> Dict[str, pygame.Rect]:
+        """Where each part of the screen sits, top to bottom.
+
+        Returns:
+            Rectangles keyed 'title', 'level_number', 'stars' (success only),
+            'stats', 'buttons' and 'hints'.
+        """
+        center_x = config.SCREEN_WIDTH // 2
+        layout: Dict[str, pygame.Rect] = {}
+
+        banner = self.banners[level_succeeded]
+        layout['title'] = banner.get_rect(midtop=(center_x, self._scaled(24)))
+
+        number_height = self._scaled(72)
+        layout['level_number'] = pygame.Rect(0, 0, number_height * 4, number_height)
+        layout['level_number'].midtop = (center_x, layout['title'].bottom + self._scaled(10))
+        next_top = layout['level_number'].bottom
+
+        if level_succeeded:
+            star_size = config.LEVEL_COMPLETE_STAR_SIZE
+            star_spacing = int(star_size * 1.2)
+            layout['stars'] = pygame.Rect(0, 0, star_spacing * 4 + star_size, star_size)
+            layout['stars'].midtop = (center_x, next_top + self._scaled(26))
+            next_top = layout['stars'].bottom
+
+        layout['stats'] = pygame.Rect(0, 0, self._scaled(920), self._scaled(114 if level_succeeded else 86))
+        layout['stats'].midtop = (center_x, next_top + self._scaled(30))
+
+        button_height = self._scaled(64)
+        button_spacing = self._scaled(84)
+        layout['buttons'] = pygame.Rect(0, 0, self._scaled(440), button_height + button_spacing)
+        layout['buttons'].midtop = (center_x, layout['stats'].bottom + self._scaled(34))
+
+        layout['hints'] = self.hints.get_rect(midbottom=(center_x, config.SCREEN_HEIGHT - self._scaled(48)))
+        return layout
+
+    def _draw_stats(self, rect: pygame.Rect, stats: List[Tuple[str, str]], comparisons=()) -> None:
+        """Draw a row of figures, each a small label over a large value, with dividers between."""
+        column_width = rect.width // len(stats)
+        for i, (label_text, value_text) in enumerate(stats):
+            column = pygame.Rect(rect.left + i * column_width, rect.top, column_width, rect.height)
+            label = self.label_font.render(label_text, True, TEXT_LABEL)
+            self.screen.blit(label, label.get_rect(midtop=(column.centerx, column.top)))
+            value = self.value_font.render(value_text, True, config.COLOR_TEXT)
+            value_bottom = column.top + self._scaled(86)
+            self.screen.blit(value, value.get_rect(midbottom=(column.centerx, value_bottom)))
+            if i < len(comparisons) and comparisons[i]:
+                color = (255, 220, 110) if comparisons[i] == 'NEW BEST' else TEXT_LABEL
+                caption = self.comparison_font.render(comparisons[i], True, color)
+                self.screen.blit(caption, caption.get_rect(midtop=(column.centerx, value_bottom + self._scaled(7))))
+            if i > 0:
+                pygame.draw.line(
+                    self.screen, (70, 64, 120),
+                    (column.left, column.top + self._scaled(8)), (column.left, column.bottom - self._scaled(8)),
+                    max(1, self._scaled(2))
+                )
+
     def update(self, dt: float) -> None:
         """Update menu animations.
-        
+
         Args:
             dt: Delta time since last update.
         """
@@ -128,7 +216,7 @@ class LevelCompleteMenu:
         self.menu_pulse_phase += config.BUTTON_GLOW_PULSE_SPEED * dt / 60.0
         if self.menu_pulse_phase >= 2 * 3.14159:
             self.menu_pulse_phase -= 2 * 3.14159
-    
+
     def draw(
         self,
         level: int,
@@ -137,10 +225,11 @@ class LevelCompleteMenu:
         level_score_breakdown: Dict,
         star_animation: Optional[AnimatedStarRating],
         show_quit_confirmation: bool,
-        draw_quit_confirmation_callback
+        draw_quit_confirmation_callback,
+        level_result: Optional[LevelResult] = None
     ) -> None:
         """Draw level complete or failed screen.
-        
+
         Args:
             level: Current level number.
             level_succeeded: True if level was completed successfully.
@@ -153,127 +242,59 @@ class LevelCompleteMenu:
         # Initialize background if needed
         if not self.level_complete_background:
             self.level_complete_background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
-        
-        # Draw animated background
-        if self.level_complete_background:
-            self.level_complete_background.draw(self.screen)
-        
-        # Show different title based on success/failure
-        if level_succeeded:
-            # Draw level complete graphic or fallback to text
-            if self.level_complete_image is not None:
-                self.screen.blit(self.level_complete_image, self.level_complete_rect)
-                # Draw level number below the level complete image
-                level_number_y = self.level_complete_rect.bottom + 30
-                # Scale the number to be appropriately sized
-                # Digit files are 216px tall, scale to about 1/4 of level complete image height
-                number_scale = (self.level_complete_image.get_height() * 0.25) / 216.0
-                self.number_sprite.draw_number(
-                    self.screen,
-                    level,
-                    (config.SCREEN_WIDTH // 2, level_number_y),
-                    scale=number_scale,
-                    center=True
-                )
-            else:
-                # Fallback to text if image not found
-                title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-                title_text = f"LEVEL {level} COMPLETE"
-                title = NeonText(
-                    title_text,
-                    title_font,
-                    (config.SCREEN_WIDTH // 2, 150),
-                    config.COLOR_NEON_ASTER_START,
-                    config.COLOR_NEON_VOID_END,
-                    center=True
-                )
-                title.pulse_phase = self.menu_pulse_phase
-                title.draw(self.screen)
-        else:
-            # Level failed - show graphic or fallback to text
-            if self.level_failed_image is not None:
-                self.screen.blit(self.level_failed_image, self.level_failed_rect)
-                # Draw level number below the level failed image
-                level_number_y = self.level_failed_rect.bottom + 30
-                # Scale the number to be appropriately sized
-                # Digit files are 216px tall, scale to about 1/4 of level failed image height
-                number_scale = (self.level_failed_image.get_height() * 0.25) / 216.0
-                self.number_sprite.draw_number(
-                    self.screen,
-                    level,
-                    (config.SCREEN_WIDTH // 2, level_number_y),
-                    scale=number_scale,
-                    center=True
-                )
-            else:
-                # Fallback to text if image not found
-                title_font = pygame.font.Font(None, config.FONT_SIZE_TITLE)
-                title_text = "LEVEL FAILED"
-                title = title_font.render(title_text, True, (255, 100, 100))
-                title_rect = title.get_rect(center=(config.SCREEN_WIDTH // 2, 150))
-                self.screen.blit(title, title_rect)
-        
-        # Format time as MM:SS.{tenths} (only show if level succeeded)
-        if level_succeeded:
-            minutes = int(completion_time_seconds // 60)
-            remaining_seconds = completion_time_seconds % 60
-            seconds = int(remaining_seconds)
-            tenths = int((remaining_seconds - seconds) * 10)
-            time_text = self.small_font.render(
-                f"Time: {minutes:02d}:{seconds:02d}.{tenths}",
-                True, config.COLOR_TEXT
-            )
-            time_rect = time_text.get_rect(center=(config.SCREEN_WIDTH // 2, 190))
-            self.screen.blit(time_text, time_rect)
-        
-        # Draw animated star rating (centered, large)
-        if star_animation:
-            star_animation.draw(self.screen)
-        
-        # Draw total score
-        total_score = int(level_score_breakdown.get('total_score', 0))
-        score_text = self.small_font.render(
-            f"Total Score: {total_score}",
-            True, config.COLOR_TEXT
+
+        self.screen.blit(self.backdrop, (0, 0))
+        self.level_complete_background.draw(self.screen)
+
+        layout = self.layout(level_succeeded)
+
+        # Banner, then the level number beneath it
+        self.screen.blit(
+            self.banners[level_succeeded], layout['title'],
+            special_flags=pygame.BLEND_RGB_ADD if self._banner_is_light[level_succeeded] else 0
         )
-        score_rect = score_text.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2 + 80))
-        self.screen.blit(score_text, score_rect)
-        
+        number = self._level_number(level, layout['level_number'].height)
+        if number is not None:
+            self.screen.blit(
+                number, number.get_rect(center=layout['level_number'].center), special_flags=pygame.BLEND_RGB_ADD
+            )
+
+        # Draw animated star rating in its slot
+        if star_animation and 'stars' in layout:
+            star_animation.x = layout['stars'].centerx - 2 * star_animation.star_spacing
+            star_animation.y = layout['stars'].centery
+            star_animation.draw(self.screen)
+
+        # Figures for the level: time as MM:SS.{tenths} and scores
+        total_score = int(level_score_breakdown.get('total_score', 0))
+        if level_succeeded:
+            stats = [
+                ("TIME", format_time(completion_time_seconds)),
+                ("LEVEL SCORE", f"{int(level_score_breakdown.get('final_score', 0)):,}"),
+                ("PROGRESS SCORE", f"{total_score:,}"),
+            ]
+        else:
+            stats = [("PROGRESS SCORE", f"{total_score:,}")]
+        comparisons = comparison_lines(level_result, level_score_breakdown.get('final_score', 0), completion_time_seconds) if level_succeeded else ()
+        self._draw_stats(layout['stats'], stats, comparisons)
+
         # Set menu options based on level success status
         # Check if we need to update (options might be empty or from previous state)
         expected_options = ["CONTINUE", "MAIN MENU"] if level_succeeded else ["RETRY LEVEL", "MAIN MENU"]
         if not self.menu_options or self.menu_options != expected_options:
             self.set_options(level_succeeded)
-        
+
         # Draw buttons
-        hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
-        
         for i, button in enumerate(self.menu_buttons):
+            button.position = (
+                layout['buttons'].centerx,
+                layout['buttons'].top + button.height // 2 + i * self._scaled(84)
+            )
             button.selected = (i == self.menu_selected_index)
             button.draw(self.screen, self.menu_pulse_phase)
-        
-        # Draw hints below buttons (dynamic based on selected option)
-        last_button_y = self.menu_buttons[-1].position[1] if self.menu_buttons else config.SCREEN_HEIGHT // 2 + 150
-        hint_y = last_button_y + 70
-        
-        selected_option = self.get_selected_option()
-        if selected_option == "CONTINUE":
-            hint_text = "Press SPACE or A Button to Continue"
-        elif selected_option == "RETRY LEVEL":
-            hint_text = "Press SPACE or A Button to Retry"
-        else:  # MAIN MENU
-            hint_text = "Press SPACE or A Button to Return to Main Menu"
-        
-        hint = hint_font.render(hint_text, True, config.COLOR_TEXT)
-        hint_rect = hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y))
-        self.screen.blit(hint, hint_rect)
-        
-        # Navigation hint
-        nav_hint = hint_font.render("Use Arrow Keys or D-Pad to Navigate", True, config.COLOR_TEXT)
-        nav_hint_rect = nav_hint.get_rect(center=(config.SCREEN_WIDTH // 2, hint_y + 35))
-        self.screen.blit(nav_hint, nav_hint_rect)
-        
+
+        self.screen.blit(self.hints, layout['hints'])
+
         # Draw quit confirmation overlay if active
         if show_quit_confirmation:
             draw_quit_confirmation_callback()
-

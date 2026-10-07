@@ -26,7 +26,7 @@ class MazePositionCalculator:
     def _calculate_cell_sizes(self) -> Tuple[float, float]:
         """Calculate cell sizes to fill available space (left zone reserved for UI).
         
-        Reserves left side for UI components (~220px), uses remaining width for maze.
+        Reserves left side for UI components (config.UI_ZONE_WIDTH), uses remaining width for maze.
         Uses 96% of screen height (UI is mostly at top). Calculates separate sizes
         for width and height to allow rectangular mazes.
         
@@ -34,9 +34,8 @@ class MazePositionCalculator:
             Tuple of (cell_size_x, cell_size_y) in pixels.
         """
         # Reserve left side for UI (gauges, indicators, etc.)
-        UI_ZONE_WIDTH = 320
         PLAY_AREA_RIGHT_MARGIN = 30
-        available_width = config.SCREEN_WIDTH - UI_ZONE_WIDTH
+        available_width = config.SCREEN_WIDTH - config.UI_ZONE_WIDTH
         available_height = config.SCREEN_HEIGHT * 0.96
         available_width -= PLAY_AREA_RIGHT_MARGIN
         cell_size_x = available_width / self.grid_width
@@ -52,13 +51,9 @@ class MazePositionCalculator:
         Returns:
             Tuple of (offset_x, offset_y) in pixels.
         """
-        # Reserve left side for UI
-        UI_ZONE_WIDTH = 320
-        PLAY_AREA_RIGHT_MARGIN = 30
-        total_maze_width = self.grid_width * self.cell_size_x
         total_maze_height = self.grid_height * self.cell_size_y
         # Position maze starting after UI zone, vertically centered
-        offset_x = UI_ZONE_WIDTH
+        offset_x = config.UI_ZONE_WIDTH
         offset_y = (config.SCREEN_HEIGHT - total_maze_height) / 2
         return (offset_x, offset_y)
     
