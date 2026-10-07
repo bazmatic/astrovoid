@@ -5,7 +5,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 ## Features
 
 - **Momentum-Based Physics**: Zero-G flight mechanics with realistic momentum and low friction
-- **Procedural Maze Generation**: Each level features a unique procedurally-generated maze. Levels are deterministic - each level number always generates the same maze layout (Level 1 = seed 1, Level 2 = seed 2, etc.)
+- **Procedural Maze Generation**: Each level features a unique procedurally-generated maze. Levels are deterministic - each level number always generates the same maze layout
 - **Multiple Enemy Types**:
   - Static enemies that remain stationary (but move when hit by projectiles)
   - Patrol enemies that move in straight lines
@@ -15,13 +15,15 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
   - Baby enemies - small, fast versions of Replay enemies
   - Split Boss - large enemies that split into two Replay enemies when destroyed
   - Mother Boss - even larger enemies that continuously lay Egg enemies
+  - Flockers that swarm together, Flighthouses that launch them, and Anemones that pull the ship in
 - **Resource Management**: Limited fuel and ammunition require strategic decision-making
 - **Scoring System**: Score based on completion time, collisions, resource usage, and enemy destructions
 - **Visual Effects**: Ship glow, thrust particles, enemy pulsing, and more
 - **Sound System**: Procedurally-generated sound effects for thrusters, shooting, enemy destruction, and portal activation/deactivation
-- **Progressive Difficulty**: Enemy count, speed, and strength scale with level
+- **Paced Levels**: A designed arc of 24 levels introduces one enemy type at a time, then an endless game that gets harder without getting more crowded
+- **Boss Levels**: Every sixth level is a boss fight in an open arena
 - **Momentum Physics**: Eggs and Static enemies gain momentum when hit by projectiles, moving with realistic physics and bouncing off walls
-- **Exit Portal Lock**: Exit portal deactivates when eggs are present, requiring all eggs to be destroyed before level completion
+- **Exit Portal Lock**: Exit portal deactivates while any egg or boss is alive, requiring them all to be destroyed before level completion
 
 ## Requirements
 
@@ -130,7 +132,7 @@ The executable will be created in the `dist/` folder. On Windows, it will be `di
 
 Navigate through each maze level, reaching the exit (green) while managing resources and avoiding or destroying enemies.
 
-**Important**: The exit portal is locked when any Egg enemies are present. You must destroy all eggs before the exit portal activates and allows level completion. The portal will dim and make a power-down sound when eggs are present, and brighten with a power-up sound when all eggs are destroyed.
+**Important**: The exit portal is locked while any Egg, Split Boss or Mother Boss is alive. You must destroy them all before the exit portal activates and allows level completion. The portal dims and makes a power-down sound while it is locked, and brightens with a power-up sound when the last one is destroyed. The two Replay ships a boss leaves behind do not hold the exit shut.
 
 ### Scoring
 
@@ -167,15 +169,43 @@ When you complete a level, the screen displays:
 - **Replay**: Purple ships that replay your previous successful attempt
 - **Egg**: Stationary enemies that grow over time. When they reach maximum size, they hatch and spawn 1-3 Baby enemies. Can be destroyed by projectiles before hatching (requires 2 hits). When hit, they gain momentum and move with physics.
 - **Baby**: Small, fast versions of Replay enemies that spawn when Eggs hatch
-- **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 3 hits to destroy.
-- **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 5 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
+- **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 8 hits to destroy.
+- **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 20 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
 
 ### Level Progression
 
-- Maze size increases with level
-- Enemy count and strength scale with level
-- Replay enemy ships appear starting at level 1, increasing in count up to level 10
-- **Deterministic Generation**: Each level uses its level number as the random seed, ensuring the same level always generates the same maze layout, enemy positions, and enemy distributions across playthroughs
+**Levels 1 to 24** are a designed arc. Each has its own file in `levels/` and introduces at most one new thing:
+
+| Level | New |
+|---|---|
+| 1 | Static enemies |
+| 2 | Patrol enemies |
+| 3 | Aggressive enemies |
+| 4 | The Jev hunter, your ally |
+| 5 | Replay ships |
+| 6 | **Boss level**: Split Boss |
+| 7 | Anemones |
+| 8 | Flocker swarms |
+| 10 | Flighthouses |
+| 12 | **Boss level**: two Split Bosses |
+| 13 | Eggs |
+| 18 | **Boss level**: Mother Boss |
+| 24 | **Boss level**: Mother Boss and Split Boss |
+
+- The maze grows from 10 cells across to 32, and the enemy count from 4 to 24, rising by no more than 2 from one ordinary level to the next.
+- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every boss is dead, and the hunter does not fly.
+
+**From level 25** the game is endless:
+
+- The enemy count starts at 25 and rises by one every two levels, stopping at 36. The maze stays at 32 cells across.
+- Every sixth level (30, 36, 42, ...) is a boss level: Split Bosses, then a Mother Boss, then both, building up to three bosses on a level.
+- Enemy speed and damage grow 5% a level after level 4 and stop at 2.5 times. Enemy fire range stops at 600 pixels.
+
+On every level, no enemy starts within 300 pixels of your ship.
+
+- **Deterministic Generation**: Each level uses a fixed random seed (100 + level for the arc, the level number after it), ensuring the same level always generates the same maze layout, enemy positions, and enemy distributions across playthroughs
+
+The level file format and the pacing rules are described in [levels/README.md](levels/README.md).
 
 ### Replaying and personal bests
 
@@ -188,6 +218,8 @@ Press **R** or controller **Y** during play to restart immediately. During power
 any other key or button skips to the failed screen. Each successful clear records
 independent bests for score, time, and stars; the completion screen shows the gaps
 or celebrates new records. Existing profiles pick up records as levels are cleared.
+Records set before the levels were re-paced are cleared once, the first time the game
+loads the profile; your furthest level and total score are kept.
 
 Stars require at least **20 / 40 / 60 / 80 / 95 points** for one through five
 stars respectively. Below 20 points earns no stars. Previously earned star records
@@ -309,7 +341,7 @@ venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = 
 ```
 
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
-One hunter appears on every level; `game.hunterLevelInterval` in `config/settings.json` spaces them out. It starts when you make your
+One hunter appears on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one. It starts when you make your
 first move. It is indestructible: enemy shots and contact knock it about without
 damaging it. Without a key/SDK, the hunter coasts with an unavailable pilot.
 

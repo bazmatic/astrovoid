@@ -82,7 +82,7 @@ Procedurally generated maze.
 
 **Methods:**
 
-- `get_valid_spawn_positions(count: int) -> List[Tuple[float, float]]`: Get spawn positions
+- `get_valid_spawn_positions(count: int, min_distance: float = 100, start_clearance: Optional[float] = None) -> List[Tuple[float, float]]`: Get spawn positions at least `min_distance` apart and from the exit, and `start_clearance` from the player's start. Packs them closer together if the maze is too full, and returns fewer than `count` if they still do not fit
 - `check_exit_collision(pos: Tuple, radius: float) -> bool`: Check if at exit
 - `draw(screen: pygame.Surface) -> None`: Draw maze
 
@@ -254,11 +254,12 @@ renderer.draw_star_rating(0.85, 200, 100)  # 85% score
 ### Enemy Creation
 
 ```python
-from entities.enemy import create_enemies
+import config
+from entities.enemy import Enemy
 
-# Create enemies for level
-spawn_positions = maze.get_valid_spawn_positions(10)
-enemies = create_enemies(level=1, spawn_positions=spawn_positions)
+# Create enemies for a level, clear of the player's start
+spawn_positions = maze.get_valid_spawn_positions(10, start_clearance=config.ENEMY_START_CLEARANCE)
+enemies = [Enemy(pos, "patrol", level=1) for pos in spawn_positions[:3]]
 
 # Update enemies
 for enemy in enemies:

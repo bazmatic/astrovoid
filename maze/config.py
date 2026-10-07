@@ -72,6 +72,9 @@ class MazeComplexityPresets:
     def get_complexity_from_level(level: int) -> MazeComplexity:
         """Get complexity level based on level number.
         
+        Only used when a Maze is built without a complexity. The game always
+        passes one, from level_config.get_maze_complexity.
+        
         Args:
             level: Current level number (1-based).
             
