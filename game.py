@@ -10,7 +10,7 @@ import config
 from rendering.fonts import get_font
 from entities.ship import Ship
 from maze.generator import Maze
-from entities.enemy import Enemy, create_enemies
+from entities.enemy import Enemy
 import level_rules
 import level_config
 from entities.replay_enemy_ship import ReplayEnemyShip
@@ -228,7 +228,7 @@ class Game:
         random.seed(seed)
         # Note: Seed is set before maze generation to ensure reproducible mazes
         
-        # Get maze complexity from level config (None will use level-based default)
+        # Get maze complexity (from the level file, or calculated if it has none)
         maze_complexity = level_config.get_maze_complexity(self.level)
         
         # Get maze grid size (always returns a value, calculated if not in config)
@@ -252,6 +252,8 @@ class Game:
         self.ship.shield_active = True
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
+        # The exit is locked until the bosses are dead, so shots must not run out
+        self.ship.infinite_ammo = level_config.is_boss_level(self.level)
         
         # Reset player movement flag - game loop won't start until first move
         self.player_has_moved = False
@@ -266,7 +268,8 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + 5,  # Extra buffer for spawn positions
+            start_clearance=config.ENEMY_START_CLEARANCE
         )
         hunter_pos = None
         if level_config.level_has_hunter(self.level):
@@ -469,10 +472,12 @@ class Game:
         if not self.ship or not self.maze:
             return
         
-        # Check if any eggs are still alive - deactivate exit portal if eggs exist
-        has_active_eggs = any(egg.active for egg in self.eggs)
+        # The exit stays shut while any egg or boss is alive
+        exit_locked = (any(egg.active for egg in self.eggs)
+                       or any(boss.active for boss in self.split_bosses)
+                       or any(boss.active for boss in self.mother_bosses))
         if self.maze.exit.active:
-            self.maze.exit.set_activated(not has_active_eggs, self.sound_manager)
+            self.maze.exit.set_activated(not exit_locked, self.sound_manager)
         
         # Update exit animation and check player proximity
         if self.maze.exit.active:

@@ -1,141 +1,57 @@
-# Level Configuration Files
+# Level files
 
-This directory contains per-level configuration files that can override default game settings.
+Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels from 25 have no file and come from the formulas in `level_rules.py`.
 
-## File Format
+A file can exist for any level, and can state as much or as little as it likes. Whatever it leaves out comes from the formulas.
 
-Each level can have its own configuration file named `{level}.json` (e.g., `1.json`, `2.json`, etc.).
-
-## Configuration Structure
+## Format
 
 ```json
 {
-  "seed": 42,
-  "maze": {
-    "complexity": "normal",
-    "grid_size": 25
+  "seed": 107,
+  "maze": { "complexity": "normal", "grid_size": 20 },
+  "enemies": {
+    "static": 2, "patrol": 1, "aggressive": 2, "replay": 1,
+    "flocker": 0, "flighthouse": 0, "egg": 0, "anemone": 2,
+    "split_boss": 0, "mother_boss": 0
   },
-  "enemies": {
-    "static": 5,
-    "patrol": 3,
-    "aggressive": 2,
-    "replay": 1,
-    "split_boss": 0
-  }
+  "hunter": false
 }
 ```
 
-### Fields
+- **seed**: random seed for the maze and enemy positions. Default: the level number. Arc levels use `100 + level`.
+- **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
+- **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
+- **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
+- **hunter**: leave it out for the normal rule. `false` means no hunter. `{"spawn_cell": [col, row]}` places one at that cell.
 
-- **seed** (optional): Random seed for level generation. If not specified, defaults to the level number.
-- **maze** (optional): Object containing maze configuration overrides.
-  - **complexity** (optional): Maze complexity level. Valid values: `"empty"`, `"simple"`, `"normal"`, `"complex"`, `"extreme"`. If not specified, complexity is calculated from level number:
-    - Level 1: `empty` (perimeter only, no obstacles)
-    - Levels 2-3: `simple`
-    - Levels 4-7: `normal`
-    - Levels 8-11: `complex`
-    - Levels 12+: `extreme`
-  - **grid_size** (optional): Grid size (width/height in cells). The maze is always square. If not specified, calculated as `BASE_MAZE_SIZE + (level - 1) * MAZE_SIZE_INCREMENT` (default: 15 + (level-1) \* 2). Valid range: 5-100. Larger values create more, smaller blocks.
-- **enemies** (optional): Object containing enemy count overrides. If not specified, uses default calculations from `level_rules.py`.
-  - **static** (optional): Number of static enemies. Defaults to calculated value.
-  - **patrol** (optional): Number of patrol enemies. Defaults to calculated value.
-  - **aggressive** (optional): Number of aggressive enemies. Defaults to calculated value.
-  - **replay** (optional): Number of replay enemy ships. Defaults to calculated value.
-  - **split_boss** (optional): Number of SplitBoss enemies. Defaults to calculated value (0 for levels < 11, 1 for level 11+).
+## Boss levels
 
-## Partial Overrides
+A level with at least one `split_boss` or `mother_boss` is a boss level, whatever its number:
 
-You can specify only the fields you want to override. Unspecified fields will use their default values.
+- the exit is locked until every boss is dead (and, as on any level, every egg);
+- ammo is infinite, so the level can always be finished;
+- no hunter flies, unless the file places one.
 
-### Example: Only override seed
+In the arc these are levels 6, 12, 18 and 24.
 
-```json
-{
-  "seed": 999
-}
-```
+## The hunter
 
-### Example: Only override some enemy counts
+Without a `hunter` entry: no hunter before level 4 (`game.hunterFirstLevel`), none on boss levels, and one on every other level (`game.hunterLevelInterval`).
 
-```json
-{
-  "enemies": {
-    "static": 10,
-    "replay": 2
-  }
-}
-```
+## Pacing rules for the arc
 
-### Example: Override maze complexity
+`tests/test_level_arc.py` checks these, so a level can be retuned freely as long as they hold:
 
-```json
-{
-  "maze": {
-    "complexity": "extreme"
-  }
-}
-```
+- at most one enemy type appears for the first time on any level;
+- from one ordinary level to the next, the enemy count (everything except bosses) rises by at most 2 and falls by at most 1;
+- bosses appear only on levels 6, 12, 18 and 24;
+- ordinary mazes never shrink and stop at 32;
+- anemones fit the maze.
 
-### Example: Override maze grid size
+## Levels without a file
 
-```json
-{
-  "maze": {
-    "grid_size": 50
-  }
-}
-```
-
-### Example: Override both maze complexity and grid size
-
-```json
-{
-  "maze": {
-    "complexity": "extreme",
-    "grid_size": 50
-  }
-}
-```
-
-## Default Behavior
-
-If a level has no configuration file, the game will:
-
-- Use the level number as the random seed
-- Calculate enemy counts using the formulas in `level_rules.py`
-
-## Anemones
-
-An anemone is rooted to one spot and pulls the player's ship toward it. By default a
-level has none before level 4, then four, with one more every two levels up to eight
-(`anemone.firstLevel`, `baseCount`, `levelsPerExtra` and `maxCount` in
-`config/settings.json`). A small maze gets fewer: their fields of pull together cover at
-most 40% of it (`maxCoverage`). Set `"anemone": n` inside `enemies` to choose the number
-for a level, which is then used as given; `0` removes them. None is ever placed where it
-could reach the player's starting position.
-
-
-## Allied hunter
-
-Every level spawns one Jev-controlled hunter automatically at a safe cell near the player.
-This is `game.hunterLevelInterval` in `config/settings.json`: `1` is every level, `3` every
-third level (3, 6, 9, ...), and `0` turns the schedule off. A level also gets a hunter, whatever its number, when it has a
-top-level entry placing one, which sets the spawn location too:
-
-```json
-"hunter": {"spawn_cell": [2, 3]}
-```
-
-The numbers are zero-based **column, row**, not screen pixels. The example must
-be adjusted to a free cell in that level's generated maze. The hunter spawns at
-the cell centre. It must fit clear of walls and the player's spawn. Enemy spawn
-positions are reserved away from it, including clearance for larger bosses.
-Invalid overrides log a diagnostic and fall back to automatic placement. Automatic placement puts the hunter in the safe open cell furthest from the player.
-
-Omit `hunter` or use `null` to leave the level to the schedule, with automatic placement. Arrays, counts and extra configuration
-keys are not supported. At most one hunter spawns per level; it stays dead after
-destruction and resets on a level restart. It does not count as an enemy or block
-the exit portal. Its shots damage enemies and destructible walls; it does not
-collect upgrades or contribute personal player kill points.
-
-API setup is documented in the main README. Never put an API key in level JSON.
+- **Ordinary levels from 25**: grid 32, `extreme`. The enemy count is 25 at level 25 and rises by one every two levels to 36 (`difficulty.maxEnemyCount`). Each added enemy goes to the next of aggressive, replay, flocker, static, patrol, anemone.
+- **Every sixth level** (`difficulty.bossLevelInterval`) is a boss level in a 16-cell open arena: split bosses, then a mother boss, then both, gaining a boss each time round up to three.
+- **Enemy speed and damage** grow 5% a level after level 4 and stop at 2.5 times.
+- **An arc level whose file is missing** gets `3 + level` enemies of the types introduced by then.

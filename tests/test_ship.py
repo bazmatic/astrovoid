@@ -190,3 +190,18 @@ class TestShipFire:
         # Projectile should be at similar y
         assert abs(projectile.y - ship.y) < 10
 
+
+
+def test_ammo_gauge_reads_differently_when_ammo_is_infinite():
+    import pygame
+    pygame.init()
+    pygame.display.set_mode((1352, 878))
+
+    def hud(infinite):
+        screen = pygame.Surface((1352, 878))
+        ship = Ship((100, 100))
+        ship.infinite_ammo = infinite
+        ship.draw_ui(screen, pygame.font.Font(None, 24), potential_score=50, level=6, time_seconds=1.0)
+        return pygame.image.tostring(screen, 'RGB')
+
+    assert hud(True) != hud(False)

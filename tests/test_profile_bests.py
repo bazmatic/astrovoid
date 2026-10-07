@@ -1,6 +1,8 @@
 """Per-level records are independent, durable, and isolated by profile."""
 import json
 
+import pytest
+
 from profiles import ProfileManager
 
 
@@ -50,9 +52,58 @@ def test_old_profiles_and_malformed_bests_load(tmp_path):
             '10': {'score': 'bad', 'time': 1, 'stars': 1},
         }},
     ]
-    path.write_text(json.dumps({'profiles': entries, 'active_profile': 'Old'}))
+    path.write_text(json.dumps({'profiles': entries, 'active_profile': 'Old', 'levels_version': 2}))
     manager = ProfileManager(path)
     assert manager.get_active_profile().bests == {}
     assert manager.get_active_level() == 17 and manager.get_active_total_score() == 8141
     assert manager.get_profile('Broken').bests == {}
     assert list(manager.get_profile('Mixed').bests) == [4]
+
+
+OLD_BEST = {'4': {'score': 83, 'time': 9.0, 'stars': 5}}
+
+
+def write_profiles(path, **top_level):
+    path.write_text(json.dumps({
+        'profiles': [{'name': 'Old', 'level': 21, 'total_score': 9039, 'bests': OLD_BEST}],
+        'active_profile': 'Old', **top_level}))
+
+
+def test_bests_from_before_the_levels_changed_are_cleared_but_progress_is_kept(tmp_path):
+    path = tmp_path / 'profiles.json'
+    write_profiles(path)
+    manager = ProfileManager(path)
+    assert manager.get_active_profile().bests == {}
+    assert manager.get_active_level() == 21 and manager.get_active_total_score() == 9039
+
+
+def test_the_file_is_rewritten_at_once_so_bests_are_cleared_only_once(tmp_path):
+    path = tmp_path / 'profiles.json'
+    write_profiles(path)
+    manager = ProfileManager(path)
+    saved = json.loads(path.read_text())
+    assert saved['levels_version'] == 2
+    assert saved['profiles'][0]['bests'] == {}
+    manager.record_level_result(4, 50, 12.0, 3)
+    assert list(ProfileManager(path).get_active_profile().bests) == [4]
+
+
+def test_a_current_file_keeps_its_bests(tmp_path):
+    path = tmp_path / 'profiles.json'
+    write_profiles(path, levels_version=2)
+    assert list(ProfileManager(path).get_active_profile().bests) == [4]
+
+
+@pytest.mark.parametrize('version', [None, '2', 1, 2.0, True, [], {}])
+def test_a_missing_or_malformed_version_counts_as_old(tmp_path, version):
+    path = tmp_path / 'profiles.json'
+    write_profiles(path, levels_version=version)
+    manager = ProfileManager(path)
+    assert manager.get_active_profile().bests == {}
+    assert manager.get_active_level() == 21
+
+
+def test_a_new_profiles_file_is_written_with_the_version(tmp_path):
+    path = tmp_path / 'profiles.json'
+    ProfileManager(path)
+    assert json.loads(path.read_text())['levels_version'] == 2

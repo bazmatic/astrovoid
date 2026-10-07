@@ -197,20 +197,22 @@ class TestBeingShot:
 
 class TestRealGame:
     @pytest.fixture
-    def game(self, monkeypatch):
+    def game(self, monkeypatch, tmp_path):
         pygame.init()
         screen = pygame.display.set_mode((320, 240))
         monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 0)  # No hunter, so no pilot requests
         from game import Game
+        from profiles import ProfileManager
+        manager = ProfileManager(tmp_path / 'profiles.json')  # Never the player's real save file
+        monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
         game = Game(screen)
-        game.profile_manager._save_profiles = lambda *args, **kwargs: None
         return game
 
     def test_scheduled_level_has_an_anemone_that_updates_and_draws(self, game):
-        game.level = 5  # No anemone count in its level file, so the schedule decides
+        game.level = 25  # Past the level files, so the schedule decides
         game.start_level()
         game.state = config.STATE_PLAYING
-        assert len(game.anemones) == level_rules.get_anemone_count(5) > 0
+        assert len(game.anemones) == level_rules.get_anemone_count(25) > 0
         assert game.anemones is game.entity_manager.anemones
         game.player_has_moved = True
         for _ in range(5):
@@ -227,14 +229,16 @@ class TestRealGameWiring:
     """The game itself must drive the anemone: knowing how is not enough."""
 
     @pytest.fixture
-    def game(self, monkeypatch):
+    def game(self, monkeypatch, tmp_path):
         pygame.init()
         screen = pygame.display.set_mode((320, 240))
         monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 0)  # No hunter, so no pilot requests
         from game import Game
+        from profiles import ProfileManager
+        manager = ProfileManager(tmp_path / 'profiles.json')  # Never the player's real save file
+        monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
         game = Game(screen)
-        game.profile_manager._save_profiles = lambda *args, **kwargs: None
-        game.level = 4
+        game.level = 7  # The first level with anemones
         game.start_level()
         game.state = config.STATE_PLAYING
         return game
@@ -251,7 +255,7 @@ class TestRealGameWiring:
         game.ship.vx = game.ship.vy = 0.0
         return anemone
 
-    @pytest.mark.parametrize('level', [6, 11])
+    @pytest.mark.parametrize('level', [7, 11])
     def test_no_anemone_can_reach_the_player_at_the_start(self, game, level):
         # These two levels used to put one within reach of the start
         game.level = level

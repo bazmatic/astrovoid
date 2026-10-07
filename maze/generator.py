@@ -314,13 +314,34 @@ class Maze:
         
         return destroyed
     
-    def get_valid_spawn_positions(self, count: int, min_distance: float = 100) -> List[Tuple[float, float]]:
-        """Get valid spawn positions for enemies, avoiding walls."""
+    def get_valid_spawn_positions(self, count: int, min_distance: float = 100,
+                                  start_clearance: Optional[float] = None) -> List[Tuple[float, float]]:
+        """Get valid spawn positions for enemies, avoiding walls.
+        
+        Args:
+            count: Number of positions wanted.
+            min_distance: Minimum distance between positions, and from the exit.
+            start_clearance: Minimum distance from the player's start (defaults to min_distance).
+        
+        When the maze is too full to fit them all, positions are packed closer together;
+        the distances from the start and the exit are never reduced.
+        """
+        if start_clearance is None:
+            start_clearance = min_distance
+        start_clearance_sq = start_clearance * start_clearance
+        min_distance_sq = min_distance * min_distance
+        spacing_sq = min_distance_sq
         positions = []
         attempts = 0
         max_attempts = count * 50
         
-        while len(positions) < count and attempts < max_attempts:
+        while len(positions) < count:
+            if attempts >= max_attempts:
+                # Out of room at this spacing: pack the rest closer, down to half the spacing
+                spacing_sq *= 0.64
+                if spacing_sq < min_distance_sq * 0.25:
+                    break
+                attempts = 0
             attempts += 1
             
             # Random position in maze (with offset)
@@ -335,16 +356,15 @@ class Maze:
             pos = (x, y)
             
             # Check if too close to start or exit (use squared distance for comparison)
-            min_distance_sq = min_distance * min_distance
             exit_pos = self.exit.get_pos()
-            if (distance_squared(pos, self.start_pos) < min_distance_sq or
+            if (distance_squared(pos, self.start_pos) < start_clearance_sq or
                 distance_squared(pos, exit_pos) < min_distance_sq):
                 continue
             
             # Check if too close to other spawns
             too_close = False
             for existing_pos in positions:
-                if distance_squared(pos, existing_pos) < min_distance_sq:
+                if distance_squared(pos, existing_pos) < spacing_sq:
                     too_close = True
                     break
             if too_close:

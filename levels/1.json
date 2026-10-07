@@ -1,4 +1,9 @@
 {
+  "seed": 101,
+  "maze": {
+    "complexity": "empty",
+    "grid_size": 10
+  },
   "enemies": {
     "static": 4,
     "patrol": 0,
@@ -6,9 +11,9 @@
     "replay": 0,
     "flocker": 0,
     "flighthouse": 0,
+    "egg": 0,
+    "anemone": 0,
     "split_boss": 0,
-    "mother_boss": 0,
-    "egg": 0
-  },
-  "seed": 100
+    "mother_boss": 0
+  }
 }

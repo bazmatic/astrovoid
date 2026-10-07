@@ -155,6 +155,9 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 ### Level Progression
 
 1. **Level Start**: `start_level()` generates maze, creates ship and enemies
+   - What is on a level comes from `level_config.py`: the level's file in `levels/` if it has one (levels 1-24 all do), otherwise the formulas in `level_rules.py` (level 25 onward). See `levels/README.md`.
+   - Enemies are placed at least `enemies.startClearance` pixels from the ship.
+   - A level with a Split Boss or Mother Boss is a boss level: the exit stays locked while a boss (or, on any level, an egg) is alive, and no hunter flies.
 2. **Gameplay**: Player navigates maze, avoids/fights enemies
 3. **Level Complete**: Ship reaches exit or score reaches zero
 4. **Score Calculation**: Final score calculated with penalties and bonuses
@@ -181,7 +184,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 
 ### Factory Pattern
 
-- **`create_enemies()`**: Factory function creates enemies based on level and spawn positions
+- **`SpawnManager`** (`game_handlers/spawn_manager.py`): Creates every enemy for a level from its enemy counts and spawn positions
 
 ## Extension Points
 
@@ -189,7 +192,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 
 1. Create new strategy class inheriting from `EnemyStrategy`
 2. Implement `update()` method with desired behavior
-3. Add enemy type to `create_enemies()` factory function
+3. Add a count for it to `EnemyCounts` (`level_rules.py`) and spawn it in `SpawnManager`
 4. No modification to `Enemy` class needed (OCP)
 
 ### Adding New Game States

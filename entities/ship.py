@@ -45,6 +45,7 @@ class Ship(RotatingThrusterShip):
         super().__init__(start_pos, config.SHIP_SIZE)
         self.fuel = 0  # Energy used (for scoring), starts at 0
         self.ammo = config.INITIAL_AMMO
+        self.infinite_ammo = False  # Set on boss levels, where the exit needs the bosses dead
         self.damaged = False
         self.damage_timer = 0
         self.glow_phase = 0.0  # For pulsing glow when damaged
@@ -166,8 +167,8 @@ class Ship(RotatingThrusterShip):
             List of Projectile instances if fired (single when level 0-1, 3 when level 2+),
             None if no ammo (only when level 0).
         """
-        # When upgraded (level 1+), unlimited ammo - skip ammo check and consumption
-        if self.gun_upgrade_level < 1:
+        # When upgraded (level 1+) or on a boss level, unlimited ammo - skip ammo check and consumption
+        if self.gun_upgrade_level < 1 and not self.infinite_ammo:
             if self.ammo <= 0:
                 return None
             self.ammo -= config.AMMO_CONSUMPTION_PER_SHOT
@@ -651,6 +652,11 @@ class Ship(RotatingThrusterShip):
             ammo_text = "∞"
             ammo_color = config.COLOR_UPGRADED_SHIP_GLOW
             ammo_text_color = config.COLOR_UPGRADED_SHIP_GLOW
+        elif self.infinite_ammo:
+            ammo_percent = 1.0
+            ammo_text = "∞"
+            ammo_color = (100, 200, 255)
+            ammo_text_color = config.COLOR_TEXT
         else:
             ammo_percent = max(0, min(1, self.ammo / config.INITIAL_AMMO))
             ammo_text = str(self.ammo)
