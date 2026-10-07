@@ -8,16 +8,26 @@ class PilotAction:
     turn: int
     thrust: bool
     fire: bool
+    # Hand steering to fire control: the ship trims its nose onto the firing solution.
+    track: bool = False
 
 
 NEUTRAL = PilotAction(0, False, False)
 ACTIONS = {
     f'{name}_{"thrust" if thrust else "coast"}_{"fire" if fire else "hold"}':
-        PilotAction(turn, thrust, fire)
-    for name, turn in (("left", -1), ("none", 0), ("right", 1))
+        PilotAction(turn, thrust, fire, track)
+    for name, turn, track in (("left", -1, False), ("none", 0, False), ("right", 1, False),
+                              ("track", 0, True))
     for thrust in (False, True)
     for fire in (False, True)
 }
+
+
+@dataclass(frozen=True)
+class FiringSolution:
+    """Where the nose must point to hit the engaged enemy, and whether it already does."""
+    lead_degrees: float  # Relative to the nose: negative left, positive right
+    on_target: bool  # A shot along the present nose would hit
 
 
 @dataclass(frozen=True)

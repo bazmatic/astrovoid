@@ -1,3 +1,4 @@
+import math
 import pygame
 import pytest
 from unittest.mock import Mock
@@ -9,6 +10,7 @@ from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
 from entities.command_recorder import CommandRecorder
+from entities.enemy import Enemy
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
 from hunter.model import PilotResult, PilotDecision, ACTIONS
@@ -78,6 +80,10 @@ def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
     assert not game.hunter.vx
     game.hunter_worker.result = PilotResult(obs.generation,obs.snapshot_at,obs.snapshot_at,
                                             PilotDecision(ACTIONS['none_thrust_fire']))
+    # Fire control only releases a shot at an enemy in its sights.
+    nose = math.radians(game.hunter.angle)
+    game.enemies.append(Enemy((game.hunter.x + math.cos(nose) * 60,
+                               game.hunter.y + math.sin(nose) * 60), 'static'))
     game._update_hunter(1)
     assert game.hunter.vx > 0
     assert any(p.source == 'hunter' for p in game.projectiles)

@@ -34,13 +34,24 @@ class HunterShip(RotatingThrusterShip):
         """Drop the rest of a burst once no live pilot decision backs the trigger."""
         self.burst_remaining = 0
 
-    def step(self, dt, action):
+    def step(self, dt, action, solution=None):
+        """Fly one frame on the pilot's held controls.
+
+        `solution` is fire control's firing solution for the engaged enemy, or
+        None when there is no target. Tracking trims the nose onto it, and a
+        shot is only released while it reports the nose on target.
+        """
         if not self.active:
             return None
         seconds = dt / config.FPS
         self.fire_remaining = max(0.0, self.fire_remaining - seconds)
         self.immunity_remaining = max(0.0, self.immunity_remaining - seconds)
-        if action.turn < 0:
+        if action.track:
+            if solution is not None:
+                # Swing at the normal turn rate, but stop exactly on the solution.
+                rate = self.current_rotation_speed
+                self.angle = (self.angle + max(-rate, min(rate, solution.lead_degrees))) % 360
+        elif action.turn < 0:
             self.rotate_left()
         elif action.turn > 0:
             self.rotate_right()
@@ -49,10 +60,15 @@ class HunterShip(RotatingThrusterShip):
             self.apply_thrust()
         projectile = None
         ready = self.fire_remaining <= 1e-9
+        lined_up = solution is not None and solution.on_target
         # Pulling the trigger commits to a whole burst, even if it is then released.
-        if action.fire and ready and not self.burst_remaining:
+        # Fire control holds each shot until the nose is on target, and drops a
+        # burst that is neither lined up nor still asked for.
+        if action.fire and ready and lined_up and not self.burst_remaining:
             self.burst_remaining = self.settings.burst_size
-        if self.burst_remaining and ready:
+        if self.burst_remaining and not lined_up and not action.fire:
+            self.burst_remaining = 0
+        if self.burst_remaining and ready and lined_up:
             heading = math.radians(self.angle)
             muzzle = (self.x + math.cos(heading) * (self.radius + 5),
                       self.y + math.sin(heading) * (self.radius + 5))
@@ -85,11 +101,3 @@ class HunterShip(RotatingThrusterShip):
         # the cone open while the pilot's engine is on.
         self.draw_thrust_plume(
             screen, config.THRUST_PLUME_LENGTH * 0.6 if self.pilot_thrusting else 0.0)
-
-    def draw_status(self, screen, font, status):
-        """Label the hunter with its pilot status and, when mortal, its health."""
-        if not self.active:
-            return
-        label = status if self.settings.indestructible else f'{status}  {"+" * self.health}'
-        text = font.render(label, True, self.COLOR)
-        screen.blit(text, text.get_rect(midtop=(round(self.x), round(self.y + self.radius + 6))))
