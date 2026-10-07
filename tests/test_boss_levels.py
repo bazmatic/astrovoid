@@ -191,3 +191,26 @@ def test_a_level_without_a_file_gets_its_maze_complexity_from_the_rules(monkeypa
     assert level_config.get_maze_complexity(30) == MazeComplexity.EMPTY
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {'maze': {'complexity': 'nonsense'}})
     assert level_config.get_maze_complexity(9) == MazeComplexity.NORMAL
+
+
+def test_ammo_never_runs_out_on_a_boss_level(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(mother_boss=3))
+    start(game, 72)
+    for _ in range(config.INITIAL_AMMO + 30):
+        assert game.ship.fire()
+    assert game.ship.ammo == config.INITIAL_AMMO
+
+
+def test_ammo_still_runs_out_on_an_ordinary_level(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(static=3))
+    start(game, 3)
+    for _ in range(config.INITIAL_AMMO):
+        assert game.ship.fire()
+    assert game.ship.fire() is None
+
+
+def test_a_boss_placed_by_a_level_file_on_any_level_gives_infinite_ammo(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(split_boss=1))
+    start(game, 7)
+    game.ship.ammo = 0
+    assert game.ship.fire()

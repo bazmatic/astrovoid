@@ -252,6 +252,8 @@ class Game:
         self.ship.shield_active = True
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
+        # The exit is locked until the bosses are dead, so shots must not run out
+        self.ship.infinite_ammo = level_config.is_boss_level(self.level)
         
         # Reset player movement flag - game loop won't start until first move
         self.player_has_moved = False

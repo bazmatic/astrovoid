@@ -159,7 +159,7 @@ When you complete a level, the screen displays:
 ### Resources
 
 - **Fuel**: Consumed when thrusting or using shield. Starts at 1000 units.
-- **Ammunition**: Consumed when firing. Starts at 50 rounds.
+- **Ammunition**: Consumed when firing. Starts at 50 rounds. Infinite on boss levels.
 
 ### Enemy Types
 
@@ -193,7 +193,7 @@ When you complete a level, the screen displays:
 | 24 | **Boss level**: Mother Boss and Split Boss |
 
 - The maze grows from 10 cells across to 32, and the enemy count from 4 to 24, rising by no more than 2 from one ordinary level to the next.
-- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every boss is dead, and the hunter does not fly.
+- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every boss is dead, ammo is infinite, and the hunter does not fly.
 
 **From level 25** the game is endless:
 

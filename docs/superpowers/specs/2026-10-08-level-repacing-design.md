@@ -70,6 +70,7 @@ These are checked by a test over the 24 files, so later tuning cannot break them
 - **What does not hold the exit.** The two replay ships a boss leaves behind when it dies, and babies hatched from eggs, do not lock the exit.
 - **The rule is general.** It is "any boss alive locks the exit", not "this is level 6". A level file that places a boss on any level gets the lock.
 - **No hunter** on boss levels.
+- **Infinite ammo** on boss levels, so a locked exit can never leave the player stuck with no shots. Each shot still costs score as usual.
 - **Arena.** Boss levels use a small `empty` maze. The 300 px start clearance still applies, so the boss never starts next to the player.
 
 ## 3. The hunter

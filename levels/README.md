@@ -30,6 +30,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 A level with at least one `split_boss` or `mother_boss` is a boss level, whatever its number:
 
 - the exit is locked until every boss is dead (and, as on any level, every egg);
+- ammo is infinite, so the level can always be finished;
 - no hunter flies, unless the file places one.
 
 In the arc these are levels 6, 12, 18 and 24.
