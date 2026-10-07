@@ -9,6 +9,7 @@ import pygame
 import random
 import math
 import numpy as np
+import numpy.random  # Loaded here, not lazily mid-game where it stalls a frame
 import config
 import wave
 import os
@@ -63,6 +64,20 @@ class SoundManager:
         if self.shoot_sound:
             self.shoot_sound.set_volume(config.SHOOT_SOUND_VOLUME)
     
+    @staticmethod
+    def _moving_average(samples: np.ndarray, widths: np.ndarray) -> np.ndarray:
+        """Average each sample with its neighbours, over a window whose width varies per sample.
+
+        Done with a running total rather than a Python loop over every sample,
+        which took long enough to stall the game the first time a sound played.
+        """
+        num_samples = len(samples)
+        index = np.arange(num_samples)
+        start = np.maximum(0, index - widths // 2)
+        end = np.minimum(num_samples, index + widths // 2 + 1)
+        running_total = np.concatenate(([0.0], np.cumsum(samples, dtype=np.float64)))
+        return ((running_total[end] - running_total[start]) / (end - start)).astype(np.float32)
+
     def _generate_white_noise(self) -> Optional[pygame.mixer.Sound]:
         """Generate white noise sound for thruster.
         
@@ -1020,14 +1035,8 @@ class SoundManager:
         noise_cutoff_base = freq_curve * 2.0  # Noise extends higher than tone
         # Apply low-pass filtering using convolution (simple moving average)
         # Filter width inversely related to cutoff frequency
-        filtered_noise = np.zeros(num_samples, dtype=np.float32)
-        for i in range(num_samples):
-            # Dynamic filter width based on frequency
-            filter_width = max(3, int(sample_rate / (noise_cutoff_base[i] * 4)))
-            filter_width = min(filter_width, 50)  # Cap at reasonable size
-            start_idx = max(0, i - filter_width // 2)
-            end_idx = min(num_samples, i + filter_width // 2 + 1)
-            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+        filter_widths = np.clip((sample_rate / (noise_cutoff_base * 4)).astype(np.int64), 3, 50)
+        filtered_noise = self._moving_average(white_noise, filter_widths)
         
         # Mix tone and noise (50% tone, 50% noise for strong whoosh)
         tone_mix = 0.5
@@ -1091,14 +1100,8 @@ class SoundManager:
         # Filter cutoff follows the frequency curve
         noise_cutoff_base = freq_curve * 2.0  # Noise extends higher than tone
         # Apply low-pass filtering using convolution (simple moving average)
-        filtered_noise = np.zeros(num_samples, dtype=np.float32)
-        for i in range(num_samples):
-            # Dynamic filter width based on frequency
-            filter_width = max(3, int(sample_rate / (noise_cutoff_base[i] * 4)))
-            filter_width = min(filter_width, 50)  # Cap at reasonable size
-            start_idx = max(0, i - filter_width // 2)
-            end_idx = min(num_samples, i + filter_width // 2 + 1)
-            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+        filter_widths = np.clip((sample_rate / (noise_cutoff_base * 4)).astype(np.int64), 3, 50)
+        filtered_noise = self._moving_average(white_noise, filter_widths)
         
         # Mix tone and noise (50% tone, 50% noise for strong whoosh)
         tone_mix = 0.5
@@ -1267,13 +1270,8 @@ class SoundManager:
 
         # Add filtered noise for motor texture
         white_noise = np.random.normal(0.0, 1.0, num_samples).astype(np.float32)
-        filtered_noise = np.zeros(num_samples, dtype=np.float32)
-        for i in range(num_samples):
-            filter_width = max(5, int(sample_rate / (freq_curve[i] * 2)))
-            filter_width = min(filter_width, 100)
-            start_idx = max(0, i - filter_width // 2)
-            end_idx = min(num_samples, i + filter_width // 2 + 1)
-            filtered_noise[i] = np.mean(white_noise[start_idx:end_idx])
+        filter_widths = np.clip((sample_rate / (freq_curve * 2)).astype(np.int64), 5, 100)
+        filtered_noise = self._moving_average(white_noise, filter_widths)
 
         # Mix tone and noise (motor has both tonal and noisy components)
         tone_mix = 0.7

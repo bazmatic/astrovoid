@@ -31,7 +31,8 @@ class EnemyStrategy(ABC):
         enemy: 'Enemy',
         dt: float,
         player_pos: Optional[Tuple[float, float]],
-        walls: Optional[List]
+        walls: Optional[List],
+        spatial_grid=None
     ) -> None:
         """Update enemy position and behavior based on strategy.
         
@@ -40,6 +41,7 @@ class EnemyStrategy(ABC):
             dt: Delta time since last update.
             player_pos: Current player position, if available.
             walls: List of wall segments for collision detection.
+            spatial_grid: Optional spatial grid, so only nearby walls are checked.
         """
         pass
     
@@ -151,7 +153,8 @@ class StaticEnemyStrategy(EnemyStrategy):
         enemy: 'Enemy',
         dt: float,
         player_pos: Optional[Tuple[float, float]],
-        walls: Optional[List]
+        walls: Optional[List],
+        spatial_grid=None
     ) -> None:
         """Update static enemy position based on momentum and handle wall collisions.
         
@@ -177,7 +180,7 @@ class StaticEnemyStrategy(EnemyStrategy):
         
         # Check wall collision (handles bouncing)
         if walls:
-            enemy.check_wall_collision(walls)
+            enemy.check_wall_collision(walls, spatial_grid)
 
 
 class PatrolEnemyStrategy(EnemyStrategy):
@@ -208,7 +211,8 @@ class PatrolEnemyStrategy(EnemyStrategy):
         enemy: 'Enemy',
         dt: float,
         player_pos: Optional[Tuple[float, float]],
-        walls: Optional[List]
+        walls: Optional[List],
+        spatial_grid=None
     ) -> None:
         """Update patrol enemy movement."""
         self.initialize(enemy)
@@ -251,6 +255,8 @@ class PatrolEnemyStrategy(EnemyStrategy):
         # Check wall collision
         hit_wall = False
         if walls:
+            if spatial_grid is not None:
+                walls = spatial_grid.get_nearby_walls((new_x, new_y), enemy.radius * 2.0)
             for wall in walls:
                 # Handle both WallSegment and tuple formats
                 if hasattr(wall, 'get_segment'):
@@ -327,7 +333,8 @@ class AggressiveEnemyStrategy(EnemyStrategy):
         enemy: 'Enemy',
         dt: float,
         player_pos: Optional[Tuple[float, float]],
-        walls: Optional[List]
+        walls: Optional[List],
+        spatial_grid=None
     ) -> None:
         """Update aggressive enemy to chase player with smart wall avoidance."""
         # Reset mode if player position unavailable
@@ -357,7 +364,7 @@ class AggressiveEnemyStrategy(EnemyStrategy):
             # Check and handle wall collisions (bounces off walls)
             # This must be called after movement to detect collisions
             if walls:
-                enemy.check_wall_collision(walls)
+                enemy.check_wall_collision(walls, spatial_grid)
             
             # Check if stuck (position hasn't changed significantly)
             if self.previous_pos is not None:
@@ -394,7 +401,7 @@ class AggressiveEnemyStrategy(EnemyStrategy):
             # Check and handle wall collisions (bounces off walls)
             # This must be called after movement to detect collisions
             if walls:
-                enemy.check_wall_collision(walls)
+                enemy.check_wall_collision(walls, spatial_grid)
             
             # If shift duration expired, switch back to seek mode
             if self.shift_frames_remaining <= 0:

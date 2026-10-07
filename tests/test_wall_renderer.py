@@ -156,6 +156,19 @@ class TestDamage:
         fresh = render(fresh_walls)
         assert pygame.image.tostring(patched, "RGBA") == pygame.image.tostring(fresh, "RGBA")
 
+    def test_damage_at_the_far_edge_repaints_only_its_patch(self):
+        """Hitting the bottom or right boundary must not repaint the whole maze."""
+        renderer = WallRenderer()
+        walls = [wall((40, 40), (360, 40)), wall((40, 240), (360, 240)),
+                 wall((40, 40), (40, 240)), wall((360, 40), (360, 240))]
+        render(walls, renderer)
+        cache = renderer._surface
+        walls[1].damage()
+        walls[3].damage()
+        patched = render(walls, renderer)
+        assert renderer._surface is cache
+        assert pygame.image.tostring(patched, "RGBA") == pygame.image.tostring(render(walls), "RGBA")
+
     def test_inactive_walls_are_not_drawn(self):
         dead = wall((60, 150), (340, 150))
         dead.active = False

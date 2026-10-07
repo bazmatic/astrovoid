@@ -116,7 +116,8 @@ class Enemy(GameEntity, Collidable, Drawable):
         self,
         dt: float,
         player_pos: Optional[Tuple[float, float]] = None,
-        walls: Optional[List] = None
+        walls: Optional[List] = None,
+        spatial_grid=None
     ) -> None:
         """Update enemy position and behavior using strategy.
         
@@ -124,11 +125,12 @@ class Enemy(GameEntity, Collidable, Drawable):
             dt: Delta time since last update.
             player_pos: Current player position, if available.
             walls: List of wall segments for collision detection.
+            spatial_grid: Optional spatial grid, so only nearby walls are checked.
         """
         if not self.active:
             return
         
-        self.strategy.update(self, dt, player_pos, walls)
+        self.strategy.update(self, dt, player_pos, walls, spatial_grid)
         self._body.update(self, dt, player_pos)
     
     def get_fired_projectile(self, player_pos: Optional[Tuple[float, float]]) -> Optional['Projectile']:

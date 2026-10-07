@@ -175,7 +175,9 @@ class WallRenderer:
         xs = [point[0] for key in self._segments for point in key]
         ys = [point[1] for key in self._segments for point in key]
         self._origin = (min(xs) - margin, min(ys) - margin)
-        size = (max(xs) - min(xs) + 2 * margin, max(ys) - min(ys) + 2 * margin)
+        # One pixel more than the walls span, so the patch around a wall on the
+        # far edge still fits and does not force everything to be repainted
+        size = (max(xs) - min(xs) + 2 * margin + 1, max(ys) - min(ys) + 2 * margin + 1)
         self._surface = pygame.Surface(size)
         self._surface.fill(self.TRANSPARENT)
         # No RLE acceleration: it would be re-encoded on every patch repaint
@@ -183,11 +185,21 @@ class WallRenderer:
         self._paint_segments(self._segments.keys())
     
     def _paint_patch(self, patch: pygame.Rect) -> None:
-        """Clear one patch of the cached surface and repaint the walls crossing it."""
-        self._surface.set_clip(patch)
-        self._surface.fill(self.TRANSPARENT)
-        self._paint_segments([key for key in self._segments if self._patch(key).colliderect(patch)])
-        self._surface.set_clip(None)
+        """Repaint one patch of the cached surface from the walls crossing it."""
+        keys = [key for key in self._segments if self._patch(key).colliderect(patch)]
+        # Those walls are painted whole on a scratch surface and the patch
+        # copied across. Painting them clipped to the patch instead comes out
+        # a few pixels different from how they were first painted
+        area = patch.unionall([self._patch(key) for key in keys])
+        scratch = pygame.Surface(area.size)
+        scratch.fill(self.TRANSPARENT)
+        cache, origin = self._surface, self._origin
+        self._surface, self._origin = scratch, (origin[0] + area.x, origin[1] + area.y)
+        try:
+            self._paint_segments(keys)
+        finally:
+            self._surface, self._origin = cache, origin
+        cache.blit(scratch, patch.topleft, patch.move(-area.x, -area.y))
     
     def _paint_segments(self, keys) -> None:
         """Paint the given segments and the joints at their ends."""
