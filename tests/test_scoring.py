@@ -160,3 +160,43 @@ class TestScoreCalculator:
 
 
 
+
+
+class TestPowerDrainSwitch:
+    """NO_POWER_DRAIN keeps the power gauge full so a level has no time limit while testing."""
+
+    def worn_down(self, monkeypatch, value=None):
+        from scoring.system import ScoringSystem
+        if value is None:
+            monkeypatch.delenv('NO_POWER_DRAIN', raising=False)
+        else:
+            monkeypatch.setenv('NO_POWER_DRAIN', value)
+        scoring = ScoringSystem()
+        scoring.start_level(0.0)
+        for _ in range(50):
+            scoring.record_enemy_collision()
+        # An hour in, having burned plenty of fuel
+        return scoring, scoring.calculate_current_potential_score(3600.0, 5000, 0)
+
+    def test_power_drains_by_default(self, monkeypatch):
+        scoring, potential = self.worn_down(monkeypatch)
+        assert scoring.power_drain_enabled
+        assert potential['potential_score'] <= 0
+
+    @pytest.mark.parametrize('value', ['1', 'true', 'YES', 'on'])
+    def test_switch_keeps_power_full(self, monkeypatch, value):
+        scoring, potential = self.worn_down(monkeypatch, value)
+        assert not scoring.power_drain_enabled
+        assert potential['potential_score'] == potential['max_score'] == config.MAX_LEVEL_SCORE
+        assert potential['score_percentage'] == 1.0
+
+    @pytest.mark.parametrize('value', ['', '0', 'false', 'off'])
+    def test_other_values_leave_the_drain_on(self, monkeypatch, value):
+        scoring, potential = self.worn_down(monkeypatch, value)
+        assert scoring.power_drain_enabled
+        assert potential['potential_score'] <= 0
+
+    def test_final_score_is_still_scored_honestly(self, monkeypatch):
+        """The switch only stops a level failing; it does not hand out a perfect score."""
+        scoring, _ = self.worn_down(monkeypatch, '1')
+        assert scoring.calculate_level_score(3600.0, 5000, 0)['final_score'] < config.MAX_LEVEL_SCORE

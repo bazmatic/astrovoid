@@ -66,6 +66,14 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### Testing Switches
+
+Set these in the environment when launching, for example `NO_POWER_DRAIN=1 ./run.sh`:
+
+- `NO_POWER_DRAIN=1`: the power gauge stays full, so a level never fails and has no time limit. The score awarded on finishing a level is still calculated normally.
+- `START_LEVEL=5`: start at the given level.
+- `WINDOWED=1`: run in a window instead of fullscreen.
+
 ## Building Distributables
 
 The project is set up to use PyInstaller to create standalone executables.

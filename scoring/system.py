@@ -4,6 +4,7 @@ This module provides the ScoringSystem class that tracks game metrics
 and uses ScoreCalculator for actual score calculations.
 """
 
+import os
 import config
 from typing import Dict
 from scoring.calculator import ScoreCalculator
@@ -36,6 +37,9 @@ class ScoringSystem:
         self.enemies_destroyed = 0
         self.powerup_crystals_collected = 0
         self.enemy_bullet_hits = 0
+        # Testing switch: with NO_POWER_DRAIN set, power stays full, so a level
+        # never fails and has no time limit. Final scores are unaffected.
+        self.power_drain_enabled = os.getenv('NO_POWER_DRAIN', '').lower() not in ('1', 'true', 'yes', 'on')
     
     def start_level(self, current_time: float) -> None:
         """Start tracking a new level.
@@ -174,7 +178,7 @@ class ScoringSystem:
         )
         
         max_score = self.calculate_max_possible_score()
-        potential_score = result["final_score"]
+        potential_score = result["final_score"] if self.power_drain_enabled else max_score
         result["score_percentage"] = ScoreCalculator.calculate_score_percentage(
             potential_score, max_score
         )
