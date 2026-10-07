@@ -40,7 +40,7 @@ def test_expiry_is_snapshot_based_and_no_backlog():
     now[0] = 10.6
     w.result = PilotResult(c.generation,10,10.6,PilotDecision(ACTIONS['left_thrust_fire']))
     assert c.tick(observe) == ACTIONS['left_thrust_fire']
-    now[0] = 10.75
+    now[0] = 10+c.settings.action_ttl
     assert c.tick(observe) == NEUTRAL
     assert c.status == 'coasting'
 
@@ -101,3 +101,35 @@ def test_turn_is_held_until_replaced_or_expired():
     c.tick(observe)
     now[0] += c.settings.action_ttl
     assert c.tick(observe) == NEUTRAL
+
+
+import pytest
+
+
+@pytest.mark.parametrize('latency', [0.35, 0.5, 0.7])
+def test_held_controls_do_not_lapse_between_decisions_at_measured_latency(latency):
+    """Real round trips take 0.35-0.7 s. Back-to-back decisions must hand over without
+    the controls dropping to neutral in between, and none may be thrown away as stale."""
+    now,w,c,observe = setup()
+    held = ACTIONS['track_thrust_fire']
+    c.tick(observe)
+    lapses = 0
+    for frame in range(1, 60*5):
+        now[0] = 10 + frame/60
+        if w.busy and now[0]-w.sent[-1].snapshot_at >= latency:
+            w.result = PilotResult(c.generation,w.sent[-1].snapshot_at,now[0],PilotDecision(held))
+        action = c.tick(observe)
+        if c.ever_accepted and action != held:
+            lapses += 1
+    assert c.accepted >= 5
+    assert c.discarded == 0
+    assert lapses == 0
+
+
+def test_predictions_look_as_far_ahead_as_a_decision_takes_to_land():
+    from hunter.model import HunterSettings
+    settings = HunterSettings()
+    # Measured median round trip is 0.4-0.5 s.
+    assert 0.4 <= settings.decision_delay <= 0.5
+    assert settings.action_ttl >= 2*0.7
+    assert settings.request_timeout <= settings.action_ttl
