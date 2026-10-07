@@ -1,7 +1,14 @@
-"""Local line-of-sight geometry. Returned segments never extend behind occluders."""
+"""Local line-of-sight geometry. Returned segments never extend behind occluders.
+
+This runs on the game thread for every pilot observation, and fire control
+calls it every frame, so the inner loops are written out longhand and each
+wall is only tested against the walls that share its direction from the
+viewer. tests/visibility_reference.py keeps the plain version these must match.
+"""
 import math
 
 EPS = 1e-7
+_TWO_PI = 2 * math.pi
 
 
 def _sub(a, b):
@@ -25,23 +32,28 @@ def _intersection(a, d, b, e):
 
 
 def visible_point(origin, point, segments, radius):
-    d = _sub(point, origin)
-    length_sq = d[0]**2 + d[1]**2
+    ox, oy = origin
+    dx, dy = point[0] - ox, point[1] - oy
+    length_sq = dx**2 + dy**2
     if length_sq > radius**2 + EPS:
         return False
     if length_sq < EPS**2:
         return True
-    for a, b in segments:
-        e = _sub(b, a)
-        hit = _intersection(origin, d, a, e)
-        if hit:
-            t, u = hit
-            if EPS < t < 1 - EPS and -EPS <= u <= 1 + EPS:
+    near_end = 1 - EPS
+    past_end = 1 + EPS
+    for (ax, ay), (bx, by) in segments:
+        ex, ey = bx - ax, by - ay
+        fx, fy = ax - ox, ay - oy
+        denom = dx * ey - dy * ex
+        if abs(denom) >= EPS:
+            t = (fx * ey - fy * ex) / denom
+            if EPS < t < near_end and -EPS <= (fx * dy - fy * dx) / denom <= past_end:
                 return False
-        elif abs(_cross(_sub(a, origin), d)) < EPS:
-            ts = [((p[0]-origin[0])*d[0] + (p[1]-origin[1])*d[1]) / length_sq
-                  for p in (a,b)]
-            if max(min(ts), EPS) < min(max(ts), 1-EPS):
+        elif abs(fx * dy - fy * dx) < EPS:
+            # The wall lies along the line of sight: it hides the point if it overlaps it.
+            ta = ((ax-ox)*dx + (ay-oy)*dy) / length_sq
+            tb = ((bx-ox)*dx + (by-oy)*dy) / length_sq
+            if max(min(ta, tb), EPS) < min(max(ta, tb), near_end):
                 return False
     return True
 
@@ -65,7 +77,14 @@ def _clip(origin, segment, radius):
 def local_segments(origin, segments, radius):
     """Clip and deduplicate local occluders, including reversed duplicate edges."""
     result = {}
+    # Most walls are nowhere near: throw those out before any real geometry.
+    left, right = origin[0] - radius - 1, origin[0] + radius + 1
+    top, bottom = origin[1] - radius - 1, origin[1] + radius + 1
     for segment in segments:
+        (ax, ay), (bx, by) = segment
+        if ((ax < left and bx < left) or (ax > right and bx > right) or
+                (ay < top and by < top) or (ay > bottom and by > bottom)):
+            continue
         clip = _clip(origin, segment, radius)
         if clip:
             a, b = segment
@@ -100,33 +119,67 @@ def _intervals(origin, segment, walls, radius):
     clip = _clip(origin, segment, radius)
     if not clip:
         return []
+    lo_clip, hi_clip = clip
     a, b = segment
-    d = _sub(b, a)
-    cuts = {clip[0], clip[1]}
-    for c, e in walls:
-        for endpoint in (c, e):
-            hit = _intersection(a, d, origin, _sub(endpoint, origin))
-            if hit and clip[0] < hit[0] < clip[1] and hit[1] >= 0:
-                cuts.add(hit[0])
-        hit = _intersection(a, d, c, _sub(e, c))
-        if hit and clip[0] < hit[0] < clip[1] and 0 <= hit[1] <= 1:
-            cuts.add(hit[0])
+    ax, ay = a
+    dx, dy = b[0] - ax, b[1] - ay
+    ox, oy = origin
+    # From the segment's start to the viewer
+    vx, vy = ox - ax, oy - ay
+    v_cross_d = vx * dy - vy * dx
+    cuts = {lo_clip, hi_clip}
+    add = cuts.add
+    for (cx, cy), (ex, ey) in walls:
+        # Rays from the viewer through each end of the wall
+        for px, py in ((cx, cy), (ex, ey)):
+            rx, ry = px - ox, py - oy
+            denom = dx * ry - dy * rx
+            if abs(denom) >= EPS:
+                t = (vx * ry - vy * rx) / denom
+                if lo_clip < t < hi_clip and v_cross_d / denom >= 0:
+                    add(t)
+        # Where the wall crosses the segment
+        wx, wy = ex - cx, ey - cy
+        fx, fy = cx - ax, cy - ay
+        denom = dx * wy - dy * wx
+        if abs(denom) >= EPS:
+            t = (fx * wy - fy * wx) / denom
+            if lo_clip < t < hi_clip and 0 <= (fx * dy - fy * dx) / denom <= 1:
+                add(t)
         # Collinear overlap endpoints also change whether an edge is blocked.
-        if abs(_cross(d, _sub(c, a))) < EPS and abs(_cross(d, _sub(e, a))) < EPS:
-            axis = 0 if abs(d[0]) > abs(d[1]) else 1
-            for point in (c, e):
-                t = (point[axis] - a[axis]) / d[axis]
-                if clip[0] < t < clip[1]:
-                    cuts.add(t)
+        if abs(dx * fy - dy * fx) < EPS and abs(dx * (ey - ay) - dy * (ex - ax)) < EPS:
+            if abs(dx) > abs(dy):
+                ts = ((cx - ax) / dx, (ex - ax) / dx)
+            else:
+                ts = ((cy - ay) / dy, (ey - ay) / dy)
+            for t in ts:
+                if lo_clip < t < hi_clip:
+                    add(t)
     cuts = sorted(cuts)
     result = []
     for lo, hi in zip(cuts, cuts[1:]):
         if hi-lo <= EPS:
             continue
-        mid = _at(a, d, (lo+hi)/2)
+        mid = _at(a, (dx, dy), (lo+hi)/2)
         if visible_point(origin, mid, walls, radius):
             result.append((lo, hi))
     return result
+
+
+def _bearing_span(origin, segment):
+    """The arc of directions a segment covers as seen from origin: (centre, half-width).
+
+    None means every direction, for a segment that runs through the viewer.
+    """
+    (ax, ay), (bx, by) = segment
+    ax, ay, bx, by = ax - origin[0], ay - origin[1], bx - origin[0], by - origin[1]
+    if (abs(ax) < EPS and abs(ay) < EPS) or (abs(bx) < EPS and abs(by) < EPS):
+        return None
+    start = math.atan2(ay, ax)
+    sweep = (math.atan2(by, bx) - start + math.pi) % _TWO_PI - math.pi
+    if abs(sweep) > math.pi - 1e-6:
+        return None
+    return start + sweep / 2, abs(sweep) / 2
 
 
 def _merge(intervals):
@@ -141,8 +194,19 @@ def _merge(intervals):
 
 def visible_wall_portions(origin, segments, radius):
     walls = local_segments(origin, segments, radius)
+    # A wall can only hide, cut or cross another if the two lie in overlapping
+    # directions from the viewer, so each is tested against just those.
+    spans = [_bearing_span(origin, wall) for wall in walls]
     result = []
-    for a, b in walls:
-        for lo, hi in _merge(_intervals(origin, (a,b), walls, radius)):
+    for (a, b), span in zip(walls, spans):
+        if span is None:
+            near = walls
+        else:
+            centre, half = span
+            reach = half + 1e-6
+            near = [wall for wall, other in zip(walls, spans)
+                    if other is None or
+                    abs((other[0] - centre + math.pi) % _TWO_PI - math.pi) <= reach + other[1]]
+        for lo, hi in _merge(_intervals(origin, (a,b), near, radius)):
             result.append((_at(a, _sub(b,a), lo), _at(a, _sub(b,a), hi)))
     return result

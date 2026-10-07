@@ -1,3 +1,4 @@
+import pytest
 import json
 from types import SimpleNamespace
 from dataclasses import replace
@@ -85,3 +86,20 @@ def test_route_follows_an_opening_blasted_through_a_wall_cell():
         wall.active = False
     # The grid still marks the cell as wall; the destroyed edges open it.
     assert route() == 200
+
+
+def test_sight_range_is_the_same_distance_whatever_the_cell_size():
+    """Sight is a share of the maze's width, so a denser maze does not shorten it."""
+    settings = HunterSettings()
+    coarse, dense = maze(), maze()
+    dense.grid_width = dense.grid_height = 30
+    dense.cell_size_x = dense.cell_size_y = 1000 / 30
+    assert settings.sensor_range(coarse) == pytest.approx(settings.sensor_range(dense)) == pytest.approx(400)
+
+    def sees(world, distance):
+        state = read(HunterPerception(), HunterShip((150, 150)), world, [Enemy((150 + distance, 150), 'patrol', 1)], 0)
+        return len(state['visible_contacts']) == 1
+
+    for world in (coarse, dense):
+        assert sees(world, 390)
+        assert not sees(world, 410)

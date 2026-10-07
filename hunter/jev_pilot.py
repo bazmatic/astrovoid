@@ -2,6 +2,7 @@
 import json
 import math
 import os
+from dataclasses import replace
 from hunter.model import ACTIONS, PilotDecision
 from hunter.pilot_sensors import pilot_state
 
@@ -62,21 +63,27 @@ FIRE_CONTROL_INSTRUCTIONS = (
 )
 
 BRAKE_INSTRUCTIONS = (
-    '`motion.brake` is a braking solution for the wall on your present course. There are no '
-    'brakes: slowing means swinging the nose against the motion vector and thrusting. '
-    'brake.safe_speed_metres_per_second is the fastest you can travel and still stop before '
-    'that wall from your present attitude, and brake.stopping_distance_metres is the room a '
-    'stop needs now. brake.speed_state compares your speed with the safe speed: slow (under '
-    'half), cruising (over half), or too_fast (over it: you will hit the wall unless you '
-    'start braking now). brake.thrust_effect says what the engine would do to your speed '
-    'with the nose where it is: speeds_up, sideways, or slows. '
-    'brake.retrograde_degrees_off_nose_at_next_decision is where the braking attitude will '
-    'be relative to the nose when your choice takes over (negative left, positive right). '
+    '`motion.brake` is a worked braking solution. It finds the wall your hull will actually '
+    'reach on your present motion vector and compares the distance a stop needs with the '
+    'room you have. Moving fast alongside a wall is not moving towards it: only a wall on '
+    'your course counts, however near others are. With no wall on your course the room is '
+    'your sensor range. There are no brakes: stopping means swinging the nose against the '
+    'motion vector and thrusting. brake.stopping_distance_metres is the room a stop needs '
+    'now, including the swing of the nose, and brake.safe_speed_metres_per_second is the '
+    'fastest speed from which you could still stop in the room you have. brake.speed_state '
+    'compares your speed with that: slow (under half), cruising (over half), or too_fast '
+    '(the stop no longer fits: brake now). It is never too_fast at a crawl, when touching '
+    'a wall would not matter. brake.thrust_effect says what the engine would do to your '
+    'speed with the nose where it is: speeds_up, sideways, or slows. '
+    'brake.burn_heading_degrees and brake.burn_seconds are the braking burn itself. When '
+    'brake.speed_state is too_fast, the ship\'s navigator flies that burn for you: choose '
+    'the steering `course` and hold the engine on, and it swings the nose to the braking '
+    'attitude, fires only once lined up and cuts the engine when the ship has stopped. '
 )
 
 FOLLOW_INSTRUCTIONS = (
     '`follow_player` is your job whenever no enemy is visible: follow the friendly player '
-    'ship. It is null only when there is no player to follow. It points at the next waypoint on the '
+    'ship. It is null when there is no player or no open route to it. It points at the next waypoint on the '
     'route through the maze to the player (the player itself when player_visible is true): '
     'degrees_off_nose_at_next_decision is where that waypoint will be relative to the nose '
     'when your choice takes over (negative left, positive right), waypoint_distance_metres '
@@ -85,20 +92,64 @@ FOLLOW_INSTRUCTIONS = (
 )
 
 COURSE_INSTRUCTIONS = (
-    '`follow_player.course` is a worked course correction: the turn and burn that leave '
-    'your motion vector pointing straight at the follow_player waypoint without going too '
-    'fast. Pointing the nose at the waypoint and thrusting does not do that, because '
-    'thrust adds to the motion you already have; the nose must point where the change in '
-    'motion has to go. course.burn_degrees_off_nose is where the nose must point for the '
-    'burn, relative to where it points now, and '
-    'course.burn_degrees_off_nose_at_next_decision is the same when your choice takes over '
-    '(negative left, positive right). course.burn_seconds is how long the engine must '
-    'then fire. course.burn_needed is false when the motion vector is already on the '
-    'waypoint at a good speed, or so nearly that no burn is worth flying. '
+    'A navigation course is a worked course correction: the turn and burn that leave your '
+    'motion vector pointing straight at where you need to go without going too fast. '
+    'Pointing the nose at a place and thrusting does not do that, because thrust adds to '
+    'the motion you already have; the nose must point where the change in motion has to '
+    'go. course.burn_degrees_off_nose is where the nose must point for the burn, relative '
+    'to where it points now (negative left, positive right), and course.burn_seconds is '
+    'how long the engine must then fire. course.burn_needed is false when the motion '
+    'vector is already where it should be at a good speed. '
     'course.speed_after_metres_per_second is your speed once the burn is done and '
     'course.speed_limit_metres_per_second is the too-fast speed it stays under, set by '
-    'the room to stop beyond the waypoint. The course is null when there is nothing to '
-    'follow or you are already alongside the player. '
+    'the room to stop beyond the destination. '
+    'The ship has a navigator that flies a course for you. Choosing the steering `course` '
+    'hands the nose to it: it swings the nose onto the burn heading and holds it there. '
+    'While you also hold the engine on, the navigator fires it only once the nose is lined '
+    'up and cuts it when the burn is complete, so holding thrust on a course never '
+    'overshoots. Held left or right steering cannot do this: it moves the nose about '
+    '`turning.degrees_per_decision` degrees per decision. '
+)
+
+WALL_FOLLOW_INSTRUCTIONS = (
+    '`wall_follow` is your job when there is nobody to follow: no enemy is visible and '
+    'follow_player is null because there is no player or no open route to it. You are cut '
+    'off, so explore by keeping a wall on your left and moving along it; in a maze that '
+    'leads past every opening. wall_follow.degrees_off_nose is the direction to travel, '
+    'parallel to the nearest wall with that wall on your left, wall_follow.wall_distance_metres '
+    'is the gap between your hull and that wall (null when no wall is in sight, and the '
+    'direction is then straight ahead to find one), and wall_follow.course is the '
+    'navigation course that takes you that way. wall_follow is null whenever follow_player '
+    'is not. The navigation course is follow_player.course when follow_player is not '
+    'null, and wall_follow.course otherwise. '
+)
+
+ENGINE_INSTRUCTIONS = (
+    'The engine has four settings, and your choice lasts until your next decision. '
+    'coast: engine off. '
+    'pulse: one short burn of a tenth of a second, a nudge of about 13 metres per second '
+    'along the nose. Choosing pulse again at the next decision pulses again, so repeated '
+    'pulses work like a low throttle. '
+    'burn: the worked burn. The ship fires the engine for exactly the worked length and '
+    'only while the nose is on the burn\'s heading, then cuts it, so it never overshoots. '
+    'With a worked burn of zero it does not fire at all. '
+    'thrust: engine on, wherever the nose points, until your next decision. That adds '
+    'about 60 metres per second each decision; it is the coarsest setting. '
+)
+
+ENGAGE_INSTRUCTIONS = (
+    '`engage` is the worked approach to the enemy that fire control is engaging: the '
+    'nearest visible enemy with a non-null aim. It is null when there is none. While you '
+    'track, the nose stays on that enemy, so the engine can only push you towards it. '
+    'engage.distance_metres is how far it is and engage.standoff_metres is the distance '
+    'to fight from. engage.range_state is far (outside the standoff), in_range, or '
+    'too_close. engage.closing_speed_metres_per_second is how fast you are closing on it '
+    '(negative when it is getting further away) and '
+    'engage.target_closing_speed_metres_per_second is the fastest closing speed from '
+    'which you could still turn round and stop at the standoff. engage.burn_seconds is '
+    'the worked burn along the nose that brings your closing speed up to that; '
+    'engage.burn_needed is false when you are already closing fast enough or are inside '
+    'the standoff. engage.holding_still is true when you are barely moving. '
 )
 
 SHARED_INSTRUCTIONS = UNITS_INSTRUCTIONS + PHYSICS_INSTRUCTIONS
@@ -122,72 +173,75 @@ PILOT_QUESTIONS = {
             'it is on; do not steer at an enemy with left or right. `turning.direction` is '
             'track while fire control already has the nose: keep choosing track for as long '
             'as a visible enemy has a non-null `aim`. ' + FOLLOW_INSTRUCTIONS +
-            COURSE_INSTRUCTIONS +
-            'When no enemy is visible, the target is the course burn: while '
-            'follow_player.course.burn_needed is true the value is '
-            'follow_player.course.burn_degrees_off_nose_at_next_decision, so the nose is ready '
-            'for the burn. When follow_player.course.burn_needed is false or the course is '
-            'null, the target is the follow_player waypoint itself and the value is '
-            'follow_player.degrees_off_nose_at_next_decision. With no visible enemy and no '
-            'follow_player, hold the heading. '
+            COURSE_INSTRUCTIONS + WALL_FOLLOW_INSTRUCTIONS +
+            'When no enemy is visible and the navigation course is not null, the steering '
+            'is course, whichever way the burn heading lies; do not steer a course with left '
+            'or right. `turning.direction` is course while the navigator already has the '
+            'nose: keep choosing course for as long as there is a navigation course and no '
+            'visible enemy. When no enemy is visible and there is no navigation course '
+            'because follow_player.alongside is true, the target is the follow_player '
+            'waypoint and the value is follow_player.degrees_off_nose_at_next_decision. With '
+            'no visible enemy, no follow_player and no wall_follow, hold the heading. '
             + BRAKE_INSTRUCTIONS +
-            'Avoiding walls outranks everything else: when brake.speed_state is too_fast, the '
-            'target is the braking attitude and its value is '
-            'brake.retrograde_degrees_off_nose_at_next_decision, whatever enemies are visible, '
-            'and the steering is left, none or right, never track.',
+            'Avoiding walls outranks everything else: when brake.speed_state is too_fast the '
+            'steering is course, whatever enemies are visible, so the navigator can fly the '
+            'braking burn.',
         'criteria': {
+            'course': 'Hand the nose to the navigator: brake.speed_state is too_fast; or no '
+                      'visible enemy has an aim and the navigation course '
+                      '(follow_player.course, or wall_follow.course when follow_player is '
+                      'null) is not null.',
             'track': 'Hand the nose to fire control: brake.speed_state is not too_fast and a '
                      'visible enemy has a non-null aim.',
-            'left': 'Hold left: the target\'s value at the next decision (the braking attitude '
-                    'when too_fast; else, with no visible enemy that has an aim, the '
-                    'course burn while follow_player.course.burn_needed is true, otherwise '
-                    'the follow_player waypoint) is below -20.',
-            'none': 'Hold no steering: the target\'s value at the next decision (the braking '
-                    'attitude when too_fast; else, with no visible enemy that has an aim, the '
-                    'course burn while follow_player.course.burn_needed is true, otherwise '
-                    'the follow_player waypoint) is between -20 and 20; or there is no target.',
-            'right': 'Hold right: the target\'s value at the next decision (the braking attitude '
-                     'when too_fast; else, with no visible enemy that has an aim, the '
-                     'course burn while follow_player.course.burn_needed is true, otherwise '
-                     'the follow_player waypoint) is above 20, or the target is '
-                     'directly behind.'}},
+            'left': 'Hold left: brake.speed_state is not too_fast, no visible enemy has an '
+                    'aim, there is no navigation course, and '
+                    'follow_player.degrees_off_nose_at_next_decision is below -20.',
+            'none': 'Hold no steering: brake.speed_state is not too_fast, no visible enemy '
+                    'has an aim, there is no navigation course, and '
+                    'follow_player.degrees_off_nose_at_next_decision is between -20 and 20 '
+                    'or there is no follow_player.',
+            'right': 'Hold right: brake.speed_state is not too_fast, no visible enemy has an '
+                     'aim, there is no navigation course, and '
+                     'follow_player.degrees_off_nose_at_next_decision is above 20.'}},
     'thrust': {
         'type': 'choice',
-        'instructions': SHARED_INSTRUCTIONS + BRAKE_INSTRUCTIONS + 'Choose whether to fire the '
-            'engine now. This is independent of steering and shooting: the ship can thrust '
-            'while it turns and while it fires. Keep the hunter moving without hitting walls. '
-            'A slow or stationary hunter is an easy target and cannot chase, dodge, or keep up, '
-            'so when brake.speed_state is slow, thrust. When it is cruising, the ship is as '
-            'fast as it can safely go: thrust only if brake.thrust_effect is sideways or slows, '
-            'and coast if it is speeds_up. When it is too_fast, the ship must shed speed: thrust '
-            'if brake.thrust_effect is slows or sideways, and coast if it is speeds_up, '
-            'because more speed makes the collision certain. ' + FOLLOW_INSTRUCTIONS +
-            'When no enemy is visible and follow_player.alongside is true you have caught up '
-            'with the player: hold station and do not add speed, so coast unless '
-            'brake.thrust_effect is slows. ' + COURSE_INSTRUCTIONS +
-            'When no enemy is visible and follow_player.course is not null you are flying '
-            'that course, and it replaces the slow and cruising guidance above: unless '
-            'brake.speed_state is too_fast, thrust only while follow_player.course.burn_needed '
-            'is true and follow_player.course.burn_degrees_off_nose is between -20 and 20, '
-            'and coast the rest of the time, including while the nose is still swinging '
-            'round to the burn.',
+        'instructions': SHARED_INSTRUCTIONS + BRAKE_INSTRUCTIONS + ENGINE_INSTRUCTIONS +
+            'Choose the engine setting. This is independent of steering and shooting: the '
+            'ship can thrust while it turns and while it fires. In every situation a worked '
+            'burn tells you whether the engine is wanted, so the usual choice is between '
+            'burn and coast. '
+            'When brake.speed_state is too_fast the worked burn is the braking burn: choose '
+            'burn, wherever the nose points. '
+            + ENGAGE_INSTRUCTIONS +
+            'When brake.speed_state is not too_fast and engage is not null you are fighting: '
+            'choose burn while engage.burn_needed is true. When it is false, a hunter '
+            'sitting still is an easy target, so choose pulse if engage.holding_still is '
+            'true and engage.range_state is in_range, and coast otherwise. '
+            + FOLLOW_INSTRUCTIONS + COURSE_INSTRUCTIONS + WALL_FOLLOW_INSTRUCTIONS +
+            'When brake.speed_state is not too_fast, engage is null and the navigation '
+            'course is not null you are flying that course: choose burn while the course\'s '
+            'burn_needed is true and coast when it is false. '
+            'When brake.speed_state is not too_fast, engage is null and there is no '
+            'navigation course, you are alongside the player or have nowhere to go: hold '
+            'station, so coast, unless brake.thrust_effect is slows, when thrust takes off '
+            'the speed you still have.',
         'criteria': {
-            'thrust': 'brake.speed_state is too_fast and brake.thrust_effect is slows or '
-                      'sideways; or you are flying a course (no enemy visible and '
-                      'follow_player.course not null), brake.speed_state is not too_fast, '
-                      'follow_player.course.burn_needed is true and '
-                      'follow_player.course.burn_degrees_off_nose is between -20 and 20; or '
-                      'you are not flying a course and brake.thrust_effect is slows; or you '
-                      'are not flying a course, are not alongside the player with no enemy '
-                      'visible, and brake.speed_state is slow or brake.thrust_effect is '
-                      'sideways.',
-            'coast': 'brake.speed_state is too_fast and brake.thrust_effect is speeds_up; or '
-                     'you are flying a course, brake.speed_state is not too_fast, and '
-                     'follow_player.course.burn_needed is false or '
-                     'follow_player.course.burn_degrees_off_nose is outside -20 to 20; or you '
-                     'are not flying a course and brake.thrust_effect is speeds_up while '
-                     'brake.speed_state is cruising; or no enemy is visible, '
-                     'follow_player.alongside is true and brake.thrust_effect is not slows.'}},
+            'burn': 'brake.speed_state is too_fast; or it is not too_fast and engage is not '
+                    'null and engage.burn_needed is true; or it is not too_fast, engage is '
+                    'null, and the navigation course (follow_player.course, or '
+                    'wall_follow.course when follow_player is null) is not null and its '
+                    'burn_needed is true.',
+            'pulse': 'brake.speed_state is not too_fast, engage is not null, '
+                     'engage.burn_needed is false, engage.holding_still is true and '
+                     'engage.range_state is in_range.',
+            'thrust': 'brake.speed_state is not too_fast, engage is null, there is no '
+                      'navigation course, and brake.thrust_effect is slows.',
+            'coast': 'brake.speed_state is not too_fast and: engage is not null, '
+                     'engage.burn_needed is false, and engage.holding_still is false or '
+                     'engage.range_state is not in_range; or engage is null and the '
+                     'navigation course is not null with burn_needed false; or engage is '
+                     'null, there is no navigation course, and brake.thrust_effect is not '
+                     'slows.'}},
     'fire': {
         'type': 'choice',
         'instructions': SHARED_INSTRUCTIONS + AIM_INSTRUCTIONS + FIRE_CONTROL_INSTRUCTIONS +
@@ -199,6 +253,28 @@ PILOT_QUESTIONS = {
             'fire': 'A visible enemy has a non-null aim: hold the trigger.',
             'hold': 'No visible enemy has a non-null aim: release the trigger.'}},
 }
+
+
+def navigation_course(state):
+    """The burn the navigator flies on a course decision.
+
+    Braking for a wall comes first. Otherwise it is the course with no enemy to
+    engage: to the player, or else along a wall.
+    """
+    brake = state.get('motion', {}).get('brake', {})
+    if brake.get('speed_state') == 'too_fast':
+        return {'burn_needed': True, 'burn_heading_degrees': brake['burn_heading_degrees'],
+                'burn_seconds': brake['burn_seconds']}
+    navigation = state.get('follow_player') or state.get('wall_follow')
+    return navigation.get('course') if navigation else None
+
+
+def worked_burn(state):
+    """The burn the engine setting `burn` flies: braking first, then the fight, then the course."""
+    brake = state.get('motion', {}).get('brake', {})
+    if brake.get('speed_state') != 'too_fast' and state.get('engage'):
+        return state['engage']
+    return navigation_course(state)
 
 
 class PilotUnavailable(Exception):
@@ -233,7 +309,21 @@ class JevPilot:
             state=state,
             questions=PILOT_QUESTIONS)
         answers = [result.choices[name] for name in ('turn','thrust','fire')]
-        action = ACTIONS['_'.join(answer.choice for answer in answers)]
+        # A fresh copy each time: the ship tells one decision from the next by identity,
+        # so that a repeated pulse pulses again.
+        action = replace(ACTIONS['_'.join(answer.choice for answer in answers)])
+        # The navigator and the worked burn fly what the pilot was looking at when it chose.
+        fps = observation_state.get('physics', {}).get('fps', 60)
+        course = navigation_course(state) if action.course else None
+        if course is not None:
+            action = replace(action, burn_heading=course['burn_heading_degrees'])
+        if action.worked_burn:
+            burn = course if action.course else worked_burn(state)
+            if burn is not None:
+                action = replace(
+                    action, burn_heading=burn['burn_heading_degrees'],
+                    burn_frames=burn['burn_seconds'] * fps if burn['burn_needed'] else 0.0,
+                    burn_reference=observation_state.get('self', {}).get('thrust_frames', 0))
         confidences = []
         for answer in answers:
             confidence = getattr(answer, 'confidence', None)

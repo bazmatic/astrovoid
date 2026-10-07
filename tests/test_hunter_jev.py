@@ -15,7 +15,14 @@ def test_jev_translates_typed_control_choices(choice):
             return SimpleNamespace(choices={k:SimpleNamespace(choice=v,confidence=.8)
                 for k,v in zip(('turn','thrust','fire'),choice.split('_'))})
     decision = asyncio.run(JevPilot(Client()).decide(PilotObservation(1,10,json.dumps({'visible_contacts':[]}))))
-    assert decision.action == ACTIONS[choice]
+    # A course decision also carries the course it was made on; compare the controls.
+    chosen = ACTIONS[choice]
+    for field in ('turn', 'thrust', 'fire', 'track', 'course', 'worked_burn'):
+        assert getattr(decision.action, field) == getattr(chosen, field)
+    # The navigator's heading and the worked burn are filled in from the readings.
+    assert (decision.action.burn_heading is not None) == (chosen.course or chosen.worked_burn)
+    if not chosen.worked_burn:
+        assert decision.action.burn_frames == chosen.burn_frames
     assert decision.confidence == .8
 
 
