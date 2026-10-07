@@ -1,7 +1,19 @@
 {
-  "seed": 100,
+  "seed": 107,
   "maze": {
     "complexity": "normal",
-    "grid_size": 30
+    "grid_size": 20
+  },
+  "enemies": {
+    "static": 2,
+    "patrol": 1,
+    "aggressive": 2,
+    "replay": 1,
+    "flocker": 0,
+    "flighthouse": 0,
+    "egg": 0,
+    "anemone": 2,
+    "split_boss": 0,
+    "mother_boss": 0
   }
 }

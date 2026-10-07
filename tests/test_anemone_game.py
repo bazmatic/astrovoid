@@ -234,7 +234,7 @@ class TestRealGameWiring:
         from game import Game
         game = Game(screen)
         game.profile_manager._save_profiles = lambda *args, **kwargs: None
-        game.level = 4
+        game.level = 7  # The first level with anemones
         game.start_level()
         game.state = config.STATE_PLAYING
         return game
