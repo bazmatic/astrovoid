@@ -9,7 +9,7 @@ import json
 import os
 from typing import Optional, Dict
 import level_rules
-from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts, get_split_boss_count, get_egg_count, get_flighthouse_count
+from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts, get_split_boss_count
 from maze.config import MazeComplexity
 
 
@@ -156,7 +156,7 @@ def get_level_egg_count(level: int) -> int:
     config = load_level_config(level)
     if config and 'enemies' in config and 'egg' in config['enemies']:
         return int(config['enemies']['egg'])
-    return get_egg_count(level)
+    return get_enemy_counts(level).egg
 
 
 def get_maze_complexity(level: int) -> Optional[MazeComplexity]:

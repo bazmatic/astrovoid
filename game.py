@@ -10,7 +10,7 @@ import config
 from rendering.fonts import get_font
 from entities.ship import Ship
 from maze.generator import Maze
-from entities.enemy import Enemy, create_enemies
+from entities.enemy import Enemy
 import level_rules
 import level_config
 from entities.replay_enemy_ship import ReplayEnemyShip

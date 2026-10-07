@@ -35,9 +35,13 @@
   "difficulty": {
     "baseMazeSize": 10,
     "mazeSizeIncrement": 2,
-    "maxMazeSize": 40,
-    "baseEnemyCount": 2,
-    "enemyCountIncrement": 1,
+    "maxMazeSize": 32,
+    "maxEnemyCount": 36,
+    "bossLevelInterval": 6,
+    "enemySpeedGrowth": 0.05,
+    "enemySpeedCeiling": 2.5,
+    "enemyDamageGrowth": 0.05,
+    "enemyDamageCeiling": 2.5,
     "tutorialLevels": 4
   },
   "maze": {
@@ -116,8 +120,6 @@
     "windowSize": 100,
     "size": 15,
     "color": [150, 100, 255],
-    "baseCount": 1,
-    "scaleFactor": 0.5,
     "hitPoints": 3
   },
   "flockerEnemy": {
@@ -131,8 +133,6 @@
     "alignmentWeight": 1.0,
     "cohesionWeight": 1.0,
     "seekWeight": 0.8,
-    "baseCount": 2,
-    "scaleFactor": 0.3,
     "closeRangeFireDistance": 150,
     "closeRangeFireAngleTolerance": 30.0,
     "clusterRadius": 300,
@@ -148,8 +148,6 @@
     "trackSpeedDegreesPerSecond": 240,
     "spawnIntervalSeconds": 0.5,
     "hitPoints": 5,
-    "baseCount": 1,
-    "scaleFactor": 0.1,
     "initialFlockerSpeedMultiplier": 0.8
   },
   "anemone": {
@@ -160,10 +158,7 @@
     "flingSpeed": 5.0,
     "releaseFrames": 60,
     "flinchFrames": 90,
-    "firstLevel": 4,
-    "baseCount": 4,
-    "levelsPerExtra": 2,
-    "maxCount": 8,
+    "firstLevel": 7,
     "maxCoverage": 0.4,
     "color": [255, 110, 170],
     "tipColor": [90, 230, 210]
@@ -177,16 +172,12 @@
     "hitPoints": 8,
     "spawnOffsetRange": 80,
     "splitVelocityMagnitude": 2.0,
-    "baseCount": 0,
-    "scaleFactor": 0.3,
     "childrenCount": 6
   },
   "motherBoss": {
     "sizeMultiplier": 3.0,
     "hitPoints": 20,
     "eggLayInterval": 180,
-    "baseCount": 0,
-    "scaleFactor": 0.2,
     "lineGlowIntensityMax": 0.7,
     "blinkFrequencyMultiplierMax": 2.0,
     "blinkDurationMultiplierMax": 1.5,
@@ -202,8 +193,6 @@
     "growthRateMin": 0.01,
     "growthRateMax": 0.04,
     "spawnOffsetRange": 60,
-    "baseCount": 0,
-    "scaleFactor": 0.3,
     "color": [255, 200, 100],
     "hitPoints": 2,
     "babySpawnMin": 1,

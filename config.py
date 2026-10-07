@@ -58,8 +58,12 @@ class DifficultySettings:
     baseMazeSize: int
     mazeSizeIncrement: int
     maxMazeSize: int
-    baseEnemyCount: int
-    enemyCountIncrement: int
+    maxEnemyCount: int
+    bossLevelInterval: int
+    enemySpeedGrowth: float
+    enemySpeedCeiling: float
+    enemyDamageGrowth: float
+    enemyDamageCeiling: float
     tutorialLevels: int
 
 
@@ -109,8 +113,6 @@ class ReplayEnemySettings:
     windowSize: int
     size: int
     color: Tuple[int, int, int]
-    baseCount: int
-    scaleFactor: float
     hitPoints: int
 
 
@@ -126,8 +128,6 @@ class FlockerEnemySettings:
     alignmentWeight: float
     cohesionWeight: float
     seekWeight: float
-    baseCount: int
-    scaleFactor: float
     closeRangeFireDistance: float
     closeRangeFireAngleTolerance: float
     clusterRadius: float
@@ -145,8 +145,6 @@ class FlighthouseEnemySettings:
     trackSpeedDegreesPerSecond: float
     spawnIntervalSeconds: float
     hitPoints: int
-    baseCount: int
-    scaleFactor: float
     initialFlockerSpeedMultiplier: float
 
 
@@ -160,9 +158,6 @@ class AnemoneSettings:
     releaseFrames: int
     flinchFrames: int
     firstLevel: int
-    baseCount: int
-    levelsPerExtra: int
-    maxCount: int
     maxCoverage: float
     color: Tuple[int, int, int]
     tipColor: Tuple[int, int, int]
@@ -180,8 +175,6 @@ class SplitBossSettings:
     hitPoints: int
     spawnOffsetRange: int
     splitVelocityMagnitude: float
-    baseCount: int
-    scaleFactor: float
     childrenCount: int
 
 
@@ -190,8 +183,6 @@ class MotherBossSettings:
     sizeMultiplier: float
     hitPoints: int
     eggLayInterval: int
-    baseCount: int
-    scaleFactor: float
     lineGlowIntensityMax: float
     blinkFrequencyMultiplierMax: float
     blinkDurationMultiplierMax: float
@@ -209,8 +200,6 @@ class EggSettings:
     growthRateMin: float
     growthRateMax: float
     spawnOffsetRange: int
-    baseCount: int
-    scaleFactor: float
     color: Tuple[int, int, int]
     hitPoints: int
     babySpawnMin: int
@@ -492,8 +481,6 @@ def load_settings() -> Settings:
             windowSize=raw["replayEnemy"]["windowSize"],
             size=raw["replayEnemy"]["size"],
             color=_as_color(tuple(raw["replayEnemy"]["color"])),
-            baseCount=raw["replayEnemy"]["baseCount"],
-            scaleFactor=raw["replayEnemy"]["scaleFactor"],
             hitPoints=raw["replayEnemy"]["hitPoints"]
         ),
         flockerEnemy=FlockerEnemySettings(
@@ -507,8 +494,6 @@ def load_settings() -> Settings:
             alignmentWeight=raw["flockerEnemy"]["alignmentWeight"],
             cohesionWeight=raw["flockerEnemy"]["cohesionWeight"],
             seekWeight=raw["flockerEnemy"]["seekWeight"],
-            baseCount=raw["flockerEnemy"]["baseCount"],
-            scaleFactor=raw["flockerEnemy"]["scaleFactor"],
             closeRangeFireDistance=raw["flockerEnemy"]["closeRangeFireDistance"],
             closeRangeFireAngleTolerance=raw["flockerEnemy"]["closeRangeFireAngleTolerance"],
             clusterRadius=raw["flockerEnemy"]["clusterRadius"],
@@ -524,8 +509,6 @@ def load_settings() -> Settings:
             trackSpeedDegreesPerSecond=raw["flighthouseEnemy"]["trackSpeedDegreesPerSecond"],
             spawnIntervalSeconds=raw["flighthouseEnemy"]["spawnIntervalSeconds"],
             hitPoints=raw["flighthouseEnemy"]["hitPoints"],
-            baseCount=raw["flighthouseEnemy"]["baseCount"],
-            scaleFactor=raw["flighthouseEnemy"]["scaleFactor"],
             initialFlockerSpeedMultiplier=raw["flighthouseEnemy"]["initialFlockerSpeedMultiplier"]
         ),
         anemone=AnemoneSettings(**{
@@ -547,8 +530,6 @@ def load_settings() -> Settings:
             growthRateMin=raw["egg"]["growthRateMin"],
             growthRateMax=raw["egg"]["growthRateMax"],
             spawnOffsetRange=raw["egg"]["spawnOffsetRange"],
-            baseCount=raw["egg"]["baseCount"],
-            scaleFactor=raw["egg"]["scaleFactor"],
             color=_as_color(tuple(raw["egg"]["color"])),
             hitPoints=raw["egg"]["hitPoints"],
             babySpawnMin=raw["egg"]["babySpawnMin"],
@@ -653,8 +634,15 @@ ENEMY_DESTRUCTION_BONUS = SETTINGS.scoring.enemyDestructionBonus
 BASE_MAZE_SIZE = SETTINGS.difficulty.baseMazeSize
 MAZE_SIZE_INCREMENT = SETTINGS.difficulty.mazeSizeIncrement
 MAX_MAZE_SIZE = SETTINGS.difficulty.maxMazeSize
-BASE_ENEMY_COUNT = SETTINGS.difficulty.baseEnemyCount
-ENEMY_COUNT_INCREMENT = SETTINGS.difficulty.enemyCountIncrement
+# Enemies on an endless level, not counting bosses or the hunter, never exceed this
+MAX_ENEMY_COUNT = SETTINGS.difficulty.maxEnemyCount
+# Every Nth level without a level file is a boss level
+BOSS_LEVEL_INTERVAL = SETTINGS.difficulty.bossLevelInterval
+# Speed and damage grow by this share per level after the tutorial levels, up to the ceiling
+ENEMY_SPEED_GROWTH = SETTINGS.difficulty.enemySpeedGrowth
+ENEMY_SPEED_CEILING = SETTINGS.difficulty.enemySpeedCeiling
+ENEMY_DAMAGE_GROWTH = SETTINGS.difficulty.enemyDamageGrowth
+ENEMY_DAMAGE_CEILING = SETTINGS.difficulty.enemyDamageCeiling
 TUTORIAL_LEVELS = SETTINGS.difficulty.tutorialLevels
 
 WALL_THICKNESS = SETTINGS.maze.wallThickness
@@ -685,8 +673,6 @@ REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = SETTINGS.enemies.replayFireAngleTolerance
 REPLAY_ENEMY_WINDOW_SIZE = SETTINGS.replayEnemy.windowSize
 REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
 REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
-REPLAY_ENEMY_BASE_COUNT = SETTINGS.replayEnemy.baseCount
-REPLAY_ENEMY_SCALE_FACTOR = SETTINGS.replayEnemy.scaleFactor
 REPLAY_ENEMY_HIT_POINTS = SETTINGS.replayEnemy.hitPoints
 
 FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
@@ -699,8 +685,6 @@ FLOCKER_ENEMY_SEPARATION_WEIGHT = SETTINGS.flockerEnemy.separationWeight
 FLOCKER_ENEMY_ALIGNMENT_WEIGHT = SETTINGS.flockerEnemy.alignmentWeight
 FLOCKER_ENEMY_COHESION_WEIGHT = SETTINGS.flockerEnemy.cohesionWeight
 FLOCKER_ENEMY_SEEK_WEIGHT = SETTINGS.flockerEnemy.seekWeight
-FLOCKER_ENEMY_BASE_COUNT = SETTINGS.flockerEnemy.baseCount
-FLOCKER_ENEMY_SCALE_FACTOR = SETTINGS.flockerEnemy.scaleFactor
 FLOCKER_ENEMY_CLOSE_RANGE_FIRE_DISTANCE = SETTINGS.flockerEnemy.closeRangeFireDistance
 FLOCKER_ENEMY_CLOSE_RANGE_FIRE_ANGLE_TOLERANCE = SETTINGS.flockerEnemy.closeRangeFireAngleTolerance
 FLOCKER_ENEMY_CLUSTER_RADIUS = SETTINGS.flockerEnemy.clusterRadius
@@ -715,8 +699,6 @@ FLIGHTHOUSE_ENEMY_SCAN_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.scan
 FLIGHTHOUSE_ENEMY_TRACK_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.trackSpeedDegreesPerSecond
 FLIGHTHOUSE_ENEMY_SPAWN_INTERVAL_SECONDS = SETTINGS.flighthouseEnemy.spawnIntervalSeconds
 FLIGHTHOUSE_ENEMY_HIT_POINTS = SETTINGS.flighthouseEnemy.hitPoints
-FLIGHTHOUSE_ENEMY_BASE_COUNT = SETTINGS.flighthouseEnemy.baseCount
-FLIGHTHOUSE_ENEMY_SCALE_FACTOR = SETTINGS.flighthouseEnemy.scaleFactor
 FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER = SETTINGS.flighthouseEnemy.initialFlockerSpeedMultiplier
 
 ANEMONE_SIZE = SETTINGS.anemone.size
@@ -727,9 +709,6 @@ ANEMONE_FLING_SPEED = SETTINGS.anemone.flingSpeed
 ANEMONE_RELEASE_FRAMES = SETTINGS.anemone.releaseFrames
 ANEMONE_FLINCH_FRAMES = SETTINGS.anemone.flinchFrames
 ANEMONE_FIRST_LEVEL = SETTINGS.anemone.firstLevel
-ANEMONE_BASE_COUNT = SETTINGS.anemone.baseCount
-ANEMONE_LEVELS_PER_EXTRA = SETTINGS.anemone.levelsPerExtra
-ANEMONE_MAX_COUNT = SETTINGS.anemone.maxCount
 ANEMONE_MAX_COVERAGE = SETTINGS.anemone.maxCoverage
 ANEMONE_COLOR = SETTINGS.anemone.color
 ANEMONE_TIP_COLOR = SETTINGS.anemone.tipColor
@@ -741,15 +720,11 @@ SPLIT_BOSS_SIZE_MULTIPLIER = SETTINGS.splitBoss.sizeMultiplier
 SPLIT_BOSS_HIT_POINTS = SETTINGS.splitBoss.hitPoints
 SPLIT_BOSS_SPAWN_OFFSET_RANGE = SETTINGS.splitBoss.spawnOffsetRange
 SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = SETTINGS.splitBoss.splitVelocityMagnitude
-SPLIT_BOSS_BASE_COUNT = SETTINGS.splitBoss.baseCount
-SPLIT_BOSS_SCALE_FACTOR = SETTINGS.splitBoss.scaleFactor
 SPLIT_BOSS_CHILD_COUNT = SETTINGS.splitBoss.childrenCount
 
 MOTHER_BOSS_SIZE_MULTIPLIER = SETTINGS.motherBoss.sizeMultiplier
 MOTHER_BOSS_HIT_POINTS = SETTINGS.motherBoss.hitPoints
 MOTHER_BOSS_EGG_LAY_INTERVAL = SETTINGS.motherBoss.eggLayInterval
-MOTHER_BOSS_BASE_COUNT = SETTINGS.motherBoss.baseCount
-MOTHER_BOSS_SCALE_FACTOR = SETTINGS.motherBoss.scaleFactor
 
 MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX = SETTINGS.motherBoss.lineGlowIntensityMax
 MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkFrequencyMultiplierMax
@@ -766,8 +741,6 @@ EGG_MAX_SIZE = SETTINGS.egg.maxSize
 EGG_GROWTH_RATE_MIN = SETTINGS.egg.growthRateMin
 EGG_GROWTH_RATE_MAX = SETTINGS.egg.growthRateMax
 EGG_SPAWN_OFFSET_RANGE = SETTINGS.egg.spawnOffsetRange
-EGG_BASE_COUNT = SETTINGS.egg.baseCount
-EGG_SCALE_FACTOR = SETTINGS.egg.scaleFactor
 COLOR_EGG = SETTINGS.egg.color
 EGG_HIT_POINTS = SETTINGS.egg.hitPoints
 EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin

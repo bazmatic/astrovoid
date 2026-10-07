@@ -65,129 +65,136 @@ class EnemyStrength:
     fire_range: float
 
 
-def get_enemy_count(level: int) -> int:
-    """Get total enemy count for a level.
-    
+# The designed arc: levels 1 to ARC_LEVELS each have a level file. The formulas
+# below are what the endless game uses, and a safety net for an arc level whose
+# file is missing.
+ARC_LEVELS = 24
+BOSS_ARENA_SIZE = 16
+MAX_BOSSES = 3
+
+# Level each enemy type first appears on (anemones: config.ANEMONE_FIRST_LEVEL)
+FIRST_LEVELS = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 5,
+                'flocker': 8, 'flighthouse': 10, 'egg': 13}
+
+# Each enemy added beyond the arc goes to the next type in this order, round and round
+GROWTH_ORDER = ('aggressive', 'replay', 'flocker', 'static', 'patrol', 'anemone')
+
+# What level 23, the last ordinary level of the arc, carries
+ARC_END_MIX = {'static': 4, 'patrol': 3, 'aggressive': 4, 'replay': 3, 'flocker': 3,
+               'flighthouse': 2, 'egg': 1, 'anemone': 4}
+
+
+def first_level(enemy_type: str) -> int:
+    """Level an enemy type first appears on."""
+    if enemy_type == 'anemone':
+        return config.ANEMONE_FIRST_LEVEL
+    return FIRST_LEVELS[enemy_type]
+
+
+def is_boss_level(level: int) -> bool:
+    """Whether a level without a level file is a boss level."""
+    return level % config.BOSS_LEVEL_INTERVAL == 0
+
+
+def get_boss_counts(level: int) -> Tuple[int, int]:
+    """Get the bosses on a level without a level file.
+
+    Boss levels cycle through split bosses, a mother boss, then both. Each full
+    turn of the cycle adds a boss, up to MAX_BOSSES on a level.
+
     Args:
         level: Current level number (1-based).
-        
+
     Returns:
-        Total number of enemies for the level.
+        (split boss count, mother boss count); (0, 0) on an ordinary level.
     """
-    if level <= config.TUTORIAL_LEVELS:
-        return 2
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    return config.BASE_ENEMY_COUNT + (effective_level - 1) * config.ENEMY_COUNT_INCREMENT
-
-
-def get_enemy_type_distribution(level: int, total_count: int) -> Dict[str, int]:
-    """Get distribution of enemy types for a level.
-    
-    Args:
-        level: Current level number (1-based).
-        total_count: Total number of enemies.
-        
-    Returns:
-        Dictionary with keys 'static', 'patrol', 'aggressive' and their counts.
-    """
-    # Static enemies: at least 1, up to half of total
-    static_count = max(1, total_count // 2)
-    dynamic_count = total_count - static_count
-    
-    # Dynamic enemies split between patrol and aggressive
-    patrol_count = dynamic_count // 2
-    aggressive_count = dynamic_count - patrol_count
-    
-    return {
-        'static': static_count,
-        'patrol': patrol_count,
-        'aggressive': aggressive_count
-    }
-
-
-def get_replay_enemy_count(level: int) -> int:
-    """Get number of replay enemy ships for a level.
-    
-    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
-    This provides slow, diminishing returns scaling that continues indefinitely.
-    
-    Args:
-        level: Current level number (1-based).
-        
-    Returns:
-        Number of replay enemies (0 for tutorial levels, then continuous scaling).
-    """
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    # Continuous scaling with square root for diminishing returns
-    count = config.REPLAY_ENEMY_BASE_COUNT + config.REPLAY_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
+    if not is_boss_level(level):
+        return (0, 0)
+    # Level 30 opens the first full cycle of the endless game
+    cycle = level // config.BOSS_LEVEL_INTERVAL - 5
+    kind, turn = cycle % 3, max(0, cycle // 3)
+    if kind == 0:
+        return (min(MAX_BOSSES, 2 + turn), 0)
+    if kind == 1:
+        return (0, min(MAX_BOSSES, 1 + turn))
+    return (min(MAX_BOSSES - 1, 1 + turn), 1)
 
 
 def get_split_boss_count(level: int) -> int:
-    """Get number of SplitBoss enemies for a level.
-    
-    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
-    This provides slow, diminishing returns scaling that continues indefinitely.
-    
+    """Get number of SplitBoss enemies for a level without a level file."""
+    return get_boss_counts(level)[0]
+
+
+def get_mother_boss_count(level: int) -> int:
+    """Get number of Mother Boss enemies for a level without a level file."""
+    return get_boss_counts(level)[1]
+
+
+def _boss_escort(level: int) -> Dict[str, int]:
+    """Enemies that accompany the bosses on a boss level."""
+    split, mother = get_boss_counts(level)
+    if split and mother:
+        return {'replay': 2, 'flocker': 2, 'egg': 2}
+    if mother:
+        return {'egg': 4}
+    return {'flocker': 6}
+
+
+def get_enemy_count(level: int) -> int:
+    """Get the number of enemies on a level without a level file.
+
+    Bosses and the hunter are not counted. Anemones are.
+
     Args:
         level: Current level number (1-based).
-        
+
     Returns:
-        Number of SplitBoss enemies (0 for tutorial levels, then continuous scaling).
+        The escort on a boss level. Otherwise a number that rises by one a
+        level through the arc, then by one every two levels, up to
+        config.MAX_ENEMY_COUNT.
     """
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    # Continuous scaling with square root for diminishing returns
-    count = config.SPLIT_BOSS_BASE_COUNT + config.SPLIT_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
+    if is_boss_level(level):
+        return sum(_boss_escort(level).values())
+    arc_end_count = sum(ARC_END_MIX.values())
+    if level <= ARC_LEVELS:
+        return min(arc_end_count, 3 + level)
+    return min(config.MAX_ENEMY_COUNT, arc_end_count + (level - (ARC_LEVELS - 1)) // 2)
 
 
-def get_flocker_count(level: int) -> int:
-    """Get number of flocker enemy ships for a level.
-    
-    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
-    This provides slow, diminishing returns scaling that continues indefinitely.
-    
+def get_enemy_mix(level: int) -> Dict[str, int]:
+    """Get how many of each enemy type a level without a level file has.
+
     Args:
         level: Current level number (1-based).
-        
+
     Returns:
-        Number of flocker enemies (0 for tutorial levels, then continuous scaling).
+        Count for each of static, patrol, aggressive, replay, flocker,
+        flighthouse, egg and anemone. They add up to get_enemy_count(level).
     """
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    # Continuous scaling with square root for diminishing returns
-    count = config.FLOCKER_ENEMY_BASE_COUNT + config.FLOCKER_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
+    mix = dict.fromkeys(ARC_END_MIX, 0)
+    if is_boss_level(level):
+        mix.update(_boss_escort(level))
+        return mix
 
+    count = get_enemy_count(level)
+    if level > ARC_LEVELS:
+        mix.update(ARC_END_MIX)
+        order = GROWTH_ORDER
+    else:
+        # Only what the player has already met; one flighthouse and one egg once they have
+        for enemy_type in ('flighthouse', 'egg'):
+            if level >= first_level(enemy_type):
+                mix[enemy_type] = 1
+        order = [enemy_type for enemy_type in GROWTH_ORDER if level >= first_level(enemy_type)]
 
-def get_flighthouse_count(level: int) -> int:
-    """Get number of flighthouse enemies for a level."""
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    effective_level = level - config.TUTORIAL_LEVELS
-    count = config.FLIGHTHOUSE_ENEMY_BASE_COUNT + config.FLIGHTHOUSE_ENEMY_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
+    for i in range(count - sum(mix.values())):
+        mix[order[i % len(order)]] += 1
+    return mix
 
 
 def get_anemone_count(level: int) -> int:
-    """Get number of anemone enemies for a level.
-    
-    None before the first level they appear on, then a base number plus one
-    more every few levels, up to a maximum.
-    """
-    if level < config.ANEMONE_FIRST_LEVEL:
-        return 0
-    extra = (level - config.ANEMONE_FIRST_LEVEL) // config.ANEMONE_LEVELS_PER_EXTRA
-    return min(config.ANEMONE_MAX_COUNT, config.ANEMONE_BASE_COUNT + extra)
+    """Get number of anemones for a level without a level file."""
+    return get_enemy_mix(level)['anemone']
 
 
 def anemones_that_fit(grid_size: int) -> int:
@@ -201,48 +208,6 @@ def anemones_that_fit(grid_size: int) -> int:
     """
     field_cells = math.pi * config.ANEMONE_REACH_CELLS ** 2
     return max(1, int(config.ANEMONE_MAX_COVERAGE * grid_size * grid_size / field_cells))
-
-
-def get_egg_count(level: int) -> int:
-    """Get number of egg enemies for a level.
-    
-    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
-    This provides slow, diminishing returns scaling that continues indefinitely.
-    
-    Args:
-        level: Current level number (1-based).
-        
-    Returns:
-        Number of egg enemies (0 for tutorial levels, then continuous scaling).
-    """
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    # Continuous scaling with square root for diminishing returns
-    count = config.EGG_BASE_COUNT + config.EGG_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
-
-
-def get_mother_boss_count(level: int) -> int:
-    """Get number of Mother Boss enemies for a level.
-    
-    Uses continuous scaling formula: base + scale_factor * sqrt(effective_level)
-    This provides slow, diminishing returns scaling that continues indefinitely.
-    
-    Args:
-        level: Current level number (1-based).
-        
-    Returns:
-        Number of Mother Boss enemies (0 for tutorial levels, then continuous scaling).
-    """
-    if level <= config.TUTORIAL_LEVELS:
-        return 0
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    # Continuous scaling with square root for diminishing returns
-    count = config.MOTHER_BOSS_BASE_COUNT + config.MOTHER_BOSS_SCALE_FACTOR * math.sqrt(effective_level)
-    return round(count)
 
 
 def get_flighthouse_spawn_interval(level: int) -> float:
@@ -304,9 +269,9 @@ def get_enemy_speed(level: int, enemy_type: str) -> float:
     if level <= config.TUTORIAL_LEVELS:
         return base_speed
     
-    # Scale speed by effective level: 10% increase per effective level
+    # Scale speed by effective level, up to a ceiling
     effective_level = level - config.TUTORIAL_LEVELS
-    speed_multiplier = 1.0 + (effective_level - 1) * 0.1
+    speed_multiplier = min(config.ENEMY_SPEED_CEILING, 1.0 + (effective_level - 1) * config.ENEMY_SPEED_GROWTH)
     return base_speed * speed_multiplier
 
 
@@ -323,10 +288,9 @@ def get_enemy_damage(level: int) -> int:
     if level <= config.TUTORIAL_LEVELS:
         return config.ENEMY_DAMAGE
     
-    # Base damage from config, scaled by effective level
-    # 10% increase per effective level (rounded to nearest int)
+    # Base damage from config, scaled by effective level up to a ceiling
     effective_level = level - config.TUTORIAL_LEVELS
-    damage_multiplier = 1.0 + (effective_level - 1) * 0.1
+    damage_multiplier = min(config.ENEMY_DAMAGE_CEILING, 1.0 + (effective_level - 1) * config.ENEMY_DAMAGE_GROWTH)
     return int(config.ENEMY_DAMAGE * damage_multiplier)
 
 
@@ -387,36 +351,6 @@ def get_enemy_fire_range(level: int) -> float:
     return min(base_range * range_multiplier, config.ENEMY_MAX_FIRE_RANGE)
 
 
-def get_enemy_counts(level: int) -> EnemyCounts:
-    """Get complete enemy count configuration for a level.
-    
-    Args:
-        level: Current level number (1-based).
-        
-    Returns:
-        EnemyCounts dataclass with all enemy counts.
-    """
-    total = get_enemy_count(level)
-    distribution = get_enemy_type_distribution(level, total)
-    replay = get_replay_enemy_count(level)
-    flocker = get_flocker_count(level)
-    flighthouse = get_flighthouse_count(level)
-    egg = get_egg_count(level)
-    anemone = get_anemone_count(level)
-    
-    return EnemyCounts(
-        total=total,
-        static=distribution['static'],
-        patrol=distribution['patrol'],
-        aggressive=distribution['aggressive'],
-        replay=replay,
-        flocker=flocker,
-        flighthouse=flighthouse,
-        egg=egg,
-        anemone=anemone
-    )
-
-
 def get_enemy_strength(level: int) -> EnemyStrength:
     """Get complete enemy strength configuration for a level.
     
@@ -438,42 +372,48 @@ def get_enemy_strength(level: int) -> EnemyStrength:
     )
 
 
-def get_maze_complexity(level: int) -> MazeComplexity:
-    """Get default maze complexity for a level.
-    
-    Tutorial levels use simpler complexities, scaling starts after tutorial levels.
+def get_enemy_counts(level: int) -> EnemyCounts:
+    """Get complete enemy count configuration for a level.
     
     Args:
         level: Current level number (1-based).
         
     Returns:
-        MazeComplexity based on level:
-        - Tutorial levels (1-6):
-          - Level 1: EMPTY (perimeter only, no obstacles)
-          - Levels 2-3: SIMPLE
-          - Levels 4-6: NORMAL
-        - After tutorial levels:
-          - Effective level 1-2: NORMAL
-          - Effective level 3-4: COMPLEX
-          - Effective level 5+: EXTREME
+        EnemyCounts dataclass with all enemy counts.
     """
-    # Tutorial levels use simpler complexities
-    if level <= config.TUTORIAL_LEVELS:
+    mix = get_enemy_mix(level)
+    return EnemyCounts(
+        total=mix['static'] + mix['patrol'] + mix['aggressive'],
+        static=mix['static'],
+        patrol=mix['patrol'],
+        aggressive=mix['aggressive'],
+        replay=mix['replay'],
+        flocker=mix['flocker'],
+        flighthouse=mix['flighthouse'],
+        egg=mix['egg'],
+        anemone=mix['anemone']
+    )
+
+
+def get_maze_complexity(level: int) -> MazeComplexity:
+    """Get default maze complexity for a level.
+    
+    Args:
+        level: Current level number (1-based).
+        
+    Returns:
+        EMPTY for level 1 and for boss levels (an open arena), then SIMPLE to
+        level 5, NORMAL to 11, COMPLEX to 17 and EXTREME after.
+    """
+    if level == 1 or is_boss_level(level):
         return MazeComplexity.EMPTY
-    
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    
-    # Scale complexity based on effective level
-    if effective_level <= 5:
-        print(f"Level {level} is NORMAL")
+    if level <= 5:
+        return MazeComplexity.SIMPLE
+    if level <= 11:
         return MazeComplexity.NORMAL
-    elif effective_level <= 12:
-        print(f"Level {level} is COMPLEX")
+    if level <= 17:
         return MazeComplexity.COMPLEX
-    else:
-        print(f"Level {level} is EXTREME")
-        return MazeComplexity.EXTREME
+    return MazeComplexity.EXTREME
 
 
 def get_maze_grid_size(level: int) -> int:
@@ -483,16 +423,10 @@ def get_maze_grid_size(level: int) -> int:
         level: Current level number (1-based).
         
     Returns:
-        Grid size (width/height in cells). Maze is always square.
-        Tutorial levels use base size, scaling starts after tutorial levels.
-        Capped at MAX_MAZE_SIZE to prevent excessive cells at high levels.
+        Grid size (width/height in cells). Maze is always square. Boss levels
+        get a small arena; other levels grow by MAZE_SIZE_INCREMENT a level
+        up to MAX_MAZE_SIZE.
     """
-    if level <= config.TUTORIAL_LEVELS:
-        return config.BASE_MAZE_SIZE
-    # Difficulty scaling starts after tutorial levels
-    effective_level = level - config.TUTORIAL_LEVELS
-    calculated_size = config.BASE_MAZE_SIZE + (effective_level - 1) * config.MAZE_SIZE_INCREMENT
-    # Cap at maximum to prevent excessive cells at high levels
-    return min(calculated_size, config.MAX_MAZE_SIZE)
-
-
+    if is_boss_level(level):
+        return BOSS_ARENA_SIZE
+    return min(config.BASE_MAZE_SIZE + (level - 1) * config.MAZE_SIZE_INCREMENT, config.MAX_MAZE_SIZE)
