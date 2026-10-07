@@ -60,7 +60,7 @@ class EnemyUpdater:
                 continue
             target_pos = nearest_friendly_pos(enemy, ship, hunter)
             
-            enemy.update(dt, target_pos, maze.walls)
+            enemy.update(dt, target_pos, maze.walls, maze.spatial_grid)
             
             # Check enemy-ship collision (skip if shield is active)
             if not ship.is_shield_active():

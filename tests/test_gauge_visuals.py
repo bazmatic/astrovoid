@@ -216,6 +216,17 @@ class TestHudColumn:
         assert min(columns) >= 0
         assert max(columns) < config.UI_ZONE_WIDTH
 
+    def test_level_number_images_are_not_reloaded_every_frame(self, monkeypatch):
+        pygame.font.init()
+        loads = []
+        load = pygame.image.load
+        monkeypatch.setattr(pygame.image, "load", lambda *args: loads.append(args) or load(*args))
+        screen = pygame.Surface((400, 700), pygame.SRCALPHA)
+        ship = Ship((0.0, 0.0))
+        for _ in range(5):
+            ship.draw_ui(screen, pygame.font.Font(None, 24), level=12, time_seconds=1.0)
+        assert 0 < len(loads) <= 10
+
     def test_column_is_no_wider_than_the_dials_need(self):
         rim = dial.rim_radius(60)
         center_x = config.UI_ZONE_WIDTH // 2

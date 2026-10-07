@@ -59,6 +59,7 @@ class Ship(RotatingThrusterShip):
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
         self.powerup_flash_phase = 0.0
         self.trail: List[Tuple[float, float]] = []
+        self._level_badge: Optional[Tuple[int, Optional[pygame.Surface]]] = None  # (level, rendered number)
     
     def is_enemy_ship(self) -> bool:
         """Check if this ship is an enemy ship.
@@ -614,8 +615,10 @@ class Ship(RotatingThrusterShip):
         
         # Level indicator at top (centered)
         if level is not None:
-            number_sprite = NumberSprite()
-            number_surface = number_sprite.render_number(level, scale=0.2)
+            # Loading the digit images is far too slow to do every frame
+            if self._level_badge is None or self._level_badge[0] != level:
+                self._level_badge = (level, NumberSprite().render_number(level, scale=0.2))
+            number_surface = self._level_badge[1]
             if number_surface:
                 number_rect = number_surface.get_rect(center=(GAUGE_CENTER_X, LEVEL_Y))
                 screen.blit(number_surface, number_rect)
