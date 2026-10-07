@@ -1,7 +1,15 @@
 """Translate sensed geometry into body-relative readings, without choosing controls."""
 import math
+from hunter.braking import braking_solution, hull_travel
 from hunter.course import course_correction
 from hunter.visibility import visible_point
+from hunter.wall_follow import wall_follow_target
+
+
+# Below this a brush with a wall is harmless, so the hunter is never told to brake.
+HARMLESS_SPEED_METRES_PER_SECOND = 15
+# The distance the hunter fights from, in maze cells.
+ENGAGE_STANDOFF_CELLS = 1.5
 
 
 def direction(bearing, heading):
@@ -63,8 +71,9 @@ def pilot_state(state):
     # so bearings are also given relative to where the nose will be by then.
     turn = state.get('previous_action',{}).get('turn',0)
     tracking = state.get('previous_action',{}).get('track',False)
+    on_course = state.get('previous_action',{}).get('course',False)
     turn_step = rotation_speed*state.get('action_horizon_seconds',.25)
-    turning = {'direction':('track' if tracking else
+    turning = {'direction':('track' if tracking else 'course' if on_course else
                             'left' if turn < 0 else 'right' if turn > 0 else 'none'),
                'degrees_per_decision':turn_step}
     next_heading = heading+turn*turn_step
@@ -130,30 +139,6 @@ def pilot_state(state):
         hits = [ray(origin,bearing+spread) for spread in (-10,0,10)]
         return max(0,min([sensor_range]+[t for t in hits if t is not None])-radius)
 
-    def coasting_impact(velocity, speed, friction):
-        """Distance and frames until the hull meets a sensed wall with the engine off."""
-        bearing = math.degrees(math.atan2(velocity[1],velocity[0]))
-        side = math.radians(bearing+90)
-        # Sweep the hull's full width along the course: the centre line reaches a
-        # wall one radius early, the two edge lines catch walls the centre misses.
-        hits = []
-        for offset,early in ((0,radius),(radius,0),(-radius,0)):
-            start = (origin[0]+math.cos(side)*offset,origin[1]+math.sin(side)*offset)
-            t = ray(start,bearing)
-            if t is not None:
-                hits.append(max(0,t-early))
-        if not hits:
-            return None,None
-        distance = min(hits)
-        # Each frame applies friction and then moves, so n frames cover
-        # speed*friction*(1-friction**n)/(1-friction).
-        if friction >= 1:
-            return distance,distance/speed
-        remaining = 1-distance*(1-friction)/(speed*friction)
-        if remaining <= 0:
-            return distance,None  # Drag stops the ship before it arrives.
-        return distance,math.log(remaining)/math.log(friction)
-
     space = {}
     for name,offset in [('ahead',0),('ahead_left',-45),('left',-90),
                         ('behind_left',-135),('behind',180),('behind_right',135),
@@ -176,74 +161,148 @@ def pilot_state(state):
               'rightward_speed_metres_per_second':
                   (velocity[1]*math.cos(nose)-velocity[0]*math.sin(nose))*fps,
               'wall_clearance_metres':None, 'seconds_to_wall_impact':None}
-    if speed:
-        # Null impact time: no sensed wall on this course, or drag stops the ship first.
-        distance,frames = coasting_impact(
-            velocity,speed,state.get('physics',{}).get('friction_per_frame',1))
-        motion['wall_clearance_metres'] = distance
-        if frames is not None:
-            motion['seconds_to_wall_impact'] = round(frames/fps,2)
-    # Braking means swinging the nose against the motion vector and burning, so the
-    # speed the ship can still shed before the wall on its course depends on how far
-    # the nose has to swing first.
+    # Whether the ship must brake is worked out, not judged: the wall the hull will
+    # really reach on its present motion, against the distance a stop takes. Sliding
+    # along a wall is not closing on it.
+    thrust_per_frame = physics.get('thrust_per_frame',.0375)
+    solution = braking_solution(
+        origin,velocity,heading,walls,radius,
+        thrust=thrust_per_frame,rotation_per_frame=physics.get('rotation_per_frame',5),
+        sensor_range=sensor_range,friction=physics.get('friction_per_frame',1),
+        # The need is noticed up to a decision late and acted on a decision after that.
+        reaction_frames=2*horizon_frames,
+        # Slow enough that touching a wall does not matter.
+        harmless_speed=HARMLESS_SPEED_METRES_PER_SECOND/fps)
     brake = {'speed_state':'slow', 'safe_speed_metres_per_second':None,
              'stopping_distance_metres':0, 'thrust_effect':None,
              'retrograde_degrees_off_nose':None,
-             'retrograde_degrees_off_nose_at_next_decision':None}
+             'retrograde_degrees_off_nose_at_next_decision':None,
+             'burn_heading_degrees':None, 'burn_seconds':0}
     if speed:
-        retrograde = off_nose(velocity_heading+180,heading)
-        deceleration = physics.get('thrust_per_frame',.0375)*fps*fps
-        reaction = state.get('action_horizon_seconds',.25)+abs(retrograde)/rotation_speed
-        room = motion['wall_clearance_metres']
-        room = sensor_range if room is None else room
-        metres_per_second = speed*fps
-        safe = deceleration*(math.sqrt(reaction*reaction+2*room/deceleration)-reaction)
-        brake = {'speed_state':('too_fast' if metres_per_second > safe else
-                                'cruising' if metres_per_second > safe*.5 else 'slow'),
-                 'safe_speed_metres_per_second':round(safe,1),
-                 'stopping_distance_metres':round(
-                     metres_per_second*reaction+metres_per_second**2/(2*deceleration),1),
+        # Null impact time: no sensed wall on this course, or drag stops the ship first.
+        motion['wall_clearance_metres'] = solution.wall_distance
+        if solution.frames_to_impact is not None:
+            motion['seconds_to_wall_impact'] = round(solution.frames_to_impact/fps,2)
+        retrograde = round(solution.degrees_off_nose,1)
+        brake = {'speed_state':('too_fast' if solution.must_brake else
+                                'cruising' if speed > solution.safe_speed*.5 else 'slow'),
+                 'safe_speed_metres_per_second':round(solution.safe_speed*fps,1),
+                 'stopping_distance_metres':round(solution.stopping_distance,1),
                  'thrust_effect':('slows' if abs(retrograde) <= 60 else
                                   'speeds_up' if abs(retrograde) >= 120 else 'sideways'),
                  'retrograde_degrees_off_nose':retrograde,
                  'retrograde_degrees_off_nose_at_next_decision':
-                     off_nose(velocity_heading+180,next_heading)}
+                     off_nose(velocity_heading+180,next_heading),
+                 # The burn that brings the ship to rest, for the navigator to fly.
+                 'burn_heading_degrees':round(solution.heading_degrees,1),
+                 'burn_seconds':round(solution.burn_frames/fps,2)}
     motion['brake'] = brake
-    follow = state.get('follow_player')
-    if follow is not None:
-        follow = {**bearings(follow['bearing']),
-                  'heading_degrees':follow['bearing'],
-                  'waypoint_distance_metres':follow['waypoint_distance'],
-                  'route_distance_metres':follow['route_distance'],
-                  'player_visible':follow['player_visible'],
+    def engage_reading():
+        """The worked approach to the enemy fire control is engaging, or None.
+
+        Fire control holds the nose on that enemy, so thrust pushes towards it
+        and nothing can push away. The burn therefore only ever builds closing
+        speed, up to the fastest from which the ship could still turn round and
+        stop at the standoff distance; inside the standoff it calls for none.
+        """
+        for c in visible:
+            if c['allegiance'] != 'enemy':
+                continue
+            solution = aim(c)
+            if solution is None:
+                continue
+            distance = c['distance']
+            standoff = ENGAGE_STANDOFF_CELLS*cell_size
+            toward = [c['relative_position'][i]/distance if distance else 0 for i in (0,1)]
+            closing = sum((velocity[i]-c['velocity'][i])*toward[i] for i in (0,1))
+            deceleration = thrust_per_frame*fps*fps
+            reaction = 2*state.get('action_horizon_seconds',.25)+180/rotation_speed
+            room = max(0,distance-standoff)
+            target = min(speed_limit*fps,
+                         deceleration*(math.sqrt(reaction*reaction+2*room/deceleration)-reaction))
+            burn_frames = max(0,(target/fps-closing)/thrust_per_frame)
+            return {'id':c['id'],
+                    'distance_metres':distance,
+                    'standoff_metres':standoff,
+                    'range_state':('too_close' if distance < standoff*.6 else
+                                   'far' if distance > standoff*1.15 else 'in_range'),
+                    'closing_speed_metres_per_second':round(closing*fps,1),
+                    'target_closing_speed_metres_per_second':round(target,1),
+                    'holding_still':speed*fps < HARMLESS_SPEED_METRES_PER_SECOND,
+                    'burn_needed':burn_frames >= 2,
+                    'burn_heading_degrees':round(
+                        (heading+solution['lead_degrees_off_nose']) % 360,1),
+                    'burn_seconds':round(burn_frames/fps,2) if burn_frames >= 2 else 0}
+        return None
+
+    def course_to(point, bearing, cruise=None):
+        """The turn and burn that aim the ship's motion at a point.
+
+        The speed it may arrive at is what it could still shed before the wall
+        beyond the point, allowing for the lag in deciding to brake and a full
+        swing of the nose. `cruise` (pixels per second) caps that speed, and the
+        ship then holds most of it, where the default is to settle for half.
+        """
+        thrust = physics.get('thrust_per_frame',.0375)
+        deceleration = thrust*fps*fps
+        # The need to brake is noticed one decision late and acted on a decision
+        # after that, and then the nose has to swing right round.
+        reaction = 2*state.get('action_horizon_seconds',.25)+180/rotation_speed
+        # Room is what the hull can travel that way before touching a wall; a wall
+        # running alongside the course takes none of it. Stop a hull's width short.
+        angle = math.radians(bearing)
+        travel = hull_travel(origin,(math.cos(angle),math.sin(angle)),radius,walls,sensor_range)
+        room = max(0,(sensor_range if travel is None else travel)-radius)
+        limit = min(speed_limit*fps,
+                    deceleration*(math.sqrt(reaction*reaction+2*room/deceleration)-reaction))
+        if cruise is not None:
+            limit = min(limit,cruise)
+        correction = course_correction(
+            origin,velocity,heading,point,thrust=thrust,speed_limit=limit/fps,
+            # Holding right at the limit leaves no slack for lag; a little under it does.
+            approach_speed=None if cruise is None else limit/fps*.7,
+            rotation_per_frame=physics.get('rotation_per_frame',5),
+            friction=physics.get('friction_per_frame',1))
+        if correction is None:
+            return None
+        return {# The navigator times the burn itself, so even a short one can be flown.
+                'burn_needed':correction.burn_frames >= 2,
+                'burn_heading_degrees':round(correction.heading_degrees,1),
+                'burn_degrees_off_nose':round(correction.degrees_off_nose,1),
+                'burn_degrees_off_nose_at_next_decision':
+                    off_nose(correction.heading_degrees,next_heading),
+                'burn_seconds':round(correction.burn_frames/fps,2),
+                'speed_after_metres_per_second':round(correction.final_speed*fps,1),
+                'speed_limit_metres_per_second':round(limit,1)}
+
+    raw_follow = state.get('follow_player')
+    # Cut off: no player, or no open route to it. Then there is nobody to follow,
+    # and the hunter explores along a wall instead.
+    cut_off = raw_follow is None or raw_follow['route_distance'] is None
+    follow = wall_follow = None
+    if not cut_off:
+        follow = {**bearings(raw_follow['bearing']),
+                  'heading_degrees':raw_follow['bearing'],
+                  'waypoint_distance_metres':raw_follow['waypoint_distance'],
+                  'route_distance_metres':raw_follow['route_distance'],
+                  'player_visible':raw_follow['player_visible'],
                   # Close enough to keep station without running the player down.
-                  'alongside':follow['player_visible'] and follow['player_distance'] < cell_size,
+                  'alongside':(raw_follow['player_visible']
+                               and raw_follow['player_distance'] < cell_size),
                   'course':None}
         if not follow['alongside']:
-            # The turn and burn that aim the ship's motion at the waypoint. The speed
-            # it may arrive at is what it could still shed before the wall beyond the
-            # waypoint, allowing for a full swing of the nose to brake.
-            raw = state['follow_player']
-            thrust = physics.get('thrust_per_frame',.0375)
-            deceleration = thrust*fps*fps
-            reaction = state.get('action_horizon_seconds',.25)+180/rotation_speed
-            room = clearance(raw['bearing'])
-            limit = min(speed_limit*fps,
-                        deceleration*(math.sqrt(reaction*reaction+2*room/deceleration)-reaction))
-            correction = course_correction(
-                origin,velocity,heading,raw['waypoint'],thrust=thrust,speed_limit=limit/fps,
-                rotation_per_frame=physics.get('rotation_per_frame',5),
-                friction=physics.get('friction_per_frame',1))
-            if correction is not None:
-                follow['course'] = {
-                    # A burn shorter than half a decision cannot be flown; leave it.
-                    'burn_needed':correction.burn_frames >= horizon_frames/2,
-                    'burn_degrees_off_nose':round(correction.degrees_off_nose,1),
-                    'burn_degrees_off_nose_at_next_decision':
-                        off_nose(correction.heading_degrees,next_heading),
-                    'burn_seconds':round(correction.burn_frames/fps,2),
-                    'speed_after_metres_per_second':round(correction.final_speed*fps,1),
-                    'speed_limit_metres_per_second':round(limit,1)}
+            follow['course'] = course_to(raw_follow['waypoint'],raw_follow['bearing'])
+    else:
+        goal = wall_follow_target(origin,heading,radius,walls,cell_size)
+        bearing = math.degrees(math.atan2(goal.point[1]-origin[1],goal.point[0]-origin[0]))
+        wall_follow = {**bearings(bearing),
+                       'heading_degrees':bearing % 360,
+                       'wall_distance_metres':goal.wall_distance,
+                       # Slow enough to swing round the free end of a wall and stay
+                       # with it: the engine can only bend the path so tightly.
+                       'course':course_to(
+                           goal.point,bearing,
+                           cruise=.6*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
     return {'snapshot_at_seconds':state.get('snapshot_at',0),
             'speed_metres_per_second':speed*fps,
             'heading_degrees':heading % 360,
@@ -260,4 +319,6 @@ def pilot_state(state):
                                    if c['id'] not in visible_ids],
             'hostile_projectiles':[contact(c) for c in state.get('visible_projectiles',[])
                                    if c['allegiance']=='enemy'],
-            'follow_player':follow}
+            'engage':engage_reading(),
+            'follow_player':follow,
+            'wall_follow':wall_follow}

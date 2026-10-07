@@ -41,7 +41,7 @@ class HunterPerception:
 
     def observe(self, hunter, maze, player, enemies, projectiles, previous_action, now, generation):
         origin = hunter.get_pos()
-        radius = self.settings.sensor_cells * maze.cell_size_x
+        radius = self.settings.sensor_range(maze)
         walls = local_segments(origin, [(w.start,w.end) for w in maze.walls if w.active], radius)
         contacts = []
         visible_ids = set()
@@ -74,7 +74,8 @@ class HunterPerception:
         state = {
             'self': {'position': list(origin), 'velocity': [hunter.vx,hunter.vy],
                      'heading': hunter.angle, 'health': hunter.health, 'radius': hunter.radius,
-                     'cooldown_seconds': hunter.fire_remaining},
+                     'cooldown_seconds': hunter.fire_remaining,
+                     'thrust_frames': getattr(hunter,'thrust_frames',0)},
             'cell_size': maze.cell_size_x,
             'sensor_range': radius,
             'previous_action': asdict(previous_action),

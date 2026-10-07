@@ -17,6 +17,8 @@ class HunterShip(RotatingThrusterShip):
     ENGINE_LIT_COLOR = (255, 200, 80)  # ... and engine on
     # An arrowhead, in multiples of the radius: x along the heading, y across it.
     # A long nose, swept-back wings and a notched tail give it only one way to point.
+    BURN_ALIGNMENT_DEGREES = 5.0  # How close to a course's burn heading the nose must be to thrust
+    LOOSE_BURN_ALIGNMENT_DEGREES = 20.0  # The same for a burn made while the nose is not the navigator's
     NOSE_X = 1.4
     WING_X = -0.9
     WING_HALF_SPAN = 0.85
@@ -34,6 +36,9 @@ class HunterShip(RotatingThrusterShip):
         self.burst_remaining = 0
         self.immunity_remaining = 0.0
         self.pilot_thrusting = False
+        self.thrust_frames = 0  # Frames of thrust ever applied
+        self._decision = None  # The pilot decision the burn budget belongs to
+        self._burn_left = None  # Frames of burn the present course still allows
 
     def is_enemy_ship(self):
         return False
@@ -63,13 +68,39 @@ class HunterShip(RotatingThrusterShip):
                 # Swing at the normal turn rate, but stop exactly on the solution.
                 rate = self.current_rotation_speed
                 self.angle = (self.angle + max(-rate, min(rate, solution.lead_degrees))) % 360
+        elif action.course:
+            if action.burn_heading is not None:
+                rate = self.current_rotation_speed
+                swing = (action.burn_heading - self.angle + 180) % 360 - 180
+                self.angle = (self.angle + max(-rate, min(rate, swing))) % 360
         elif action.turn < 0:
             self.rotate_left()
         elif action.turn > 0:
             self.rotate_right()
-        self.pilot_thrusting = action.thrust
-        if action.thrust:
+        # A decision may bring a burn of a set length, and a heading the burn belongs
+        # to. Thrust applied since a worked burn was worked out counts against it.
+        if action is not self._decision:
+            self._decision = action
+            self._burn_left = None
+            if action.burn_frames is not None:
+                used = (0 if action.burn_reference is None
+                        else self.thrust_frames - action.burn_reference)
+                self._burn_left = max(0.0, action.burn_frames - used)
+        thrusting = action.thrust
+        if thrusting and action.burn_heading is not None:
+            # The navigator holds the nose on a course's heading, so that burn can be
+            # exact. Otherwise the nose is busy elsewhere and close is good enough.
+            swing = (action.burn_heading - self.angle + 180) % 360 - 180
+            thrusting = abs(swing) <= (self.BURN_ALIGNMENT_DEGREES if action.course
+                                       else self.LOOSE_BURN_ALIGNMENT_DEGREES)
+        if thrusting and self._burn_left is not None:
+            thrusting = self._burn_left > 0.0
+            if thrusting:
+                self._burn_left -= dt
+        self.pilot_thrusting = thrusting
+        if thrusting:
             self.apply_thrust()
+            self.thrust_frames += 1
         projectile = None
         ready = self.fire_remaining <= 1e-9
         lined_up = solution is not None and solution.on_target

@@ -34,14 +34,14 @@ def ship_at(pos=(500, 500), heading=0.0):
 
 def test_track_is_a_fourth_steering_choice():
     tracking = {name: action for name, action in ACTIONS.items() if name.startswith('track_')}
-    assert len(tracking) == 4
+    assert len(tracking) == 8
     assert all(action.track and action.turn == 0 for action in tracking.values())
     assert not any(action.track for name, action in ACTIONS.items() if not name.startswith('track_'))
     assert ACTIONS['track_thrust_fire'] == PilotAction(0, True, True, True)
 
 
 def test_pilot_is_offered_track():
-    assert set(PILOT_QUESTIONS['turn']['criteria']) == {'left', 'none', 'right', 'track'}
+    assert set(PILOT_QUESTIONS['turn']['criteria']) == {'left', 'none', 'right', 'track', 'course'}
 
 
 @pytest.mark.parametrize('lead', [40.0, -40.0])
@@ -143,7 +143,7 @@ def test_enemy_behind_a_wall_is_not_a_target():
 
 
 def test_enemy_beyond_sensor_range_or_dead_is_not_a_target():
-    reach = SETTINGS.sensor_cells * maze().cell_size_x
+    reach = SETTINGS.sensor_range(maze())
     assert find_firing_solution(ship_at(), [urchin((500 + reach + 50, 500))], maze(), SETTINGS) is None
     dead = urchin((700, 500))
     dead.active = False
@@ -203,3 +203,28 @@ def test_tracking_hunter_kills_a_static_urchin(distance, bearing, monkeypatch):
             break
     assert not enemy.active, f'urchin survived {len(shots)} shots'
     assert len(shots) <= 4 * config.STATIC_ENEMY_HIT_POINTS
+
+
+@pytest.mark.parametrize('seed', range(12))
+def test_fire_control_sees_exactly_what_the_pilot_sees(seed):
+    """Fire control's quick line-of-sight check must agree with the pilot's full view."""
+    import random
+    rng = random.Random(seed)
+    world = maze()
+    world.grid_width = world.grid_height = 20
+    world.cell_size_x = world.cell_size_y = 50
+    for gx in range(20):
+        for gy in range(20):
+            if rng.random() < 0.25:
+                x, y = gx * 50, gy * 50
+                world.walls += [WallSegment((x, y), (x + 50, y), 3), WallSegment((x + 50, y), (x + 50, y + 50), 3),
+                                WallSegment((x + 50, y + 50), (x, y + 50), 3), WallSegment((x, y + 50), (x, y), 3)]
+    for _ in range(8):
+        ship = ship_at((rng.uniform(100, 900), rng.uniform(100, 900)), rng.uniform(0, 360))
+        enemies = [urchin((rng.uniform(50, 950), rng.uniform(50, 950))) for _ in range(6)]
+        observation = HunterPerception().observe(ship, world, None, enemies, [], ACTIONS['none_coast_hold'], 0, 1)
+        shown = pilot_state(json.loads(observation.state_json))['engage']
+        solution = find_firing_solution(ship, enemies, world, SETTINGS)
+        assert (solution is None) == (shown is None)
+        if solution is not None:
+            assert (ship.angle + solution.lead_degrees) % 360 == pytest.approx(shown['burn_heading_degrees'], abs=0.11)  # Twice rounded to a tenth

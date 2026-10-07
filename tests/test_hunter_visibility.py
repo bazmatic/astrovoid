@@ -21,3 +21,71 @@ def test_wall_portions_clip_range_and_hidden_ends():
         assert b[0]**2+b[1]**2 <= 100.00001
         if a[0] == 8:
             assert not (-3.19 < (a[1]+b[1])/2 < 3.19)
+
+
+# --- the fast implementation must agree with the original ---
+
+import random
+import time
+
+from hunter.visibility import local_segments
+from tests import visibility_reference as reference
+
+
+def random_maze_walls(rng, cells=12, size=50.0, fill=0.35):
+    """Cell-edge wall segments like the maze converter emits, duplicates and all."""
+    walls = []
+    for gx in range(cells):
+        for gy in range(cells):
+            if rng.random() < fill:
+                x, y = gx * size, gy * size
+                walls += [((x, y), (x + size, y)), ((x + size, y), (x + size, y + size)),
+                          ((x + size, y + size), (x, y + size)), ((x, y + size), (x, y))]
+    return walls
+
+
+def canonical(pieces):
+    return sorted(tuple(sorted((round(a[0], 5), round(a[1], 5)) for a in piece)) for piece in pieces)
+
+
+@pytest.mark.parametrize('seed', range(30))
+def test_fast_visibility_matches_the_original(seed):
+    rng = random.Random(seed)
+    walls = random_maze_walls(rng)
+    if seed % 3 == 0:  # Some walls at odd angles too
+        walls += [((rng.uniform(0, 600), rng.uniform(0, 600)), (rng.uniform(0, 600), rng.uniform(0, 600)))
+                  for _ in range(6)]
+    for _ in range(6):
+        origin = (rng.uniform(0, 600), rng.uniform(0, 600))
+        radius = rng.choice((80.0, 200.0, 400.0))
+        assert canonical(local_segments(origin, walls, radius)) == canonical(
+            reference.local_segments(origin, walls, radius))
+        assert canonical(visible_wall_portions(origin, walls, radius)) == canonical(
+            reference.visible_wall_portions(origin, walls, radius))
+        local = reference.local_segments(origin, walls, radius)
+        for _ in range(40):
+            point = (origin[0] + rng.uniform(-radius, radius), origin[1] + rng.uniform(-radius, radius))
+            assert visible_point(origin, point, local, radius) == reference.visible_point(origin, point, local, radius)
+
+
+def test_fast_visibility_matches_on_grid_aligned_origins():
+    """Origins on cell centres and corners line rays up with wall ends: the awkward cases."""
+    walls = random_maze_walls(random.Random(99))
+    for origin in ((275.0, 275.0), (300.0, 300.0), (250.0, 325.0), (300.0, 275.0)):
+        assert canonical(visible_wall_portions(origin, walls, 400.0)) == canonical(
+            reference.visible_wall_portions(origin, walls, 400.0))
+
+
+def test_fast_visibility_is_much_faster_in_a_dense_maze():
+    walls = random_maze_walls(random.Random(7), cells=30, size=33.0)
+    origin = (495.0 + 16.5, 495.0 + 16.5)
+
+    def timed(function):
+        best = float('inf')
+        for _ in range(3):
+            start = time.perf_counter()
+            function(origin, walls, 400.0)
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    assert timed(visible_wall_portions) * 4 < timed(reference.visible_wall_portions)
