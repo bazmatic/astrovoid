@@ -382,6 +382,7 @@ class UISettings:
 class GameSettings:
     criticalWarningThreshold: int
     hunterLevelInterval: int
+    hunterFirstLevel: int
 
 
 @dataclass
@@ -871,3 +872,5 @@ FONT_SIZE_HINT = SETTINGS.ui.fonts.hint
 
 # Allied hunter: one appears on every Nth level (0 disables the schedule)
 HUNTER_LEVEL_INTERVAL = SETTINGS.game.hunterLevelInterval
+# No hunter flies before this level
+HUNTER_FIRST_LEVEL = SETTINGS.game.hunterFirstLevel

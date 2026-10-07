@@ -213,15 +213,30 @@ def get_maze_grid_size(level: int) -> int:
 
 
 
+def is_boss_level(level: int) -> bool:
+    """A boss level is any level with a split boss or a mother boss on it."""
+    return get_level_split_boss_count(level) + get_level_mother_boss_count(level) > 0
+
+
 def get_level_hunter_config(level: int):
-    """Return optional hunter spawn override; absent/null uses automatic placement."""
+    """Return the level file's hunter entry: a spawn override, False for no hunter, or None if absent."""
     data = load_level_config(level)
     return data.get('hunter') if data else None
 
 
 def level_has_hunter(level: int) -> bool:
-    """A hunter flies every Nth level, and on any level whose config places one."""
-    if get_level_hunter_config(level) is not None:
+    """Whether a hunter flies on a level.
+
+    A level file decides if it says anything: False forbids one, a spawn
+    override places one. Otherwise there is none before HUNTER_FIRST_LEVEL or
+    on a boss level, and one every HUNTER_LEVEL_INTERVAL levels elsewhere.
+    """
+    hunter = get_level_hunter_config(level)
+    if hunter is False:
+        return False
+    if hunter is not None:
         return True
+    if level < config.HUNTER_FIRST_LEVEL or is_boss_level(level):
+        return False
     interval = config.HUNTER_LEVEL_INTERVAL
     return interval > 0 and level % interval == 0

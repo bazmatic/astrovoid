@@ -334,6 +334,7 @@
   },
   "game": {
     "criticalWarningThreshold": 20,
-    "hunterLevelInterval": 1
+    "hunterLevelInterval": 1,
+    "hunterFirstLevel": 4
   }
 }
