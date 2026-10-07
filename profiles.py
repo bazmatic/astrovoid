@@ -11,6 +11,10 @@ from typing import Dict, List, Optional
 
 DEFAULT_PROFILES_PATH = Path(__file__).resolve().parent / "profiles.json"
 
+# Bests are stored by level number. Raise this when the levels change so that
+# records set on the old levels are not shown against the new ones.
+LEVELS_VERSION = 2
+
 
 @dataclass(frozen=True)
 class LevelBest:
@@ -62,6 +66,9 @@ class ProfileManager:
             except (ValueError, OSError):
                 pass
 
+        version = data.get("levels_version")
+        stale = type(version) is not int or version < LEVELS_VERSION
+
         loaded_profiles: List[Profile] = []
         for entry in data.get("profiles", []):
             try:
@@ -73,7 +80,7 @@ class ProfileManager:
 
             bests = {}
             raw_bests = entry.get("bests", {})
-            if isinstance(raw_bests, dict):
+            if not stale and isinstance(raw_bests, dict):
                 for key, value in raw_bests.items():
                     try:
                         best_level = int(key)
@@ -93,6 +100,8 @@ class ProfileManager:
         self.profiles = loaded_profiles
         self.active_profile_name = data.get("active_profile")
         self._ensure_active_profile()
+        if stale:
+            self._save_profiles()
 
     def _ensure_active_profile(self) -> None:
         """Ensure there is always at least one profile and an active profile."""
@@ -119,7 +128,8 @@ class ProfileManager:
                 }
                 for profile in self.profiles
             ],
-            "active_profile": self.active_profile_name
+            "active_profile": self.active_profile_name,
+            "levels_version": LEVELS_VERSION
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
