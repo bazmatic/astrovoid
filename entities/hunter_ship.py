@@ -11,6 +11,18 @@ class HunterShip(RotatingThrusterShip):
     # Green marks an ally: the player is blue, enemies are red, orange and purple.
     COLOR = (120, 255, 90)
     FILL = (25, 110, 40)
+    NOSE_COLOR = (215, 255, 200)  # Pale tip, so the front reads at a glance
+    COCKPIT_COLOR = (15, 60, 30)
+    ENGINE_COLOR = (170, 95, 20)  # Amber mark in the tail notch, engine off
+    ENGINE_LIT_COLOR = (255, 200, 80)  # ... and engine on
+    # An arrowhead, in multiples of the radius: x along the heading, y across it.
+    # A long nose, swept-back wings and a notched tail give it only one way to point.
+    NOSE_X = 1.4
+    WING_X = -0.9
+    WING_HALF_SPAN = 0.85
+    NOTCH_X = -0.35
+    COCKPIT_X = 0.5
+    ENGINE_X = -0.5
 
     def __init__(self, start_pos, settings=HunterSettings()):
         super().__init__(start_pos, config.SHIP_SIZE)
@@ -88,15 +100,50 @@ class HunterShip(RotatingThrusterShip):
         self.active = self.health > 0
         return not self.active
 
+    def _place(self, x, y):
+        """Convert a point in the ship's own frame (radius units) to the screen."""
+        heading = math.radians(self.angle)
+        cos_heading, sin_heading = math.cos(heading), math.sin(heading)
+        return (self.x + (x * cos_heading - y * sin_heading) * self.radius,
+                self.y + (x * sin_heading + y * cos_heading) * self.radius)
+
+    def outline(self):
+        """Corners of the arrowhead: nose, right wing tip, tail notch, left wing tip."""
+        return [self._place(self.NOSE_X, 0.0),
+                self._place(self.WING_X, self.WING_HALF_SPAN),
+                self._place(self.NOTCH_X, 0.0),
+                self._place(self.WING_X, -self.WING_HALF_SPAN)]
+
+    def cockpit(self):
+        """Where the cockpit sits, forward of centre."""
+        return self._place(self.COCKPIT_X, 0.0)
+
+    def _nose_section(self, back_x):
+        """The part of the arrowhead ahead of back_x: a triangle ending at the nose."""
+        half_width = self.WING_HALF_SPAN * (self.NOSE_X - back_x) / (self.NOSE_X - self.WING_X)
+        return [self._place(self.NOSE_X, 0.0), self._place(back_x, half_width),
+                self._place(back_x, -half_width)]
+
     def draw(self, screen):
         if not self.active:
             return
         color = self.COLOR
         if self.immunity_remaining and int(self.immunity_remaining * 20) % 2:
             color = (235, 255, 230)
-        pygame.draw.polygon(screen, self.FILL, self.get_vertices())
-        pygame.draw.polygon(screen, color, self.get_vertices(), 2)
-        pygame.draw.circle(screen, color, (round(self.x), round(self.y)), 3)
+        outline = self.outline()
+        # Dark at the tail, brightening in two steps to a pale nose
+        pygame.draw.polygon(screen, self.FILL, outline)
+        middle = tuple((a + b) // 2 for a, b in zip(self.FILL, self.COLOR))
+        pygame.draw.polygon(screen, middle, self._nose_section(-0.2))
+        pygame.draw.polygon(screen, self.NOSE_COLOR, self._nose_section(0.45))
+        pygame.draw.lines(screen, color, True, outline, 1)
+        cockpit = self.cockpit()
+        pygame.draw.circle(screen, self.COCKPIT_COLOR, (round(cockpit[0]), round(cockpit[1])), 1)
+        # The engine sits in the tail notch and marks the back even when it is off
+        engine = self._place(self.ENGINE_X, 0.0)
+        pygame.draw.circle(
+            screen, self.ENGINE_LIT_COLOR if self.pilot_thrusting else self.ENGINE_COLOR,
+            (round(engine[0]), round(engine[1])), max(2, round(self.radius * 0.22)))
         # The hunter's gentle thrust rarely reaches plume-length speeds, so hold
         # the cone open while the pilot's engine is on.
         self.draw_thrust_plume(
