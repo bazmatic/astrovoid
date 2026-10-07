@@ -36,23 +36,3 @@ class SplitBoss(ReplayEnemyShip):
         # Add hit points system
         self.hit_points = config.SPLIT_BOSS_HIT_POINTS
         self.max_hit_points = config.SPLIT_BOSS_HIT_POINTS
-    
-    def get_damage_fraction(self) -> float:
-        """Return fraction of damage taken (0.0 full health, 1.0 dead)."""
-        if self.max_hit_points <= 0:
-            return 0.0
-        ratio = 1.0 - max(0.0, min(1.0, self.hit_points / self.max_hit_points))
-        return ratio
-
-    def take_damage(self) -> bool:
-        """Take damage from a projectile hit.
-        
-        Decrements hit points by 1. Returns True if the boss should be destroyed
-        (hit points reached 0), False otherwise.
-        
-        Returns:
-            True if hit points reached 0, False otherwise.
-        """
-        self.hit_points -= 1
-        return self.hit_points <= 0
-

@@ -21,22 +21,22 @@ class QuitConfirmationMenu:
         # Create dialog instances
         self.level_complete_dialog = ConfirmationDialog(
             screen,
-            title="Quit to Menu?",
+            title="QUIT TO MENU?",
             message="Progress will be saved.",
-            confirm_label="OK",
-            cancel_label="Cancel",
-            dialog_width=550,
-            dialog_height=280,
+            confirm_label="QUIT",
+            cancel_label="CANCEL",
+            dialog_width=560,
+            dialog_height=290,
             button_layout="side_by_side"
         )
         self.quit_level_dialog = ConfirmationDialog(
             screen,
-            title="Quit Level?",
-            message="Are you sure you want to quit? Progress will be lost.",
-            confirm_label="OK",
-            cancel_label="Cancel",
-            dialog_width=600,
-            dialog_height=360,
+            title="QUIT LEVEL?",
+            message="Progress on this level will be lost.",
+            confirm_label="QUIT",
+            cancel_label="CANCEL",
+            dialog_width=620,
+            dialog_height=370,
             button_layout="stacked"
         )
     

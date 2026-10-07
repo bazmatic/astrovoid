@@ -6,6 +6,8 @@ eliminating code duplication in the main game loop.
 
 from game_handlers.combat_targets import nearest_friendly_pos
 
+import math
+import config
 from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
@@ -17,6 +19,7 @@ if TYPE_CHECKING:
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
     from entities.egg import Egg
+    from entities.anemone import Anemone
     from entities.ship import Ship
     from entities.projectile import Projectile
     from entities.rotating_thruster_ship import RotatingThrusterShip
@@ -204,6 +207,45 @@ class EnemyUpdater:
             if not ship.is_shield_active():
                 if ship.check_circle_collision(flighthouse.get_pos(), flighthouse.radius, flighthouse):
                     scoring.record_enemy_collision()
+    
+    def update_anemones(
+        self,
+        anemones: List['Anemone'],
+        dt: float,
+        maze: 'Maze',
+        ship: 'Ship',
+        scoring: 'ScoringSystem'
+    ) -> None:
+        """Update anemones: pull the ship, and sting and fling it on contact."""
+        from entities.anemone import apply_pull
+        
+        # However many have hold of the ship, together they never pull harder
+        # than one at full strength, so a straight burn can always break free
+        pull_x = pull_y = 0.0
+        for anemone in anemones:
+            if not anemone.active:
+                continue
+            anemone.update(dt)
+            ax, ay = anemone.reach_for(ship, maze)
+            pull_x += ax
+            pull_y += ay
+        strength = math.hypot(pull_x, pull_y)
+        peak = config.ANEMONE_PULL_THRUST_FRACTION * config.SHIP_THRUST_FORCE
+        if strength > peak:
+            pull_x, pull_y = pull_x / strength * peak, pull_y / strength * peak
+        if strength > 0.0:
+            apply_pull(ship, pull_x, pull_y)
+
+        for anemone in anemones:
+            if not anemone.active:
+                continue
+
+            # Check anemone-ship collision (skip if shield is active)
+            if not ship.is_shield_active():
+                if ship.check_circle_collision(anemone.get_pos(), anemone.radius, anemone):
+                    scoring.record_enemy_collision()
+                    anemone.fling(ship)
+    
     
     def update_split_bosses(
         self,

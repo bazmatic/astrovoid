@@ -66,12 +66,14 @@ class MenuStateHandler(StateHandler):
                 game.state = config.STATE_PLAYING
                 game.level = game.initial_start_level if game.initial_start_level else game.profile_manager.get_active_level()
                 game.start_level()
+            elif selected_option == "LEVELS":
+                game.level_select_menu.refresh()
+                game.state = config.STATE_LEVEL_SELECT
             elif selected_option == "SELECT PROFILE":
                 game.profile_selection_menu.refresh_profiles()
                 game.state = config.STATE_PROFILE_SELECTION
-            elif selected_option == "OPTIONS":
-                # Placeholder - do nothing yet
-                pass
+            elif selected_option == "CONTROLS":
+                game.state = config.STATE_CONTROLS
             elif selected_option == "QUIT":
                 game.running = False
             return True
@@ -89,12 +91,14 @@ class MenuStateHandler(StateHandler):
                     game.state = config.STATE_PLAYING
                     game.level = game.initial_start_level if game.initial_start_level else game.profile_manager.get_active_level()
                     game.start_level()
+                elif selected_option == "LEVELS":
+                    game.level_select_menu.refresh()
+                    game.state = config.STATE_LEVEL_SELECT
                 elif selected_option == "SELECT PROFILE":
                     game.profile_selection_menu.refresh_profiles()
                     game.state = config.STATE_PROFILE_SELECTION
-                elif selected_option == "OPTIONS":
-                    # Placeholder - do nothing yet
-                    pass
+                elif selected_option == "CONTROLS":
+                    game.state = config.STATE_CONTROLS
                 elif selected_option == "QUIT":
                     game.running = False
                 return True
@@ -239,11 +243,89 @@ class ProfileSelectionStateHandler(StateHandler):
         return False
 
 
+class LevelSelectStateHandler(StateHandler):
+    """Keyboard, d-pad and stick navigation for the level grid."""
+
+    def __init__(self):
+        self.last_navigation_time = 0.0
+
+    def _play(self, game):
+        menu = game.level_select_menu
+        if menu.can_play_selected:
+            game.level = menu.selected_level
+            game.state = config.STATE_PLAYING
+            game.start_level()
+        return True
+
+    def handle_keyboard(self, event, game):
+        directions = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0),
+                      pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
+        if event.key in directions:
+            game.level_select_menu.navigate(*directions[event.key])
+            return True
+        if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+            return self._play(game)
+        if event.key in (pygame.K_ESCAPE, pygame.K_q):
+            game.state = config.STATE_MENU
+            return True
+        return False
+
+    def handle_controller(self, event, game):
+        if event.type == pygame.JOYBUTTONDOWN:
+            if game.input_handler.is_controller_menu_confirm_pressed(event.button):
+                return self._play(game)
+            if game.input_handler.is_controller_menu_cancel_pressed(event.button):
+                game.state = config.STATE_MENU
+                return True
+        now = time.monotonic()
+        if now - self.last_navigation_time < 0.15:
+            return False
+        dx, dy = 0, 0
+        if event.type == pygame.JOYHATMOTION:
+            dx, dy = event.value[0], -event.value[1]
+        elif event.type == pygame.JOYAXISMOTION and abs(event.value) > config.CONTROLLER_DEADZONE:
+            direction = 1 if event.value > 0 else -1
+            if event.axis in (0, 2):
+                dx = direction
+            elif event.axis in (1, 3):
+                dy = direction
+        if dx or dy:
+            game.level_select_menu.navigate(dx, dy)
+            self.last_navigation_time = now
+            return True
+        return False
+
+
+class ControlsStateHandler(StateHandler):
+    """Handler for the controls screen: any confirm or cancel input goes back to the menu."""
+
+    def handle_keyboard(self, event: 'pygame.event.Event', game: 'Game') -> bool:
+        if event.key in (pygame.K_ESCAPE, pygame.K_q, pygame.K_RETURN, pygame.K_SPACE, pygame.K_BACKSPACE):
+            game.state = config.STATE_MENU
+            return True
+        return False
+
+    def handle_controller(self, event: 'pygame.event.Event', game: 'Game') -> bool:
+        if event.type != pygame.JOYBUTTONDOWN:
+            return False
+        if (game.input_handler.is_controller_menu_confirm_pressed(event.button)
+                or game.input_handler.is_controller_menu_cancel_pressed(event.button)):
+            game.state = config.STATE_MENU
+            return True
+        return False
+
+
 class PlayingStateHandler(StateHandler):
     """Handler for playing state events."""
     
     def handle_keyboard(self, event: 'pygame.event.Event', game: 'Game') -> bool:
         """Handle keyboard events in playing state."""
+        if event.key == pygame.K_r:
+            game.restart_level()
+            return True
+        if game.game_over_active:
+            game.complete_level(success=False)
+            return True
         if event.key == pygame.K_ESCAPE:
             game.state = config.STATE_QUIT_CONFIRM
             return True
@@ -251,6 +333,14 @@ class PlayingStateHandler(StateHandler):
     
     def handle_controller(self, event: 'pygame.event.Event', game: 'Game') -> bool:
         """Handle controller events in playing state."""
+        if event.type != pygame.JOYBUTTONDOWN:
+            return False
+        if game.input_handler.is_controller_restart_pressed(event.button):
+            game.restart_level()
+            return True
+        if game.game_over_active:
+            game.complete_level(success=False)
+            return True
         if game.input_handler.is_controller_quit_pressed(event.button):
             game.state = config.STATE_QUIT_CONFIRM
             return True
@@ -349,18 +439,14 @@ class LevelCompleteStateHandler(StateHandler):
                 game.state = config.STATE_PLAYING
                 game.start_level()
             elif selected_option == "RETRY LEVEL":
-                game.scoring.total_score = game.total_score_before_level
-                game.state = config.STATE_PLAYING
-                game.start_level()
+                game.restart_level()
             elif selected_option == "MAIN MENU":
                 game.state = config.STATE_MENU
                 game.reset_scoring_to_profile_state()
             return True
         elif event.key == pygame.K_r:
             # R key still works for quick retry
-            game.scoring.total_score = game.total_score_before_level
-            game.state = config.STATE_PLAYING
-            game.start_level()
+            game.restart_level()
             return True
         elif event.key == pygame.K_ESCAPE or event.key == pygame.K_q:
             # ESC/Q still shows quit confirmation (for backwards compatibility)
@@ -427,9 +513,7 @@ class LevelCompleteStateHandler(StateHandler):
                     game.state = config.STATE_PLAYING
                     game.start_level()
                 elif selected_option == "RETRY LEVEL":
-                    game.scoring.total_score = game.total_score_before_level
-                    game.state = config.STATE_PLAYING
-                    game.start_level()
+                    game.restart_level()
                 elif selected_option == "MAIN MENU":
                     game.state = config.STATE_MENU
                     game.reset_scoring_to_profile_state()
@@ -463,6 +547,8 @@ class StateHandlerRegistry:
         self.handlers = {
             config.STATE_MENU: MenuStateHandler(),
             config.STATE_PROFILE_SELECTION: ProfileSelectionStateHandler(),
+            config.STATE_CONTROLS: ControlsStateHandler(),
+            config.STATE_LEVEL_SELECT: LevelSelectStateHandler(),
             config.STATE_PLAYING: PlayingStateHandler(),
             config.STATE_QUIT_CONFIRM: QuitConfirmStateHandler(),
             config.STATE_LEVEL_COMPLETE: LevelCompleteStateHandler(),

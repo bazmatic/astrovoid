@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import config
 import level_config
 from game import Game
+from profiles import ProfileManager
 from game_handlers.entity_manager import EntityManager
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
@@ -18,16 +19,17 @@ from tests.test_hunter_controller import Worker
 
 
 @pytest.fixture
-def game(monkeypatch):
+def game(monkeypatch, tmp_path):
     pygame.init()
     pygame.display.set_mode((320,240))
     g = Game.__new__(Game)
     g.level = 1
+    g.profile_manager = ProfileManager(tmp_path / "profiles.json")
     g.scoring = ScoringSystem()
     g.sound_manager = Mock()
     g.command_recorder = CommandRecorder()
     g.entity_manager = EntityManager()
-    for name in ('enemies','replay_enemies','flockers','flighthouses','split_bosses','mother_bosses','babies','eggs'):
+    for name in ('enemies','replay_enemies','flockers','flighthouses','split_bosses','mother_bosses','babies','eggs','anemones'):
         setattr(g,name,getattr(g.entity_manager,name))
     g.spawn_manager = SpawnManager(g.entity_manager)
     g.enemy_updater = EnemyUpdater()

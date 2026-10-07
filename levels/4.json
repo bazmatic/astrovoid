@@ -7,7 +7,8 @@
     "replay": 1,
     "split_boss": 0,
     "mother_boss": 0,
-    "egg": 0
+    "egg": 0,
+    "anemone": 3
   },
   "maze": {
     "complexity": "simple",

@@ -115,7 +115,8 @@
     "size": 15,
     "color": [150, 100, 255],
     "baseCount": 1,
-    "scaleFactor": 0.5
+    "scaleFactor": 0.5,
+    "hitPoints": 3
   },
   "flockerEnemy": {
     "size": 12,
@@ -144,10 +145,26 @@
     "scanSpeedDegreesPerSecond": 90,
     "trackSpeedDegreesPerSecond": 240,
     "spawnIntervalSeconds": 0.5,
-    "hitPoints": 3,
+    "hitPoints": 5,
     "baseCount": 1,
     "scaleFactor": 0.1,
     "initialFlockerSpeedMultiplier": 0.8
+  },
+  "anemone": {
+    "size": 14,
+    "hitPoints": 4,
+    "reachCells": 3.5,
+    "pullThrustFraction": 0.8,
+    "flingSpeed": 5.0,
+    "releaseFrames": 60,
+    "flinchFrames": 90,
+    "firstLevel": 4,
+    "baseCount": 4,
+    "levelsPerExtra": 2,
+    "maxCount": 8,
+    "maxCoverage": 0.4,
+    "color": [255, 110, 170],
+    "tipColor": [90, 230, 210]
   },
   "baby": {
     "size": 10,
@@ -290,7 +307,7 @@
     "twinkleIntensity": 0.3,
     "tinkleBasePitch": 800,
     "tinklePitchIncrement": 200,
-    "levelCompleteStarSize": 45
+    "levelCompleteStarSize": 60
   },
   "ui": {
     "splashEnabled": false,

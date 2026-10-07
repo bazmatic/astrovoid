@@ -177,6 +177,22 @@ When you complete a level, the screen displays:
 - Replay enemy ships appear starting at level 1, increasing in count up to level 10
 - **Deterministic Generation**: Each level uses its level number as the random seed, ensuring the same level always generates the same maze layout, enemy positions, and enemy distributions across playthroughs
 
+### Replaying and personal bests
+
+**LEVELS** on the main menu opens a grid of unlocked levels, with best stars and
+score/time records for each. Replaying an earlier level can improve these records
+without adding to your progress score or changing your furthest level. CONTINUE moves
+to the next level and resumes ordinary progress when you reach your furthest level.
+
+Press **R** or controller **Y** during play to restart immediately. During power-out,
+any other key or button skips to the failed screen. Each successful clear records
+independent bests for score, time, and stars; the completion screen shows the gaps
+or celebrates new records. Existing profiles pick up records as levels are cleared.
+
+Stars require at least **20 / 40 / 60 / 80 / 95 points** for one through five
+stars respectively. Below 20 points earns no stars. Previously earned star records
+are retained when the balance changes.
+
 ## Project Structure
 
 ```
@@ -197,6 +213,7 @@ asterdroids/
 │   ├── projectile.py      # Projectiles
 │   ├── command_recorder.py # Command recording for replay
 │   ├── egg.py             # Egg enemy that grows and spawns babies
+│   ├── anemone.py         # Anemone enemy that pulls the ship toward it
 │   ├── baby.py            # Baby enemy (small, fast replay enemy)
 │   ├── split_boss.py      # Split Boss enemy
 │   ├── mother_boss.py     # Mother Boss enemy that lays eggs
@@ -210,6 +227,9 @@ asterdroids/
 ├── rendering/             # Rendering system
 │   ├── renderer.py       # Centralized rendering
 │   ├── ui_elements.py    # UI components
+│   ├── dial.py           # HUD instrument dials
+│   ├── fonts.py          # The game typeface (Chakra Petch)
+│   ├── controls_menu.py  # Key and button mappings screen
 │   └── visual_effects.py  # Visual effects
 ├── input/                 # Input handling
 │   └── input_handler.py  # Keyboard input mapping

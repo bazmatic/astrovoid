@@ -7,6 +7,7 @@ import random
 import os
 from typing import List, Optional, Tuple
 import config
+from rendering.fonts import get_font
 from entities.ship import Ship
 from maze.generator import Maze
 from entities.enemy import Enemy, create_enemies
@@ -19,14 +20,16 @@ from entities.powerup_crystal import PowerupCrystal
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
-from profiles import ProfileManager
+from profiles import ProfileManager, LevelResult
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators
-from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
+from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon, render_hint_row
 from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
 from rendering.level_complete_menu import LevelCompleteMenu
 from rendering.profile_selection_menu import ProfileSelectionMenu
+from rendering.controls_menu import ControlsMenu
+from rendering.level_select_menu import LevelSelectMenu
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
@@ -56,8 +59,8 @@ class Game:
         """Initialize game."""
         self.screen = screen
         self.clock = pygame.time.Clock()
-        self.font = pygame.font.Font(None, 36)
-        self.small_font = pygame.font.Font(None, 24)
+        self.font = get_font(36)
+        self.small_font = get_font(24)
         self.renderer = Renderer(screen)
         
         # Initialize game indicators component
@@ -93,6 +96,7 @@ class Game:
         self.replay_enemies = self.entity_manager.replay_enemies
         self.flockers = self.entity_manager.flockers
         self.flighthouses = self.entity_manager.flighthouses
+        self.anemones = self.entity_manager.anemones
         self.split_bosses = self.entity_manager.split_bosses
         self.mother_bosses = self.entity_manager.mother_bosses
         self.babies = self.entity_manager.babies
@@ -104,6 +108,10 @@ class Game:
         self.sound_manager = SoundManager()  # Game-level sound manager for enemy destruction
         self.command_recorder = CommandRecorder()  # Record player commands for replay enemy
         self.input_handler = InputHandler()  # Handle keyboard input and map to commands
+        self.restart_hints = {
+            connected: render_hint_row(get_font(24), [(key, "Restart")])
+            for connected, key in ((False, "R"), (True, "R / Y"))
+        }
         
         # Game handlers
         self.spawn_manager = SpawnManager(self.entity_manager)
@@ -122,6 +130,8 @@ class Game:
         self.completion_time_seconds = 0.0
         self.level_score_percentage = 0.0
         self.total_score_before_level = 0  # Store score before level for replay
+        self.replaying = False
+        self.level_result: Optional[LevelResult] = None
         self.level_succeeded = False  # Track if level was completed successfully
         self.exit_explosion_active = False  # Track if exit explosion is playing
         self.exit_explosion_time = 0.0  # Time since explosion started
@@ -139,13 +149,15 @@ class Game:
         self.game_over_active = False  # Track if game over sequence is active
         self.game_frozen = False  # Track if game action is frozen (score reached zero)
         self.game_over_start_time = 0.0  # Time when game over sequence started
-        self.game_over_fade_duration = 2.0  # Duration of fade to black (seconds)
-        self.game_over_text_delay = 2.0  # Delay before showing "GAME OVER" text (seconds)
-        self.game_over_text_duration = 2.0  # Duration to show "GAME OVER" text (seconds)
+        self.game_over_fade_duration = 0.5  # Duration of fade to black (seconds)
+        self.game_over_text_delay = 0.0  # Delay before showing "GAME OVER" text (seconds)
+        self.game_over_text_duration = 0.6  # Duration to show "GAME OVER" text (seconds)
         self.profile_selection_menu = ProfileSelectionMenu(screen, self.profile_manager)
         
         # Menu UI components
         self.main_menu = MainMenu(screen)
+        self.controls_menu = ControlsMenu(screen)
+        self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
         self.level_complete_menu = LevelCompleteMenu(screen)
         self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
@@ -175,15 +187,32 @@ class Game:
             self.ship.activate_shield()
         # NO_ACTION and FIRE are handled separately
     
+    def restart_level(self) -> None:
+        """Retry immediately without keeping the current run's score."""
+        replaying = self.replaying
+        self.sound_manager.stop_all_sounds()
+        self.scoring.total_score = self.total_score_before_level
+        self.state = config.STATE_PLAYING
+        self.start_level()
+        # Retrying an ordinary clear replaces that attempt, even though the
+        # first clear has already unlocked the next level in the profile.
+        self.replaying = replaying
+
     def start_level(self) -> None:
         """Start a new level."""
         self._close_hunter()
+        self.replaying = self.level < self.profile_manager.get_active_level()
+        self.level_result = None
         # Store total score before starting level (for replay functionality)
         self.total_score_before_level = self.scoring.get_total_score()
         
         # Ensure warning sound is silenced when a level starts
         self.sound_manager.stop_critical_warning()
         self.critical_warning_active = False
+
+        self.game_over_active = False
+        self.game_frozen = False
+        self.game_over_start_time = 0.0
 
         # Reset exit explosion state
         self.exit_explosion_active = False
@@ -233,10 +262,11 @@ class Game:
         enemy_counts = level_config.get_level_enemy_counts(self.level)
         if enemy_counts is None:
             enemy_counts = level_rules.get_enemy_counts(self.level)
+        enemy_counts.anemone = level_config.get_level_anemone_count(self.level)
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + 5  # Extra buffer for spawn positions
         )
         hunter_pos = None
         if level_config.level_has_hunter(self.level):
@@ -254,9 +284,15 @@ class Game:
                 self.hunter_worker = PilotWorker()
             self.hunter_controller = HunterController(self.hunter_worker)
 
+        # No anemone starts with the player already inside its pull
+        anemone_reach = config.ANEMONE_REACH_CELLS * (self.maze.cell_size_x + self.maze.cell_size_y) / 2
         self.spawn_manager.spawn_all_enemies(
-            self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count
+            self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
+            anemone_keep_clear=(self.maze.start_pos, anemone_reach)
         )
+        # Anemones show their reach from the start, before the first update works it out
+        for anemone in self.anemones:
+            anemone.reach_px = anemone.reach(self.maze)
         
         # Clear projectiles and crystals
         self.projectiles = []
@@ -314,7 +350,7 @@ class Game:
             return self.hunter_perception.observe(
                 self.hunter, self.maze, self.ship,
                 [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
-                 self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs)
+                 self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones)
                  for enemy in group], self.projectiles,
                 self.hunter_controller.action, now, generation)
         action = self.hunter_controller.tick(observe)
@@ -356,7 +392,7 @@ class Game:
                     handler.handle_controller(event, self)
             elif event.type == pygame.JOYHATMOTION or event.type == pygame.JOYAXISMOTION:
                 # Handle controller hat (d-pad) and axis (stick) events for menu navigation
-                if self.state in (config.STATE_MENU, config.STATE_PROFILE_SELECTION, config.STATE_LEVEL_COMPLETE):
+                if self.state in (config.STATE_MENU, config.STATE_PROFILE_SELECTION, config.STATE_LEVEL_SELECT, config.STATE_LEVEL_COMPLETE):
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
@@ -397,6 +433,12 @@ class Game:
         elif self.state == config.STATE_PROFILE_SELECTION:
             self.profile_selection_menu.update(dt)
             return
+        elif self.state == config.STATE_LEVEL_SELECT:
+            self.level_select_menu.update(dt)
+            return
+        elif self.state == config.STATE_CONTROLS:
+            self.controls_menu.update(dt)
+            return
         elif self.state == config.STATE_LEVEL_COMPLETE:
             self.level_complete_menu.update(dt)
         
@@ -409,6 +451,12 @@ class Game:
         if self.state != config.STATE_PLAYING:
             return  # Don't update if not playing (including quit confirmation)
         
+        if self.game_over_active:
+            elapsed = time.time() - self.game_over_start_time
+            if elapsed >= self.game_over_fade_duration + self.game_over_text_duration:
+                self.complete_level(success=False)
+            return
+
         # Update exit explosion animation
         if self.exit_explosion_active:
             self.exit_explosion_time += dt / 60.0  # Convert to seconds
@@ -604,6 +652,9 @@ class Game:
             self.enemy_updater.update_flighthouses(
                 self.flighthouses, dt, player_pos, self.maze, self.ship, self.scoring, self.flockers
             )
+            self.enemy_updater.update_anemones(
+                self.anemones, dt, self.maze, self.ship, self.scoring
+            )
             self.enemy_updater.update_flockers(
                 self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
             )
@@ -655,7 +706,7 @@ class Game:
 
             # Friendly projectile-enemy collisions share normal destruction effects.
             if self.collision_handler.handle_projectile_enemy_collisions(
-                projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals
+                projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones
             ):
                 continue  # Projectile destroyed, skip adding to active list
             
@@ -701,18 +752,6 @@ class Game:
             self.game_frozen = True
             self._start_game_over_sequence(current_time)
         
-        # If game is frozen, don't update entities (action is frozen)
-        if self.game_frozen:
-            # Update game over sequence timing
-            if self.game_over_active:
-                elapsed = current_time - self.game_over_start_time
-                # Check if sequence is complete (fade + text display)
-                if elapsed >= self.game_over_fade_duration + self.game_over_text_delay + self.game_over_text_duration:
-                    self.complete_level(success=False)
-                    self.game_over_active = False
-                    self.game_frozen = False
-            return  # Don't update game entities when frozen
-        
         # Update star indicator (handles change detection and audio feedback)
         score_percentage = potential.get('score_percentage', 0.0)
         self.star_indicator.update(score_percentage)
@@ -757,8 +796,11 @@ class Game:
         self.sound_manager.stop_critical_warning()
         self.critical_warning_active = False
         
-        # Store success status
+        # Store success status and consume the power-out sequence.
         self.level_succeeded = success
+        self.game_over_active = False
+        self.game_frozen = False
+        self.level_complete_menu.set_options(success)
         
         # Calculate score
         self.level_score_breakdown = self.scoring.calculate_level_score(
@@ -774,8 +816,17 @@ class Game:
         max_score = self.scoring.calculate_max_possible_score()
         final_score = self.level_score_breakdown.get('final_score', 0)
         self.level_score_percentage = min(1.0, max(0.0, final_score / max_score)) if max_score > 0 else 0.0
+        self.level_result = None
         if success:
-            self.profile_manager.update_active_profile_progress(self.level, self.scoring.get_total_score())
+            self.level_result = self.profile_manager.record_level_result(
+                self.level, final_score, completion_time,
+                StarIndicator.calculate_star_count(self.level_score_percentage),
+            )
+            if not self.replaying:
+                self.profile_manager.update_active_profile_progress(self.level, self.scoring.get_total_score())
+        if self.replaying:
+            self.scoring.total_score = self.total_score_before_level
+            self.level_score_breakdown['total_score'] = self.total_score_before_level
         
         # Initialize animated star rating if level succeeded
         if success:
@@ -789,7 +840,9 @@ class Game:
                 self.level_score_percentage,
                 star_x,
                 star_y,
-                star_size=config.LEVEL_COMPLETE_STAR_SIZE
+                star_size=config.LEVEL_COMPLETE_STAR_SIZE,
+                previous_stars=(self.level_result.previous_best.stars
+                                if self.level_result.previous_best else None)
             )
             # Set sound callback
             self.star_animation.set_sound_callback(self.sound_manager.play_tinkling)
@@ -811,6 +864,10 @@ class Game:
             self.main_menu.draw()
         elif self.state == config.STATE_PROFILE_SELECTION:
             self.profile_selection_menu.draw()
+        elif self.state == config.STATE_LEVEL_SELECT:
+            self.level_select_menu.draw()
+        elif self.state == config.STATE_CONTROLS:
+            self.controls_menu.draw()
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
@@ -832,7 +889,8 @@ class Game:
                 lambda: self.quit_confirmation_menu.draw_level_complete_quit_confirmation(
                     self.level_complete_menu.menu_pulse_phase,
                     self.quit_confirmation_selection
-                )
+                ),
+                level_result=self.level_result
             )
         
         pygame.display.flip()
@@ -882,6 +940,12 @@ class Game:
             if flocker.active:
                 flocker.draw(self.screen)
 
+        # Draw anemones (under the things that fly over them)
+        for anemone in self.anemones:
+            if anemone.active:
+                anemone.draw(self.screen)
+        
+        
         # Draw flighthouse enemies
         for flighthouse in self.flighthouses:
             if flighthouse.active:
@@ -943,7 +1007,9 @@ class Game:
                 potential_score=potential['potential_score'],
                 max_score=potential['max_score'],
                 level=self.level,
-                time_seconds=elapsed
+                time_seconds=elapsed,
+                level_score=potential['final_score'],
+                progress_score=self.scoring.get_total_score()
             )
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
@@ -952,8 +1018,18 @@ class Game:
         # Draw game over sequence (fade to black and text)
         if self.game_over_active:
             self._draw_game_over_sequence()
-    
-    
+
+        if not self.exit_explosion_active:
+            hint = self.restart_hints[bool(self.input_handler.get_controllers())]
+            if self.game_over_active:
+                # Keep the retry prompt visible over the fade, below GAME OVER.
+                hint_rect = hint.get_rect(center=(self.screen.get_width() // 2,
+                                                  self.screen.get_height() // 2 + 90))
+            else:
+                hint_rect = hint.get_rect(midbottom=(config.UI_ZONE_WIDTH // 2,
+                                                     self.screen.get_height() - 24))
+            self.screen.blit(hint, hint_rect)
+
     def _draw_game_over_sequence(self) -> None:
         """Draw game over sequence: fade to black and GAME OVER text."""
         current_time = time.time()
@@ -973,7 +1049,7 @@ class Game:
         if elapsed >= self.game_over_fade_duration + self.game_over_text_delay:
             # Render "GAME OVER" text
             # Use large, bold font
-            game_over_font = pygame.font.Font(None, 120)
+            game_over_font = get_font(120)
             game_over_text = game_over_font.render("GAME OVER", True, (255, 255, 255))
             text_rect = game_over_text.get_rect(center=(self.screen.get_width() // 2, 
                                                          self.screen.get_height() // 2))

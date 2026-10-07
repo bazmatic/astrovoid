@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
     from entities.egg import Egg
+    from entities.anemone import Anemone
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -60,7 +61,8 @@ class CollisionHandler:
         mother_bosses: List['MotherBoss'],
         babies: List['Baby'],
         eggs: List['Egg'],
-        powerup_crystals: List['PowerupCrystal']
+        powerup_crystals: List['PowerupCrystal'],
+        anemones: Optional[List['Anemone']] = None
     ) -> bool:
         """Handle collisions between a projectile and enemies.
         
@@ -74,6 +76,7 @@ class CollisionHandler:
             babies: List of Baby enemies.
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
+            anemones: List of anemone enemies (optional).
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -125,14 +128,20 @@ class CollisionHandler:
             if replay_enemy.active and projectile.active:
                 if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
                     enemy_pos = replay_enemy.get_pos()
-                    replay_enemy.die()
-                    self.sound_manager.play_enemy_destroy()
-                    self._record_projectile_kill(projectile)
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(enemy_pos)
-                        powerup_crystals.append(crystal)
+                    # Take damage - returns True if destroyed
+                    if replay_enemy.take_damage():
+                        replay_enemy.die()
+                        self.sound_manager.play_enemy_destroy()
+                        self._record_projectile_kill(projectile)
+                        
+                        # Spawn powerup crystal with probability
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(enemy_pos)
+                            powerup_crystals.append(crystal)
+                    else:
+                        # Flinch so the hit registers
+                        replay_enemy.trigger_blink()
                     
                     return True  # Projectile destroyed
         
@@ -151,6 +160,24 @@ class CollisionHandler:
                         powerup_crystals.append(crystal)
                     
                     return True  # Projectile destroyed
+
+        # Check projectile-anemone collision
+        for anemone in anemones or ():
+            if anemone.active and projectile.active:
+                if projectile.check_circle_collision(anemone.get_pos(), anemone.radius):
+                    anemone_pos = anemone.get_pos()
+                    if anemone.take_damage():
+                        anemone.die()
+                        self.sound_manager.play_enemy_destroy()
+                        self._record_projectile_kill(projectile)
+                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+                            crystal = PowerupCrystal(anemone_pos)
+                            powerup_crystals.append(crystal)
+                    else:
+                        # Clamp shut so the hit buys a moment without the pull
+                        anemone.stun(config.ANEMONE_FLINCH_FRAMES)
+                    return True  # Projectile destroyed
+
 
         # Check projectile-flighthouse collision
         for flighthouse in flighthouses:

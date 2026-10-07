@@ -6,80 +6,12 @@ star ratings, text, and other interface components.
 
 import pygame
 import math
-import os
-from typing import Tuple, List, Optional, Callable, Dict
+from typing import Tuple, List, Optional, Callable
 import config
+from rendering.fonts import get_font
+from rendering.dial import draw_dial
+from rendering.stars import draw_star, draw_glow, StarBurst
 from rendering.number_sprite import NumberSprite
-from utils.resource_path import resource_path
-
-
-class GaugeFrame:
-    """Handles loading and rendering the gauge frame template image.
-    
-    Loads gauge.png once and provides scaled versions for different gauge sizes.
-    Follows the NumberSprite pattern for consistency.
-    """
-    
-    def __init__(self, image_path: str = "assets/gauge.png"):
-        """Initialize gauge frame loader.
-        
-        Args:
-            image_path: Path to the gauge frame image file.
-        """
-        self.image_path = image_path
-        self.original_image: Optional[pygame.Surface] = None
-        self.scaled_cache: Dict[Tuple[int, int], pygame.Surface] = {}
-        self._load_image()
-    
-    def _load_image(self) -> None:
-        """Load the gauge frame image file."""
-        try:
-            resolved_path = resource_path(self.image_path)
-            if not os.path.exists(resolved_path):
-                print(f"Warning: Gauge frame file not found: {resolved_path}")
-                self.original_image = None
-                return
-            
-            # Load with alpha channel preserved
-            self.original_image = pygame.image.load(resolved_path).convert_alpha()
-            print(f"Gauge frame loaded successfully: {resolved_path}, size: {self.original_image.get_size()}")
-        except (pygame.error, FileNotFoundError) as e:
-            print(f"Warning: Could not load gauge frame from {self.image_path}: {e}")
-            self.original_image = None
-    
-    def get_scaled_frame(self, diameter: int) -> Optional[pygame.Surface]:
-        """Get a scaled version of the gauge frame.
-        
-        Args:
-            diameter: Desired diameter of the frame in pixels.
-            
-        Returns:
-            Scaled pygame.Surface, or None if image not available.
-        """
-        if self.original_image is None:
-            return None
-        
-        # Check cache first
-        cache_key = (diameter, diameter)
-        if cache_key in self.scaled_cache:
-            return self.scaled_cache[cache_key]
-        
-        # Scale the image while preserving alpha channel
-        # Create a new surface with alpha support and scale onto it
-        scaled = pygame.Surface((diameter, diameter), pygame.SRCALPHA)
-        # Use smoothscale to preserve quality and alpha
-        scaled_image = pygame.transform.smoothscale(self.original_image, (diameter, diameter))
-        scaled.blit(scaled_image, (0, 0))
-        self.scaled_cache[cache_key] = scaled
-        return scaled
-    
-    def is_available(self) -> bool:
-        """Check if the gauge frame image is available.
-        
-        Returns:
-            True if image is loaded, False otherwise.
-        """
-        return self.original_image is not None
 
 
 class StarIndicator:
@@ -91,27 +23,17 @@ class StarIndicator:
     - Static and animated rendering
     """
     
+    SCORE_THRESHOLDS = (0.20, 0.40, 0.60, 0.80, 0.95)
+
     @staticmethod
     def calculate_star_count(score_percentage: float) -> int:
-        """Calculate star count (0-5) from score percentage.
-        
-        A star counts if it's at least partially filled, matching the visual representation.
-        For example, 75% shows 4 stars (3 full + 1 partially filled), so returns 4.
-        
-        Args:
-            score_percentage: Score as percentage (0.0 to 1.0+).
-            
-        Returns:
-            Number of stars (0-5). A star counts if it's at least partially filled.
+        """Award a star only when its score threshold is reached.
+
+        On the 100-point scale, stars require 20, 40, 60, 80 and 95 points.
+        Scores below 20 earn no stars; bonuses above 100 still earn at most five.
         """
-        if score_percentage >= 1.0:
-            return 5
-        
-        # Count stars that are at least partially filled
-        # Use math.ceil to round up, so any partial fill counts as a full star
-        # This matches the visual representation where a partially filled star is visible
-        return min(5, math.ceil(score_percentage * 5))
-    
+        return sum(score_percentage >= threshold for threshold in StarIndicator.SCORE_THRESHOLDS)
+
     def __init__(
         self,
         score_percentage: float = 0.0,
@@ -186,16 +108,6 @@ class StarIndicator:
 class UIElementRenderer:
     """Utility class for rendering UI elements."""
     
-    # Class-level gauge frame instance (shared across all gauges)
-    _gauge_frame = None
-    
-    @classmethod
-    def _get_gauge_frame(cls):
-        """Get or create the gauge frame instance (lazy initialization)."""
-        if cls._gauge_frame is None:
-            cls._gauge_frame = GaugeFrame()
-        return cls._gauge_frame
-    
     @staticmethod
     def draw_star_rating(
         screen: pygame.Surface,
@@ -244,62 +156,6 @@ class UIElementRenderer:
             )
     
     @staticmethod
-    def _draw_led_ring(
-        screen: pygame.Surface,
-        center_x: int,
-        center_y: int,
-        radius: int,
-        percentage: float,
-        color: Tuple[int, int, int],
-        thickness: int
-    ) -> None:
-        """Draw a ring of glowing LEDs to indicate percentage.
-        
-        Args:
-            screen: The pygame Surface to draw on.
-            center_x: X coordinate of gauge center.
-            center_y: Y coordinate of gauge center.
-            radius: Radius of the gauge ring.
-            percentage: Fill percentage (0.0 to 1.0).
-            color: RGB color for the LEDs.
-            thickness: Thickness of the ring (used to determine LED size).
-        """
-        # Use smaller radius for LED ring (closer to center)
-        led_ring_radius = int(radius * 0.75)  # 75% of gauge radius
-        
-        # Calculate number of LEDs with spacing between them
-        # Use fewer LEDs with spacing - approximately one LED per 15-20 pixels
-        circumference = 2 * math.pi * led_ring_radius
-        num_leds = max(12, int(circumference / 18))  # Fewer LEDs with spacing
-        
-        progress = num_leds * percentage
-        led_size = max(2, thickness // 3)  # Smaller LEDs
-
-        # Draw each LED with spacing and glow layers
-        for i in range(num_leds):
-            strength = progress - i
-            if strength <= 0:
-                break
-            strength = min(1.0, strength)
-
-            angle = math.radians(-90 + (i / num_leds) * 360)
-            led_x = center_x + led_ring_radius * math.cos(angle)
-            led_y = center_y + led_ring_radius * math.sin(angle)
-
-            # Gradually reduce glow size and brightness as strength falls
-            glow_radius = led_size + 1 + int(strength * led_size)
-            glow_color = tuple(min(255, int(c + 80 * strength)) for c in color)
-            pygame.draw.circle(screen, glow_color, (int(led_x), int(led_y)), glow_radius)
-
-            core_radius = max(1, int(led_size * (0.4 + 0.6 * strength)))
-            core_color = tuple(min(255, int(c * (0.6 + 0.4 * strength))) for c in color)
-            pygame.draw.circle(screen, core_color, (int(led_x), int(led_y)), core_radius)
-
-            bright_radius = max(1, int(core_radius * 0.5))
-            bright_color = tuple(min(255, int(c + 100 * strength)) for c in color)
-            pygame.draw.circle(screen, bright_color, (int(led_x), int(led_y)), bright_radius)
-    
-    @staticmethod
     def _calculate_percentage_color(
         percentage: float,
         high_color: Tuple[int, int, int],
@@ -337,10 +193,9 @@ class UIElementRenderer:
         percentage: float,
         center_text: str,
         fill_color: Tuple[int, int, int],
-        empty_color: Tuple[int, int, int] = (50, 50, 50),
         text_color: Tuple[int, int, int] = (255, 255, 255),
-        thickness: int = 7,
-        label_text: Optional[str] = None
+        label_text: Optional[str] = None,
+        alert: bool = False
     ) -> None:
         """Draw a circular gauge with percentage fill and center text.
         
@@ -351,57 +206,15 @@ class UIElementRenderer:
             radius: Radius of the gauge in pixels.
             percentage: Fill percentage (0.0 to 1.0).
             center_text: Text to display in center of gauge.
-            fill_color: RGB color for filled portion.
-            empty_color: RGB color for empty/background portion.
+            fill_color: RGB color for the rim and the filled portion.
             text_color: RGB color for center text.
-            thickness: Thickness of the gauge ring in pixels.
-            label_text: Optional label to render above the numeric value.
+            label_text: Optional label to render below the numeric value.
+            alert: Pulse the rim to warn that the value is running out.
         """
-        # Clamp percentage
-        percentage = max(0.0, min(1.0, percentage))
-        
-        # Get gauge frame instance
-        gauge_frame = UIElementRenderer._get_gauge_frame()
-        
-        # Draw gauge frame image first (as background layer)
-        # The frame has a transparent center, so arcs will show through
-        # Make frame 50% bigger than the gauge radius
-        frame_diameter = int(radius * 2 * 1.5)
-        frame_image = gauge_frame.get_scaled_frame(frame_diameter)
-        if frame_image is not None:
-            # Draw the frame image centered at the gauge position
-            frame_rect = frame_image.get_rect(center=(center_x, center_y))
-            screen.blit(frame_image, frame_rect)
-        else:
-            # Fallback: Draw background ring (empty portion) - full circle
-            pygame.draw.circle(screen, empty_color, (center_x, center_y), radius, thickness)
-        
-        # Draw filled arc as glowing LEDs if percentage > 0
-        if percentage > 0.01:
-            UIElementRenderer._draw_led_ring(
-                screen,
-                center_x,
-                center_y,
-                radius,
-                percentage,
-                fill_color,
-                thickness
-            )
-        
-        text_y = center_y
-        if label_text:
-            label_font = pygame.font.Font(None, max(12, radius // 3))
-            label_surface = label_font.render(label_text, True, text_color)
-            label_rect = label_surface.get_rect(center=(center_x, center_y - radius // 6))
-            screen.blit(label_surface, label_rect)
-            text_y = center_y + radius // 6
-
-        if center_text:
-            font_size = max(16, radius // 2 - 2)
-            font = pygame.font.Font(None, font_size)
-            text_surface = font.render(center_text, True, text_color)
-            text_rect = text_surface.get_rect(center=(center_x, text_y))
-            screen.blit(text_surface, text_rect)
+        draw_dial(
+            screen, center_x, center_y, radius, percentage, center_text, fill_color,
+            text_color=text_color, label_text=label_text, alert=alert
+        )
     
     @staticmethod
     def _draw_star(
@@ -545,150 +358,101 @@ class UIElementRenderer:
 
 
 class AnimatedStarRating:
-    """Animated star rating component with sequential appearance and twinkling.
-    
-    Stars appear one by one with tinkling sounds, then continue twinkling.
-    Designed for reuse in any UI context.
-    """
-    
-    def __init__(
-        self,
-        score_percentage: float,
-        x: int,
-        y: int,
-        star_size: int = config.LEVEL_COMPLETE_STAR_SIZE,
-        star_spacing: int = None
-    ):
-        """Initialize animated star rating.
-        
-        Args:
-            score_percentage: Score as percentage (0.0 to 1.0+).
-            x: X coordinate for first star center.
-            y: Y coordinate for stars center.
-            star_size: Size of each star in pixels.
-            star_spacing: Spacing between stars (defaults to star_size * 1.2).
-        """
-        self.score_percentage = min(1.0, score_percentage)
-        self.x = x
-        self.y = y
+    """Sequential spring arrivals, landing sparks, and a quiet metallic shimmer."""
+
+    MAX_SPARKS = 80
+
+    def __init__(self, score_percentage: float, x: int, y: int,
+                 star_size: int = config.LEVEL_COMPLETE_STAR_SIZE,
+                 star_spacing: int = None, previous_stars: Optional[int] = None):
+        self.score_percentage = min(1.0, max(0.0, score_percentage))
+        self.x, self.y = x, y
         self.star_size = star_size
         self.star_spacing = star_spacing if star_spacing is not None else int(star_size * 1.2)
-        
-        # Calculate number of stars earned using StarIndicator
         self.num_stars = StarIndicator.calculate_star_count(self.score_percentage)
-        
-        # Animation state for each star
-        self.star_timers: List[float] = [0.0] * 5  # Time since each star started appearing
-        self.twinkle_phases: List[float] = [0.0] * 5  # Twinkling phase for each star
-        self.stars_visible: List[bool] = [False] * 5  # Whether each star has appeared
-        
-        # Sound callback (set by game to play tinkling sounds)
-        self.sound_callback: Optional[Callable[[float], None]] = None
-        
-        # Colors
-        self.star_color_full = (255, 215, 0)  # Gold
-        self.star_color_empty = (80, 80, 80)  # Dark gray
-    
+        self.previous_stars = previous_stars
+        self.elapsed = 0.0
+        self.sound_callback = None
+        self.bursts = []
+        self._landed = 0
+
     def set_sound_callback(self, callback: Callable[[float], None]) -> None:
-        """Set callback function to play tinkling sounds.
-        
-        Args:
-            callback: Function that takes pitch (float) and plays sound.
-        """
         self.sound_callback = callback
-    
+
+    def star_scale(self, index: int) -> float:
+        """Current scale of an earned star; zero before its turn."""
+        if index >= self.num_stars:
+            return 0.0
+        progress = self.elapsed / config.STAR_APPEAR_DURATION - index
+        if progress < 0:
+            return 0.0
+        if progress >= 1:
+            return 1.0
+        # A short damped spring starts at 2.6x, passes just below 1x, and
+        # converges exactly to 1x at the end of the existing arrival duration.
+        return 1 + 1.6 * (1 - progress) ** 3 * math.cos(progress * math.tau)
+
+    def glow_color(self, index: int) -> Tuple[int, int, int]:
+        """Newly earned record stars breathe between the title's cyan and magenta."""
+        if self.previous_stars is not None and self.previous_stars <= index < self.num_stars:
+            blend = round((math.sin(self.elapsed * 1.5) + 1) * 7.5) / 15
+            return tuple(round(a + (b - a) * blend) for a, b in zip((45, 220, 255), (245, 65, 230)))
+        return (255, 185, 45)
+
+    @property
+    def flash(self) -> float:
+        if self.num_stars != 5 or self._landed < 5:
+            return 0.0
+        since_landing = self.elapsed - 5 * config.STAR_APPEAR_DURATION
+        return max(0.0, 1 - since_landing / 0.24)
+
+    def _burst(self, index, count, age, spread=0):
+        remaining = self.MAX_SPARKS - sum(len(b.sparks) for b in self.bursts)
+        burst = StarBurst(index * self.star_spacing, 0, self.star_size,
+                          min(count, remaining), spread, seed=index + count)
+        burst.update(age)
+        if burst.alive:
+            self.bursts.append(burst)
+
     def update(self, dt: float) -> None:
-        """Update animation state.
-        
-        Args:
-            dt: Delta time since last update (normalized to 60fps).
-        """
-        # Convert dt to seconds (assuming dt is normalized to 60fps)
-        dt_seconds = dt / 60.0
-        
-        for i in range(5):
-            # Calculate when this star should start appearing
-            start_time = i * config.STAR_APPEAR_DURATION
-            
-            # Update timer
-            if not self.stars_visible[i]:
-                # Star hasn't appeared yet - check if it's time
-                if self.star_timers[i] >= start_time:
-                    # Time to appear - start animation
-                    self.stars_visible[i] = True
-                    # Play tinkling sound
-                    if self.sound_callback and i < self.num_stars:
-                        pitch = config.STAR_TINKLE_BASE_PITCH + (i * config.STAR_TINKLE_PITCH_INCREMENT)
-                        self.sound_callback(pitch)
-            
-            # Update timer for this star
-            if i < self.num_stars:
-                self.star_timers[i] += dt_seconds
-            else:
-                # Star not earned - don't animate
-                continue
-            
-            # Update twinkle phase for visible stars
-            if self.stars_visible[i]:
-                self.twinkle_phases[i] += config.STAR_TWINKLE_SPEED * dt_seconds
-                if self.twinkle_phases[i] >= 2 * math.pi:
-                    self.twinkle_phases[i] -= 2 * math.pi
-    
+        """Advance using frame-normalized time; each landing is consumed once."""
+        seconds = max(0.0, dt / 60.0)
+        self.elapsed += seconds
+        for burst in self.bursts:
+            burst.update(seconds)
+        self.bursts = [b for b in self.bursts if b.alive]
+        while self._landed < self.num_stars:
+            landing = (self._landed + 1) * config.STAR_APPEAR_DURATION
+            if self.elapsed + 1e-9 < landing:
+                break
+            index = self._landed
+            self._landed += 1
+            if self.sound_callback:
+                self.sound_callback(config.STAR_TINKLE_BASE_PITCH + index * config.STAR_TINKLE_PITCH_INCREMENT)
+            self._burst(index, 12, max(0.0, self.elapsed - landing))
+            if self._landed == 5:
+                self._burst(2, 32, max(0.0, self.elapsed - landing), self.star_spacing * 4)
+
     def draw(self, screen: pygame.Surface) -> None:
-        """Draw animated stars.
-        
-        Args:
-            screen: The pygame Surface to draw on.
-        """
         for i in range(5):
-            star_x = self.x + i * self.star_spacing
-            
-            # Calculate scale for appearance animation
-            if not self.stars_visible[i] or i >= self.num_stars:
-                scale = 0.0
-            else:
-                # Calculate progress through appearance animation
-                appearance_progress = min(1.0, self.star_timers[i] / config.STAR_APPEAR_DURATION)
-                # Ease-out scaling
-                scale = 1.0 - (1.0 - appearance_progress) ** 3
-            
-            # Determine if star is earned
-            if i < self.num_stars:
-                fill = 1.0  # Fully filled
-            else:
-                fill = 0.0  # Empty
-            
-            # Draw star with twinkling
-            if scale > 0.0:
-                UIElementRenderer._draw_twinkling_star(
-                    screen,
-                    star_x,
-                    self.y,
-                    self.star_size,
-                    fill,
-                    self.star_color_full,
-                    self.star_color_empty,
-                    self.twinkle_phases[i],
-                    scale
-                )
-    
+            x = self.x + i * self.star_spacing
+            draw_star(screen, x, self.y, self.star_size, filled=False)
+            scale = self.star_scale(i)
+            if scale == 0:
+                continue
+            glow = 0.65 + 0.18 * math.sin(self.elapsed * 1.7 + i * 0.3)
+            draw_glow(screen, x, self.y, self.star_size * 2.4, self.glow_color(i), glow)
+            # The bright band sweeps across the entire row, then rests.
+            sweep = (self.elapsed % 4.5) / 1.6
+            band = sweep * 7 - i
+            shimmer = band if 0 <= band <= 1.4 else None
+            draw_star(screen, x, self.y, self.star_size * scale,
+                      flash=self.flash, shimmer=shimmer)
+        for burst in self.bursts:
+            burst.draw(screen, (self.x, self.y))
+
     def is_complete(self) -> bool:
-        """Check if all stars have finished appearing.
-        
-        Returns:
-            True if all earned stars have completed their appearance animation.
-        """
-        if self.num_stars == 0:
-            return True
-        
-        # Check if the last star has finished appearing
-        last_star_index = self.num_stars - 1
-        if not self.stars_visible[last_star_index]:
-            return False
-        
-        # Check if appearance animation is complete
-        appearance_progress = self.star_timers[last_star_index] / config.STAR_APPEAR_DURATION
-        return appearance_progress >= 1.0
+        return self._landed == self.num_stars
 
 
 class GameIndicators:
@@ -717,7 +481,7 @@ class GameIndicators:
         self.x = x
         self.y_start = y_start
         self.line_spacing = line_spacing
-        self.font = font if font is not None else pygame.font.Font(None, 24)
+        self.font = font if font is not None else get_font(24)
         self.number_sprite = NumberSprite()
         self.level_scale = level_scale
     

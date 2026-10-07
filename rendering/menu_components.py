@@ -6,14 +6,16 @@ controller icons, animated backgrounds, and neon text rendering.
 
 import pygame
 import math
-from typing import Tuple, Optional, Callable
+from typing import Dict, List, Tuple, Optional, Callable
 import config
+from rendering.fonts import get_font
 from rendering.visual_effects import (
     draw_neon_text,
     draw_button_glow,
     interpolate_color,
     Starfield,
-    MenuParticleSystem
+    MenuParticleSystem,
+    create_radial_gradient_surface
 )
 
 
@@ -24,8 +26,173 @@ BUTTON_SELECTED_SCALE = 1.06
 BUTTON_FADE_MS = 140
 BUTTON_TEXT_IDLE = (160, 160, 190)
 
+TEXT_DIM = (160, 160, 185)
+TEXT_LABEL = (110, 120, 170)
+KEY_TEXT = (210, 225, 255)
+KEY_OUTLINE = (90, 110, 170)
+
+# Menu layouts are authored for a 1080px-high screen and scaled to the real
+# height. REFERENCE_WIDTH is the narrowest screen that layout fits; narrower
+# (e.g. portrait) screens scale down by width instead so nothing runs off the sides
+REFERENCE_HEIGHT = 1080
+REFERENCE_WIDTH = 1200
+
 # Button skins keyed by (width, height), shared by all buttons of that size
 _button_skin_cache: dict = {}
+_panel_cache: Dict[Tuple[int, int, int], pygame.Surface] = {}
+_panel_glow_cache: Dict[Tuple[int, int, int], pygame.Surface] = {}
+
+
+def menu_scale() -> float:
+    """Factor that scales a reference-layout length to the current screen size."""
+    return min(config.SCREEN_HEIGHT / REFERENCE_HEIGHT, config.SCREEN_WIDTH / REFERENCE_WIDTH)
+
+
+def build_menu_backdrop(width: int, height: int) -> pygame.Surface:
+    """Build the static menu backdrop: nebula tint and vignette over the background color."""
+    # Composed without an alpha channel so every pixel is opaque. The display
+    # surface can carry alpha, and pygame copies rather than blends
+    # per-pixel-alpha surfaces onto pixels whose alpha is 0, which would turn
+    # everything drawn on top into solid blocks
+    backdrop = pygame.Surface((width, height), 0, 24)
+    backdrop.fill(config.COLOR_BACKGROUND)
+    
+    # Nebula clouds as (color, alpha, center fraction, size fraction)
+    clouds = [
+        ((90, 40, 170), 70, (0.5, 0.42), (1.1, 1.2)),
+        ((30, 90, 190), 45, (0.24, 0.2), (0.8, 0.9)),
+        ((190, 50, 150), 40, (0.8, 0.78), (0.8, 0.9)),
+    ]
+    for color, alpha, center, size in clouds:
+        cloud = create_radial_gradient_surface((int(width * size[0]), int(height * size[1])), color, alpha)
+        backdrop.blit(cloud, cloud.get_rect(center=(int(width * center[0]), int(height * center[1]))))
+    
+    vignette = create_radial_gradient_surface((width, height), (0, 0, 0), 0, edge_alpha=150, falloff=0.6)
+    backdrop.blit(vignette, (0, 0))
+    return backdrop
+
+
+def render_pill(
+    font: pygame.font.Font,
+    text: str,
+    text_color: Tuple[int, int, int] = KEY_TEXT,
+    outline_color: Tuple[int, int, int] = KEY_OUTLINE,
+    padding: Tuple[int, int] = (10, 5),
+    border: int = 1
+) -> pygame.Surface:
+    """Render text inside an outlined pill."""
+    text_surface = font.render(text, True, text_color)
+    pill = pygame.Surface(
+        (text_surface.get_width() + padding[0] * 2, text_surface.get_height() + padding[1] * 2),
+        pygame.SRCALPHA
+    )
+    radius = pill.get_height() // 2
+    pygame.draw.rect(pill, (*outline_color, 255), pill.get_rect(), border_radius=radius)
+    pygame.draw.rect(pill, (24, 20, 48, 200), pill.get_rect().inflate(-border * 2, -border * 2), border_radius=radius - border)
+    pill.blit(text_surface, text_surface.get_rect(center=pill.get_rect().center))
+    return pill
+
+
+def render_hint_row(
+    font: pygame.font.Font,
+    hints: List[Tuple[str, str]],
+    action_gap: int = 9,
+    hint_gap: int = 28
+) -> pygame.Surface:
+    """Render a row of key hints: each key in a pill, followed by what it does."""
+    pieces: List[pygame.Surface] = []
+    gaps: List[int] = []
+    for key_text, action_text in hints:
+        pieces.append(render_pill(font, key_text))
+        gaps.append(action_gap)
+        pieces.append(font.render(action_text, True, TEXT_DIM))
+        gaps.append(hint_gap)
+    gaps[-1] = 0
+    
+    row = pygame.Surface(
+        (sum(piece.get_width() for piece in pieces) + sum(gaps), max(piece.get_height() for piece in pieces)),
+        pygame.SRCALPHA
+    )
+    x = 0
+    for piece, gap in zip(pieces, gaps):
+        row.blit(piece, piece.get_rect(midleft=(x, row.get_height() // 2)))
+        x += piece.get_width() + gap
+    return row
+
+
+def build_panel(size: Tuple[int, int], radius: int = 18) -> pygame.Surface:
+    """Build a dark rounded panel with the accent gradient as its border."""
+    key = (size[0], size[1], radius)
+    if key in _panel_cache:
+        return _panel_cache[key]
+    
+    supersample = 2  # Drawn oversized and scaled down for smooth corners
+    border = 2
+    outer = pygame.Rect(0, 0, size[0] * supersample, size[1] * supersample)
+    inner = outer.inflate(-border * 2 * supersample, -border * 2 * supersample)
+    ring = pygame.Surface(outer.size, pygame.SRCALPHA)
+    pygame.draw.rect(ring, (255, 255, 255, 255), outer, border_radius=radius * supersample)
+    pygame.draw.rect(ring, (0, 0, 0, 0), inner, border_radius=(radius - border) * supersample)
+    ring.blit(_accent_gradient(outer.size), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    panel = pygame.Surface(outer.size, pygame.SRCALPHA)
+    pygame.draw.rect(panel, (18, 14, 38, 240), inner, border_radius=(radius - border) * supersample)
+    panel.blit(ring, (0, 0))
+    panel = pygame.transform.smoothscale(panel, size)
+    _panel_cache[key] = panel
+    return panel
+
+
+def build_panel_glow(size: Tuple[int, int], radius: int = 18, spread: int = 22) -> pygame.Surface:
+    """Build the soft accent glow that sits behind a panel; larger than it by spread on every side."""
+    key = (size[0], size[1], radius)
+    if key in _panel_glow_cache:
+        return _panel_glow_cache[key]
+    
+    glow_rect = pygame.Rect(0, 0, size[0] + spread * 2, size[1] + spread * 2)
+    glow = pygame.Surface(glow_rect.size, pygame.SRCALPHA)
+    for step in range(spread):
+        alpha = int(70 * ((step + 1) / spread) ** 2)
+        pygame.draw.rect(
+            glow, (255, 255, 255, alpha), glow_rect.inflate(-step * 2, -step * 2),
+            border_radius=radius + spread - step
+        )
+    glow.blit(_accent_gradient(glow_rect.size), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    _panel_glow_cache[key] = glow
+    return glow
+
+
+def as_light(image: pygame.Surface, floor: Tuple[int, int, int] = (16, 4, 24)) -> pygame.Surface:
+    """Turn artwork painted on a dark background into light that can be added to the screen.
+
+    The banner and digit images carry their own near-black background, which
+    shows as a rectangle over anything but a matching flat color. Subtracting
+    that floor leaves only the glowing artwork; blit the result with
+    pygame.BLEND_RGB_ADD.
+    """
+    light = pygame.Surface(image.get_size(), 0, 24)
+    light.blit(image, (0, 0))
+    light.fill(floor, special_flags=pygame.BLEND_RGB_SUB)
+    return light
+
+
+def render_title(font: pygame.font.Font, text: str) -> pygame.Surface:
+    """Render a screen heading in the accent gradient with a soft glow behind it."""
+    pad = max(6, font.get_height() // 3)
+    white = font.render(text, True, (255, 255, 255))
+    lettering = pygame.Surface((white.get_width() + pad * 2, white.get_height() + pad * 2), pygame.SRCALPHA)
+    lettering.blit(white, (pad, pad))
+    lettering.blit(_accent_gradient(lettering.get_size()), (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+    
+    # Blur by scaling down and back up
+    small = pygame.transform.smoothscale(lettering, (max(1, lettering.get_width() // 8), max(1, lettering.get_height() // 8)))
+    title = pygame.transform.smoothscale(small, lettering.get_size())
+    title.blit(title, (0, 0))
+    
+    # Lift the letters towards white so they read as lit tubes over their own glow
+    bright = lettering.copy()
+    bright.fill((90, 90, 90, 0), special_flags=pygame.BLEND_RGBA_ADD)
+    title.blit(bright, (0, 0))
+    return title
 
 
 def _accent_gradient(size: Tuple[int, int]) -> pygame.Surface:
@@ -127,7 +294,7 @@ class ControllerIcon:
         pygame.draw.circle(screen, (255, 255, 255), (x, y), size, 2)
         
         # Draw "A" text
-        font = pygame.font.Font(None, size)
+        font = get_font(size)
         text = font.render("A", True, (255, 255, 255))
         text_rect = text.get_rect(center=(x, y))
         screen.blit(text, text_rect)
@@ -169,7 +336,7 @@ class ControllerIcon:
         pygame.draw.circle(screen, (255, 255, 255), (x, y), size, 2)
         
         # Draw "B" text
-        font = pygame.font.Font(None, size)
+        font = get_font(size)
         text = font.render("B", True, (255, 255, 255))
         text_rect = text.get_rect(center=(x, y))
         screen.blit(text, text_rect)
@@ -421,29 +588,55 @@ class ConfirmationDialog:
         self.dialog_height = dialog_height
         self.button_layout = button_layout
         
-        self.small_font = pygame.font.Font(None, 24)
-        self.title_font = pygame.font.Font(None, config.FONT_SIZE_SUBTITLE)
-        self.button_font = pygame.font.Font(None, config.FONT_SIZE_BUTTON)
-        self.hint_font = pygame.font.Font(None, config.FONT_SIZE_HINT)
+        self.message_font = get_font(24)
+        self.title_font = get_font(config.FONT_SIZE_SUBTITLE + 8)
+        self.button_font = get_font(config.FONT_SIZE_BUTTON)
+        self.hint_font = get_font(config.FONT_SIZE_HINT)
         # Buttons are kept between frames so their selection fade can play
         self._buttons: Optional[Tuple[Button, Button]] = None
+        self._hints: Optional[pygame.Surface] = None
     
-    def _get_buttons(
-        self,
-        confirm_position: Tuple[int, int],
-        cancel_position: Tuple[int, int],
-        width: int,
-        height: int
-    ) -> Tuple[Button, Button]:
+    def dialog_rect(self) -> pygame.Rect:
+        """Get the dialog's rectangle, centered on the screen."""
+        rect = pygame.Rect(0, 0, self.dialog_width, self.dialog_height)
+        rect.center = (config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2)
+        return rect
+    
+    def button_rects(self) -> Tuple[pygame.Rect, pygame.Rect]:
+        """Get the confirm and cancel button rectangles."""
+        rect = self.dialog_rect()
+        if self.button_layout == "side_by_side":
+            width, height = 200, 54
+            y = rect.top + 172
+            centers = ((rect.centerx - 120, y), (rect.centerx + 120, y))
+        else:
+            width, height = 400, 54
+            y = rect.top + 172
+            centers = ((rect.centerx, y), (rect.centerx, y + 74))
+        rects = []
+        for center in centers:
+            button_rect = pygame.Rect(0, 0, width, height)
+            button_rect.center = center
+            rects.append(button_rect)
+        return rects[0], rects[1]
+    
+    def hints_rect(self) -> pygame.Rect:
+        """Get the rectangle of the key hints along the bottom of the dialog."""
+        if self._hints is None:
+            self._hints = render_hint_row(self.hint_font, [("ENTER / A", "Select"), ("ESC / B", "Cancel")])
+        return self._hints.get_rect(midbottom=(self.dialog_rect().centerx, self.dialog_rect().bottom - 26))
+    
+    def _get_buttons(self) -> Tuple[Button, Button]:
         """Get the confirm and cancel buttons, creating them on first use."""
+        confirm_rect, cancel_rect = self.button_rects()
         if self._buttons is None:
             self._buttons = (
-                Button(self.confirm_label, confirm_position, self.button_font, width=width, height=height),
-                Button(self.cancel_label, cancel_position, self.button_font, width=width, height=height)
+                Button(self.confirm_label, confirm_rect.center, self.button_font, width=confirm_rect.width, height=confirm_rect.height),
+                Button(self.cancel_label, cancel_rect.center, self.button_font, width=cancel_rect.width, height=cancel_rect.height)
             )
         confirm_button, cancel_button = self._buttons
-        confirm_button.position = confirm_position
-        cancel_button.position = cancel_position
+        confirm_button.position = confirm_rect.center
+        cancel_button.position = cancel_rect.center
         return confirm_button, cancel_button
     
     def draw(
@@ -463,113 +656,28 @@ class ConfirmationDialog:
         overlay.fill((0, 0, 0))
         self.screen.blit(overlay, (0, 0))
         
-        # Calculate dialog position (centered)
-        dialog_x = (config.SCREEN_WIDTH - self.dialog_width) // 2
-        dialog_y = (config.SCREEN_HEIGHT - self.dialog_height) // 2
-        dialog_rect = pygame.Rect(dialog_x, dialog_y, self.dialog_width, self.dialog_height)
+        dialog_rect = self.dialog_rect()
         
-        # Draw glow effect
-        draw_button_glow(
-            self.screen,
-            dialog_rect,
-            config.COLOR_BUTTON_GLOW,
-            config.BUTTON_GLOW_INTENSITY * 1.5,
-            menu_pulse_phase
-        )
-        
-        # Dialog background
-        pygame.draw.rect(self.screen, config.COLOR_UI_BG, dialog_rect)
-        pygame.draw.rect(self.screen, config.COLOR_BUTTON_GLOW, dialog_rect, 3)
+        # Rounded panel over a soft accent glow
+        glow = build_panel_glow(dialog_rect.size)
+        self.screen.blit(glow, glow.get_rect(center=dialog_rect.center))
+        self.screen.blit(build_panel(dialog_rect.size), dialog_rect)
         
         # Draw title
         title_surface = self.title_font.render(self.title, True, config.COLOR_TEXT)
-        title_rect = title_surface.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 50))
-        self.screen.blit(title_surface, title_rect)
+        self.screen.blit(title_surface, title_surface.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 56)))
         
         # Draw message
-        message_surface = self.small_font.render(self.message, True, config.COLOR_TEXT)
-        message_rect = message_surface.get_rect(center=(config.SCREEN_WIDTH // 2, dialog_y + 100))
-        self.screen.blit(message_surface, message_rect)
+        message_surface = self.message_font.render(self.message, True, TEXT_DIM)
+        self.screen.blit(message_surface, message_surface.get_rect(center=(dialog_rect.centerx, dialog_rect.top + 104)))
         
-        # Draw buttons based on layout
-        if self.button_layout == "side_by_side":
-            self._draw_side_by_side_buttons(dialog_y, menu_pulse_phase, selection_index)
-        else:
-            self._draw_stacked_buttons(dialog_y, menu_pulse_phase, selection_index)
-    
-    def _draw_side_by_side_buttons(
-        self,
-        dialog_y: int,
-        menu_pulse_phase: float,
-        selection_index: int
-    ) -> None:
-        """Draw buttons side by side."""
-        button_y = dialog_y + 150
-        
-        confirm_button, cancel_button = self._get_buttons(
-            (config.SCREEN_WIDTH // 2 - 120, button_y),
-            (config.SCREEN_WIDTH // 2 + 120, button_y),
-            width=180,
-            height=50
-        )
-        
-        # Confirm button (left)
+        # Draw buttons
+        confirm_button, cancel_button = self._get_buttons()
         confirm_button.selected = selection_index == 0
-        confirm_button.draw(self.screen, menu_pulse_phase)
-        
-        # Confirm button hint
-        confirm_hint = self.hint_font.render("Enter/A", True, config.COLOR_TEXT)
-        confirm_hint_rect = confirm_hint.get_rect(
-            center=(config.SCREEN_WIDTH // 2 - 120, button_y + 50)
-        )
-        self.screen.blit(confirm_hint, confirm_hint_rect)
-        
-        # Cancel button (right)
         cancel_button.selected = selection_index == 1
+        confirm_button.draw(self.screen, menu_pulse_phase)
         cancel_button.draw(self.screen, menu_pulse_phase)
         
-        # Cancel button hint
-        cancel_hint = self.hint_font.render("ESC/B", True, config.COLOR_TEXT)
-        cancel_hint_rect = cancel_hint.get_rect(
-            center=(config.SCREEN_WIDTH // 2 + 120, button_y + 50)
-        )
-        self.screen.blit(cancel_hint, cancel_hint_rect)
-    
-    def _draw_stacked_buttons(
-        self,
-        dialog_y: int,
-        menu_pulse_phase: float,
-        selection_index: int
-    ) -> None:
-        """Draw buttons stacked vertically."""
-        button_y = dialog_y + 150
-        
-        confirm_button, cancel_button = self._get_buttons(
-            (config.SCREEN_WIDTH // 2, button_y),
-            (config.SCREEN_WIDTH // 2, button_y + 100),
-            width=400,
-            height=50
-        )
-        
-        # Confirm button (top)
-        confirm_button.selected = selection_index == 0
-        confirm_button.draw(self.screen, menu_pulse_phase)
-        
-        # Confirm button hint
-        confirm_hint = self.hint_font.render("Enter/A/OK", True, config.COLOR_TEXT)
-        confirm_hint_rect = confirm_hint.get_rect(
-            center=(config.SCREEN_WIDTH // 2, button_y + 40)
-        )
-        self.screen.blit(confirm_hint, confirm_hint_rect)
-        
-        # Cancel button (bottom)
-        cancel_button.selected = selection_index == 1
-        cancel_button.draw(self.screen, menu_pulse_phase)
-        
-        # Cancel button hint
-        cancel_hint = self.hint_font.render("ESC/B/Cancel", True, config.COLOR_TEXT)
-        cancel_hint_rect = cancel_hint.get_rect(
-            center=(config.SCREEN_WIDTH // 2, button_y + 140)
-        )
-        self.screen.blit(cancel_hint, cancel_hint_rect)
-
+        # Key hints share one row at the bottom instead of crowding each button
+        hints_rect = self.hints_rect()
+        self.screen.blit(self._hints, hints_rect)

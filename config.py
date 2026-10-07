@@ -109,6 +109,7 @@ class ReplayEnemySettings:
     color: Tuple[int, int, int]
     baseCount: int
     scaleFactor: float
+    hitPoints: int
 
 
 @dataclass
@@ -145,6 +146,24 @@ class FlighthouseEnemySettings:
     baseCount: int
     scaleFactor: float
     initialFlockerSpeedMultiplier: float
+
+
+@dataclass
+class AnemoneSettings:
+    size: int
+    hitPoints: int
+    reachCells: float
+    pullThrustFraction: float
+    flingSpeed: float
+    releaseFrames: int
+    flinchFrames: int
+    firstLevel: int
+    baseCount: int
+    levelsPerExtra: int
+    maxCount: int
+    maxCoverage: float
+    color: Tuple[int, int, int]
+    tipColor: Tuple[int, int, int]
 
 
 @dataclass
@@ -386,6 +405,7 @@ class Settings:
     replayEnemy: ReplayEnemySettings
     flockerEnemy: FlockerEnemySettings
     flighthouseEnemy: FlighthouseEnemySettings
+    anemone: AnemoneSettings
     baby: BabySettings
     splitBoss: SplitBossSettings
     motherBoss: MotherBossSettings
@@ -471,7 +491,8 @@ def load_settings() -> Settings:
             size=raw["replayEnemy"]["size"],
             color=_as_color(tuple(raw["replayEnemy"]["color"])),
             baseCount=raw["replayEnemy"]["baseCount"],
-            scaleFactor=raw["replayEnemy"]["scaleFactor"]
+            scaleFactor=raw["replayEnemy"]["scaleFactor"],
+            hitPoints=raw["replayEnemy"]["hitPoints"]
         ),
         flockerEnemy=FlockerEnemySettings(
             size=raw["flockerEnemy"]["size"],
@@ -505,6 +526,11 @@ def load_settings() -> Settings:
             scaleFactor=raw["flighthouseEnemy"]["scaleFactor"],
             initialFlockerSpeedMultiplier=raw["flighthouseEnemy"]["initialFlockerSpeedMultiplier"]
         ),
+        anemone=AnemoneSettings(**{
+            **raw["anemone"],
+            "color": _as_color(tuple(raw["anemone"]["color"])),
+            "tipColor": _as_color(tuple(raw["anemone"]["tipColor"])),
+        }),
         baby=BabySettings(**raw["baby"]),
         splitBoss=SplitBossSettings(**raw["splitBoss"]),
         motherBoss=MotherBossSettings(
@@ -584,6 +610,8 @@ STATES_DEFAULTS = {
     "splash": "splash",
     "menu": "menu",
     "profileSelection": "profile_selection",
+    "controls": "controls",
+    "levelSelect": "level_select",
     "playing": "playing",
     "levelComplete": "level_complete",
     "quitConfirm": "quit_confirm"
@@ -592,6 +620,8 @@ STATES_DEFAULTS = {
 # Backwards-compatible constants
 SCREEN_WIDTH = SETTINGS.screen.width
 SCREEN_HEIGHT = SETTINGS.screen.height
+# Width of the column on the left that holds the HUD dials; the maze starts where it ends
+UI_ZONE_WIDTH = 200
 FPS = SETTINGS.screen.fps
 SCREEN_FULLSCREEN = SETTINGS.screen.fullscreen
 
@@ -651,6 +681,7 @@ REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
 REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
 REPLAY_ENEMY_BASE_COUNT = SETTINGS.replayEnemy.baseCount
 REPLAY_ENEMY_SCALE_FACTOR = SETTINGS.replayEnemy.scaleFactor
+REPLAY_ENEMY_HIT_POINTS = SETTINGS.replayEnemy.hitPoints
 
 FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
 FLOCKER_ENEMY_COLOR = SETTINGS.flockerEnemy.color
@@ -681,6 +712,21 @@ FLIGHTHOUSE_ENEMY_HIT_POINTS = SETTINGS.flighthouseEnemy.hitPoints
 FLIGHTHOUSE_ENEMY_BASE_COUNT = SETTINGS.flighthouseEnemy.baseCount
 FLIGHTHOUSE_ENEMY_SCALE_FACTOR = SETTINGS.flighthouseEnemy.scaleFactor
 FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER = SETTINGS.flighthouseEnemy.initialFlockerSpeedMultiplier
+
+ANEMONE_SIZE = SETTINGS.anemone.size
+ANEMONE_HIT_POINTS = SETTINGS.anemone.hitPoints
+ANEMONE_REACH_CELLS = SETTINGS.anemone.reachCells
+ANEMONE_PULL_THRUST_FRACTION = SETTINGS.anemone.pullThrustFraction
+ANEMONE_FLING_SPEED = SETTINGS.anemone.flingSpeed
+ANEMONE_RELEASE_FRAMES = SETTINGS.anemone.releaseFrames
+ANEMONE_FLINCH_FRAMES = SETTINGS.anemone.flinchFrames
+ANEMONE_FIRST_LEVEL = SETTINGS.anemone.firstLevel
+ANEMONE_BASE_COUNT = SETTINGS.anemone.baseCount
+ANEMONE_LEVELS_PER_EXTRA = SETTINGS.anemone.levelsPerExtra
+ANEMONE_MAX_COUNT = SETTINGS.anemone.maxCount
+ANEMONE_MAX_COVERAGE = SETTINGS.anemone.maxCoverage
+ANEMONE_COLOR = SETTINGS.anemone.color
+ANEMONE_TIP_COLOR = SETTINGS.anemone.tipColor
 
 BABY_SIZE = SETTINGS.baby.size
 BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier
@@ -810,6 +856,8 @@ LEVEL_COMPLETE_STAR_SIZE = SETTINGS.starAnimation.levelCompleteStarSize
 STATE_SPLASH = STATES_DEFAULTS["splash"]
 STATE_MENU = STATES_DEFAULTS["menu"]
 STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
+STATE_CONTROLS = STATES_DEFAULTS["controls"]
+STATE_LEVEL_SELECT = STATES_DEFAULTS["levelSelect"]
 STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
 STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]

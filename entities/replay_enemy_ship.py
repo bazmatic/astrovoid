@@ -107,6 +107,8 @@ class ReplayEnemyShip(RotatingThrusterShip):
         self.angle = random.uniform(0, 360)  # Random starting orientation
         self.command_recorder = command_recorder
         self.current_replay_index = 0
+        self.hit_points = config.REPLAY_ENEMY_HIT_POINTS
+        self.max_hit_points = config.REPLAY_ENEMY_HIT_POINTS
         self.fire_cooldown: int = 0
         self.pulse_phase: float = 0.0  # Animation phase for mantle and tentacles
         self.jet: float = 0.0  # 0.0 drifting, 1.0 jetting hard
@@ -121,7 +123,18 @@ class ReplayEnemyShip(RotatingThrusterShip):
 
     def get_damage_fraction(self) -> float:
         """Return damage fraction (0.0 no damage, 1.0 destroyed)."""
-        return 0.0
+        if self.max_hit_points <= 0:
+            return 0.0
+        return 1.0 - max(0.0, min(1.0, self.hit_points / self.max_hit_points))
+
+    def take_damage(self) -> bool:
+        """Take damage from a projectile hit.
+        
+        Returns:
+            True if hit points reached 0, False otherwise.
+        """
+        self.hit_points -= 1
+        return self.hit_points <= 0
 
     def _get_blink_interval_multiplier(self, damage_fraction: float) -> float:
         """Calculate blink timer multiplier based on damage."""

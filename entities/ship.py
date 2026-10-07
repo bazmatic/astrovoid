@@ -29,7 +29,12 @@ class Ship(RotatingThrusterShip):
         ammo: Current ammunition remaining.
         damaged: Whether the ship is currently in a damaged state.
         damage_timer: Frames remaining in damaged state.
+        trail: Recent positions, oldest first, drawn as a fading wake.
     """
+    
+    TRAIL_LENGTH = 28  # Positions remembered, one per frame
+    TRAIL_ALPHA = 110  # Opacity of the trail where it meets the ship
+    TRAIL_MIN_STEP = 0.5  # Movement per frame, in pixels, below which the trail runs out
     
     def __init__(self, start_pos: Tuple[float, float]):
         """Initialize ship at starting position.
@@ -53,6 +58,7 @@ class Ship(RotatingThrusterShip):
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
         self.powerup_flash_phase = 0.0
+        self.trail: List[Tuple[float, float]] = []
     
     def is_enemy_ship(self) -> bool:
         """Check if this ship is an enemy ship.
@@ -91,7 +97,15 @@ class Ship(RotatingThrusterShip):
         was_thrusting = self.thrusting
         
         # Call base class update (handles movement, friction, edge bouncing, particles)
+        previous_pos = (self.x, self.y)
         super().update(dt)
+        
+        # Leave a trail while moving; let it run out once at rest
+        if math.hypot(self.x - previous_pos[0], self.y - previous_pos[1]) >= self.TRAIL_MIN_STEP:
+            self.trail.append(previous_pos)
+            del self.trail[:-self.TRAIL_LENGTH]
+        elif self.trail:
+            del self.trail[0]
         
         # Update damage timer
         if self.damaged:
@@ -353,12 +367,41 @@ class Ship(RotatingThrusterShip):
             
             screen.blit(ring_surf, (center_x - ring_center, center_y - ring_center))
     
+    def _draw_trail(self, screen: pygame.Surface) -> None:
+        """Draw a faint wake that narrows and fades towards its oldest point."""
+        points = self.trail + [(self.x, self.y)]
+        if len(points) < 2:
+            return
+        
+        pad = int(self.radius) + 2
+        left = int(min(point[0] for point in points)) - pad
+        top = int(min(point[1] for point in points)) - pad
+        width = int(max(point[0] for point in points)) + pad - left
+        height = int(max(point[1] for point in points)) + pad - top
+        # Drawing onto a transparent surface replaces pixels instead of blending
+        # them, so newer segments simply overwrite older ones where they overlap
+        wake = pygame.Surface((width, height), pygame.SRCALPHA)
+        segments = len(points) - 1
+        for index in range(segments):
+            # Strength follows how recent the segment is, so the trail keeps
+            # its fade as it runs out from the old end
+            strength = 1.0 - (segments - 1 - index) / self.TRAIL_LENGTH
+            color = (*config.COLOR_SHIP, int(self.TRAIL_ALPHA * strength ** 1.5))
+            thickness = max(1, int(round(self.radius * 1.1 * strength)))
+            start = (points[index][0] - left, points[index][1] - top)
+            end = (points[index + 1][0] - left, points[index + 1][1] - top)
+            pygame.draw.line(wake, color, start, end, thickness)
+            pygame.draw.circle(wake, color, end, thickness / 2)
+        screen.blit(wake, (left, top))
+    
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the ship with enhanced visuals.
         
         Args:
             screen: The pygame Surface to draw on.
         """
+        self._draw_trail(screen)
+        
         # Draw shield glow effect when shield is active
         if self.shield_active:
             # During initial activation, fade out over time
@@ -512,7 +555,7 @@ class Ship(RotatingThrusterShip):
         
         self.draw_thrust_plume(screen)
     
-    def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font, potential_score: Optional[float] = None, max_score: float = 100.0, level: Optional[int] = None, time_seconds: Optional[float] = None) -> None:
+    def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font, potential_score: Optional[float] = None, max_score: float = 100.0, level: Optional[int] = None, time_seconds: Optional[float] = None, level_score: Optional[float] = None, progress_score: Optional[int] = None) -> None:
         """Draw ship UI (level, time, ammo, score) using circular gauges.
         
         Args:
@@ -522,14 +565,16 @@ class Ship(RotatingThrusterShip):
             max_score: Maximum possible score (default 100).
             level: Current level number to display at top.
             time_seconds: Elapsed time in seconds to display in circular gauge.
+            level_score: Current run score, independent of the power-drain override.
+            progress_score: Accumulated score from completed ordinary levels.
         """
         from rendering.ui_elements import UIElementRenderer
+        from rendering.fonts import get_font
         from rendering.number_sprite import NumberSprite
         
         # UI zone constants
-        UI_ZONE_WIDTH = 320
         GAUGE_RADIUS = 60
-        GAUGE_CENTER_X = UI_ZONE_WIDTH // 2  # Center of UI zone
+        GAUGE_CENTER_X = config.UI_ZONE_WIDTH // 2  # Center of UI zone
         LEVEL_Y = 60  # Level indicator at top (needs space, so gauges start lower)
         TIME_Y = 180   # Time gauge position (create space above other gauges)
         
@@ -542,7 +587,7 @@ class Ship(RotatingThrusterShip):
             'ammo': GAUGE_START_Y + GAUGE_SPACING
         }
         GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 2)  # Below all gauges
-        EMPTY_COLOR = (50, 50, 50)
+        LOW_POWER_THRESHOLD = 0.2  # Power gauge pulses at or below this
         
         def draw_gauge(
             center_y: int,
@@ -550,7 +595,8 @@ class Ship(RotatingThrusterShip):
             text: str,
             fill_color: Tuple[int, int, int],
             label_text: str,
-            text_color: Tuple[int, int, int] = config.COLOR_TEXT
+            text_color: Tuple[int, int, int] = config.COLOR_TEXT,
+            alert: bool = False
         ) -> None:
             """Helper to draw a gauge with common parameters."""
             UIElementRenderer.draw_circular_gauge(
@@ -561,9 +607,9 @@ class Ship(RotatingThrusterShip):
                 percentage,
                 text,
                 fill_color,
-                empty_color=EMPTY_COLOR,
                 text_color=text_color,
-                label_text=label_text
+                label_text=label_text,
+                alert=alert
             )
         
         # Level indicator at top (centered)
@@ -574,22 +620,11 @@ class Ship(RotatingThrusterShip):
                 number_rect = number_surface.get_rect(center=(GAUGE_CENTER_X, LEVEL_Y))
                 screen.blit(number_surface, number_rect)
         
-        # Time gauge (circular display, no fill)
+        # Time gauge (sweeps round once a minute)
         if time_seconds is not None:
             time_text = f"{time_seconds:.1f}s"
-            # Draw as a circular gauge with no fill (percentage = 0) but with a background circle
-            UIElementRenderer.draw_circular_gauge(
-                screen,
-                GAUGE_CENTER_X,
-                TIME_Y,
-                GAUGE_RADIUS,
-                0.0,  # No fill percentage
-                time_text,
-                (100, 150, 200),  # Light blue color for time
-                empty_color=(50, 50, 50),
-                text_color=config.COLOR_TEXT,
-                label_text="TIME"
-            )
+            minute_fraction = (time_seconds % 60.0) / 60.0
+            draw_gauge(TIME_Y, minute_fraction, time_text, (100, 150, 200), "TIME")
         
         # Score gauge (if provided)
         if potential_score is not None:
@@ -602,7 +637,10 @@ class Ship(RotatingThrusterShip):
                 high_threshold=0.5,
                 medium_threshold=0.2
             )
-            draw_gauge(GAUGE_Y_POSITIONS['score'], score_percent, str(int(potential_score)), score_color, "POWER")
+            draw_gauge(
+                GAUGE_Y_POSITIONS['score'], score_percent, str(int(potential_score)), score_color, "POWER",
+                alert=score_percent <= LOW_POWER_THRESHOLD
+            )
         
         # Ammo gauge
         if self.gun_upgrade_level >= 1:
@@ -618,6 +656,26 @@ class Ship(RotatingThrusterShip):
         
         draw_gauge(GAUGE_Y_POSITIONS['ammo'], ammo_percent, ammo_text, ammo_color, "AMMO", ammo_text_color)
         
+        # Explicit score readings below AMMO; power is a resource, not a score label.
+        label_font = get_font(18)
+        value_font = get_font(30)
+        for index, (label, value) in enumerate((("LEVEL SCORE", level_score),
+                                                ("PROGRESS SCORE", progress_score))):
+            if value is None:
+                continue
+            y = GAUGE_Y_POSITIONS['ammo'] + 100 + index * 40
+            label_image = label_font.render(label, True, (150, 160, 195))
+            label_rect = label_image.get_rect(midleft=(12, y))
+            value_image = value_font.render(f"{int(value):,}", True, (235, 242, 255))
+            available_width = max(1, config.UI_ZONE_WIDTH - 24 - label_image.get_width() - 8)
+            if value_image.get_width() > available_width:
+                ratio = available_width / value_image.get_width()
+                value_image = pygame.transform.smoothscale(
+                    value_image, (available_width, max(1, round(value_image.get_height() * ratio)))
+                )
+            screen.blit(label_image, label_rect)
+            screen.blit(value_image, value_image.get_rect(midright=(config.UI_ZONE_WIDTH - 12, y)))
+
         # Gun upgrade indicator (below gauges, centered)
         if self.gun_upgrade_level > 0:
             upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)

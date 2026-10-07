@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from entities.mother_boss import MotherBoss
     from entities.baby import Baby
     from entities.egg import Egg
+    from entities.anemone import Anemone
 
 
 class EntityManager:
@@ -29,6 +30,7 @@ class EntityManager:
         self.mother_bosses: List['MotherBoss'] = []
         self.babies: List['Baby'] = []
         self.eggs: List['Egg'] = []
+        self.anemones: List['Anemone'] = []
     
     def clear_all(self) -> None:
         """Clear all enemy lists."""
@@ -40,6 +42,7 @@ class EntityManager:
         self.mother_bosses.clear()
         self.babies.clear()
         self.eggs.clear()
+        self.anemones.clear()
     
     def get_all_enemy_positions(self) -> List[Tuple[float, float]]:
         """Get positions of all enemies for spawn position calculation.
@@ -56,6 +59,7 @@ class EntityManager:
         positions.extend([mb.get_pos() for mb in self.mother_bosses])
         positions.extend([baby.get_pos() for baby in self.babies])
         positions.extend([egg.get_pos() for egg in self.eggs])
+        positions.extend([anemone.get_pos() for anemone in self.anemones])
         return positions
     
     def get_all_active_enemies(self) -> Iterator:
@@ -88,6 +92,9 @@ class EntityManager:
         for egg in self.eggs:
             if egg.active:
                 yield egg
+        for anemone in self.anemones:
+            if anemone.active:
+                yield anemone
     
     def get_all_enemies(self) -> Iterator:
         """Get iterator over every enemy, active or not.
@@ -96,7 +103,7 @@ class EntityManager:
             Enemy instances from all lists.
         """
         for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
-                      self.split_bosses, self.mother_bosses, self.babies, self.eggs):
+                      self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones):
             yield from group
     
     def update_dying(self, dt: float) -> None:

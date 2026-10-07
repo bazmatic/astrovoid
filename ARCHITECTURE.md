@@ -67,6 +67,7 @@ The entity system provides a foundation for all game objects:
   - Zero-G physics with low friction
 
 - **`enemy.py`**: `Enemy` - Enemy entities
+- **`anemone.py`**: `Anemone` - rooted enemy that pulls the player's ship toward it; `pull_acceleration` is the pure pull maths
 
   - Uses Strategy pattern for behaviors (see `enemy_strategies.py`)
   - Supports static, patrol, and aggressive enemy types
@@ -115,6 +116,12 @@ The entity system provides a foundation for all game objects:
   - Star rating display
   - Progress bars
   - Reusable UI components
+
+- **`fonts.py`**: `get_font` - the bundled typeface (Chakra Petch, in `assets/fonts`); all text goes through it
+- **`controls_menu.py`**: `ControlsMenu` - key and button mappings, reached from the main menu
+- **`dial.py`**: Neon HUD instrument dials (time, power, ammo)
+  - Segmented arc that fills clockwise, with a dim unlit track
+  - Static layers drawn once per size and colour, then cached
 
 ### State Management (`states/`)
 
@@ -217,6 +224,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   ├── drawable.py
 │   ├── ship.py
 │   ├── enemy.py
+│   ├── anemone.py
 │   ├── enemy_strategies.py
 │   └── projectile.py
 ├── maze/                    # Maze generation
@@ -226,7 +234,10 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   └── calculator.py
 ├── rendering/               # Rendering system
 │   ├── renderer.py
-│   └── ui_elements.py
+│   ├── ui_elements.py
+│   ├── dial.py
+│   ├── fonts.py
+│   └── controls_menu.py
 ├── states/                  # State management
 │   └── state_machine.py
 └── utils/                   # Utilities
