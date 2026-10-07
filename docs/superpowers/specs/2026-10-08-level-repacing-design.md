@@ -31,7 +31,7 @@ Columns: St static, Pa patrol, Ag aggressive, Rp replay ship, Fl flocker, Fh fli
 | 2 | 12 | simple | 2 | 2 | | | | | | | | | 4 | no | Patrol introduced |
 | 3 | 14 | simple | 2 | 1 | 2 | | | | | | | | 5 | no | Aggressive introduced |
 | 4 | 16 | simple | 2 | 1 | 1 | | | | | | | | 4 | yes | Hunter introduced |
-| 5 | 18 | simple | 2 | 1 | 2 | 2 | | | | | | | 7 | yes | Replay ship introduced |
+| 5 | 18 | simple | 2 | 1 | 1 | 2 | | | | | | | 6 | yes | Replay ship introduced |
 | 6 | 12 | empty | | | | 2 | | | | | 1 | | 2 | no | **Boss: split boss** |
 | 7 | 20 | normal | 2 | 1 | 2 | 1 | | | | 2 | | | 8 | yes | Anemone introduced |
 | 8 | 22 | normal | 2 | | | | 6 | | | 2 | | | 10 | yes | Flocker swarm introduced |
