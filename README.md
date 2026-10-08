@@ -361,6 +361,14 @@ the attitude needed to slow down), and a lead-aim firing solution for each visib
 Whenever no enemy is in sight the hunter follows the player: it is given the next
 waypoint on a route through the maze to the player's ship and holds station when it
 arrives. It does not explore on its own.
+
+A powerup crystal in the hunter's sight is a goal of its own (`collect_powerup` in the
+pilot's readings and instructions): with no enemy to fight it flies onto the nearest one
+before going back to the player. Crystals upgrade the hunter's guns as they do yours:
+bursts come faster, then each shot is a three-way spread, then the shots grow bigger and
+faster. A crystal the hunter takes is one you do not get and does not count towards your
+score; you have first claim on one you both touch. The hunter leaves Jev beacons alone,
+and a newly summoned hunter starts with no upgrades.
 Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
 thrust and firing while momentum continues. Requests time out after one second.
 There is no local autopilot fallback. Constants are in `hunter/model.py`.

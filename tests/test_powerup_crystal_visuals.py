@@ -182,6 +182,7 @@ class TestGameLoop:
         game.collision_handler = CollisionHandler(Mock(), game.scoring, Mock())
         game.ship = Mock(x=POS[0], y=POS[1], radius=10.0)
         game.powerup_crystals = []
+        game.hunter = None
         return game
 
     def test_collected_crystal_upgrades_once_and_plays_out(self, game):

@@ -420,4 +420,14 @@ class CollisionHandler:
             return True
         
         return False
+    
+    def handle_hunter_crystal_collision(self, hunter, crystal: 'PowerupCrystal') -> bool:
+        """The hunter collects a crystal it touches; it upgrades the hunter's guns, not the player's score."""
+        if hunter is None or not hunter.active or not crystal.active:
+            return False
+        if not crystal.check_circle_collision(hunter.get_pos(), hunter.radius):
+            return False
+        hunter.collect_powerup()
+        self.sound_manager.play_powerup_activation()
+        return True
 

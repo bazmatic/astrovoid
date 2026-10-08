@@ -194,7 +194,7 @@ def test_tracking_hunter_kills_a_static_urchin(distance, bearing, monkeypatch):
         solution = find_firing_solution(ship, [enemy], world, SETTINGS)
         shot = ship.step(1, ACTIONS['track_coast_fire'], solution)
         if shot:
-            shots.append(shot)
+            shots.extend(shot)
         for projectile in shots:
             if projectile.active:
                 projectile.update(1.0)
