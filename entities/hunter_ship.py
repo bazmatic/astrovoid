@@ -4,7 +4,7 @@ import pygame
 import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.projectile import Projectile
-from game_handlers.fire_rate_calculator import calculate_fire_cooldown
+from game_handlers.fire_rate_calculator import calculate_fire_cooldown, shots_per_volley
 from hunter.model import HunterSettings
 
 
@@ -35,7 +35,8 @@ class HunterShip(RotatingThrusterShip):
         self.health = settings.health
         self.fire_remaining = 0.0
         self.burst_remaining = 0
-        self.gun_upgrade_level = 0  # Powerups collected: they upgrade the guns as the player's do
+        self.gun_upgrade_level = 0  # Powerups in effect: they upgrade the guns as the player's do
+        self.upgrade_remaining = 0.0  # Seconds until the powerups wear off
         self.immunity_remaining = 0.0
         self.pilot_thrusting = False
         self.thrust_frames = 0  # Frames of thrust ever applied
@@ -53,12 +54,13 @@ class HunterShip(RotatingThrusterShip):
         return self.gun_upgrade_level
 
     def collect_powerup(self):
-        """Take a powerup crystal: one more level of gun upgrade."""
+        """Take a powerup crystal: one more level of gun upgrade, and the clock on them all restarts."""
         self.gun_upgrade_level += 1
+        self.upgrade_remaining = config.POWERUP_DURATION_SECONDS
 
     @property
     def fire_interval(self):
-        """Seconds between bursts, shortened by powerups in step with the player's fire rate."""
+        """Seconds between bursts, which changes with powerups in step with the player's fire rate."""
         base = config.SETTINGS.powerups.fireRateBaseCooldown
         return self.settings.fire_interval * calculate_fire_cooldown(self) / base
 
@@ -69,7 +71,7 @@ class HunterShip(RotatingThrusterShip):
                   self.y + math.sin(heading) * (self.radius + 5))
         level = self.gun_upgrade_level
         angles = [self.angle]
-        if level >= 2:
+        if shots_per_volley(level) > 1:
             spread = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
             angles += [self.angle - spread, self.angle + spread]
         # Powerups beyond the third make the shots bigger and faster
@@ -99,6 +101,11 @@ class HunterShip(RotatingThrusterShip):
         seconds = dt / config.FPS
         self.fire_remaining = max(0.0, self.fire_remaining - seconds)
         self.immunity_remaining = max(0.0, self.immunity_remaining - seconds)
+        if self.gun_upgrade_level:
+            # Powerups wear off all together, as the player's do
+            self.upgrade_remaining -= seconds
+            if self.upgrade_remaining <= 0.0:
+                self.gun_upgrade_level = 0
         if action.track:
             if solution is not None:
                 # Swing at the normal turn rate, but stop exactly on the solution.

@@ -9,13 +9,23 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.ship import Ship
 
+SPREAD_LEVEL = 2  # Upgrade level from which each volley is a spread
+SPREAD_SHOTS = 3
+
+
+def shots_per_volley(upgrade_level: int) -> int:
+    """How many projectiles one pull of the trigger releases at an upgrade level."""
+    return SPREAD_SHOTS if upgrade_level >= SPREAD_LEVEL else 1
+
 
 def calculate_fire_cooldown(ship: 'Ship') -> int:
     """Calculate fire cooldown based on ship's gun upgrade level.
     
-    Levels 1-3 use the configured fire rate multipliers. Each level beyond 3
-    multiplies the level 3 rate by a further growth factor, down to a minimum
-    cooldown, so every upgrade keeps the gun at least as fast as before.
+    Every powerup adds the same amount of firepower: a fixed share of the
+    base gun's projectiles per second. The effects do not compound, so once
+    volleys become a spread they come more slowly than single shots did,
+    though more projectiles leave the gun each second. The cooldown never
+    drops below a minimum.
     
     Args:
         ship: The player ship.
@@ -26,17 +36,9 @@ def calculate_fire_cooldown(ship: 'Ship') -> int:
     powerups = config.SETTINGS.powerups
     base_cooldown = powerups.fireRateBaseCooldown
     upgrade_level = ship.get_gun_upgrade_level()
-    
-    multipliers = powerups.fireRateMultipliers
     if upgrade_level <= 0:
         return base_cooldown
-    if upgrade_level == 1:
-        return int(base_cooldown / multipliers.level1)
-    if upgrade_level == 2:
-        return int(base_cooldown / multipliers.level2)
     
-    beyond = powerups.beyondLevel3
-    rate_multiplier = multipliers.level3 * beyond.fireRateGrowth ** (upgrade_level - 3)
-    level3_cooldown = int(base_cooldown / multipliers.level3)
-    floor = min(beyond.minFireCooldown, level3_cooldown)
-    return max(floor, int(base_cooldown / rate_multiplier))
+    firepower = 1.0 + upgrade_level * powerups.firepowerPerCrystal
+    cooldown = int(base_cooldown * shots_per_volley(upgrade_level) / firepower)
+    return max(min(powerups.beyondLevel3.minFireCooldown, base_cooldown), cooldown)

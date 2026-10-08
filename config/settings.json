@@ -270,12 +270,11 @@
     "flashDurationFrames": 18,
     "flashTintStrength": 0.85,
     "flashGlowMultiplier": 1.6,
+    "durationSeconds": 10,
+    "ammoRefill": 25,
+    "ammoCostMultiplier": 0.5,
     "fireRateBaseCooldown": 200,
-    "fireRateMultipliers": {
-      "level1": 1.5,
-      "level2": 2.0,
-      "level3": 3.0
-    },
+    "firepowerPerCrystal": 1.0,
     "upgradedProjectile": {
       "spreadAngle": 12.5,
       "sizeMultiplier": 1.5,
@@ -288,7 +287,6 @@
       "speedIncrement": 0.05,
       "glowIntensityIncrement": 0.1,
       "hueRotation": 30,
-      "fireRateGrowth": 1.1,
       "minFireCooldown": 40
     },
     "rotationSpeedMultiplier": 1.2
