@@ -201,3 +201,92 @@ class TestGameIntegration:
         screen = blank_screen()
         manager.draw_dying(screen)
         assert screen.get_bounding_rect().width == 0
+
+
+class TestBirdAndFlighthouseDeath:
+    @pytest.mark.parametrize('cls', [FlockerEnemyShip, FlighthouseEnemy])
+    def test_death_changes_shape_then_disappears(self, cls):
+        enemy = cls(POS)
+        enemy.radius = 40
+        enemy.angle = 0
+        enemy.die()
+        first = blank_screen()
+        enemy.draw_death(first)
+        assert first.get_bounding_rect().width > 0
+        run_death(enemy, 0.5)
+        middle = blank_screen()
+        enemy.draw_death(middle)
+        assert middle.get_bounding_rect().width > 0
+        assert pygame.image.tostring(first, 'RGBA') != pygame.image.tostring(middle, 'RGBA')
+        run_death(enemy, 1.0)
+        last = blank_screen()
+        enemy.draw_death(last)
+        assert last.get_bounding_rect().width == 0
+
+    def test_dead_flighthouse_stays_anchored_and_cannot_spawn(self):
+        enemy = FlighthouseEnemy(POS)
+        enemy.die()
+        angle = enemy.angle
+        assert enemy.update(10, (420, 300)) == []
+        enemy.update_death(10)
+        assert enemy.get_pos() == POS
+        assert enemy.angle == angle
+
+    def test_dead_flocker_coasts_and_cannot_fire(self):
+        enemy = FlockerEnemyShip(POS)
+        enemy.vx = 4
+        enemy.die()
+        enemy.update_death(1)
+        assert POS[0] < enemy.x < POS[0] + 4
+        assert 0 < enemy.vx < 4
+        assert enemy.get_fired_projectile((420, 300)) is None
+
+    def test_entity_manager_advances_both_deaths(self):
+        manager = EntityManager()
+        manager.flockers.append(FlockerEnemyShip(POS))
+        manager.flighthouses.append(FlighthouseEnemy(POS))
+        for enemy in manager.get_all_enemies():
+            enemy.die()
+        manager.update_dying(10)
+        assert all(enemy.death_progress > 0 for enemy in manager.get_all_enemies())
+        screen = blank_screen()
+        manager.draw_dying(screen)
+        assert screen.get_bounding_rect().width > 0
+
+
+class TestLastKillPortrait:
+    @pytest.mark.parametrize('enemy', make_all_enemies() + [Enemy(POS, 'patrol'), Enemy(POS, 'aggressive')],
+                             ids=lambda e: type(e).__name__ + getattr(e, 'type', ''))
+    def test_portrait_replays_every_enemy_without_changing_original(self, enemy):
+        from copy import deepcopy
+        from rendering.enemy_death_portrait import EnemyDeathPortrait
+        enemy.x, enemy.y = 4000, 3000
+        enemy.die()
+        snapshot = deepcopy(enemy)
+        portrait = EnemyDeathPortrait(snapshot, 40)
+        screen = blank_screen()
+        portrait.draw(screen, (400, 300))
+        assert screen.get_bounding_rect().width > 0
+        portrait.update(60)
+        assert portrait.enemy.death_progress == pytest.approx(0.5)
+        screen.fill((0, 0, 0, 0))
+        portrait.draw(screen, (400, 300))
+        assert screen.get_bounding_rect().width > 0
+        portrait.update(60)
+        screen.fill((0, 0, 0, 0))
+        portrait.draw(screen, (400, 300))
+        assert screen.get_bounding_rect().width == 0
+        assert enemy.get_pos() == snapshot.get_pos() == (4000, 3000)
+        assert snapshot.death_progress == 0
+
+    def test_only_player_kills_replace_the_snapshot(self):
+        handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
+        squid = make_squid()
+        squid.die()
+        handler._record_projectile_kill(Mock(source='player'), squid)
+        recorded = handler.last_player_kill
+        assert isinstance(recorded, ReplayEnemyShip)
+        squid.update_death(10)
+        assert recorded.death_progress == 0
+        handler._record_projectile_kill(Mock(source='hunter'), FlighthouseEnemy(POS))
+        assert handler.last_player_kill is recorded

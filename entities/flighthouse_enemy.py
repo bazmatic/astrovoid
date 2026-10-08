@@ -51,6 +51,8 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
     ALERT_FALL_SECONDS = 0.8  # Time to calm down again
     LAUNCH_FLASH_SECONDS = 0.35
 
+    DEATH_DURATION = 54.0  # Frames: beam sputters, masonry breaks, lamp goes out
+
     _beam_cache: dict = {}
 
     def __init__(self, pos: Tuple[float, float], level: int = 1):
@@ -403,6 +405,51 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
 
         if self.launch_flash > 0.0:
             self._draw_launch_flash(screen, center)
+
+    def draw_death(self, screen: pygame.Surface) -> None:
+        """Sputter out the beam, scatter the base and collapse the lamp."""
+        if not self.is_dying:
+            return
+        progress = self.death_progress
+        color = config.FLIGHTHOUSE_ENEMY_COLOR
+        # A short, flickering last sweep; the dead scanner never tracks or spawns.
+        beam_strength = max(0.0, 1.0 - progress / 0.3)
+        if int(progress * 40) % 2 == 0:
+            self._draw_beam(screen, color, beam_strength)
+
+        breakup = max(0.0, (progress - 0.12) / 0.88)
+        size = self.radius * (1.0 - breakup ** 2)
+        if size < 0.5:
+            return
+        for index in range(self.BASE_SIDES):
+            angle = (index + 0.5) * 2 * math.pi / self.BASE_SIDES
+            drift = self.radius * 1.8 * breakup
+            center = (self.x + math.cos(angle) * drift, self.y + math.sin(angle) * drift)
+            corners = []
+            for reach, offset in ((0.65, -0.5), (1.0, -0.5), (1.0, 0.5), (0.65, 0.5)):
+                direction = angle + offset * 2 * math.pi / self.BASE_SIDES + breakup * 0.7
+                corners.append((center[0] + math.cos(direction) * size * reach,
+                                center[1] + math.sin(direction) * size * reach))
+            pygame.draw.polygon(screen, color, corners)
+
+        # The housing slumps toward the hood as the lamp briefly flares and dies.
+        heading = math.radians(self.angle + 100 * breakup)
+        center = (int(self.x + math.cos(heading) * self.radius * breakup * 0.6),
+                  int(self.y + math.sin(heading) * self.radius * breakup * 0.6))
+        housing = max(1, int(size * self.HOUSING_RADIUS))
+        pygame.draw.circle(screen, self.SHADOW_COLOR, center, housing)
+        pygame.draw.circle(screen, color, center, housing, 1)
+        hood = [(center[0] + size * (x * math.cos(heading) - y * math.sin(heading)),
+                 center[1] + size * (x * math.sin(heading) + y * math.cos(heading)))
+                for x, y in self.HOOD_POINTS]
+        pygame.draw.polygon(screen, color, hood, 1)
+        light = max(0.0, 1.0 - progress / 0.65)
+        if light > 0:
+            glow = visual_effects.create_soft_glow_surface(self.radius * (1.2 + progress),
+                                                         self.LAMP_COLOR, int(170 * light))
+            screen.blit(glow, glow.get_rect(center=center))
+            pygame.draw.circle(screen, self.LAMP_COLOR, center,
+                               max(1, int(size * self.LAMP_RADIUS * light)))
 
     def _draw_launch_flash(self, screen: pygame.Surface, center: Tuple[int, int]) -> None:
         """Draw the ring that bursts outward when a flocker launches."""

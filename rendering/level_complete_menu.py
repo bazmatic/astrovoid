@@ -8,6 +8,7 @@ import pygame
 from typing import Optional, Dict, List, Tuple
 import config
 from rendering.fonts import get_font
+from rendering.enemy_death_portrait import EnemyDeathPortrait
 from rendering.menu_components import (
     AnimatedBackground, Button, TEXT_LABEL, as_light, build_menu_backdrop, menu_scale, render_hint_row,
     render_title
@@ -66,6 +67,7 @@ class LevelCompleteMenu:
         self.menu_pulse_phase = 0.0
         self.failed_squids = [ReplayEnemyShip((0.0, 0.0), CommandRecorder()) for _ in range(2)]
         self.failed_squid_phase = 0.0
+        self.complete_portraits: List[EnemyDeathPortrait] = []
         self.label_font = get_font(self._scaled(26), bold=True)
         self.comparison_font = get_font(self._scaled(21))
         self.value_font = get_font(self._scaled(52), bold=True)
@@ -83,14 +85,18 @@ class LevelCompleteMenu:
         """Scale a reference-layout length to the current screen size."""
         return max(1, int(round(value * self.scale)))
 
-    def set_options(self, level_succeeded: bool) -> None:
+    def set_options(self, level_succeeded: bool, last_enemy=None) -> None:
         """Set menu options based on level success status.
 
         Args:
             level_succeeded: True if level was completed successfully.
         """
+        self.complete_portraits = []
         if level_succeeded:
             self.menu_options = ["CONTINUE", "MAIN MENU"]
+            if last_enemy is not None:
+                self.complete_portraits = [EnemyDeathPortrait(last_enemy, self._scaled(self.FAILED_SQUID_RADIUS))
+                                           for _ in range(2)]
         else:
             self.menu_options = ["RETRY LEVEL", "MAIN MENU"]
         self.menu_selected_index = 0
@@ -245,6 +251,8 @@ class LevelCompleteMenu:
         if self.menu_pulse_phase >= 2 * 3.14159:
             self.menu_pulse_phase -= 2 * 3.14159
         self._update_failed_squids(dt)
+        for portrait in self.complete_portraits:
+            portrait.update(dt)
 
     def draw(
         self,
@@ -275,6 +283,9 @@ class LevelCompleteMenu:
         self.screen.blit(self.backdrop, (0, 0))
         self.level_complete_background.draw(self.screen)
 
+        expected_options = ["CONTINUE", "MAIN MENU"] if level_succeeded else ["RETRY LEVEL", "MAIN MENU"]
+        if self.menu_options != expected_options:
+            self.set_options(level_succeeded)
         layout = self.layout(level_succeeded)
 
         # Banner, then the level number beneath it
@@ -282,7 +293,14 @@ class LevelCompleteMenu:
             self.banners[level_succeeded], layout['title'],
             special_flags=pygame.BLEND_RGB_ADD if self._banner_is_light[level_succeeded] else 0
         )
-        if not level_succeeded:
+        if level_succeeded:
+            title = layout['title']
+            for side, portrait in zip((-1, 1), self.complete_portraits):
+                portrait.draw(self.screen, (
+                    title.centerx + side * (title.width / 2 + self._scaled(100)),
+                    title.centery,
+                ))
+        else:
             for squid in self.failed_squids:
                 squid.draw(self.screen)
         number = self._level_number(level, layout['level_number'].height)
@@ -309,12 +327,6 @@ class LevelCompleteMenu:
             stats = [("PROGRESS SCORE", f"{total_score:,}")]
         comparisons = comparison_lines(level_result, level_score_breakdown.get('final_score', 0), completion_time_seconds) if level_succeeded else ()
         self._draw_stats(layout['stats'], stats, comparisons)
-
-        # Set menu options based on level success status
-        # Check if we need to update (options might be empty or from previous state)
-        expected_options = ["CONTINUE", "MAIN MENU"] if level_succeeded else ["RETRY LEVEL", "MAIN MENU"]
-        if not self.menu_options or self.menu_options != expected_options:
-            self.set_options(level_succeeded)
 
         # Draw buttons
         for i, button in enumerate(self.menu_buttons):

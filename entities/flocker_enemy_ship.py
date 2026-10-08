@@ -35,6 +35,19 @@ class FlockerEnemyShip(RotatingThrusterShip):
         All attributes inherited from RotatingThrusterShip.
     """
     
+    DEATH_DURATION = 48.0  # Frames: wings fold, then the bird tumbles away
+    DEATH_FRICTION = 0.94
+
+    def update_death(self, dt: float) -> None:
+        """Coast to a stop without flocking or firing."""
+        super().update_death(dt)
+        self.apply_friction_and_update_position(self.DEATH_FRICTION ** dt, dt)
+
+    def draw_death(self, screen: pygame.Surface) -> None:
+        """Fold the wings and tumble into a shrinking silhouette."""
+        if self.is_dying:
+            self._draw_bird(screen, self.death_progress)
+
     def __init__(self, start_pos: Tuple[float, float]):
         """Initialize flocker enemy ship."""
         super().__init__(start_pos, config.FLOCKER_ENEMY_SIZE)
@@ -436,13 +449,24 @@ class FlockerEnemyShip(RotatingThrusterShip):
         if not self.active:
             return
         
-        angle_rad = angle_to_radians(self.angle)
+        self._draw_bird(screen)
+
+    def _draw_bird(self, screen: pygame.Surface, death_progress: float = 0.0) -> None:
+        """Draw the same bird geometry in its flying or folded pose."""
+        progress = death_progress
+        fold = min(1.0, progress / 0.45)
+        fold = fold * fold * (3.0 - 2.0 * fold)
+        radius = self.radius * (1.0 - progress ** 2)
+        if radius < 1.0:
+            return
+        angle = self.angle + 240.0 * progress ** 1.5
+        angle_rad = angle_to_radians(angle)
         cos_angle = math.cos(angle_rad)
         sin_angle = math.sin(angle_rad)
         
         base_color = config.FLOCKER_ENEMY_COLOR
         darker_color = tuple(max(0, c - 40) for c in base_color)
-        body_radius = self.radius * 0.5
+        body_radius = radius * 0.5
         
         # Draw glow effect
         from rendering import visual_effects
@@ -452,11 +476,11 @@ class FlockerEnemyShip(RotatingThrusterShip):
         )
         
         # Calculate wing animation (subtle flapping)
-        wing_angle_offset = math.sin(self.wing_phase) * 3.0  # 3 degree wing movement
+        wing_angle_offset = math.sin(self.wing_phase) * 3.0 * (1.0 - fold)  # 3 degree wing movement
         
         # Draw body (small oval shape, streamlined)
-        body_length = self.radius * 0.8
-        body_width = self.radius * 0.5
+        body_length = radius * 0.8
+        body_width = radius * 0.5
         
         # Create surface for rotated body
         surface_size = int(max(body_length, body_width) * 2) + 4
@@ -482,14 +506,14 @@ class FlockerEnemyShip(RotatingThrusterShip):
         pygame.draw.ellipse(body_surface, darker_color, top_rect)
         
         # Rotate and blit body
-        rotated_body = pygame.transform.rotate(body_surface, -self.angle)
+        rotated_body = pygame.transform.rotate(body_surface, -angle)
         body_rect = rotated_body.get_rect(center=(int(self.x), int(self.y)))
         screen.blit(rotated_body, body_rect)
         
         # Draw sickle-moon-like, backwards-curving wings
-        wing_span = self.radius * 1.4  # Wing span
-        wing_curve_radius = self.radius * 1.2  # Radius of the curved wing
-        wing_base_offset = self.radius * 0.2  # How far forward the wing attaches
+        wing_span = radius * 1.4  # Wing span
+        wing_curve_radius = radius * 1.2  # Radius of the curved wing
+        wing_base_offset = radius * 0.2  # How far forward the wing attaches
         
         # Wing attachment point on body
         wing_attach_x = self.x + math.cos(angle_rad) * wing_base_offset
@@ -506,8 +530,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
             # Angle starts perpendicular to body, curves backward
             # Start angle: 90 degrees from body direction
             # End angle: curves backward (more than 90 degrees)
-            start_angle = angle_rad + math.radians(90 + wing_angle_offset)
-            end_angle = angle_rad + math.radians(135 + wing_angle_offset)  # Curves backward
+            start_angle = angle_rad + math.radians(90 + 80 * fold + wing_angle_offset)
+            end_angle = angle_rad + math.radians(135 + 40 * fold + wing_angle_offset)  # Curves backward
             
             # Interpolate angle
             wing_angle = start_angle + (end_angle - start_angle) * t
@@ -530,8 +554,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
             
             # Start angle: -90 degrees from body direction
             # End angle: curves backward (more than -90 degrees)
-            start_angle = angle_rad - math.radians(90 - wing_angle_offset)
-            end_angle = angle_rad - math.radians(135 - wing_angle_offset)  # Curves backward
+            start_angle = angle_rad - math.radians(90 + 80 * fold - wing_angle_offset)
+            end_angle = angle_rad - math.radians(135 + 40 * fold - wing_angle_offset)  # Curves backward
             
             wing_angle = start_angle + (end_angle - start_angle) * t
             distance = wing_curve_radius * (0.3 + 0.7 * t)
@@ -549,8 +573,8 @@ class FlockerEnemyShip(RotatingThrusterShip):
             pygame.draw.polygon(screen, darker_color, right_wing_points)
         
         # Draw straight tail extending backward
-        tail_length = self.radius * 0.9
-        tail_width = self.radius * 0.15
+        tail_length = radius * 0.9
+        tail_width = radius * 0.15
         
         # Tail base (at rear of body)
         tail_base_x = self.x - math.cos(angle_rad) * body_radius * 0.6

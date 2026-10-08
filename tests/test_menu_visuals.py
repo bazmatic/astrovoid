@@ -170,6 +170,27 @@ class TestLevelComplete:
         assert squid_pixels(False) > 200
         assert squid_pixels(True) == 0
 
+    def test_last_enemy_portraits_play_once_and_restart_on_next_clear(self, screen):
+        from entities.enemy import Enemy
+        enemy = Enemy((4000, 3000), "patrol")
+        enemy.die()
+        menu = LevelCompleteMenu(screen)
+        menu.set_options(True, enemy)
+        assert len(menu.complete_portraits) == 2
+        assert all(p.enemy.type == "patrol" for p in menu.complete_portraits)
+        menu.update(60.0)
+        assert all(p.enemy.death_progress == pytest.approx(0.5) for p in menu.complete_portraits)
+        menu.update(120.0)
+        menu.draw(3, True, 42.3, {}, None, False, lambda: None)
+        assert all(not p.enemy.is_dying for p in menu.complete_portraits)
+        assert is_opaque(screen)
+        menu.set_options(False)
+        assert menu.complete_portraits == []
+        menu.set_options(True, enemy)
+        assert all(p.enemy.death_progress == 0.0 for p in menu.complete_portraits)
+        menu.set_options(True)
+        assert menu.complete_portraits == []
+
     def test_failed_squids_hover_and_trail_their_tentacles(self, screen):
         menu = LevelCompleteMenu(screen)
         squid = menu.failed_squids[0]
