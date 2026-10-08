@@ -26,7 +26,7 @@ frame.
 import math
 import random
 from dataclasses import dataclass, field
-from typing import Dict, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Dict, FrozenSet, Iterable, List, Mapping, Optional, Sequence, Set, Tuple, TYPE_CHECKING
 
 import pygame
 import config
@@ -104,6 +104,16 @@ class WallRenderer:
     BITE_CORNER_MARGIN = 11.0  # Pixels kept whole at each end of an edge, where walls join
     BITE_DARKNESS = 0.9  # How far the hollow of a bite is blackened
     BITE_FACE = 2.5  # Pixels of broken rock face showing around the hollow
+    # Unbreakable blocks take any number of hits along a long run of wall, so
+    # their bites range from a chip to a gouge, and the rock is stained around
+    # each wound rather than darkened from side to side
+    UNBREAKABLE_BITE_WIDTH = (0.1, 0.46)
+    UNBREAKABLE_BITE_DEPTH = (0.07, 0.36)
+    STAIN_SPREAD = 0.2  # Of the block's shorter side
+    STAIN_GROWTH = 0.2  # Growth in spread for each further shot in the same place
+    STAIN_REACH = 2.2  # Spreads the stain runs to before it has faded out
+    STAIN_DARKNESS = 0.5  # Brightness lost at the heart of a stain
+    STAIN_BLOTCH_AREA = 30  # Pixels of stain per blotch
     LIGHT = (-0.7071, -0.7071)  # Direction the light comes from: the top left
     FILL_SHADE = 0.5  # Brightness of the rock inside a block, against its faces
     FILL_BLOTCH_AREA = 150  # Pixels of block per blotch of mottling
@@ -123,6 +133,8 @@ class WallRenderer:
         self._segments: Dict[SegmentKey, int] = {}  # Hit points shown for each painted edge
         self._blocks: Dict[BlockRect, int] = {}  # Hit points shown for each filled block
         self._wounds: Dict[BlockRect, Tuple[Wound, ...]] = {}  # Where each block shown has been hit
+        self._unbreakable: FrozenSet[BlockRect] = frozenset()  # Blocks that wear without ever going
+        self._unbreakable_edges: Set[SegmentKey] = set()
         self._weed_by_segment: Dict[SegmentKey, Weed] = {}
         self._surface: Optional[pygame.Surface] = None
         self._origin = (0, 0)
@@ -135,7 +147,8 @@ class WallRenderer:
         time_seconds: Optional[float] = None,
         animate: bool = True,
         blocks: Optional[Mapping[BlockRect, int]] = None,
-        wounds: Optional[Mapping[BlockRect, Sequence[Wound]]] = None
+        wounds: Optional[Mapping[BlockRect, Sequence[Wound]]] = None,
+        unbreakable: Iterable[BlockRect] = ()
     ) -> None:
         """Draw the walls.
 
@@ -146,8 +159,15 @@ class WallRenderer:
             animate: Draw the weed. Without it only the rock is drawn.
             blocks: Solid blocks to fill with rock, as screen area to hit points left.
             wounds: Where shots have landed on each block's edge, oldest first.
+            unbreakable: Blocks that can never be destroyed, which show their damage differently.
         """
         blocks = blocks or {}
+        unbreakable = frozenset(unbreakable)
+        if unbreakable != self._unbreakable:
+            self._unbreakable = unbreakable
+            self._unbreakable_edges = {edge[0] for rect in unbreakable for edge in self._edges(rect)}
+            # Everything is painted afresh
+            self._surface = self._signature = None
         # Walls only ever lose hit points or vanish, so this changes whenever
         # the picture should
         count = hit_points = identity = 0
@@ -289,8 +309,7 @@ class WallRenderer:
             left, top, width, height = rect
             if width < 1 or height < 1:
                 continue
-            damage = max(0, config.WALL_HIT_POINTS - self._blocks[rect])
-            shade = self.FILL_SHADE * self._damage_shade(damage)
+            shade = self.FILL_SHADE * self._damage_shade(self._darkening(rect))
             rng = self._rng(left, top, width, height)
             x, y = left - self._origin[0], top - self._origin[1]
             # Nothing spills over the block's edge, where there may be open space
@@ -301,10 +320,39 @@ class WallRenderer:
                 centre = (x + rng.randrange(width), y + rng.randrange(height))
                 pygame.draw.circle(surface, self._tint(rng, shade * rng.uniform(0.75, 1.2)), centre, rng.randint(2, 5))
             edge = interpolate_color(base, (254, 254, 254), 0.22)
-            for bite in self._bites(rect):
+            bites = self._bites(rect)
+            if rect in self._unbreakable:
+                for bite in bites:
+                    self._paint_stain(surface, bite, min(width, height), shade)
+            for bite in bites:
                 self._paint_cracks(surface, bite, min(width, height), edge)
             surface.set_clip(None)
     
+    def _darkening(self, rect: BlockRect) -> int:
+        """Hits that darken a block from side to side. An unbreakable block is stained instead."""
+        if rect in self._unbreakable:
+            return 0
+        return max(0, config.WALL_HIT_POINTS - self._blocks[rect])
+
+    def _paint_stain(self, surface: pygame.Surface, bite: Bite, size: int, shade: float) -> None:
+        """Darken the rock around a bite in a ragged patch that fades out. The surface is clipped to the block."""
+        rng = self._rng(bite.start[0], bite.start[1], bite.seed, int(bite.distance), 15485863)
+        origin_x, origin_y = self._origin
+        spread = size * self.STAIN_SPREAD * (1 + self.STAIN_GROWTH * (bite.hits - 1))
+        # Narrower near the end of an edge, so the stain stays within its block
+        sideways = min(spread, min(bite.middle, bite.length - bite.middle) / self.STAIN_REACH)
+        for _ in range(int(math.pi * sideways * spread * self.STAIN_REACH ** 2 / self.STAIN_BLOTCH_AREA)):
+            across, inward = rng.gauss(0.0, 1.0), abs(rng.gauss(0.0, 1.0))
+            faded = math.hypot(across, inward) / self.STAIN_REACH
+            if faded >= 1.0:
+                continue
+            darkness = self.STAIN_DARKNESS * (1.0 - faded) * rng.uniform(0.5, 1.0)
+            x, y = bite.place(bite.middle + across * sideways, inward * spread)
+            pygame.draw.circle(
+                surface, self._tint(rng, shade * (1.0 - darkness)),
+                (int(x - origin_x), int(y - origin_y)), rng.randint(2, 4)
+            )
+
     @staticmethod
     def _edges(rect: BlockRect) -> List[Tuple[SegmentKey, Tuple[int, int], Tuple[int, int], Tuple[int, int], int]]:
         """The four edges of a block: segment key, start, direction along, direction inward, length."""
@@ -341,13 +389,16 @@ class WallRenderer:
                 seed = (inward[0] + 1) * 3 + inward[1] + 1
                 bites.append(Bite(start, along, inward, length, distance, seed=seed))
 
+        unbreakable = rect in self._unbreakable
+        width_range = self.UNBREAKABLE_BITE_WIDTH if unbreakable else self.BITE_WIDTH
+        depth_range = self.UNBREAKABLE_BITE_DEPTH if unbreakable else self.BITE_DEPTH
         shaped = []
         for bite in bites:
             rng = self._rng(left, top, width, height, 104723, bite.seed, int(bite.distance))
             further = bite.hits - 1
             across = height if bite.along[0] else width
-            bite.half = bite.length * rng.uniform(*self.BITE_WIDTH) / 2 * (1 + self.BITE_WIDENING * further)
-            bite.depth = min(width, height) * rng.uniform(*self.BITE_DEPTH) * (1 + self.BITE_DEEPENING * further)
+            bite.half = bite.length * rng.uniform(*width_range) / 2 * (1 + self.BITE_WIDENING * further)
+            bite.depth = min(width, height) * rng.uniform(*depth_range) * (1 + self.BITE_DEEPENING * further)
             bite.depth = min(bite.depth, across * 0.6)
             # Corners are left whole, where other walls join. The broken face
             # may undercut the mouth a little at either end
@@ -411,9 +462,10 @@ class WallRenderer:
             bites = self._bites(rect)
             if not bites:
                 continue
-            damage = max(0, config.WALL_HIT_POINTS - self._blocks[rect])
             # The same rock the block was filled with
-            base = self._tint(self._rng(left, top, width, height), self.FILL_SHADE * self._damage_shade(damage))
+            base = self._tint(
+                self._rng(left, top, width, height), self.FILL_SHADE * self._damage_shade(self._darkening(rect))
+            )
             hollow = interpolate_color(base, (0, 0, 0), self.BITE_DARKNESS)
             face = interpolate_color(base, (0, 0, 0), 0.45)
             inside = pygame.Rect(left - origin_x, top - origin_y, width, height)
@@ -493,7 +545,8 @@ class WallRenderer:
         along_x, along_y = (bx - ax) / length, (by - ay) / length
         normal_x, normal_y = -along_y, along_x
         origin_x, origin_y = self._origin
-        damage = max(0, config.WALL_HIT_POINTS - hit_points)
+        # The face of an unbreakable block only shows damage where it was hit
+        damage = 0 if key in self._unbreakable_edges else max(0, config.WALL_HIT_POINTS - hit_points)
         shade = self._damage_shade(damage)
         half = config.WALL_THICKNESS / 2
 

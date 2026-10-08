@@ -301,6 +301,10 @@ class Maze:
             (x, y): config.WALL_HIT_POINTS
             for y, row in enumerate(self.grid) for x, value in enumerate(row) if value == 1
         }
+        # Screen areas of the outer ring's blocks, which wear down but are never destroyed
+        self.unbreakable_blocks = frozenset(
+            self.converter.cell_rect(x, y) for x, y in self.blocks if self.converter.on_perimeter(self.grid, x, y)
+        )
         # Where each block has been hit, as points on its edge, oldest first
         self.wounds: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
         self.spatial_grid.add_walls(self.walls)
@@ -330,7 +334,8 @@ class Maze:
         
         The whole block goes at once, and the faces of its neighbours that
         looked onto it become walls. Either way the shot knocks rock loose.
-        
+        A block of the outer ring cracks and sheds rock but is never destroyed.
+
         Args:
             wall: The wall segment that was hit.
             impact: Where the shot landed, for the chips it knocks off.
@@ -338,9 +343,9 @@ class Maze:
         Returns:
             True if the block was destroyed (hit points reached 0), False otherwise.
         """
-        if wall not in self.walls or not wall.destructible:
+        if wall not in self.walls:
             return False
-        
+
         cell = wall.cell
         if cell not in self.blocks:
             # A loose segment that belongs to no block
@@ -349,15 +354,19 @@ class Maze:
                 self.spatial_grid.update_wall(wall)
                 self.walls = [w for w in self.walls if w.active]
             return destroyed
-        
+
         faces = [w for w in self.walls if w.cell == cell]
         hit_points = self.blocks[cell] - 1
+        if not wall.destructible:
+            # The outer ring wears down like any block, but its last hit point never goes
+            hit_points = max(1, hit_points)
         for face in faces:
             face.hit_points = hit_points
         if hit_points > 0:
-            self.blocks[cell] = hit_points
-            self.wounds.setdefault(cell, []).append(self._wound(wall, impact))
-            self._refresh_block_fills()
+            if hit_points < self.blocks[cell]:
+                self.blocks[cell] = hit_points
+                self.wounds.setdefault(cell, []).append(self._wound(wall, impact))
+                self._refresh_block_fills()
             self.wall_debris.hit(self.converter.cell_rect(*cell), impact)
             return False
         
@@ -462,7 +471,9 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        self.wall_renderer.draw(screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds)
+        self.wall_renderer.draw(
+            screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks
+        )
         self.wall_debris.draw(screen)
         
         # Draw exit marker
