@@ -19,17 +19,8 @@ def parse_hunter_cell(value):
 def resolve_hunter_spawn(value, maze, player):
     cell = parse_hunter_cell(value)
     if cell is None:
-        candidates = [(col,row) for row in range(maze.grid_height)
-                      for col in range(maze.grid_width) if not maze.grid[row][col]]
         # Furthest from the player first, so the hunter starts well away and has to come and help
-        candidates.sort(key=lambda cell: -math.dist(
-            maze.position_calculator.grid_center_to_screen(*cell), (player.x,player.y)))
-        for candidate in candidates:
-            try:
-                return resolve_hunter_spawn({'spawn_cell':list(candidate)}, maze, player)
-            except ValueError:
-                continue
-        raise ValueError('no safe hunter spawn exists in this maze')
+        return _first_safe_cell(maze, player, lambda pos: -math.dist(pos, (player.x, player.y)))
     col, row = cell
     if not (0 <= col < maze.grid_width and 0 <= row < maze.grid_height):
         raise ValueError('hunter.spawn_cell is outside the maze')
@@ -42,6 +33,33 @@ def resolve_hunter_spawn(value, maze, player):
     if math.hypot(pos[0] - player.x, pos[1] - player.y) < config.SHIP_SIZE + player.radius:
         raise ValueError('hunter.spawn_cell overlaps the player')
     return pos
+
+
+def nearest_hunter_spawn(near, maze, player):
+    """The safe spawn closest to a point: where a summoned hunter appears."""
+    return _first_safe_cell(maze, player, lambda pos: math.dist(pos, near))
+
+
+def place_jev_beacon(maze, player):
+    """Where a level's Jev beacon lies: a third of the way from the player's start to the exit.
+
+    That is soon reached, and clear of the exit portal, which would hide it.
+    """
+    third = (player.x + (maze.exit.x - player.x) / 3, player.y + (maze.exit.y - player.y) / 3)
+    return nearest_hunter_spawn(third, maze, player)
+
+
+def _first_safe_cell(maze, player, order):
+    """The centre of the first usable open cell, taking cells in ascending `order` of their centres."""
+    candidates = [(col,row) for row in range(maze.grid_height)
+                  for col in range(maze.grid_width) if not maze.grid[row][col]]
+    candidates.sort(key=lambda cell: order(maze.position_calculator.grid_center_to_screen(*cell)))
+    for candidate in candidates:
+        try:
+            return resolve_hunter_spawn({'spawn_cell':list(candidate)}, maze, player)
+        except ValueError:
+            continue
+    raise ValueError('no safe hunter spawn exists in this maze')
 
 
 def reserve_hunter_clearance(positions, hunter_pos, radius):

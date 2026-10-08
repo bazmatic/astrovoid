@@ -36,17 +36,21 @@ class GridToWallsConverter:
         for y in range(grid_height):
             for x in range(grid_width):
                 if grid[y][x] == 1:  # Wall cell
-                    wall_segments = self._create_wall_segments_for_cell(x, y)
+                    # The outer ring of cells bounds the playing area and can never be destroyed
+                    on_perimeter = x in (0, grid_width - 1) or y in (0, grid_height - 1)
+                    wall_segments = self._create_wall_segments_for_cell(x, y, destructible=not on_perimeter)
                     walls.extend(wall_segments)
         
         return walls
     
-    def _create_wall_segments_for_cell(self, grid_x: int, grid_y: int) -> List[WallSegment]:
+    def _create_wall_segments_for_cell(self, grid_x: int, grid_y: int,
+                                       destructible: bool = True) -> List[WallSegment]:
         """Create wall segments for a single grid cell.
         
         Args:
             grid_x: Grid X coordinate.
             grid_y: Grid Y coordinate.
+            destructible: Whether the cell's walls can be shot away.
             
         Returns:
             List of WallSegment instances for the cell's four edges.
@@ -60,25 +64,29 @@ class GridToWallsConverter:
         top = WallSegment(
             (screen_x, screen_y),
             (screen_x + cell_size_x, screen_y),
-            config.WALL_HIT_POINTS
+            config.WALL_HIT_POINTS,
+            destructible
         )
         # Right edge
         right = WallSegment(
             (screen_x + cell_size_x, screen_y),
             (screen_x + cell_size_x, screen_y + cell_size_y),
-            config.WALL_HIT_POINTS
+            config.WALL_HIT_POINTS,
+            destructible
         )
         # Bottom edge
         bottom = WallSegment(
             (screen_x + cell_size_x, screen_y + cell_size_y),
             (screen_x, screen_y + cell_size_y),
-            config.WALL_HIT_POINTS
+            config.WALL_HIT_POINTS,
+            destructible
         )
         # Left edge
         left = WallSegment(
             (screen_x, screen_y + cell_size_y),
             (screen_x, screen_y),
-            config.WALL_HIT_POINTS
+            config.WALL_HIT_POINTS,
+            destructible
         )
         
         return [top, right, bottom, left]

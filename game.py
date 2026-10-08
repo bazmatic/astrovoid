@@ -17,6 +17,7 @@ from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.split_boss import SplitBoss
 from entities.projectile import Projectile
 from entities.powerup_crystal import PowerupCrystal
+from entities.jev_beacon import JevBeacon
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
@@ -46,7 +47,7 @@ from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
 from hunter.fire_control import find_firing_solution
 from hunter.perception import HunterPerception
-from hunter.spawn import resolve_hunter_spawn, reserve_hunter_clearance
+from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 import logging
 
@@ -89,6 +90,7 @@ class Game:
         self.hunter_controller = None
         self.hunter_perception = None
         self.hunter_worker = None
+        self.jev_beacon_level = False
         
         # Entity management
         self.entity_manager = EntityManager()
@@ -273,21 +275,21 @@ class Game:
             enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
-        hunter_pos = None
+        # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
+        self.jev_beacon_level = level_config.level_allows_jev_beacon(self.level)
+        if self.jev_beacon_level and self.hunter_worker is None:
+            self.hunter_worker = PilotWorker()
+        beacon_pos = None
         if level_config.level_has_hunter(self.level):
-            try:
-                hunter_pos = resolve_hunter_spawn(
-                    level_config.get_level_hunter_config(self.level), self.maze, self.ship)
-            except ValueError as exc:
-                logging.getLogger(__name__).warning('Hunter spawn override rejected: %s; using automatic placement', exc)
-                hunter_pos = resolve_hunter_spawn(None, self.maze, self.ship)
-        spawn_positions = reserve_hunter_clearance(spawn_positions, hunter_pos, config.SHIP_SIZE)
-        if hunter_pos is not None:
-            self.hunter = HunterShip(hunter_pos)
-            self.hunter_perception = HunterPerception()
-            if self.hunter_worker is None:
-                self.hunter_worker = PilotWorker()
-            self.hunter_controller = HunterController(self.hunter_worker)
+            placed = level_config.get_level_hunter_config(self.level)
+            if placed is not None:
+                try:
+                    beacon_pos = resolve_hunter_spawn(placed, self.maze, self.ship)
+                except ValueError as exc:
+                    logging.getLogger(__name__).warning('Jev beacon placement rejected: %s; using automatic placement', exc)
+            if beacon_pos is None:
+                beacon_pos = place_jev_beacon(self.maze, self.ship)
+        spawn_positions = reserve_hunter_clearance(spawn_positions, beacon_pos, config.SHIP_SIZE)
 
         # No anemone starts with the player already inside its pull
         anemone_reach = config.ANEMONE_REACH_CELLS * (self.maze.cell_size_x + self.maze.cell_size_y) / 2
@@ -302,6 +304,8 @@ class Game:
         # Clear projectiles and crystals
         self.projectiles = []
         self.powerup_crystals = []
+        if beacon_pos is not None:
+            self.powerup_crystals.append(JevBeacon(beacon_pos))
         
         # Start scoring
         current_time = time.time()
@@ -341,6 +345,24 @@ class Game:
         self.hunter = None
         self.hunter_controller = None
         self.hunter_perception = None
+
+    def _summon_hunter(self, near) -> None:
+        """Bring the hunter in beside a collected Jev beacon, replacing one that has died."""
+        try:
+            pos = nearest_hunter_spawn(near, self.maze, self.ship)
+        except ValueError as exc:
+            logging.getLogger(__name__).warning('Hunter not summoned: %s', exc)
+            return
+        self._close_hunter()
+        self.hunter = HunterShip(pos)
+        self.hunter_perception = HunterPerception()
+        if self.hunter_worker is None:
+            self.hunter_worker = PilotWorker()
+        self.hunter_controller = HunterController(self.hunter_worker)
+
+    def _jev_beacon_drop_allowed(self) -> bool:
+        """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
+        return self.jev_beacon_level and (self.hunter is None or not self.hunter.active)
 
     def _update_hunter(self, dt) -> None:
         if self.hunter is None or self.hunter_controller is None:
@@ -639,9 +661,9 @@ class Game:
         self.ship.update(dt)
         
         # Check ship-wall collision (use spatial grid for optimization)
-        # Skip collision if shield is active
-        if not self.ship.is_shield_active():
-            if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+        # Walls always stop the ship; the shield only spares it the penalty
+        if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+            if not self.ship.is_shield_active():
                 self.scoring.record_wall_collision()
         
         # Only update enemies after player has made their first move
@@ -713,7 +735,8 @@ class Game:
 
             # Friendly projectile-enemy collisions share normal destruction effects.
             if self.collision_handler.handle_projectile_enemy_collisions(
-                projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones
+                projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
+                jev_beacon_allowed=self._jev_beacon_drop_allowed()
             ):
                 continue  # Projectile destroyed, skip adding to active list
             
@@ -915,7 +938,12 @@ class Game:
         for crystal in self.powerup_crystals:
             if crystal.active:
                 crystal.update(dt, player_pos)
-                self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring)
+                if isinstance(crystal, JevBeacon):
+                    if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
+                        self.sound_manager.play_powerup_activation()
+                        self._summon_hunter(crystal.get_pos())
+                else:
+                    self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring)
             elif crystal.is_dying:
                 crystal.update_death(dt)
             

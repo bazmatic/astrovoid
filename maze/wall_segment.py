@@ -15,27 +15,34 @@ class WallSegment:
         end: End point of the wall segment (x, y).
         hit_points: Current hit points remaining.
         active: Whether the wall segment is still active (not destroyed).
+        destructible: Whether damage can wear the wall segment down.
     """
     
-    def __init__(self, start: Tuple[float, float], end: Tuple[float, float], hit_points: int):
+    def __init__(self, start: Tuple[float, float], end: Tuple[float, float], hit_points: int,
+                 destructible: bool = True):
         """Initialize wall segment.
         
         Args:
             start: Start point of the wall segment (x, y).
             end: End point of the wall segment (x, y).
             hit_points: Initial hit points for the wall segment.
+            destructible: False for a wall that can never be damaged (the maze's outer walls).
         """
         self.start = start
         self.end = end
         self.hit_points = hit_points
         self.active = True
+        self.destructible = destructible
     
     def damage(self) -> bool:
         """Damage the wall segment by reducing hit points.
         
         Returns:
             True if wall was destroyed (hit points reached 0), False otherwise.
+            An indestructible wall is never damaged.
         """
+        if not self.destructible:
+            return False
         self.hit_points -= 1
         if self.hit_points <= 0:
             self.active = False

@@ -15,6 +15,7 @@ from entities.enemy import Enemy
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
 from hunter.model import PilotResult, PilotDecision, ACTIONS
+from entities.jev_beacon import JevBeacon
 from tests.test_hunter_controller import Worker
 
 
@@ -46,7 +47,20 @@ def game(monkeypatch, tmp_path):
     pygame.quit()
 
 
-def test_hunter_flies_every_third_level_and_wherever_a_level_places_one(game,monkeypatch):
+def has_beacon(game):
+    return any(isinstance(c, JevBeacon) for c in game.powerup_crystals)
+
+
+def summon(game):
+    """Fly the player into the level's beacon, then back to the start."""
+    start = (game.ship.x, game.ship.y)
+    beacon = next(c for c in game.powerup_crystals if isinstance(c, JevBeacon))
+    game.ship.x, game.ship.y = beacon.get_pos()
+    game._update_powerup_crystals(1)
+    game.ship.x, game.ship.y = start
+
+
+def test_beacon_lies_on_every_third_level_and_wherever_a_level_places_one(game,monkeypatch):
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
     monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',3)
     monkeypatch.setattr(config,'HUNTER_FIRST_LEVEL',1)
@@ -54,26 +68,28 @@ def test_hunter_flies_every_third_level_and_wherever_a_level_places_one(game,mon
     for level in range(1,10):
         game.level = level
         game.start_level()
-        assert (game.hunter is not None) == (level % 3 == 0)
+        assert has_beacon(game) == (level % 3 == 0)
+        assert game.hunter is None
     assert game.hunter_worker is not None
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[4,4]})
     game.level = 1
     game.start_level()
-    assert game.hunter is not None
-    # An invalid override still gets a hunter at a safe default cell.
+    assert has_beacon(game)
+    # An invalid override still gets a beacon at a safe default cell.
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[-1,0]})
     game.start_level()
-    assert game.hunter is not None
+    assert has_beacon(game)
     monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',0)
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
     game.level = 3
     game.start_level()
-    assert game.hunter is None
+    assert not has_beacon(game)
 
 
 def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
     game.hunter_worker = Worker()
     game.start_level()
+    summon(game)
     assert game.hunter is not None
     assert game.hunter not in list(game.entity_manager.get_all_active_enemies())
     game._update_hunter(1)
@@ -93,6 +109,8 @@ def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
     assert any(p.source == 'hunter' for p in game.projectiles)
     old = game.hunter
     game.start_level()
+    assert game.hunter is None
+    summon(game)
     assert game.hunter is not old
     assert game.hunter.health == 3
     assert not game.hunter_perception.contacts
@@ -101,6 +119,7 @@ def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
 def test_real_update_pauses_requests_and_keeps_dead_hunter_dead(game):
     game.hunter_worker = Worker()
     game.start_level()
+    summon(game)
     game.state = config.STATE_PLAYING
     game.game_frozen = game.game_over_active = False
     game.input_handler = Mock(key_mappings={})
