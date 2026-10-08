@@ -253,7 +253,9 @@ class Ship(RotatingThrusterShip):
         self.damage_timer = 30
     
     def on_wall_collision(self) -> None:
-        """Handle wall collision - set damage state."""
+        """Handle wall collision - set damage state unless the shield took the hit."""
+        if self.shield_active:
+            return
         self.damaged = True
         self.damage_timer = 30
     

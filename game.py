@@ -639,9 +639,9 @@ class Game:
         self.ship.update(dt)
         
         # Check ship-wall collision (use spatial grid for optimization)
-        # Skip collision if shield is active
-        if not self.ship.is_shield_active():
-            if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+        # Walls always stop the ship; the shield only spares it the penalty
+        if self.ship.check_wall_collision(self.maze.walls, self.maze.spatial_grid):
+            if not self.ship.is_shield_active():
                 self.scoring.record_wall_collision()
         
         # Only update enemies after player has made their first move

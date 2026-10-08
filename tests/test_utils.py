@@ -291,7 +291,7 @@ class TestReflectVelocity:
         """Velocity perpendicular to surface should reverse."""
         velocity = (10, 0)
         normal = (1, 0)  # Surface normal pointing right
-        result = reflect_velocity(velocity, normal, bounce_factor=1.0)
+        result = reflect_velocity(velocity, normal, restitution=1.0)
         # Should reflect to left
         assert abs(result[0] - (-10)) < 0.0001
         assert abs(result[1] - 0) < 0.0001
@@ -300,15 +300,15 @@ class TestReflectVelocity:
         """Velocity at angle should reflect correctly."""
         velocity = (10, 10)
         normal = (0, 1)  # Surface normal pointing down
-        result = reflect_velocity(velocity, normal, bounce_factor=1.0)
+        result = reflect_velocity(velocity, normal, restitution=1.0)
         # Should reflect upward
         assert abs(result[1] - (-10)) < 0.0001
     
     def test_reflect_velocity_with_bounce_factor(self):
-        """Bounce factor should reduce reflected velocity."""
+        """Restitution should reduce reflected velocity."""
         velocity = (10, 0)
         normal = (1, 0)
-        result = reflect_velocity(velocity, normal, bounce_factor=0.5)
+        result = reflect_velocity(velocity, normal, restitution=0.5)
         # Should be half the original magnitude
         assert abs(result[0] - (-5)) < 0.0001
 
