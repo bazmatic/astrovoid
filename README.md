@@ -30,7 +30,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.10 to 3.13 (3.13 recommended; see [Troubleshooting](#troubleshooting))
 - pygame >= 2.5.0
 - numpy >= 1.20.0
 
@@ -43,11 +43,37 @@ git clone <repository-url>
 cd astrovoid
 ```
 
-2. Install dependencies:
+2. Create a virtual environment in `venv/` (the location `run.sh` expects) and install the dependencies:
 
 ```bash
+python3.13 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+3. Check that sound is available, then start the game:
+
+```bash
+venv/bin/python -c "import pygame.mixer; pygame.mixer.init(); print('mixer ok')"
+./run.sh
+```
+
+4. Optional: enable the Jev hunter ally. Install its SDK and add your TypeSafe API key:
+
+```bash
+venv/bin/python -m pip install -r requirements-hunter.txt
+mkdir -p .astrovoid-local
+printf '%s' 'YOUR_KEY_HERE' > .astrovoid-local/typesafe-api-key
+chmod 600 .astrovoid-local/typesafe-api-key
+```
+
+`.astrovoid-local/` is git-ignored. `run.sh` reads the key file only when `TYPESAFE_API_KEY` is not already set, and running `python main.py` directly skips the file. Without a key the game still runs, but the hunter coasts. See [Jev hunter ally](#jev-hunter-ally).
+
+### Troubleshooting
+
+- **`NotImplementedError: mixer module not available`**: pygame was built from source without SDL2_mixer. This happens on Python 3.14, which has no prebuilt pygame wheels. Recreate the venv with Python 3.13 (`rm -rf venv && python3.13 -m venv venv`), then reinstall the requirements.
+- **`objc: Class SDL... is implemented in both ...` warnings on macOS**: `opencv-python` bundles its own SDL2, which clashes with pygame's. The warnings are noisy but usually harmless.
+- **`./run.sh: venv/bin/python: No such file or directory`**: create the virtual environment from step 2 first.
 
 ## Running the Game
 
