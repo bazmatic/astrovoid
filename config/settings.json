@@ -302,8 +302,8 @@
     "levelCompleteStarSize": 60
   },
   "ui": {
-    "splashEnabled": false,
-    "splashDisplayDuration": 3.5,
+    "splashEnabled": true,
+    "splashDisplayDuration": 5.0,
     "splashFadeInDuration": 1.0,
     "splashFadeOutDuration": 0.8,
     "splashVideoSpeedMultiplier": 1,
