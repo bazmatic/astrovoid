@@ -17,8 +17,11 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
   - Mother Boss - even larger enemies that continuously lay Egg enemies
   - Flockers that swarm together, Flighthouses that launch them, and Anemones that pull the ship in
 - **Resource Management**: Limited fuel and ammunition require strategic decision-making
+- **Destructible Rock**: Maze walls are solid blocks of rock that crack under fire and can be blasted away a block at a time
+- **Powerup Crystals**: Short-lived gun upgrades dropped by destroyed enemies
 - **Scoring System**: Score based on completion time, collisions, resource usage, and enemy destructions
 - **Visual Effects**: Ship glow, thrust particles, enemy pulsing, and more
+- **Animated Splash**: A giant squid chases the ship up the screen and settles over the title
 - **Sound System**: Procedurally-generated sound effects for thrusters, shooting, enemy destruction, and portal activation/deactivation
 - **Paced Levels**: A designed arc of 24 levels introduces one enemy type at a time, then an endless game that gets harder without getting more crowded
 - **Boss Levels**: Every sixth level is a boss fight in an open arena
@@ -67,6 +70,10 @@ python -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
+
+### Splash Screen
+
+The game opens with a short animated splash (about five seconds) before the main menu. Any key or controller button skips it. To turn it off, set `ui.splashEnabled` to `false` in `config/settings.json`.
 
 ### Testing Switches
 
@@ -156,10 +163,33 @@ When you complete a level, the screen displays:
 - **Star Rating**: 5-star rating based on score percentage
 - **Score Breakdown**: Detailed breakdown of penalties and bonuses
 
+A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squids, with your progress score and the option to retry.
+
 ### Resources
 
 - **Fuel**: Consumed when thrusting or using shield. Starts at 1000 units.
 - **Ammunition**: Consumed when firing. Starts at 50 rounds. Infinite on boss levels.
+
+### Powerup Crystals
+
+A destroyed enemy has a 30% chance of leaving a green crystal. Flying near one pulls it in. Each crystal:
+
+- **Upgrades the gun** by one level. The first doubles the fire rate; from the second, each pull of the trigger is a three-way spread. Every crystal adds the same amount of firepower (one base gun's worth of shots per second) rather than multiplying it, so a spread fires at a slower rhythm than the single shots before it. Upgraded shots are larger and faster, and the ship turns a little quicker.
+- **Refills 25 rounds** of ammunition, up to the full 50.
+- **Halves the cost of firing** while the upgrade lasts. A spread costs the same as a single shot. Ammunition is no longer unlimited, so an upgraded gun can still run dry.
+
+Upgrades are temporary. They last 10 seconds from the most recent crystal, then all wear off together and the gun returns to normal. The bar under the "GUN UPGRADE" label on the HUD shows the time left. Upgrades are also cleared at the start of each level.
+
+The numbers are in `config/settings.json` under `powerups`: `durationSeconds`, `firepowerPerCrystal`, `ammoRefill`, `ammoCostMultiplier` and `crystalSpawnChance`.
+
+### Walls
+
+The maze is built from solid blocks of rock. A block has walls only where it faces open space, so blocks packed together form one mass with nothing inside to fly through.
+
+- Your shots wear a block down. It takes 4 hits from any side (`maze.wallHitPoints`), and each one knocks chips loose, darkens the rock and breaks a chunk out of the edge where it landed, with cracks running in from the wound. Shots in the same place open the same wound further. The last hit bursts the whole block into rubble.
+- Destroying a block exposes the faces of its neighbours, so you can tunnel through thick rock one block at a time.
+- The outer ring of blocks bounds the playing area. It chips and cracks under fire, but its last hit point never goes, so it can never be destroyed. Its damage is rougher than an inner block's: bites range from a chip to a deep gouge, and the rock is stained around each wound instead of darkening as a whole block.
+- Enemy shots stop at walls without damaging them.
 
 ### Enemy Types
 
@@ -251,8 +281,9 @@ asterdroids/
 │   ├── mother_boss.py     # Mother Boss enemy that lays eggs
 │   └── exit.py            # Exit portal with activation system
 ├── maze/                   # Maze generation
-│   ├── generator.py       # Procedural maze generation
-│   └── wall_segment.py    # Wall representation
+│   ├── generator.py       # Procedural maze generation, wall blocks and their destruction
+│   ├── converter.py       # Turns the grid into the exposed faces of each block
+│   └── wall_segment.py    # One face of a wall block
 ├── scoring/               # Scoring system
 │   ├── system.py         # Score tracking
 │   └── calculator.py      # Score calculation
@@ -262,17 +293,22 @@ asterdroids/
 │   ├── dial.py           # HUD instrument dials
 │   ├── fonts.py          # The game typeface (Chakra Petch)
 │   ├── controls_menu.py  # Key and button mappings screen
+│   ├── level_complete_menu.py # Level complete and level failed screens
+│   ├── splash_scene.py   # Splash animation: a squid chasing the ship to the title
+│   ├── wall_renderer.py  # Rock drawing for wall blocks and their faces
 │   └── visual_effects.py  # Visual effects
 ├── input/                 # Input handling
 │   └── input_handler.py  # Keyboard input mapping
 ├── sounds/                # Sound system
 │   └── sound_manager.py  # Procedural sound generation (thrusters, shooting, explosions, portal sounds)
 ├── states/                # State management
+│   ├── splash_screen.py  # Splash screen timing, fades and skipping
 │   └── state_machine.py  # State machine infrastructure
 ├── game_handlers/         # Game system handlers
 │   ├── entity_manager.py # Entity management
 │   ├── spawn_manager.py  # Enemy spawning system
 │   ├── enemy_updater.py  # Enemy update logic
+│   ├── fire_rate_calculator.py # Fire rate and spread for each gun upgrade level
 │   └── collision_handler.py # Collision detection and response
 ├── utils/                 # Utilities
 │   ├── math_utils.py     # Math and collision utilities
@@ -365,10 +401,13 @@ arrives. It does not explore on its own.
 A powerup crystal in the hunter's sight is a goal of its own (`collect_powerup` in the
 pilot's readings and instructions): with no enemy to fight it flies onto the nearest one
 before going back to the player. Crystals upgrade the hunter's guns as they do yours:
-bursts come faster, then each shot is a three-way spread, then the shots grow bigger and
-faster. A crystal the hunter takes is one you do not get and does not count towards your
-score; you have first claim on one you both touch. The hunter leaves Jev beacons alone,
-and a newly summoned hunter starts with no upgrades.
+the first makes bursts come faster, the second turns each shot into a three-way spread,
+and those beyond the third make the shots bigger and faster. Each crystal adds the same
+amount of firepower rather than multiplying it, and the upgrades all wear off together
+`powerups.durationSeconds` after the last crystal. A crystal the hunter takes is one you
+do not get and does not count towards your score; you have first claim on one you both
+touch. The hunter leaves Jev beacons alone, and a newly summoned hunter starts with no
+upgrades.
 Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
 thrust and firing while momentum continues. Requests time out after one second.
 There is no local autopilot fallback. Constants are in `hunter/model.py`.
