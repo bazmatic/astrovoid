@@ -498,6 +498,8 @@ class Game:
         if not self.ship or not self.maze:
             return
         
+        self.maze.update(dt)
+
         # The exit stays shut while any egg is alive and, on a boss level, while any enemy at all is
         exit_locked = (any(egg.active for egg in self.eggs)
                        or (self.boss_level
@@ -722,7 +724,7 @@ class Game:
                 hit_wall = projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
                 if hit_wall:
                     # Damage the wall (hit_wall is already a WallSegment)
-                    self.maze.damage_wall(hit_wall)
+                    self.maze.damage_wall(hit_wall, (projectile.x, projectile.y))
             else:
                 # Enemy projectiles just deactivate on wall collision
                 projectile.check_wall_collision(self.maze.walls, self.maze.spatial_grid)

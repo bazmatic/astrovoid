@@ -1,4 +1,6 @@
 """Wall blocks are solid rock: filled in, walled only where they face open space, and destroyed whole."""
+import math
+
 import pygame
 import pytest
 
@@ -31,7 +33,7 @@ def destroy(maze, cell):
 def render(maze):
     pygame.init()
     screen = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
-    maze.wall_renderer.draw(screen, maze.walls, animate=False, blocks=maze.block_fills)
+    maze.wall_renderer.draw(screen, maze.walls, animate=False, blocks=maze.block_fills, wounds=maze.block_wounds)
     return screen
 
 
@@ -143,6 +145,27 @@ class TestFill:
         maze.damage_wall(faces(maze, (4, 4))[0])
         assert pygame.image.tostring(render(maze).subsurface(inside), "RGBA") != before
 
+    def test_a_block_darkens_with_every_hit(self):
+        maze = maze_with((4, 4))
+        left, top, width, height = maze.converter.cell_rect(4, 4)
+        inside = pygame.Rect(left, top, width, height).inflate(-20, -20)
+        brightness = []
+        for _ in range(config.WALL_HIT_POINTS):
+            brightness.append(sum(pygame.transform.average_color(render(maze), inside)[:3]))
+            maze.damage_wall(faces(maze, (4, 4))[0])
+        for lighter, darker in zip(brightness, brightness[1:]):
+            assert darker < lighter * 0.95
+
+    def test_bites_never_eat_into_a_neighbouring_block(self):
+        cells = [(4, 4), (5, 3), (3, 5), (5, 5), (3, 3)]
+        maze = maze_with(*cells)
+        for _ in range(config.WALL_HIT_POINTS - 1):
+            maze.damage_wall(faces(maze, (4, 4))[0])
+        mask = pygame.mask.from_surface(render(maze), 1)
+        for cell in cells:
+            left, top, width, height = maze.converter.cell_rect(*cell)
+            assert all(mask.get_at((x, y)) for x in range(left, left + width) for y in range(top, top + height))
+
     def test_a_destroyed_block_leaves_nothing_behind(self):
         maze = maze_with((4, 4))
         render(maze)
@@ -167,3 +190,117 @@ class TestFill:
 
         maze.wall_renderer = WallRenderer()
         assert pygame.image.tostring(patched, "RGBA") == pygame.image.tostring(render(maze), "RGBA")
+
+
+def shoot(maze, cell, side, along):
+    """Hit one face of a block part of the way along it. Returns where the shot landed."""
+    left, top, width, height = maze.converter.cell_rect(*cell)
+    impact = {
+        'top': (left + width * along, top),
+        'bottom': (left + width * along, top + height),
+        'left': (left, top + height * along),
+        'right': (left + width, top + height * along),
+    }[side]
+    wall = min(faces(maze, cell), key=lambda w: abs((w.start[0] + w.end[0]) / 2 - {
+        'top': left + width / 2, 'bottom': left + width / 2, 'left': left, 'right': left + width,
+    }[side]) + abs((w.start[1] + w.end[1]) / 2 - {
+        'top': top, 'bottom': top + height, 'left': top + height / 2, 'right': top + height / 2,
+    }[side]))
+    maze.damage_wall(wall, impact)
+    return impact
+
+
+def brightness(color):
+    return sum(color[:3])
+
+
+class TestWounds:
+    """Damage shows where the shots landed, not just anywhere on the block."""
+
+    CELL = (4, 4)
+
+    def setup_method(self):
+        self.maze = maze_with(self.CELL)
+        self.rect = pygame.Rect(self.maze.converter.cell_rect(*self.CELL))
+        self.intact = brightness(pygame.transform.average_color(render(self.maze), self.rect))
+
+    def hollow_near(self, point, reach=None):
+        """Pixels of the block near a point that have been broken out to near blackness."""
+        reach = reach or min(self.rect.size) * 0.45
+        screen = render(self.maze)
+        return sum(
+            1
+            for x in range(self.rect.left, self.rect.right) for y in range(self.rect.top, self.rect.bottom)
+            if (x - point[0]) ** 2 + (y - point[1]) ** 2 <= reach ** 2
+            and brightness(screen.get_at((x, y))) < self.intact * 0.3
+        )
+
+    def crack_pixels(self):
+        screen = render(self.maze)
+        core = self.rect.inflate(-18, -18)
+        return [
+            (x, y) for x in range(core.left, core.right) for y in range(core.top, core.bottom)
+            if tuple(screen.get_at((x, y))[:3]) == WallRenderer.CRACK_COLOR
+        ]
+
+    def test_the_maze_remembers_where_a_block_was_hit(self):
+        impact = shoot(self.maze, self.CELL, 'top', 0.3)
+        assert self.maze.block_wounds[tuple(self.rect)] == ((round(impact[0]), round(impact[1])),)
+
+    def test_a_shot_breaks_a_chunk_out_where_it_landed(self):
+        impact = shoot(self.maze, self.CELL, 'top', 0.3)
+        assert self.hollow_near(impact) > 0.01 * self.rect.width * self.rect.height
+
+    def test_the_rest_of_the_block_keeps_its_edge(self):
+        shoot(self.maze, self.CELL, 'top', 0.3)
+        for elsewhere in (self.rect.midbottom, self.rect.midleft, self.rect.midright, self.rect.bottomright):
+            assert self.hollow_near(elsewhere, reach=min(self.rect.size) * 0.3) == 0
+
+    def test_a_second_shot_in_the_same_place_deepens_the_wound(self):
+        impact = shoot(self.maze, self.CELL, 'top', 0.5)
+        once = self.hollow_near(impact)
+        shoot(self.maze, self.CELL, 'top', 0.52)
+        assert self.hollow_near(impact) > once * 1.3
+        assert self.hollow_near(self.rect.midbottom, reach=min(self.rect.size) * 0.3) == 0
+
+    def test_shots_in_different_places_leave_separate_wounds(self):
+        first = shoot(self.maze, self.CELL, 'top', 0.3)
+        second = shoot(self.maze, self.CELL, 'bottom', 0.7)
+        assert self.hollow_near(first, reach=min(self.rect.size) * 0.3) > 0
+        assert self.hollow_near(second, reach=min(self.rect.size) * 0.3) > 0
+
+    def test_a_shot_at_a_corner_wounds_the_face_it_struck(self):
+        """Not the neighbouring side, which may be buried in more rock."""
+        maze = maze_with((4, 4), (4, 3))
+        impact = shoot(maze, (4, 4), 'left', 0.0)
+        mask = pygame.mask.from_surface(render(maze), 1)
+        left, top, width, height = maze.converter.cell_rect(4, 3)
+        assert all(mask.get_at((x, y)) for x in range(left, left + width) for y in range(top, top + height))
+        assert impact[1] == pytest.approx(top + height)
+
+    def test_cracks_run_from_the_wound(self):
+        impact = shoot(self.maze, self.CELL, 'left', 0.5)
+        cracks = self.crack_pixels()
+        assert cracks
+        nearest = min(math.hypot(x - impact[0], y - impact[1]) for x, y in cracks)
+        assert nearest < min(self.rect.size) * 0.45
+        # Nothing has cracked on the far side of the block
+        assert all(x < self.rect.centerx + self.rect.width * 0.2 for x, _ in cracks)
+
+    def test_rock_that_was_never_struck_does_not_crack(self):
+        assert self.crack_pixels() == []
+
+    def test_light_catches_the_floor_of_a_bite_in_the_top_but_not_the_bottom(self):
+        """Light falls from the top left, so only broken faces turned that way are pale."""
+        def pale_near(point):
+            screen = render(self.maze)
+            reach = min(self.rect.size) * 0.45
+            return sum(
+                1
+                for x in range(self.rect.left, self.rect.right) for y in range(self.rect.top + 4, self.rect.bottom - 4)
+                if (x - point[0]) ** 2 + (y - point[1]) ** 2 <= reach ** 2
+                and brightness(screen.get_at((x, y))) > self.intact * 1.6
+            )
+        top = shoot(self.maze, self.CELL, 'top', 0.5)
+        bottom = shoot(self.maze, self.CELL, 'bottom', 0.5)
+        assert pale_near(top) > 1.5 * pale_near(bottom)

@@ -20,6 +20,7 @@ from maze.converter import GridToWallsConverter, SIDES
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
 from rendering.wall_renderer import WallRenderer
+from rendering.wall_debris import WallDebris
 
 
 class RecursiveBacktrackingGenerator:
@@ -268,6 +269,7 @@ class Maze:
         # Convert grid to blocks and their wall segments
         self.converter = GridToWallsConverter(self.position_calculator)
         self.wall_renderer = WallRenderer()
+        self.wall_debris = WallDebris()
         # Spatial grid for efficient collision detection
         self.spatial_grid = SpatialGrid(
             config.SCREEN_WIDTH,
@@ -299,21 +301,39 @@ class Maze:
             (x, y): config.WALL_HIT_POINTS
             for y, row in enumerate(self.grid) for x, value in enumerate(row) if value == 1
         }
+        # Where each block has been hit, as points on its edge, oldest first
+        self.wounds: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
         self.spatial_grid.add_walls(self.walls)
         self._refresh_block_fills()
     
     def _refresh_block_fills(self) -> None:
         """Rebuild the screen areas of the blocks, which the renderer fills with rock."""
         self.block_fills = {self.converter.cell_rect(x, y): hit_points for (x, y), hit_points in self.blocks.items()}
+        self.block_wounds = {self.converter.cell_rect(x, y): tuple(wounds) for (x, y), wounds in self.wounds.items()}
     
-    def damage_wall(self, wall: WallSegment) -> bool:
+    @staticmethod
+    def _wound(wall: WallSegment, impact: Optional[Tuple[float, float]]) -> Tuple[int, int]:
+        """The point on a face nearest to where a shot landed; its middle if that is unknown."""
+        (ax, ay), (bx, by) = wall.start, wall.end
+        dx, dy = bx - ax, by - ay
+        length_sq = dx * dx + dy * dy
+        along = 0.5
+        if impact is not None and length_sq > 0:
+            along = ((impact[0] - ax) * dx + (impact[1] - ay) * dy) / length_sq
+        # Kept off the very corner, which belongs to the neighbouring side as much as this one
+        inset = min(0.5, 3.0 / math.sqrt(length_sq)) if length_sq > 0 else 0.5
+        along = max(inset, min(1.0 - inset, along))
+        return (int(round(ax + dx * along)), int(round(ay + dy * along)))
+    
+    def damage_wall(self, wall: WallSegment, impact: Optional[Tuple[float, float]] = None) -> bool:
         """Damage the block a wall segment is a face of. Returns True if the block was destroyed.
         
         The whole block goes at once, and the faces of its neighbours that
-        looked onto it become walls.
+        looked onto it become walls. Either way the shot knocks rock loose.
         
         Args:
             wall: The wall segment that was hit.
+            impact: Where the shot landed, for the chips it knocks off.
             
         Returns:
             True if the block was destroyed (hit points reached 0), False otherwise.
@@ -336,10 +356,14 @@ class Maze:
             face.hit_points = hit_points
         if hit_points > 0:
             self.blocks[cell] = hit_points
+            self.wounds.setdefault(cell, []).append(self._wound(wall, impact))
             self._refresh_block_fills()
+            self.wall_debris.hit(self.converter.cell_rect(*cell), impact)
             return False
         
         del self.blocks[cell]
+        self.wounds.pop(cell, None)
+        self.wall_debris.destroy(self.converter.cell_rect(*cell))
         self.grid[cell[1]][cell[0]] = 0
         for face in faces:
             face.active = False
@@ -432,9 +456,14 @@ class Maze:
         
         return positions
     
+    def update(self, dt: float) -> None:
+        """Advance the rock knocked loose by shots."""
+        self.wall_debris.update(dt)
+    
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        self.wall_renderer.draw(screen, self.walls, blocks=self.block_fills)
+        self.wall_renderer.draw(screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds)
+        self.wall_debris.draw(screen)
         
         # Draw exit marker
         if self.exit.active:
