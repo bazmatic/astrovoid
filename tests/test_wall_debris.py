@@ -80,11 +80,13 @@ class TestHit:
         assert not maze.wall_debris.chips and not maze.wall_debris.flashes
         assert painted_near(maze, impact) == 0
 
-    def test_a_wall_that_cannot_be_damaged_sheds_nothing(self):
+    def test_an_outer_wall_sheds_chips_however_worn_it_is(self):
         maze = maze_with()
         wall = face(maze, (0, 4))
-        maze.damage_wall(wall, impact_on(wall))
-        assert not maze.wall_debris.chips and not maze.wall_debris.flashes
+        for _ in range(config.WALL_HIT_POINTS * 2):
+            run_out(maze)
+            maze.damage_wall(wall, impact_on(wall))
+            assert maze.wall_debris.chips and maze.wall_debris.flashes
 
     def test_damage_without_an_impact_point_still_works(self):
         maze = maze_with((4, 4))

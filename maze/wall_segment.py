@@ -27,7 +27,7 @@ class WallSegment:
             start: Start point of the wall segment (x, y).
             end: End point of the wall segment (x, y).
             hit_points: Initial hit points for the wall segment.
-            destructible: False for a wall that can never be damaged (the maze's outer walls).
+            destructible: False for a wall that can never be destroyed (the maze's outer walls).
             cell: Grid cell (x, y) of the block this segment is a face of.
         """
         self.start = start
