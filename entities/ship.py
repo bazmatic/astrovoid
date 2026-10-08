@@ -12,6 +12,7 @@ from utils import angle_to_radians
 from utils.math_utils import hsv_to_rgb
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.projectile import Projectile
+from game_handlers.fire_rate_calculator import shots_per_volley
 from rendering import visual_effects
 from sounds import SoundManager
 
@@ -55,7 +56,8 @@ class Ship(RotatingThrusterShip):
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no energy consumed during this period
         self.game_started = False  # Flag to prevent shield timer countdown until game starts
-        self.gun_upgrade_level = 0  # Powerup level: 0 = base, 1 = faster fire, 2 = fan effect, 3 = super fast
+        self.gun_upgrade_level = 0  # Powerups in effect: 0 = base gun, 1 = faster fire, 2+ = three-way spread
+        self.gun_upgrade_timer = 0.0  # Frames until the powerups wear off
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
         self.powerup_flash_timer = 0  # Frames remaining for powerup flash
         self.powerup_flash_phase = 0.0
@@ -126,6 +128,10 @@ class Ship(RotatingThrusterShip):
             self.upgrade_glow_phase += 0.15
             if self.upgrade_glow_phase >= 2 * math.pi:
                 self.upgrade_glow_phase -= 2 * math.pi
+            # Powerups wear off all together; each crystal collected restarts the clock
+            self.gun_upgrade_timer -= dt
+            if self.gun_upgrade_timer <= 0:
+                self.reset_gun_upgrade()
         
         # Update powerup flash animation timer
         if self.powerup_flash_timer > 0:
@@ -165,13 +171,17 @@ class Ship(RotatingThrusterShip):
         
         Returns:
             List of Projectile instances if fired (single when level 0-1, 3 when level 2+),
-            None if no ammo (only when level 0).
+            None if out of ammo.
         """
-        # When upgraded (level 1+) or on a boss level, unlimited ammo - skip ammo check and consumption
-        if self.gun_upgrade_level < 1 and not self.infinite_ammo:
+        # Each pull of the trigger costs ammo, a spread no more than a single
+        # shot, and less while a powerup lasts. Boss levels have unlimited ammo
+        if not self.infinite_ammo:
             if self.ammo <= 0:
                 return None
-            self.ammo -= config.AMMO_CONSUMPTION_PER_SHOT
+            cost = config.AMMO_CONSUMPTION_PER_SHOT
+            if self.gun_upgrade_level >= 1:
+                cost *= config.POWERUP_AMMO_COST_MULTIPLIER
+            self.ammo = max(0, self.ammo - cost)
         
         # Play shoot sound (better sound when level 2+)
         self.sound_manager.play_shoot(is_upgraded=(self.gun_upgrade_level >= 2))
@@ -201,7 +211,7 @@ class Ship(RotatingThrusterShip):
             dynamic_color = hsv_to_rgb(hue, 1.0, 1.0)
         
         # Fan effect (3-way spread) at level 2+
-        if self.gun_upgrade_level >= 2:
+        if shots_per_volley(self.gun_upgrade_level) > 1:
             # Fire 3-way spread: center, left, right
             projectiles = []
             spread_angle = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
@@ -282,17 +292,20 @@ class Ship(RotatingThrusterShip):
     
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
-        # Increment level (no cap - unlimited powerups)
+        # Increment level (no cap), restart the clock and top up the ammo
         previous_level = self.gun_upgrade_level
         self.gun_upgrade_level += 1
+        self.gun_upgrade_timer = config.POWERUP_DURATION_SECONDS * config.FPS
+        self.ammo = min(config.INITIAL_AMMO, self.ammo + config.POWERUP_AMMO_REFILL)
         if previous_level == 0:
             self.rotation_speed_multiplier = config.POWERUP_ROTATION_SPEED_MULTIPLIER
         self._start_powerup_flash()
         self.sound_manager.play_powerup_activation()
     
     def reset_gun_upgrade(self) -> None:
-        """Reset gun upgrade state (called on level start)."""
+        """Reset gun upgrade state (called on level start, and when powerups wear off)."""
         self.gun_upgrade_level = 0
+        self.gun_upgrade_timer = 0.0
         self.upgrade_glow_phase = 0.0
         self.powerup_flash_timer = 0
         self.powerup_flash_phase = 0.0
@@ -310,9 +323,15 @@ class Ship(RotatingThrusterShip):
         """Get current gun upgrade level.
         
         Returns:
-            Current upgrade level (0-3).
+            Current upgrade level (0 = base gun).
         """
         return self.gun_upgrade_level
+    
+    def get_gun_upgrade_time_left(self) -> float:
+        """Share of the powerups' duration still to run (0.0 to 1.0)."""
+        if self.gun_upgrade_level <= 0:
+            return 0.0
+        return max(0.0, min(1.0, self.gun_upgrade_timer / (config.POWERUP_DURATION_SECONDS * config.FPS)))
     
     def _start_powerup_flash(self) -> None:
         """Trigger a brief flash effect when collecting a powerup."""
@@ -649,19 +668,14 @@ class Ship(RotatingThrusterShip):
             )
         
         # Ammo gauge
-        if self.gun_upgrade_level >= 1:
-            ammo_percent = 1.0
-            ammo_text = "∞"
-            ammo_color = config.COLOR_UPGRADED_SHIP_GLOW
-            ammo_text_color = config.COLOR_UPGRADED_SHIP_GLOW
-        elif self.infinite_ammo:
+        if self.infinite_ammo:
             ammo_percent = 1.0
             ammo_text = "∞"
             ammo_color = (100, 200, 255)
             ammo_text_color = config.COLOR_TEXT
         else:
             ammo_percent = max(0, min(1, self.ammo / config.INITIAL_AMMO))
-            ammo_text = str(self.ammo)
+            ammo_text = str(math.ceil(self.ammo))
             ammo_color = (100, 200, 255)
             ammo_text_color = config.COLOR_TEXT
         
@@ -692,4 +706,10 @@ class Ship(RotatingThrusterShip):
             upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)
             text_rect = upgrade_text.get_rect(center=(GAUGE_CENTER_X, GUN_UPGRADE_Y))
             screen.blit(upgrade_text, text_rect)
+            # A bar under the label drains as the powerups run out
+            bar = pygame.Rect(0, 0, text_rect.width, 4)
+            bar.midtop = (text_rect.centerx, text_rect.bottom + 4)
+            pygame.draw.rect(screen, (40, 44, 70), bar)
+            bar.width = int(round(bar.width * self.get_gun_upgrade_time_left()))
+            pygame.draw.rect(screen, config.COLOR_UPGRADED_SHIP_GLOW, bar)
 

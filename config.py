@@ -281,13 +281,6 @@ class ControllerSettings:
 
 
 @dataclass
-class PowerupFireRateMultipliers:
-    level1: float
-    level2: float
-    level3: float
-
-
-@dataclass
 class PowerupUpgradedProjectile:
     spreadAngle: float
     sizeMultiplier: float
@@ -302,7 +295,6 @@ class PowerupBeyondLevel3:
     speedIncrement: float
     glowIntensityIncrement: float
     hueRotation: float
-    fireRateGrowth: float
     minFireCooldown: int
 
 
@@ -319,8 +311,11 @@ class PowerupSettings:
     flashDurationFrames: int
     flashTintStrength: float
     flashGlowMultiplier: float
+    durationSeconds: float
+    ammoRefill: int
+    ammoCostMultiplier: float
     fireRateBaseCooldown: int
-    fireRateMultipliers: PowerupFireRateMultipliers
+    firepowerPerCrystal: float
     upgradedProjectile: PowerupUpgradedProjectile
     beyondLevel3: PowerupBeyondLevel3
     rotationSpeedMultiplier: float
@@ -449,8 +444,11 @@ def load_settings() -> Settings:
         flashDurationFrames=powerup_raw["flashDurationFrames"],
         flashTintStrength=powerup_raw["flashTintStrength"],
         flashGlowMultiplier=powerup_raw["flashGlowMultiplier"],
+        durationSeconds=powerup_raw["durationSeconds"],
+        ammoRefill=powerup_raw["ammoRefill"],
+        ammoCostMultiplier=powerup_raw["ammoCostMultiplier"],
         fireRateBaseCooldown=powerup_raw["fireRateBaseCooldown"],
-        fireRateMultipliers=PowerupFireRateMultipliers(**powerup_raw["fireRateMultipliers"]),
+        firepowerPerCrystal=powerup_raw["firepowerPerCrystal"],
         upgradedProjectile=PowerupUpgradedProjectile(
             spreadAngle=powerup_raw["upgradedProjectile"]["spreadAngle"],
             sizeMultiplier=powerup_raw["upgradedProjectile"]["sizeMultiplier"],
@@ -815,9 +813,9 @@ POWERUP_FLASH_DURATION_FRAMES = SETTINGS.powerups.flashDurationFrames
 POWERUP_FLASH_TINT_STRENGTH = SETTINGS.powerups.flashTintStrength
 POWERUP_FLASH_GLOW_MULTIPLIER = SETTINGS.powerups.flashGlowMultiplier
 
-POWERUP_LEVEL_1_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level1
-POWERUP_LEVEL_2_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level2
-POWERUP_LEVEL_3_FIRE_RATE_MULTIPLIER = SETTINGS.powerups.fireRateMultipliers.level3
+POWERUP_DURATION_SECONDS = SETTINGS.powerups.durationSeconds
+POWERUP_AMMO_REFILL = SETTINGS.powerups.ammoRefill
+POWERUP_AMMO_COST_MULTIPLIER = SETTINGS.powerups.ammoCostMultiplier
 UPGRADED_PROJECTILE_SPREAD_ANGLE = SETTINGS.powerups.upgradedProjectile.spreadAngle
 UPGRADED_PROJECTILE_SIZE_MULTIPLIER = SETTINGS.powerups.upgradedProjectile.sizeMultiplier
 UPGRADED_PROJECTILE_SPEED_MULTIPLIER = SETTINGS.powerups.upgradedProjectile.speedMultiplier
