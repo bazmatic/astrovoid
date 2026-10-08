@@ -1,7 +1,7 @@
 """Splash screen state implementation.
 
-This module provides the splash screen state that displays the game logo
-with fade-in/out animations and auto-advances to the menu.
+This module provides the splash screen state that shows a squid swimming up
+to the game title, with fade-in/out animations, and auto-advances to the menu.
 """
 
 import pygame
@@ -9,6 +9,7 @@ import os
 from typing import TYPE_CHECKING, Optional
 import config
 from utils.resource_path import resource_path
+from rendering.splash_scene import SplashScene
 
 try:
     import cv2
@@ -33,20 +34,10 @@ class SplashScreenState:
         self.state_machine = state_machine
         self.screen = screen
         
-        # Load splash image
-        splash_path = resource_path('assets/splash.png')
-        try:
-            self.splash_image = pygame.image.load(splash_path).convert_alpha()
-            # Scale to fit screen while maintaining aspect ratio
-            screen_width, screen_height = screen.get_size()
-            img_width, img_height = self.splash_image.get_size()
-            scale = min(screen_width / img_width, screen_height / img_height)
-            new_width = int(img_width * scale)
-            new_height = int(img_height * scale)
-            self.splash_image = pygame.transform.scale(self.splash_image, (new_width, new_height))
-        except (pygame.error, FileNotFoundError):
-            # Fallback if image not found
-            self.splash_image = None
+        # Animated scene shown before the video
+        self.scene = SplashScene(screen)
+        # Black sheet laid over the scene to fade it in and out
+        self.fade_cover = pygame.Surface(screen.get_size(), 0, 24)
         
         # Video state
         self.video_cap: Optional[object] = None  # cv2.VideoCapture when available
@@ -78,6 +69,7 @@ class SplashScreenState:
         self.video_complete = False
         self.video_frame = None
         self.video_time_accumulator = 0.0
+        self.scene.reset()
         
         # Close any existing video capture
         if self.video_cap is not None:
@@ -196,7 +188,8 @@ class SplashScreenState:
         self.time_elapsed += dt_seconds
         
         if self.showing_image:
-            # Phase 1: Show image with fade-in
+            self.scene.update(dt)
+            # Phase 1: Show the scene with fade-in
             if not self.fade_in_complete:
                 fade_progress = self.time_elapsed / config.SPLASH_FADE_IN_DURATION
                 if fade_progress >= 1.0:
@@ -264,18 +257,11 @@ class SplashScreenState:
         screen.fill((0, 0, 0))
         
         if self.showing_image:
-            # Draw splash image with alpha
-            if self.splash_image:
-                # Create surface with alpha
-                alpha_surf = self.splash_image.copy()
-                alpha_surf.set_alpha(int(255 * self.alpha))
-                
-                # Center on screen
-                screen_width, screen_height = screen.get_size()
-                img_width, img_height = alpha_surf.get_size()
-                x = (screen_width - img_width) // 2
-                y = (screen_height - img_height) // 2
-                screen.blit(alpha_surf, (x, y))
+            # Draw the scene, darkened by the fade
+            self.scene.draw()
+            if self.alpha < 1.0:
+                self.fade_cover.set_alpha(int(255 * (1.0 - self.alpha)))
+                screen.blit(self.fade_cover, (0, 0))
         else:
             # Draw video frame with alpha
             if self.video_frame:
