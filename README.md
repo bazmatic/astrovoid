@@ -181,7 +181,7 @@ When you complete a level, the screen displays:
 | 1 | Static enemies |
 | 2 | Patrol enemies |
 | 3 | Aggressive enemies |
-| 4 | The Jev hunter, your ally |
+| 4 | The Jev beacon, which summons the hunter, your ally |
 | 5 | Replay ships |
 | 6 | **Boss level**: Split Boss |
 | 7 | Anemones |
@@ -193,7 +193,7 @@ When you complete a level, the screen displays:
 | 24 | **Boss level**: Mother Boss and Split Boss |
 
 - The maze grows from 10 cells across to 32, and the enemy count from 4 to 24, rising by no more than 2 from one ordinary level to the next.
-- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every enemy on the level is dead, ammo is infinite, and the hunter does not fly.
+- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every enemy on the level is dead, ammo is infinite, and no Jev beacon appears, so the hunter does not fly.
 
 **From level 25** the game is endless:
 
@@ -322,7 +322,7 @@ See [LICENSE](LICENSE) file for details.
 
 ## Jev hunter ally
 
-A level can include one independent allied ship piloted by TypeSafe's Jev model.
+Collecting a Jev beacon summons one independent allied ship piloted by TypeSafe's Jev model.
 Jev chooses turning, thrust and firing from local sensors and remembered sightings.
 Enemies can target and destroy it. It has three hit points, no friendly fire, and
 starts with fresh memory each level. Hunter kills do not award personal kill points.
@@ -341,8 +341,11 @@ venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = 
 ```
 
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
-One hunter appears on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one. It starts when you make your
-first move. It is indestructible: enemy shots and contact knock it about without
+The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the
+way from your start to the exit, on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one.
+Fly into it and the hunter appears beside you. On those levels a destroyed enemy can also drop a beacon
+in place of a crystal (`powerups.jevBeaconSpawnChance`), but only while no hunter is flying and no other
+beacon is waiting, so there is never more than one hunter. It is indestructible: enemy shots and contact knock it about without
 damaging it. Without a key/SDK, the hunter coasts with an unavailable pilot.
 
 Decisions are requested at most four times per second, with one request in flight.

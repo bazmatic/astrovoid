@@ -9,6 +9,7 @@ import random
 from typing import List, Optional, Tuple, TYPE_CHECKING
 import config
 from entities.powerup_crystal import PowerupCrystal
+from entities.jev_beacon import JevBeacon
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -50,6 +51,29 @@ class CollisionHandler:
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
 
+    def _drop_pickup(
+        self,
+        pos: Tuple[float, float],
+        powerup_crystals: List['PowerupCrystal'],
+        jev_beacon_allowed: bool
+    ) -> None:
+        """Roll for what a destroyed enemy leaves behind.
+        
+        A Jev beacon takes the place of the crystal, and only one lies on the
+        field at a time.
+        
+        Args:
+            pos: Where the enemy died.
+            powerup_crystals: List to add the pickup to.
+            jev_beacon_allowed: Whether this kill may drop a Jev beacon.
+        """
+        if (jev_beacon_allowed
+                and not any(isinstance(pickup, JevBeacon) and pickup.active for pickup in powerup_crystals)
+                and random.random() < config.JEV_BEACON_SPAWN_CHANCE):
+            powerup_crystals.append(JevBeacon(pos))
+        elif random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
+            powerup_crystals.append(PowerupCrystal(pos))
+
     def handle_projectile_enemy_collisions(
         self,
         projectile: 'Projectile',
@@ -62,7 +86,8 @@ class CollisionHandler:
         babies: List['Baby'],
         eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal'],
-        anemones: Optional[List['Anemone']] = None
+        anemones: Optional[List['Anemone']] = None,
+        jev_beacon_allowed: bool = False
     ) -> bool:
         """Handle collisions between a projectile and enemies.
         
@@ -77,6 +102,7 @@ class CollisionHandler:
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             anemones: List of anemone enemies (optional).
+            jev_beacon_allowed: Whether a kill may drop a Jev beacon.
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -106,20 +132,14 @@ class CollisionHandler:
                             self.sound_manager.play_enemy_destroy()
                             self._record_projectile_kill(projectile)
                             
-                            # Spawn powerup crystal with probability
-                            if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                                crystal = PowerupCrystal(enemy_pos)
-                                powerup_crystals.append(crystal)
+                            self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Non-static enemies destroyed immediately (existing behavior)
                         enemy.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
-                        # Spawn powerup crystal with probability
-                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                            crystal = PowerupCrystal(enemy_pos)
-                            powerup_crystals.append(crystal)
+                        self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -135,10 +155,7 @@ class CollisionHandler:
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
-                        # Spawn powerup crystal with probability
-                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                            crystal = PowerupCrystal(enemy_pos)
-                            powerup_crystals.append(crystal)
+                        self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Flinch so the hit registers
                         replay_enemy.trigger_blink()
@@ -154,10 +171,7 @@ class CollisionHandler:
                     self.sound_manager.play_enemy_destroy()
                     self._record_projectile_kill(projectile)
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(flocker_pos)
-                        powerup_crystals.append(crystal)
+                    self._drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
 
@@ -170,9 +184,7 @@ class CollisionHandler:
                         anemone.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
-                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                            crystal = PowerupCrystal(anemone_pos)
-                            powerup_crystals.append(crystal)
+                        self._drop_pickup(anemone_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Clamp shut so the hit buys a moment without the pull
                         anemone.stun(config.ANEMONE_FLINCH_FRAMES)
@@ -188,9 +200,7 @@ class CollisionHandler:
                         flighthouse.die()
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
-                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                            crystal = PowerupCrystal(fh_pos)
-                            powerup_crystals.append(crystal)
+                        self._drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
                     return True
         
         # Check projectile-SplitBoss collision
@@ -209,7 +219,7 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -231,7 +241,7 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -246,10 +256,7 @@ class CollisionHandler:
                     self.sound_manager.play_enemy_destroy()
                     self._record_projectile_kill(projectile)
                     
-                    # Spawn powerup crystal with probability
-                    if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                        crystal = PowerupCrystal(baby_pos)
-                        powerup_crystals.append(crystal)
+                    self._drop_pickup(baby_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -270,10 +277,7 @@ class CollisionHandler:
                         self.sound_manager.play_enemy_destroy()
                         self._record_projectile_kill(projectile)
                         
-                        # Spawn powerup crystal with probability
-                        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-                            crystal = PowerupCrystal(egg_pos)
-                            powerup_crystals.append(crystal)
+                        self._drop_pickup(egg_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -284,7 +288,8 @@ class CollisionHandler:
         boss_pos: Tuple[float, float],
         boss_velocity: Tuple[float, float],
         replay_enemies: List['ReplayEnemyShip'],
-        powerup_crystals: List['PowerupCrystal']
+        powerup_crystals: List['PowerupCrystal'],
+        jev_beacon_allowed: bool = False
     ) -> None:
         """Spawn two ReplayEnemyShip instances when SplitBoss is destroyed.
         
@@ -325,10 +330,7 @@ class CollisionHandler:
             spawned_baby.current_replay_index = 0
             replay_enemies.append(spawned_baby)
         
-        # Spawn powerup crystal with probability
-        if random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-            crystal = PowerupCrystal(boss_pos)
-            powerup_crystals.append(crystal)
+        self._drop_pickup(boss_pos, powerup_crystals, jev_beacon_allowed)
     
     def handle_projectile_ship_collision(
         self,

@@ -219,18 +219,25 @@ def get_level_hunter_config(level: int):
 
 
 def level_has_hunter(level: int) -> bool:
-    """Whether a hunter flies on a level.
+    """Whether a level starts with a Jev beacon, the pickup that summons the hunter.
 
     A level file decides if it says anything: False forbids one, a spawn
     override places one. Otherwise there is none before HUNTER_FIRST_LEVEL or
     on a boss level, and one every HUNTER_LEVEL_INTERVAL levels elsewhere.
     """
+    if get_level_hunter_config(level) is None:
+        interval = config.HUNTER_LEVEL_INTERVAL
+        return level_allows_jev_beacon(level) and interval > 0 and level % interval == 0
+    return level_allows_jev_beacon(level)
+
+
+def level_allows_jev_beacon(level: int) -> bool:
+    """Whether a Jev beacon may appear on a level at all, placed or dropped by an enemy.
+
+    False in a level file forbids it and a spawn override allows it. Otherwise
+    there is none before HUNTER_FIRST_LEVEL or on a boss level.
+    """
     hunter = get_level_hunter_config(level)
-    if hunter is False:
-        return False
     if hunter is not None:
-        return True
-    if level < config.HUNTER_FIRST_LEVEL or is_boss_level(level):
-        return False
-    interval = config.HUNTER_LEVEL_INTERVAL
-    return interval > 0 and level % interval == 0
+        return hunter is not False
+    return level >= config.HUNTER_FIRST_LEVEL and not is_boss_level(level)

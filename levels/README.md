@@ -23,7 +23,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
 - **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
 - **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
-- **hunter**: leave it out for the normal rule. `false` means no hunter. `{"spawn_cell": [col, row]}` places one at that cell.
+- **hunter**: leave it out for the normal rule. `false` means no Jev beacon, so no hunter. `{"spawn_cell": [col, row]}` places the beacon at that cell.
 
 ## Boss levels
 
@@ -31,13 +31,13 @@ A level with at least one `split_boss` or `mother_boss` is a boss level, whateve
 
 - the exit is locked until every enemy on the level is dead, including the ships a boss leaves behind and anything that hatches;
 - ammo is infinite, so the level can always be finished;
-- no hunter flies, unless the file places one.
+- no Jev beacon appears, so no hunter flies, unless the file places one.
 
 In the arc these are levels 6, 12, 18 and 24.
 
 ## The hunter
 
-Without a `hunter` entry: no hunter before level 4 (`game.hunterFirstLevel`), none on boss levels, and one on every other level (`game.hunterLevelInterval`).
+The hunter is summoned by collecting a Jev beacon. Without a `hunter` entry: no beacon before level 4 (`game.hunterFirstLevel`), none on boss levels, and one placed in the maze on every other level (`game.hunterLevelInterval`). Wherever a beacon is allowed, a destroyed enemy can also drop one (`powerups.jevBeaconSpawnChance`) while no hunter is flying.
 
 ## Pacing rules for the arc
 

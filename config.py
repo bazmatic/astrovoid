@@ -310,6 +310,7 @@ class PowerupBeyondLevel3:
 class PowerupSettings:
     crystalSize: int
     crystalSpawnChance: float
+    jevBeaconSpawnChance: float
     crystalRotationSpeed: float
     crystalGlowIntensity: float
     crystalColor: Tuple[int, int, int]
@@ -439,6 +440,7 @@ def load_settings() -> Settings:
     powerup_settings = PowerupSettings(
         crystalSize=powerup_raw["crystalSize"],
         crystalSpawnChance=powerup_raw["crystalSpawnChance"],
+        jevBeaconSpawnChance=powerup_raw["jevBeaconSpawnChance"],
         crystalRotationSpeed=powerup_raw["crystalRotationSpeed"],
         crystalGlowIntensity=powerup_raw["crystalGlowIntensity"],
         crystalColor=_as_color(tuple(powerup_raw["crystalColor"])),
@@ -802,6 +804,8 @@ CONTROLLER_TRIGGER_THRESHOLD = SETTINGS.controller.triggerThreshold
 
 POWERUP_CRYSTAL_SIZE = SETTINGS.powerups.crystalSize
 POWERUP_CRYSTAL_SPAWN_CHANCE = SETTINGS.powerups.crystalSpawnChance
+# Chance a kill drops a Jev beacon, which summons the hunter, in place of a crystal
+JEV_BEACON_SPAWN_CHANCE = SETTINGS.powerups.jevBeaconSpawnChance
 POWERUP_CRYSTAL_ROTATION_SPEED = SETTINGS.powerups.crystalRotationSpeed
 POWERUP_CRYSTAL_GLOW_INTENSITY = SETTINGS.powerups.crystalGlowIntensity
 COLOR_POWERUP_CRYSTAL = SETTINGS.powerups.crystalColor

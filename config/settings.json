@@ -261,6 +261,7 @@
   "powerups": {
     "crystalSize": 6,
     "crystalSpawnChance": 0.3,
+    "jevBeaconSpawnChance": 0.03,
     "crystalRotationSpeed": 2.0,
     "crystalGlowIntensity": 0.6,
     "crystalColor": [100, 255, 100],
