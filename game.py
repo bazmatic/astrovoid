@@ -379,7 +379,9 @@ class Game:
                 [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
                  self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones)
                  for enemy in group], self.projectiles,
-                self.hunter_controller.action, now, generation)
+                self.hunter_controller.action, now, generation,
+                # A Jev beacon is the player's to collect, not the hunter's
+                powerups=[c for c in self.powerup_crystals if not isinstance(c, JevBeacon)])
         action = self.hunter_controller.tick(observe)
         if self.hunter_controller.status != 'active':
             self.hunter.cancel_burst()
@@ -389,9 +391,9 @@ class Game:
             solution = find_firing_solution(
                 self.hunter, list(self.entity_manager.get_all_active_enemies()),
                 self.maze, self.hunter.settings)
-        bullet = self.hunter.step(dt, action, solution)
-        if bullet is not None:
-            self.projectiles.append(bullet)
+        shots = self.hunter.step(dt, action, solution)
+        if shots:
+            self.projectiles.extend(shots)
         self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
 
     def _stop_dead_hunter(self) -> None:
@@ -926,9 +928,10 @@ class Game:
         pygame.display.flip()
     
     def _update_powerup_crystals(self, dt: float) -> None:
-        """Update powerup crystals and collect any the ship touches.
+        """Update powerup crystals and collect any the ship or the hunter touches.
         
-        A collected crystal stays in the list until its burst has played.
+        The player has first claim on a crystal both touch. A collected crystal
+        stays in the list until its burst has played.
         
         Args:
             dt: Delta time since last update.
@@ -944,6 +947,7 @@ class Game:
                         self._summon_hunter(crystal.get_pos())
                 else:
                     self.collision_handler.handle_ship_crystal_collision(self.ship, crystal, self.scoring)
+                    self.collision_handler.handle_hunter_crystal_collision(self.hunter, crystal)
             elif crystal.is_dying:
                 crystal.update_death(dt)
             

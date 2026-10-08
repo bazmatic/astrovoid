@@ -12,13 +12,13 @@ LINED_UP = FiringSolution(0.0, True)
 def test_simultaneous_controls(name):
     action = ACTIONS[name]
     ship = HunterShip((200,200))
-    bullet = ship.step(1, action, LINED_UP)
-    assert (bullet is not None) == action.fire
+    shots = ship.step(1, action, LINED_UP)
+    assert (shots is not None) == action.fire
     assert ship.angle == (action.turn * config.SHIP_ROTATION_SPEED
                           * ship.settings.turn_rate_multiplier) % 360
     assert (abs(ship.vx) + abs(ship.vy) > 0) == action.thrust
-    if bullet:
-        assert bullet.source == 'hunter'
+    if shots:
+        assert [shot.source for shot in shots] == ['hunter']
         assert ship.step(1, action, LINED_UP) is None
 
 
@@ -59,7 +59,7 @@ def test_one_trigger_pull_fires_a_burst_of_three_then_cools_down():
     cooldown = round(settings.fire_interval*config.FPS)
     second = 1+2*spacing+cooldown
     assert held == [1, 1+spacing, 1+2*spacing, second, second+spacing, second+2*spacing]
-    assert HunterShip((200,200)).step(1, fire, LINED_UP).source == 'hunter'
+    assert HunterShip((200,200)).step(1, fire, LINED_UP)[0].source == 'hunter'
 
 
 def test_cancelled_burst_fires_no_further_shots():

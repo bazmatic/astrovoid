@@ -39,7 +39,8 @@ class HunterPerception:
                 'heading': getattr(entity,'angle',None), 'radius': entity.radius,
                 'distance': math.hypot(dx,dy), 'bearing': math.degrees(math.atan2(dy,dx)) % 360}
 
-    def observe(self, hunter, maze, player, enemies, projectiles, previous_action, now, generation):
+    def observe(self, hunter, maze, player, enemies, projectiles, previous_action, now, generation,
+                powerups=()):
         origin = hunter.get_pos()
         radius = self.settings.sensor_range(maze)
         walls = local_segments(origin, [(w.start,w.end) for w in maze.walls if w.active], radius)
@@ -70,6 +71,10 @@ class HunterPerception:
         bullets = [self._contact(p,origin,'enemy' if p.is_enemy else 'friendly')
                    for p in projectiles if p.active and visible_point(origin,p.get_pos(),walls,radius)]
         bullets.sort(key=lambda c:(c['distance'],c['id']))
+        # Powerups are sensed like anything else: only those in plain sight, nearest first.
+        crystals = [self._contact(p,origin,'powerup') for p in powerups
+                    if p.active and visible_point(origin,p.get_pos(),walls,radius)]
+        crystals.sort(key=lambda c:(c['distance'],c['id']))
         visible_walls = visible_wall_portions(origin,walls,radius)
         state = {
             'self': {'position': list(origin), 'velocity': [hunter.vx,hunter.vy],
@@ -82,6 +87,7 @@ class HunterPerception:
             'snapshot_at': now,
             'visible_contacts': contacts[:self.settings.max_contacts],
             'visible_projectiles': bullets[:self.settings.max_projectiles],
+            'visible_powerups': crystals[:self.settings.max_contacts],
             'visible_walls': visible_walls,
             'remembered_contacts': self._remembered_contacts(origin,now),
             'physics': {'fps':config.FPS,'speed_limit':hunter.max_speed,

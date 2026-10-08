@@ -4,6 +4,7 @@ import pygame
 import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.projectile import Projectile
+from game_handlers.fire_rate_calculator import calculate_fire_cooldown
 from hunter.model import HunterSettings
 
 
@@ -34,6 +35,7 @@ class HunterShip(RotatingThrusterShip):
         self.health = settings.health
         self.fire_remaining = 0.0
         self.burst_remaining = 0
+        self.gun_upgrade_level = 0  # Powerups collected: they upgrade the guns as the player's do
         self.immunity_remaining = 0.0
         self.pilot_thrusting = False
         self.thrust_frames = 0  # Frames of thrust ever applied
@@ -47,6 +49,37 @@ class HunterShip(RotatingThrusterShip):
     def thrust_force(self):
         return config.SHIP_THRUST_FORCE * self.settings.thrust_multiplier
 
+    def get_gun_upgrade_level(self):
+        return self.gun_upgrade_level
+
+    def collect_powerup(self):
+        """Take a powerup crystal: one more level of gun upgrade."""
+        self.gun_upgrade_level += 1
+
+    @property
+    def fire_interval(self):
+        """Seconds between bursts, shortened by powerups in step with the player's fire rate."""
+        base = config.SETTINGS.powerups.fireRateBaseCooldown
+        return self.settings.fire_interval * calculate_fire_cooldown(self) / base
+
+    def _shots(self):
+        """The projectiles of one shot: a single one, or a three-way spread from the second powerup."""
+        heading = math.radians(self.angle)
+        muzzle = (self.x + math.cos(heading) * (self.radius + 5),
+                  self.y + math.sin(heading) * (self.radius + 5))
+        level = self.gun_upgrade_level
+        angles = [self.angle]
+        if level >= 2:
+            spread = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
+            angles += [self.angle - spread, self.angle + spread]
+        # Powerups beyond the third make the shots bigger and faster
+        extra = max(0, level - 3)
+        return [Projectile(
+            muzzle, angle, is_upgraded=level >= 1,
+            enhanced_size_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT,
+            enhanced_speed_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT,
+            source='hunter', dynamic_color=self.COLOR) for angle in angles]
+
     def cancel_burst(self):
         """Drop the rest of a burst once no live pilot decision backs the trigger."""
         self.burst_remaining = 0
@@ -57,6 +90,9 @@ class HunterShip(RotatingThrusterShip):
         `solution` is fire control's firing solution for the engaged enemy, or
         None when there is no target. Tracking trims the nose onto it, and a
         shot is only released while it reports the nose on target.
+
+        Returns the projectiles of a shot released this frame (one, or three once
+        the guns spread), or None.
         """
         if not self.active:
             return None
@@ -101,7 +137,7 @@ class HunterShip(RotatingThrusterShip):
         if thrusting:
             self.apply_thrust()
             self.thrust_frames += 1
-        projectile = None
+        shots = None
         ready = self.fire_remaining <= 1e-9
         lined_up = solution is not None and solution.on_target
         # Pulling the trigger commits to a whole burst, even if it is then released.
@@ -112,16 +148,12 @@ class HunterShip(RotatingThrusterShip):
         if self.burst_remaining and not lined_up and not action.fire:
             self.burst_remaining = 0
         if self.burst_remaining and ready and lined_up:
-            heading = math.radians(self.angle)
-            muzzle = (self.x + math.cos(heading) * (self.radius + 5),
-                      self.y + math.sin(heading) * (self.radius + 5))
-            projectile = Projectile(muzzle, self.angle, source='hunter',
-                                    dynamic_color=self.COLOR)
+            shots = self._shots()
             self.burst_remaining -= 1
             self.fire_remaining = (self.settings.burst_spacing if self.burst_remaining
-                                   else self.settings.fire_interval)
+                                   else self.fire_interval)
         super().update(dt)
-        return projectile
+        return shots
 
     def take_damage(self):
         if not self.active or self.settings.indestructible or self.immunity_remaining > 0:

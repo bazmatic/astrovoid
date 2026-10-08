@@ -275,6 +275,16 @@ def pilot_state(state):
                 'speed_after_metres_per_second':round(correction.final_speed*fps,1),
                 'speed_limit_metres_per_second':round(limit,1)}
 
+    # The nearest powerup in sight is a goal of its own: there is a clear line to it,
+    # so the course is flown straight onto it rather than along a route.
+    collect = None
+    powerups = state.get('visible_powerups',[])
+    if powerups:
+        nearest = powerups[0]
+        collect = {**bearings(nearest['bearing']),
+                   'heading_degrees':nearest['bearing'] % 360,
+                   'distance_metres':nearest['distance'],
+                   'course':course_to(nearest['position'],nearest['bearing'])}
     raw_follow = state.get('follow_player')
     # Cut off: no player, or no open route to it. Then there is nobody to follow,
     # and the hunter explores along a wall instead.
@@ -320,5 +330,6 @@ def pilot_state(state):
             'hostile_projectiles':[contact(c) for c in state.get('visible_projectiles',[])
                                    if c['allegiance']=='enemy'],
             'engage':engage_reading(),
+            'collect_powerup':collect,
             'follow_player':follow,
             'wall_follow':wall_follow}

@@ -302,7 +302,7 @@ class TestRealGameWiring:
         game.hunter_controller = Mock()
         game.hunter_controller.tick.side_effect = tick
         game.hunter_perception = Mock()
-        game.hunter_perception.observe.side_effect = lambda hunter, maze, player, enemies, *rest: seen.extend(enemies)
+        game.hunter_perception.observe.side_effect = lambda hunter, maze, player, enemies, *rest, **more: seen.extend(enemies)
         game.player_has_moved = True
         try:
             with pytest.raises(Observed):

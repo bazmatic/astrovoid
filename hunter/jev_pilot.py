@@ -81,9 +81,22 @@ BRAKE_INSTRUCTIONS = (
     'attitude, fires only once lined up and cuts the engine when the ship has stopped. '
 )
 
+POWERUP_INSTRUCTIONS = (
+    '`collect_powerup` is your job whenever no enemy is visible and a powerup crystal is in '
+    'sight: fly onto it. Touching a powerup collects it and upgrades your guns: first a '
+    'faster rate of fire, then a three-way spread, then bigger and faster shots. It is null '
+    'when no powerup is in sight. It points at the nearest powerup you can see: '
+    'degrees_off_nose_at_next_decision is where it will be relative to the nose when your '
+    'choice takes over (negative left, positive right), distance_metres is how far it is, '
+    'and collect_powerup.course is the navigation course that flies you onto it. There is '
+    'no need to stop at a powerup: flying through it collects it. Collecting a powerup '
+    'outranks following the player and following a wall, and you go back to those once it '
+    'is collected. '
+)
+
 FOLLOW_INSTRUCTIONS = (
-    '`follow_player` is your job whenever no enemy is visible: follow the friendly player '
-    'ship. It is null when there is no player or no open route to it. It points at the next waypoint on the '
+    '`follow_player` is your job whenever no enemy is visible and there is no powerup to '
+    'collect: follow the friendly player ship. It is null when there is no player or no open route to it. It points at the next waypoint on the '
     'route through the maze to the player (the player itself when player_visible is true): '
     'degrees_off_nose_at_next_decision is where that waypoint will be relative to the nose '
     'when your choice takes over (negative left, positive right), waypoint_distance_metres '
@@ -112,16 +125,18 @@ COURSE_INSTRUCTIONS = (
 )
 
 WALL_FOLLOW_INSTRUCTIONS = (
-    '`wall_follow` is your job when there is nobody to follow: no enemy is visible and '
-    'follow_player is null because there is no player or no open route to it. You are cut '
+    '`wall_follow` is your job when there is nobody to follow: no enemy is visible, there '
+    'is no powerup to collect and follow_player is null because there is no player or no '
+    'open route to it. You are cut '
     'off, so explore by keeping a wall on your left and moving along it; in a maze that '
     'leads past every opening. wall_follow.degrees_off_nose is the direction to travel, '
     'parallel to the nearest wall with that wall on your left, wall_follow.wall_distance_metres '
     'is the gap between your hull and that wall (null when no wall is in sight, and the '
     'direction is then straight ahead to find one), and wall_follow.course is the '
     'navigation course that takes you that way. wall_follow is null whenever follow_player '
-    'is not. The navigation course is follow_player.course when follow_player is not '
-    'null, and wall_follow.course otherwise. '
+    'is not. The navigation course is collect_powerup.course when collect_powerup is not '
+    'null; otherwise it is follow_player.course when follow_player is not null, and '
+    'wall_follow.course otherwise. '
 )
 
 ENGINE_INSTRUCTIONS = (
@@ -172,7 +187,7 @@ PILOT_QUESTIONS = {
             '`aim`, the steering is track, however far off the nose it is and whichever side '
             'it is on; do not steer at an enemy with left or right. `turning.direction` is '
             'track while fire control already has the nose: keep choosing track for as long '
-            'as a visible enemy has a non-null `aim`. ' + FOLLOW_INSTRUCTIONS +
+            'as a visible enemy has a non-null `aim`. ' + POWERUP_INSTRUCTIONS + FOLLOW_INSTRUCTIONS +
             COURSE_INSTRUCTIONS + WALL_FOLLOW_INSTRUCTIONS +
             'When no enemy is visible and the navigation course is not null, the steering '
             'is course, whichever way the burn heading lies; do not steer a course with left '
@@ -189,8 +204,9 @@ PILOT_QUESTIONS = {
         'criteria': {
             'course': 'Hand the nose to the navigator: brake.speed_state is too_fast; or no '
                       'visible enemy has an aim and the navigation course '
-                      '(follow_player.course, or wall_follow.course when follow_player is '
-                      'null) is not null.',
+                      '(collect_powerup.course when collect_powerup is not null, '
+                      'otherwise follow_player.course, or wall_follow.course when '
+                      'follow_player is null) is not null.',
             'track': 'Hand the nose to fire control: brake.speed_state is not too_fast and a '
                      'visible enemy has a non-null aim.',
             'left': 'Hold left: brake.speed_state is not too_fast, no visible enemy has an '
@@ -217,7 +233,8 @@ PILOT_QUESTIONS = {
             'choose burn while engage.burn_needed is true. When it is false, a hunter '
             'sitting still is an easy target, so choose pulse if engage.holding_still is '
             'true and engage.range_state is in_range, and coast otherwise. '
-            + FOLLOW_INSTRUCTIONS + COURSE_INSTRUCTIONS + WALL_FOLLOW_INSTRUCTIONS +
+            + POWERUP_INSTRUCTIONS + FOLLOW_INSTRUCTIONS + COURSE_INSTRUCTIONS
+            + WALL_FOLLOW_INSTRUCTIONS +
             'When brake.speed_state is not too_fast, engage is null and the navigation '
             'course is not null you are flying that course: choose burn while the course\'s '
             'burn_needed is true and coast when it is false. '
@@ -228,7 +245,8 @@ PILOT_QUESTIONS = {
         'criteria': {
             'burn': 'brake.speed_state is too_fast; or it is not too_fast and engage is not '
                     'null and engage.burn_needed is true; or it is not too_fast, engage is '
-                    'null, and the navigation course (follow_player.course, or '
+                    'null, and the navigation course (collect_powerup.course when '
+                    'collect_powerup is not null, otherwise follow_player.course, or '
                     'wall_follow.course when follow_player is null) is not null and its '
                     'burn_needed is true.',
             'pulse': 'brake.speed_state is not too_fast, engage is not null, '
@@ -259,13 +277,14 @@ def navigation_course(state):
     """The burn the navigator flies on a course decision.
 
     Braking for a wall comes first. Otherwise it is the course with no enemy to
-    engage: to the player, or else along a wall.
+    engage: onto a powerup in sight, else to the player, or else along a wall.
     """
     brake = state.get('motion', {}).get('brake', {})
     if brake.get('speed_state') == 'too_fast':
         return {'burn_needed': True, 'burn_heading_degrees': brake['burn_heading_degrees'],
                 'burn_seconds': brake['burn_seconds']}
-    navigation = state.get('follow_player') or state.get('wall_follow')
+    navigation = (state.get('collect_powerup') or state.get('follow_player')
+                  or state.get('wall_follow'))
     return navigation.get('course') if navigation else None
 
 
