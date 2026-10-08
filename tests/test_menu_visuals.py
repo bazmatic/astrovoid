@@ -25,7 +25,8 @@ def screen(monkeypatch):
 
 
 def is_opaque(surface):
-    return pygame.mask.from_surface(surface, 254).count() == surface.get_width() * surface.get_height()
+    # Antialiased lines round alpha down a step or two, which is not a hole
+    return pygame.mask.from_surface(surface, 250).count() == surface.get_width() * surface.get_height()
 
 
 def profile_menu(screen, tmp_path, names):
@@ -154,6 +155,29 @@ class TestLevelComplete:
         menu.update(1.0)
         menu.draw(3, succeeded, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None)
         assert is_opaque(screen)
+
+    def test_failed_banner_is_flanked_by_the_games_squids(self, screen):
+        menu = LevelCompleteMenu(screen)
+        title = menu.layout(False)['title']
+        left, right = menu.failed_squids
+        assert title.left < left.x < title.centerx < right.x < title.right
+        assert title.top < left.y < title.centery
+
+        def squid_pixels(succeeded):
+            menu.draw(3, succeeded, 42.3, {'final_score': 55, 'total_score': 1234}, None, False, lambda: None)
+            return pygame.mask.from_threshold(screen, (*config.REPLAY_ENEMY_COLOR, 255), (1, 1, 1, 255)).count()
+
+        assert squid_pixels(False) > 200
+        assert squid_pixels(True) == 0
+
+    def test_failed_squids_hover_and_trail_their_tentacles(self, screen):
+        menu = LevelCompleteMenu(screen)
+        squid = menu.failed_squids[0]
+        before = (squid.y, squid.angle, list(squid.tentacles[0]))
+        for _ in range(30):
+            menu.update(1.0)
+        assert (squid.y, squid.angle, list(squid.tentacles[0])) != before
+        assert all(len(chain) > 1 for chain in squid.tentacles)
 
 
 class TestStarRating:

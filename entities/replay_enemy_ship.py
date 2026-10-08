@@ -176,7 +176,31 @@ class ReplayEnemyShip(RotatingThrusterShip):
         replay_commands = self.command_recorder.get_replay_commands()
         command_count = self.command_recorder.get_command_count()
         
-        # Update blink animation
+        self._update_blink()
+        
+        if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
+            super().update(dt)
+            self._update_tentacles(dt)
+            return
+        
+        if replay_commands:
+            cmd_type = replay_commands[self.current_replay_index]
+            self._execute_command(cmd_type, player_pos)
+            self.current_replay_index = (self.current_replay_index + 1) % len(replay_commands)
+        
+        if self.fire_cooldown > 0:
+            self.fire_cooldown -= 1
+        
+        super().update(dt)
+        self._update_tentacles(dt)
+    
+    def animate(self, dt: float) -> None:
+        """Advance the blinking and tentacles of a squid that is on show rather than in play."""
+        self._update_blink()
+        self._update_tentacles(dt)
+    
+    def _update_blink(self) -> None:
+        """Count down to the next blink, or advance the one in progress."""
         damage_fraction = self.get_damage_fraction()
         interval_multiplier = self._get_blink_interval_multiplier(damage_fraction)
 
@@ -214,22 +238,6 @@ class ReplayEnemyShip(RotatingThrusterShip):
                 self.blink_state = 1.0
                 base_interval = random.randint(self.BLINK_INTERVAL_MIN, self.BLINK_INTERVAL_MAX)
                 self.blink_timer = base_interval / max(1.0, interval_multiplier)
-        
-        if command_count < config.REPLAY_ENEMY_WINDOW_SIZE:
-            super().update(dt)
-            self._update_tentacles(dt)
-            return
-        
-        if replay_commands:
-            cmd_type = replay_commands[self.current_replay_index]
-            self._execute_command(cmd_type, player_pos)
-            self.current_replay_index = (self.current_replay_index + 1) % len(replay_commands)
-        
-        if self.fire_cooldown > 0:
-            self.fire_cooldown -= 1
-        
-        super().update(dt)
-        self._update_tentacles(dt)
     
     def _death_stage(self, span: Tuple[float, float]) -> float:
         """Eased progress (0.0 to 1.0) through one stage of the death animation."""

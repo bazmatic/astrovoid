@@ -3,6 +3,7 @@
 This module handles the rendering of the level complete/failed screen.
 """
 
+import math
 import pygame
 from typing import Optional, Dict, List, Tuple
 import config
@@ -16,6 +17,8 @@ from rendering.number_sprite import NumberSprite
 from utils.resource_path import resource_path
 from utils.formatting import format_time
 from profiles import LevelResult
+from entities.replay_enemy_ship import ReplayEnemyShip
+from entities.command_recorder import CommandRecorder
 
 
 def comparison_lines(result: Optional[LevelResult], score: int, elapsed: float) -> Tuple[str, str]:
@@ -35,6 +38,16 @@ def comparison_lines(result: Optional[LevelResult], score: int, elapsed: float) 
 class LevelCompleteMenu:
     """Handles level complete/failed screen rendering."""
 
+    # The game's own squids hover either side of the failed banner. Positions
+    # are fractions of the banner, lengths are on the reference layout
+    FAILED_SQUID_OFFSET_X = 0.365  # From the banner's centre line
+    FAILED_SQUID_Y = 0.2
+    FAILED_SQUID_RADIUS = 58
+    FAILED_SQUID_TILT = 20  # Degrees the mantle tips lean in over the lettering
+    FAILED_SQUID_SWAY = 7  # Degrees
+    FAILED_SQUID_BOB = 7
+    FAILED_SQUID_SPEED = 0.03  # Radians per frame
+
     def __init__(self, screen: pygame.Surface):
         """Initialize level complete menu.
 
@@ -51,6 +64,8 @@ class LevelCompleteMenu:
         self._banner_is_light: Dict[bool, bool] = {}
         self._level_numbers: Dict[Tuple[int, int], Optional[pygame.Surface]] = {}
         self.menu_pulse_phase = 0.0
+        self.failed_squids = [ReplayEnemyShip((0.0, 0.0), CommandRecorder()) for _ in range(2)]
+        self.failed_squid_phase = 0.0
         self.label_font = get_font(self._scaled(26), bold=True)
         self.comparison_font = get_font(self._scaled(21))
         self.value_font = get_font(self._scaled(52), bold=True)
@@ -62,6 +77,7 @@ class LevelCompleteMenu:
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self._initialize()
+        self._update_failed_squids(0.0)
 
     def _scaled(self, value: float) -> int:
         """Scale a reference-layout length to the current screen size."""
@@ -204,6 +220,18 @@ class LevelCompleteMenu:
                     max(1, self._scaled(2))
                 )
 
+    def _update_failed_squids(self, dt: float) -> None:
+        """Hold the squids beside the failed banner, bobbing and swaying as they hover."""
+        self.failed_squid_phase += self.FAILED_SQUID_SPEED * dt
+        title = self.layout(False)['title']
+        for side, squid in zip((-1, 1), self.failed_squids):
+            phase = self.failed_squid_phase + (side + 1) * 0.9  # Out of step with each other
+            squid.radius = self._scaled(self.FAILED_SQUID_RADIUS)
+            squid.angle = -90 - side * self.FAILED_SQUID_TILT + self.FAILED_SQUID_SWAY * math.sin(phase * 0.6)
+            squid.x = title.centerx + side * title.width * self.FAILED_SQUID_OFFSET_X
+            squid.y = title.top + title.height * self.FAILED_SQUID_Y + self._scaled(self.FAILED_SQUID_BOB) * math.sin(phase)
+            squid.animate(dt)
+
     def update(self, dt: float) -> None:
         """Update menu animations.
 
@@ -216,6 +244,7 @@ class LevelCompleteMenu:
         self.menu_pulse_phase += config.BUTTON_GLOW_PULSE_SPEED * dt / 60.0
         if self.menu_pulse_phase >= 2 * 3.14159:
             self.menu_pulse_phase -= 2 * 3.14159
+        self._update_failed_squids(dt)
 
     def draw(
         self,
@@ -253,6 +282,9 @@ class LevelCompleteMenu:
             self.banners[level_succeeded], layout['title'],
             special_flags=pygame.BLEND_RGB_ADD if self._banner_is_light[level_succeeded] else 0
         )
+        if not level_succeeded:
+            for squid in self.failed_squids:
+                squid.draw(self.screen)
         number = self._level_number(level, layout['level_number'].height)
         if number is not None:
             self.screen.blit(
