@@ -114,8 +114,10 @@ class HunterPerception:
         """The player guides the hunter in: a cell route through the maze and its next waypoint."""
         sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
         active = [w for w in maze.walls if w.active]
-        if self._links_walls != len(active):
-            self._links,self._links_walls = {},len(active)
+        # A destroyed block can expose as many faces as it loses, so count alone is not enough
+        walls_key = (len(active),getattr(maze,'wall_generation',0))
+        if self._links_walls != walls_key:
+            self._links,self._links_walls = {},walls_key
 
         def cell(pos):
             return (min(maze.grid_width-1,max(0,int((pos[0]-ox)//sx))),
@@ -125,8 +127,7 @@ class HunterPerception:
             return (ox+(c[0]+.5)*sx,oy+(c[1]+.5)*sy)
 
         def linked(a, b):
-            # Judged by live wall segments, not maze.grid: destroying a wall
-            # removes its segments but leaves the generated grid untouched.
+            # Judged by live wall segments, which follow the blocks as they are destroyed.
             key = (a,b) if a < b else (b,a)
             if key not in self._links:
                 near = active

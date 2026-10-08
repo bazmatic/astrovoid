@@ -5,9 +5,14 @@ uneven ridge of rock instead of a ruled line: it wanders slightly, varies in
 thickness and color, has a lit and a shadowed edge, and shows cracks once it
 has been hit. Some walls carry barnacles or a tuft of swaying weed.
 
-The drawing never strays more than MAX_REACH from the true segment and always
-covers it, so what the player sees is still what they collide with. Each
-wall's shape is derived from its end points, so it looks the same every frame.
+The segments are the exposed faces of solid blocks. Each block is filled with
+darker rock that cracks further with every hit, so a wall reads as stone all
+the way through rather than as an outline.
+
+A ridge never strays more than MAX_REACH from its true segment and always
+covers it, and a block's fill stays inside the block, so what the player sees
+is still what they collide with. Each wall's shape is derived from its end
+points, so it looks the same every frame.
 
 Walls are painted once onto a cached surface. When one is damaged or destroyed
 only the patch around it is repainted. Weed is the only part drawn fresh each
@@ -17,7 +22,7 @@ frame.
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import Dict, List, Mapping, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import pygame
 import config
@@ -29,6 +34,7 @@ if TYPE_CHECKING:
 Point = Tuple[float, float]
 Color = Tuple[int, int, int]
 SegmentKey = Tuple[Tuple[int, int], Tuple[int, int]]
+BlockRect = Tuple[int, int, int, int]  # Left, top, width, height
 
 
 @dataclass
@@ -59,6 +65,9 @@ class WallRenderer:
     TINTS = ((0.62, 0.80, 0.87), (0.78, 0.70, 0.83), (0.57, 0.87, 0.77))
     CRACK_COLOR = (25, 30, 40)
     DAMAGED_SHADE = 0.78  # Brightness of a wall that has been hit
+    FILL_SHADE = 0.5  # Brightness of the rock inside a block, against its faces
+    FILL_BLOTCH_AREA = 150  # Pixels of block per blotch of mottling
+    FILL_CRACKS_PER_HIT = 2
     BARNACLE_CHANCE = 0.22
     BARNACLE_COLOR = (205, 205, 185)
     WEED_CHANCE = 0.16
@@ -73,17 +82,19 @@ class WallRenderer:
         self.weeds: List[Weed] = []
         self.repaint_count = 0
         self._segments: Dict[SegmentKey, int] = {}  # Hit points shown for each painted edge
+        self._blocks: Dict[BlockRect, int] = {}  # Hit points shown for each filled block
         self._weed_by_segment: Dict[SegmentKey, Weed] = {}
         self._surface: Optional[pygame.Surface] = None
         self._origin = (0, 0)
-        self._signature: Optional[Tuple[int, int, int]] = None
+        self._signature: Optional[Tuple[int, ...]] = None
 
     def draw(
         self,
         screen: pygame.Surface,
         walls: Sequence['WallSegment'],
         time_seconds: Optional[float] = None,
-        animate: bool = True
+        animate: bool = True,
+        blocks: Optional[Mapping[BlockRect, int]] = None
     ) -> None:
         """Draw the walls.
 
@@ -92,7 +103,9 @@ class WallRenderer:
             walls: The maze's wall segments. Inactive ones are skipped.
             time_seconds: Clock for the swaying weed. Defaults to the pygame clock.
             animate: Draw the weed. Without it only the rock is drawn.
+            blocks: Solid blocks to fill with rock, as screen area to hit points left.
         """
+        blocks = blocks or {}
         # Walls only ever lose hit points or vanish, so this changes whenever
         # the picture should
         count = hit_points = identity = 0
@@ -101,10 +114,10 @@ class WallRenderer:
                 count += 1
                 hit_points += wall.hit_points
                 identity ^= id(wall)
-        signature = (count, hit_points, identity)
+        signature = (count, hit_points, identity, len(blocks), sum(blocks.values()))
         if signature != self._signature:
             self._signature = signature
-            self._repaint(walls)
+            self._repaint(walls, blocks)
 
         if self._surface is not None:
             screen.blit(self._surface, self._origin)
@@ -133,8 +146,8 @@ class WallRenderer:
             seed = (seed * 1000003 + value) & 0xFFFFFFFFFFFF
         return random.Random(seed)
 
-    def _repaint(self, walls: Sequence['WallSegment']) -> None:
-        """Bring the cached picture up to date with the walls."""
+    def _repaint(self, walls: Sequence['WallSegment'], blocks: Mapping[BlockRect, int]) -> None:
+        """Bring the cached picture up to date with the walls and blocks."""
         self.repaint_count += 1
         # One entry per distinct edge, showing the most damaged copy
         segments: Dict[SegmentKey, int] = {}
@@ -146,6 +159,11 @@ class WallRenderer:
         previous, self._segments = self._segments, segments
         changed = [key for key in previous.keys() | segments.keys() if previous.get(key) != segments.get(key)]
         patches = [self._patch(key) for key in changed]
+        previous_blocks, self._blocks = self._blocks, dict(blocks)
+        patches += [
+            self._block_patch(rect) for rect in previous_blocks.keys() | self._blocks.keys()
+            if previous_blocks.get(rect) != self._blocks.get(rect)
+        ]
         if self._surface is None or not all(self._surface.get_rect().contains(patch) for patch in patches):
             self._paint_everything()
         else:
@@ -165,15 +183,22 @@ class WallRenderer:
         patch = pygame.Rect(min(ax, bx), min(ay, by), abs(bx - ax) + 1, abs(by - ay) + 1)
         return patch.inflate(2 * margin, 2 * margin).move(-self._origin[0], -self._origin[1])
     
+    def _block_patch(self, rect: BlockRect) -> pygame.Rect:
+        """Area of the cached surface a block's fill paints on."""
+        return pygame.Rect(rect).move(-self._origin[0], -self._origin[1])
+    
     def _paint_everything(self) -> None:
         """Paint every wall onto a fresh cached surface."""
         self._weed_by_segment = {}
-        if not self._segments:
+        if not self._segments and not self._blocks:
             self._surface = None
             return
         margin = int(math.ceil(self.MAX_REACH)) + 2
         xs = [point[0] for key in self._segments for point in key]
         ys = [point[1] for key in self._segments for point in key]
+        for left, top, width, height in self._blocks:
+            xs += [left, left + width]
+            ys += [top, top + height]
         self._origin = (min(xs) - margin, min(ys) - margin)
         # One pixel more than the walls span, so the patch around a wall on the
         # far edge still fits and does not force everything to be repainted
@@ -182,24 +207,58 @@ class WallRenderer:
         self._surface.fill(self.TRANSPARENT)
         # No RLE acceleration: it would be re-encoded on every patch repaint
         self._surface.set_colorkey(self.TRANSPARENT)
+        self._paint_blocks(self._blocks.keys())
         self._paint_segments(self._segments.keys())
     
     def _paint_patch(self, patch: pygame.Rect) -> None:
-        """Repaint one patch of the cached surface from the walls crossing it."""
+        """Repaint one patch of the cached surface from the walls and blocks crossing it."""
         keys = [key for key in self._segments if self._patch(key).colliderect(patch)]
+        rects = [rect for rect in self._blocks if self._block_patch(rect).colliderect(patch)]
         # Those walls are painted whole on a scratch surface and the patch
         # copied across. Painting them clipped to the patch instead comes out
         # a few pixels different from how they were first painted
-        area = patch.unionall([self._patch(key) for key in keys])
+        area = patch.unionall([self._patch(key) for key in keys] + [self._block_patch(rect) for rect in rects])
         scratch = pygame.Surface(area.size)
         scratch.fill(self.TRANSPARENT)
         cache, origin = self._surface, self._origin
         self._surface, self._origin = scratch, (origin[0] + area.x, origin[1] + area.y)
         try:
+            self._paint_blocks(rects)
             self._paint_segments(keys)
         finally:
             self._surface, self._origin = cache, origin
         cache.blit(scratch, patch.topleft, patch.move(-area.x, -area.y))
+    
+    def _paint_blocks(self, rects) -> None:
+        """Fill the given blocks with rock, cracked according to the hits they have taken."""
+        surface = self._surface
+        for rect in rects:
+            left, top, width, height = rect
+            if width < 1 or height < 1:
+                continue
+            damage = max(0, config.WALL_HIT_POINTS - self._blocks[rect])
+            shade = self.FILL_SHADE * (self.DAMAGED_SHADE if damage else 1.0)
+            rng = self._rng(left, top, width, height)
+            x, y = left - self._origin[0], top - self._origin[1]
+            # Nothing spills over the block's edge, where there may be open space
+            surface.set_clip(pygame.Rect(x, y, width, height))
+            surface.fill(self._tint(rng, shade))
+            for _ in range(max(3, width * height // self.FILL_BLOTCH_AREA)):
+                centre = (x + rng.randrange(width), y + rng.randrange(height))
+                pygame.draw.circle(surface, self._tint(rng, shade * rng.uniform(0.75, 1.2)), centre, rng.randint(2, 5))
+            if damage:
+                # A separate stream, so cracks spread without reshaping the rock
+                crack_rng = self._rng(left, top, width, height, 7919)
+                for _ in range(damage * self.FILL_CRACKS_PER_HIT):
+                    crack = [(x + crack_rng.randrange(width), y + crack_rng.randrange(height))]
+                    for _ in range(crack_rng.randint(2, 4)):
+                        reach = max(3, min(width, height) // 3)
+                        crack.append((
+                            max(x, min(x + width - 1, crack[-1][0] + crack_rng.randint(-reach, reach))),
+                            max(y, min(y + height - 1, crack[-1][1] + crack_rng.randint(-reach, reach))),
+                        ))
+                    pygame.draw.lines(surface, self.CRACK_COLOR, False, crack, 1)
+            surface.set_clip(None)
     
     def _paint_segments(self, keys) -> None:
         """Paint the given segments and the joints at their ends."""

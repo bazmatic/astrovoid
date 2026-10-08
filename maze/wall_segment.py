@@ -4,7 +4,7 @@ This module provides the WallSegment class for representing destructible wall se
 with hit points tracking.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 
 class WallSegment:
@@ -16,10 +16,11 @@ class WallSegment:
         hit_points: Current hit points remaining.
         active: Whether the wall segment is still active (not destroyed).
         destructible: Whether damage can wear the wall segment down.
+        cell: Grid cell of the block this is a face of, if it belongs to one.
     """
     
     def __init__(self, start: Tuple[float, float], end: Tuple[float, float], hit_points: int,
-                 destructible: bool = True):
+                 destructible: bool = True, cell: Optional[Tuple[int, int]] = None):
         """Initialize wall segment.
         
         Args:
@@ -27,12 +28,14 @@ class WallSegment:
             end: End point of the wall segment (x, y).
             hit_points: Initial hit points for the wall segment.
             destructible: False for a wall that can never be damaged (the maze's outer walls).
+            cell: Grid cell (x, y) of the block this segment is a face of.
         """
         self.start = start
         self.end = end
         self.hit_points = hit_points
         self.active = True
         self.destructible = destructible
+        self.cell = cell
     
     def damage(self) -> bool:
         """Damage the wall segment by reducing hit points.

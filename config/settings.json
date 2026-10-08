@@ -48,7 +48,7 @@
     "wallThickness": 6,
     "cellSize": null,
     "minPassageWidth": 3,
-    "wallHitPoints": 2,
+    "wallHitPoints": 4,
     "shipSpawnOffset": 0.35,
     "complexityPresets": {
       "EMPTY": {

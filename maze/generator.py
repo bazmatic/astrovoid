@@ -16,7 +16,7 @@ from utils import (
 from maze.wall_segment import WallSegment
 from maze.config import MazeComplexity, MazeGenerationConfig, MazeComplexityPresets
 from maze.positioning import MazePositionCalculator
-from maze.converter import GridToWallsConverter
+from maze.converter import GridToWallsConverter, SIDES
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
 from rendering.wall_renderer import WallRenderer
@@ -265,18 +265,17 @@ class Maze:
         generator.clear_corner_area(self.grid, start_grid)
         generator.clear_corner_area(self.grid, exit_grid)
         
-        # Convert grid to wall segments
-        converter = GridToWallsConverter(self.position_calculator)
-        self.walls = converter.convert(self.grid)
+        # Convert grid to blocks and their wall segments
+        self.converter = GridToWallsConverter(self.position_calculator)
         self.wall_renderer = WallRenderer()
-        
-        # Create spatial grid for efficient collision detection
+        # Spatial grid for efficient collision detection
         self.spatial_grid = SpatialGrid(
             config.SCREEN_WIDTH,
             config.SCREEN_HEIGHT,
             cell_size=150.0  # Optimal cell size for this game
         )
-        self.spatial_grid.add_walls(self.walls)
+        self.wall_generation = 0  # Goes up each time a block is destroyed
+        self.rebuild_walls()
         
         # Set start position
         self.start_pos = self.position_calculator.get_start_position(start_grid)
@@ -291,28 +290,71 @@ class Maze:
         """Check if player reached the exit."""
         return self.exit.check_circle_collision(pos, radius)
     
+    def rebuild_walls(self) -> None:
+        """Build the blocks, their exposed faces and the collision index from the grid."""
+        self.walls = self.converter.convert(self.grid)
+        # Hit points left in each wall block, keyed by grid cell (x, y). A
+        # block is solid rock: shots at any of its faces wear down the block
+        self.blocks: Dict[Tuple[int, int], int] = {
+            (x, y): config.WALL_HIT_POINTS
+            for y, row in enumerate(self.grid) for x, value in enumerate(row) if value == 1
+        }
+        self.spatial_grid.add_walls(self.walls)
+        self._refresh_block_fills()
+    
+    def _refresh_block_fills(self) -> None:
+        """Rebuild the screen areas of the blocks, which the renderer fills with rock."""
+        self.block_fills = {self.converter.cell_rect(x, y): hit_points for (x, y), hit_points in self.blocks.items()}
+    
     def damage_wall(self, wall: WallSegment) -> bool:
-        """Damage a wall segment. Returns True if wall was destroyed.
+        """Damage the block a wall segment is a face of. Returns True if the block was destroyed.
+        
+        The whole block goes at once, and the faces of its neighbours that
+        looked onto it become walls.
         
         Args:
-            wall: The wall segment to damage.
+            wall: The wall segment that was hit.
             
         Returns:
-            True if wall was destroyed (hit points reached 0), False otherwise.
+            True if the block was destroyed (hit points reached 0), False otherwise.
         """
-        if wall not in self.walls:
+        if wall not in self.walls or not wall.destructible:
             return False
         
-        # Damage the wall segment
-        destroyed = wall.damage()
+        cell = wall.cell
+        if cell not in self.blocks:
+            # A loose segment that belongs to no block
+            destroyed = wall.damage()
+            if destroyed:
+                self.spatial_grid.update_wall(wall)
+                self.walls = [w for w in self.walls if w.active]
+            return destroyed
         
-        # Update spatial grid
-        if destroyed:
-            self.spatial_grid.update_wall(wall)
-            # Remove inactive walls from the list
-            self.walls = [w for w in self.walls if w.active]
+        faces = [w for w in self.walls if w.cell == cell]
+        hit_points = self.blocks[cell] - 1
+        for face in faces:
+            face.hit_points = hit_points
+        if hit_points > 0:
+            self.blocks[cell] = hit_points
+            self._refresh_block_fills()
+            return False
         
-        return destroyed
+        del self.blocks[cell]
+        self.grid[cell[1]][cell[0]] = 0
+        for face in faces:
+            face.active = False
+            self.spatial_grid.update_wall(face)
+        self.walls = [w for w in self.walls if w.active]
+        # Neighbouring blocks now have a face onto the gap
+        for dx, dy in SIDES:
+            neighbour = (cell[0] + dx, cell[1] + dy)
+            if neighbour in self.blocks:
+                face = self.converter.face(self.grid, neighbour, (-dx, -dy), self.blocks[neighbour])
+                self.walls.append(face)
+                self.spatial_grid.add_wall(face)
+        self.wall_generation += 1
+        self._refresh_block_fills()
+        return True
     
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100,
                                   start_clearance: Optional[float] = None) -> List[Tuple[float, float]]:
@@ -370,6 +412,11 @@ class Maze:
             if too_close:
                 continue
             
+            # Check if position is inside a block
+            cell = (int((x - self.offset_x) // self.cell_size_x), int((y - self.offset_y) // self.cell_size_y))
+            if cell in self.blocks:
+                continue
+            
             # Check if position is in a wall
             in_wall = False
             for wall in self.walls:
@@ -387,7 +434,7 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
-        self.wall_renderer.draw(screen, self.walls)
+        self.wall_renderer.draw(screen, self.walls, blocks=self.block_fills)
         
         # Draw exit marker
         if self.exit.active:
