@@ -110,6 +110,25 @@ class TestDamage:
         damaged = render([wall((60, 150), (340, 150), hit_points=1)])
         assert pygame.image.tostring(intact, "RGBA") != pygame.image.tostring(damaged, "RGBA")
 
+    def test_each_hit_looks_worse_than_the_last(self):
+        looks = [
+            pygame.image.tostring(render([wall((60, 150), (340, 150), hit_points=hit_points)]), "RGBA")
+            for hit_points in range(config.WALL_HIT_POINTS, 0, -1)
+        ]
+        assert len(set(looks)) == len(looks)
+
+    @pytest.mark.parametrize("start,end", [
+        ((60, 150), (340, 150)), ((200, 30), (200, 270)), ((70, 60), (310, 240)),
+    ])
+    def test_a_damaged_wall_still_covers_its_true_line(self, start, end):
+        pixels = drawn_pixels(render([wall(start, end, hit_points=1)]))
+        length = math.hypot(end[0] - start[0], end[1] - start[1])
+        for step in range(int(length) + 1):
+            t = step / length
+            point = (int(start[0] + (end[0] - start[0]) * t), int(start[1] + (end[1] - start[1]) * t))
+            assert point in pixels
+        assert max(distance_to_segment(p, start, end) for p in pixels) <= WallRenderer.MAX_REACH
+
     def test_damage_repaints(self):
         renderer = WallRenderer()
         walls = [wall((60, 150), (340, 150)), wall((60, 250), (340, 250))]
