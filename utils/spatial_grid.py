@@ -217,6 +217,20 @@ class SpatialGrid:
         
         return list(cells)
     
+    def add_wall(self, wall) -> None:
+        """Add one more wall to the grid, keeping those already there.
+        
+        Args:
+            wall: The wall segment to add (WallSegment instance or tuple).
+        """
+        segment = wall.get_segment() if hasattr(wall, 'get_segment') else wall
+        wall_index = len(self.walls)
+        self.walls.append(wall)
+        self.wall_to_index[wall] = wall_index
+        for row, col in self._get_cells_for_line(segment[0], segment[1]):
+            if 0 <= row < self.grid_rows and 0 <= col < self.grid_cols:
+                self.grid[row][col].add(wall_index)
+    
     def update_wall(self, wall) -> None:
         """Update a wall's position in the grid (e.g., when it's destroyed).
         

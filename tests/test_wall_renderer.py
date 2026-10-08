@@ -143,8 +143,8 @@ class TestDamage:
         walls = grid()
         render(walls, renderer)
         walls[2].damage()
-        walls[5].damage()
-        walls[5].damage()
+        for _ in range(config.WALL_HIT_POINTS):
+            walls[5].damage()
         walls[7].damage()
         patched = render([w for w in walls if w.active], renderer)
         assert renderer.repaint_count == 2
