@@ -23,7 +23,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 - **Paced Levels**: A designed arc of 24 levels introduces one enemy type at a time, then an endless game that gets harder without getting more crowded
 - **Boss Levels**: Every sixth level is a boss fight in an open arena
 - **Momentum Physics**: Eggs and Static enemies gain momentum when hit by projectiles, moving with realistic physics and bouncing off walls
-- **Exit Portal Lock**: Exit portal deactivates while any egg or boss is alive, requiring them all to be destroyed before level completion
+- **Exit Portal Lock**: Exit portal deactivates while any egg is alive, and on a boss level while any enemy is alive, requiring them to be destroyed before level completion
 
 ## Requirements
 
@@ -132,7 +132,7 @@ The executable will be created in the `dist/` folder. On Windows, it will be `di
 
 Navigate through each maze level, reaching the exit (green) while managing resources and avoiding or destroying enemies.
 
-**Important**: The exit portal is locked while any Egg, Split Boss or Mother Boss is alive. You must destroy them all before the exit portal activates and allows level completion. The portal dims and makes a power-down sound while it is locked, and brightens with a power-up sound when the last one is destroyed. The two Replay ships a boss leaves behind do not hold the exit shut.
+**Important**: The exit portal is locked while any Egg is alive. On a boss level it is locked until every enemy is destroyed: the bosses, their escorts, the two Replay ships a boss leaves behind when it dies, and any Babies that hatch. The portal dims and makes a power-down sound while it is locked, and brightens with a power-up sound when the last one is destroyed.
 
 ### Scoring
 
@@ -193,7 +193,7 @@ When you complete a level, the screen displays:
 | 24 | **Boss level**: Mother Boss and Split Boss |
 
 - The maze grows from 10 cells across to 32, and the enemy count from 4 to 24, rising by no more than 2 from one ordinary level to the next.
-- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every boss is dead, ammo is infinite, and the hunter does not fly.
+- **Boss levels** are small open arenas with a boss and a few escorts. The exit stays locked until every enemy on the level is dead, ammo is infinite, and the hunter does not fly.
 
 **From level 25** the game is endless:
 

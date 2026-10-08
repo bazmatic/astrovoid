@@ -66,9 +66,9 @@ These are checked by a test over the 24 files, so later tuning cannot break them
 
 ## 2. Boss levels
 
-- **Exit lock.** The exit is locked while any split boss or mother boss is alive. This extends the existing rule that locks it while any egg is alive, and uses the same locked look and unlock ripple. The two rules combine: on a mother boss level the boss and every egg must be dead.
-- **What does not hold the exit.** The two replay ships a boss leaves behind when it dies, and babies hatched from eggs, do not lock the exit.
-- **The rule is general.** It is "any boss alive locks the exit", not "this is level 6". A level file that places a boss on any level gets the lock.
+- **Exit lock.** On a boss level the exit is locked until every enemy on the level is dead: the bosses, their escorts, the two replay ships a boss leaves behind when it dies, and any babies that hatch. It uses the same locked look and unlock ripple as the existing egg lock. (Changed after first play: originally only the bosses and eggs held the exit.)
+- **Other levels are unchanged.** On an ordinary level only eggs lock the exit, as before.
+- **The rule is general.** It applies to any level with a boss, not to particular level numbers. A level file that places a boss on any level gets the lock.
 - **No hunter** on boss levels.
 - **Infinite ammo** on boss levels, so a locked exit can never leave the player stuck with no shots. Each shot still costs score as usual.
 - **Arena.** Boss levels use a small `empty` maze. The 300 px start clearance still applies, so the boss never starts next to the player.
@@ -148,7 +148,7 @@ Tests are written first.
 - **Endless:** count formula and cap; the mix at levels 25, 35 and 47; boss levels fall on multiples of 6 with the right kind and number through level 66; ordinary endless levels have no bosses; speed and damage stop at their ceilings.
 - **Fallback:** a level below 25 with no file gets a count and types within the bounds above.
 - **Hunter:** none on levels 1–3, present on 4, absent on 6 and 30, `"hunter": false` respected, a placed hunter still placed.
-- **Exit lock:** starting a real level with a boss, the exit is locked; killing the boss unlocks it even with the boss's two replay ships alive; with a mother boss it stays locked until the eggs are dead too.
+- **Exit lock:** starting a real level with a boss, the exit is locked; it stays locked after the boss dies while any escort, replay ship or baby lives, and opens when the last enemy is dead; on an ordinary level living enemies do not lock it.
 - **Profiles:** an old file loads with bests cleared and level and total kept, and is rewritten with the version; a current file keeps its bests.
 - **Existing tests** that pin the old schedule (`test_anemone_levels.py`, hunter interval tests) are updated to the new schedule.
 - **Spawn room:** every arc level and endless levels 25, 47 and 66 place all their enemies at 1352x878 with the start clearance.

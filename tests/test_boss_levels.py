@@ -118,12 +118,54 @@ def test_the_exit_is_locked_while_a_mother_boss_lives_even_with_no_eggs(game, mo
     assert not game.maze.exit.is_activated
 
 
-def test_killing_the_boss_opens_the_exit_even_with_its_escort_alive(game, monkeypatch):
+def test_killing_the_boss_does_not_open_the_exit_while_its_escort_lives(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(split_boss=1, replay=2))
     start(game, 6)
     kill(game.split_bosses)
     game.update(1.0)
     assert any(ship.active for ship in game.replay_enemies)
+    assert not game.maze.exit.is_activated
+    kill(game.replay_enemies)
+    game.update(1.0)
+    assert game.maze.exit.is_activated
+
+
+@pytest.mark.parametrize('escort, group', [
+    ('static', 'enemies'), ('patrol', 'enemies'), ('aggressive', 'enemies'), ('replay', 'replay_enemies'),
+    ('flocker', 'flockers'), ('flighthouse', 'flighthouses'), ('anemone', 'anemones')])
+def test_every_kind_of_enemy_holds_a_boss_level_exit_shut(game, monkeypatch, escort, group):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(split_boss=1, **{escort: 1}))
+    start(game, 6)
+    kill(game.split_bosses)
+    game.update(1.0)
+    assert not game.maze.exit.is_activated
+    kill(getattr(game, group))
+    game.update(1.0)
+    assert game.maze.exit.is_activated
+
+
+def test_ships_and_babies_that_arrive_during_a_boss_level_hold_the_exit_shut(game, monkeypatch):
+    from entities.baby import Baby
+    from entities.replay_enemy_ship import ReplayEnemyShip
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(split_boss=1))
+    start(game, 6)
+    kill(game.split_bosses)
+    game.replay_enemies.append(ReplayEnemyShip((600.0, 400.0), game.command_recorder))  # as a dying boss leaves
+    game.update(1.0)
+    assert not game.maze.exit.is_activated
+    kill(game.replay_enemies)
+    game.babies.append(Baby((600.0, 400.0), game.command_recorder))  # as a hatching egg leaves
+    game.update(1.0)
+    assert not game.maze.exit.is_activated
+    kill(game.babies)
+    game.update(1.0)
+    assert game.maze.exit.is_activated
+
+
+def test_enemies_do_not_hold_an_ordinary_level_exit_shut(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(static=2, patrol=1, replay=1))
+    start(game, 3)
+    assert sum(enemy.active for enemy in game.entity_manager.get_all_enemies()) == 4
     assert game.maze.exit.is_activated
 
 
@@ -152,6 +194,12 @@ def test_a_boss_on_any_level_locks_the_exit(game, monkeypatch):
     start(game, 7)
     assert not game.maze.exit.is_activated
     assert game.hunter is None
+    kill(game.split_bosses)
+    game.update(1.0)
+    assert not game.maze.exit.is_activated  # the two static enemies remain
+    kill(game.enemies)
+    game.update(1.0)
+    assert game.maze.exit.is_activated
 
 
 def test_restarting_a_boss_level_locks_the_exit_again(game, monkeypatch):
