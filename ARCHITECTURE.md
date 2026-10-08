@@ -157,7 +157,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 1. **Level Start**: `start_level()` generates maze, creates ship and enemies
    - What is on a level comes from `level_config.py`: the level's file in `levels/` if it has one (levels 1-24 all do), otherwise the formulas in `level_rules.py` (level 25 onward). See `levels/README.md`.
    - Enemies are placed at least `enemies.startClearance` pixels from the ship.
-   - A level with a Split Boss or Mother Boss is a boss level: the exit stays locked while a boss (or, on any level, an egg) is alive, and no hunter flies.
+   - A level with a Split Boss or Mother Boss is a boss level: the exit stays locked until every enemy is dead (on other levels, only eggs lock it), ammo is infinite, and no hunter flies.
 2. **Gameplay**: Player navigates maze, avoids/fights enemies
 3. **Level Complete**: Ship reaches exit or score reaches zero
 4. **Score Calculation**: Final score calculated with penalties and bonuses

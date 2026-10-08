@@ -136,6 +136,7 @@ class Game:
         self.exit_explosion_active = False  # Track if exit explosion is playing
         self.exit_explosion_time = 0.0  # Time since explosion started
         self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
+        self.boss_level = False  # On a boss level the exit opens only when every enemy is dead
         self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
         self.level_complete_quit_confirm = False  # Track quit confirmation on level complete screen
         self.player_has_moved = False  # Track if player has made their first move
@@ -252,8 +253,9 @@ class Game:
         self.ship.shield_active = True
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
-        # The exit is locked until the bosses are dead, so shots must not run out
-        self.ship.infinite_ammo = level_config.is_boss_level(self.level)
+        # A boss level's exit is locked until every enemy is dead, so shots must not run out
+        self.boss_level = level_config.is_boss_level(self.level)
+        self.ship.infinite_ammo = self.boss_level
         
         # Reset player movement flag - game loop won't start until first move
         self.player_has_moved = False
@@ -472,10 +474,10 @@ class Game:
         if not self.ship or not self.maze:
             return
         
-        # The exit stays shut while any egg or boss is alive
+        # The exit stays shut while any egg is alive and, on a boss level, while any enemy at all is
         exit_locked = (any(egg.active for egg in self.eggs)
-                       or any(boss.active for boss in self.split_bosses)
-                       or any(boss.active for boss in self.mother_bosses))
+                       or (self.boss_level
+                           and any(enemy.active for enemy in self.entity_manager.get_all_enemies())))
         if self.maze.exit.active:
             self.maze.exit.set_activated(not exit_locked, self.sound_manager)
         

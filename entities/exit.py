@@ -22,7 +22,7 @@ class ExitPortal(GameEntity, Collidable, Drawable):
     The exit portal is a stationary object that the player must reach to complete a level.
     Bands of water spiral into a dark mouth and specks are drawn in from the
     edge of its pull, so the pull is visible before it is felt. While locked
-    (eggs or a boss remain) it slows, dims and its mouth irises shut.
+    (eggs remain, or any enemy on a boss level) it slows, dims and its mouth irises shut.
     
     Attributes:
         base_radius: Base radius of the exit portal (used for collision and display).
@@ -330,7 +330,7 @@ class ExitPortal(GameEntity, Collidable, Drawable):
     def set_activated(self, activated: bool, sound_manager=None) -> None:
         """Set the activation state of the exit portal.
         
-        When deactivated (eggs or a boss present), the portal is dimmed and non-functional.
+        When deactivated (eggs present, or any enemy on a boss level), the portal is dimmed and non-functional.
         When activated (none left), the portal is fully functional.
         
         Args:
