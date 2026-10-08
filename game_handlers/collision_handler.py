@@ -4,6 +4,7 @@ This module centralizes all collision detection logic, eliminating duplication
 and making collision handling easier to maintain and extend.
 """
 
+from copy import deepcopy
 import math
 import random
 from typing import List, Optional, Tuple, TYPE_CHECKING
@@ -46,10 +47,12 @@ class CollisionHandler:
         self.sound_manager = sound_manager
         self.scoring = scoring
         self.command_recorder = command_recorder
+        self.last_player_kill = None
     
-    def _record_projectile_kill(self, projectile) -> None:
+    def _record_projectile_kill(self, projectile, enemy) -> None:
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
+            self.last_player_kill = deepcopy(enemy)
 
     def _drop_pickup(
         self,
@@ -130,14 +133,14 @@ class CollisionHandler:
                         if enemy.take_damage():
                             enemy.die()
                             self.sound_manager.play_enemy_destroy()
-                            self._record_projectile_kill(projectile)
+                            self._record_projectile_kill(projectile, enemy)
                             
                             self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Non-static enemies destroyed immediately (existing behavior)
                         enemy.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, enemy)
                         
                         self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     
@@ -153,7 +156,7 @@ class CollisionHandler:
                     if replay_enemy.take_damage():
                         replay_enemy.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, replay_enemy)
                         
                         self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
@@ -169,7 +172,7 @@ class CollisionHandler:
                     flocker_pos = flocker.get_pos()
                     flocker.die()
                     self.sound_manager.play_enemy_destroy()
-                    self._record_projectile_kill(projectile)
+                    self._record_projectile_kill(projectile, flocker)
                     
                     self._drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
                     
@@ -183,7 +186,7 @@ class CollisionHandler:
                     if anemone.take_damage():
                         anemone.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, anemone)
                         self._drop_pickup(anemone_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Clamp shut so the hit buys a moment without the pull
@@ -199,7 +202,7 @@ class CollisionHandler:
                     if flighthouse.take_damage():
                         flighthouse.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, flighthouse)
                         self._drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
                     return True
         
@@ -215,7 +218,7 @@ class CollisionHandler:
                         # SplitBoss destroyed - spawn two ReplayEnemyShip instances
                         split_boss.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, split_boss)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -237,7 +240,7 @@ class CollisionHandler:
                         # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
                         mother_boss.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, mother_boss)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -254,7 +257,7 @@ class CollisionHandler:
                     baby_pos = baby.get_pos()
                     baby.die()
                     self.sound_manager.play_enemy_destroy()
-                    self._record_projectile_kill(projectile)
+                    self._record_projectile_kill(projectile, baby)
                     
                     self._drop_pickup(baby_pos, powerup_crystals, jev_beacon_allowed)
                     
@@ -275,7 +278,7 @@ class CollisionHandler:
                     if egg.take_damage():
                         egg.die()  # Destroy egg without spawning Replay Enemies
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile)
+                        self._record_projectile_kill(projectile, egg)
                         
                         self._drop_pickup(egg_pos, powerup_crystals, jev_beacon_allowed)
                     

@@ -204,6 +204,7 @@ class Game:
     def start_level(self) -> None:
         """Start a new level."""
         self._close_hunter()
+        self.collision_handler.last_player_kill = None
         self.replaying = self.level < self.profile_manager.get_active_level()
         self.level_result = None
         # Store total score before starting level (for replay functionality)
@@ -834,7 +835,7 @@ class Game:
         self.level_succeeded = success
         self.game_over_active = False
         self.game_frozen = False
-        self.level_complete_menu.set_options(success)
+        self.level_complete_menu.set_options(success, self.collision_handler.last_player_kill)
         
         # Calculate score
         self.level_score_breakdown = self.scoring.calculate_level_score(
