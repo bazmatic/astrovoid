@@ -160,9 +160,10 @@ def test_flying_the_correction_points_the_motion_at_the_target(seed):
 
     final_speed = math.hypot(ship.vx, ship.vy)
     travel = math.degrees(math.atan2(ship.vy, ship.vx))
-    # Burns are whole frames, so a stronger engine steers in coarser steps: about 2 degrees at the
-    # reference engine, up to about 3.3 at four times its thrust.
-    assert abs(off(travel, bearing(ship.get_pos(), target))) < 4.0
+    # Burns are whole frames, so a stronger engine steers in coarser steps: 2 degrees at the reference
+    # engine, and it grew to about 3.3 at four times its thrust.
+    tolerance = 2.0 * max(1.0, (ship.thrust_force / 0.0375) ** 0.5)
+    assert abs(off(travel, bearing(ship.get_pos(), target))) < tolerance
     assert final_speed <= limit + 0.05
     assert final_speed == pytest.approx(correction.final_speed, abs=0.08)
     # The burn never pushes the speed above where it started or the limit, whichever is higher.

@@ -34,6 +34,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 005 | [baseline, rules defaults](005-baseline-rules.md) | 48.6 | 65.7 | superseded by 007's baseline |
 | 006 | [strafe](006-strafe.md) | -36.8 to -50.1 | n/a | rejected: more hits, fewer kills |
 | 007 | [confident exploration](007-confident-exploration.md) | +11.3 | +5.3 | **adopted** (cruise 2.0, look-ahead 2.5); current reference 53.6 / 72.2 |
+| 008 | [thrust](008-thrust.md) | no effect at 0.15 to 1.5; 1.0 worse on held-out (-21.6) | | reverted to 0.25 |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 

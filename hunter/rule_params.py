@@ -9,16 +9,16 @@ class RuleParams:
     too_close_ratio: float = 0.6  # Closer than this share of the standoff is too close
     far_ratio: float = 1.15  # Further than this multiple of the standoff is far
     harmless_speed: float = 15.0  # m/s below which a wall brush is harmless
-    # Share of sqrt(thrust x standoff) that wall-following cruises at. 0.3 at the hunter's thrust of
-    # 1.0 is the same absolute speed as 0.6 was at 0.25, so Jev's and the student's pace is unchanged.
-    wall_follow_cruise: float = 0.3
+    # Share of sqrt(thrust x standoff) that wall-following cruises at. It scales with the engine, so a
+    # stronger one would need a smaller value to keep the same pace (0.3 at thrust 1.0 = 0.6 at 0.25).
+    wall_follow_cruise: float = 0.6
     wall_lookahead_cells: float = 0.75  # How far along the wall the follow target sits, in cells
     course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
     # The hunter ship's engine, as a share of the player's. A ship property: the lab applies it to the
     # hunter, and adopting a value means changing HunterSettings (a test keeps the two equal).
-    thrust_multiplier: float = 1.0
+    thrust_multiplier: float = 0.25
     strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
@@ -51,9 +51,9 @@ class RuleParams:
 
 DEFAULT = RuleParams()
 # The rules pilot's own defaults: DEFAULT plus what experiments have adopted (docs/experiments):
-# the investigate rule (004) and faster, longer-sighted wall-following (007: a cruise of 2.0 at the
-# old thrust of 0.25, which is 1.0 at today's thrust of 1.0). Jev and the student keep DEFAULT.
-RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=1.0, wall_lookahead_cells=2.5)
+# the investigate rule (004) and faster, longer-sighted wall-following (007). Jev and the student
+# keep DEFAULT.
+RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5)
 
 SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe')
 
