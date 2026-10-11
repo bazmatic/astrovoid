@@ -402,6 +402,15 @@ selects a model; the default is `jev-latest`. To enter the key privately for one
 venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
 ```
 
+### Offline student pilot
+
+`game.hunterPilot` in `config/settings.json` chooses the hunter's pilot: `"jev"` (default),
+`"student"` (a small network trained to imitate Jev, no key or network needed), or `"auto"`
+(Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
+to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a student with
+`venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
+`assets/student/jev_student.npz`.
+
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
 The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the
 way from your start to the exit, on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one.

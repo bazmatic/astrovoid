@@ -2,6 +2,7 @@
 import json
 import math
 import os
+import sys
 from dataclasses import replace
 from hunter.model import ACTIONS, PilotDecision
 from hunter.pilot_sensors import pilot_state
@@ -300,7 +301,7 @@ class PilotUnavailable(Exception):
     """A local configuration issue prevents decisions for this level."""
 
 
-def create_client():
+def _create_jev_client():
     if not os.environ.get('TYPESAFE_API_KEY', '').strip():
         raise PilotUnavailable('missing_key')
     try:
@@ -314,6 +315,29 @@ def create_client():
     except Exception:
         # Client construction performs validation, not an inference request.
         raise PilotUnavailable('invalid_configuration') from None
+
+
+def create_client():
+    """The pilot client for this level: Jev, the trained student, or Jev with recording."""
+    from config import SETTINGS
+    from hunter.student.client import load_student_client
+    mode = SETTINGS.game.hunterPilot
+    if mode not in ('jev', 'student', 'auto'):
+        raise PilotUnavailable('invalid_configuration')
+    if mode == 'student':
+        return load_student_client()
+    try:
+        client = _create_jev_client()
+    except PilotUnavailable:
+        if mode == 'auto':
+            return load_student_client()
+        raise
+    # Frozen builds have no useful project directory to log into.
+    if SETTINGS.game.recordPilotDecisions and not getattr(sys, 'frozen', False):
+        from hunter.student.recorder import record_to_disk
+        client = record_to_disk(
+            client, model=os.environ.get('TYPESAFE_DEFAULT_MODEL', '').strip() or 'jev-latest')
+    return client
 
 
 class JevPilot:
