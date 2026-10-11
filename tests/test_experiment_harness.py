@@ -127,3 +127,58 @@ def test_a_farming_level_reports_the_enemies_that_spawned():
     result = run_episode(27, 0, horizon=25.0)
     assert result.enemies_spawned >= 0
     assert result.kills <= result.enemies_at_start + result.enemies_spawned
+
+
+# --- the hunter is never replaced, and the real clock never matters ---------------
+
+def test_a_beacon_pickup_cannot_replace_the_hunter_mid_episode(monkeypatch):
+    from game import Game
+    original = Game.update
+    state = {'frames': 0, 'replaced': None}
+
+    def summon_again(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == 30:
+            before = self.hunter
+            self._summon_hunter((self.ship.x, self.ship.y))   # what picking up a beacon does
+            state['replaced'] = self.hunter is not before
+    monkeypatch.setattr(Game, 'update', summon_again)
+    result = run_episode(13, 0, horizon=2.0)
+    assert state['replaced'] is False
+    assert result.end in ('cleared', 'horizon')
+
+
+def test_results_do_not_depend_on_the_real_clock(monkeypatch):
+    import random as stdlib_random
+    import time
+
+    def drifting_clock(drift_seed):
+        rng = stdlib_random.Random(drift_seed)   # its own generator, not the game's
+        value = [1.0e6]
+
+        def tick():
+            value[0] += rng.uniform(0.0, 0.01)
+            return value[0]
+        return tick
+    runs = []
+    for drift_seed in (1, 2):
+        monkeypatch.setattr(time, 'monotonic', drifting_clock(drift_seed))
+        monkeypatch.setattr(time, 'time', drifting_clock(drift_seed + 100))
+        runs.append(run_episode(13, 5, horizon=60.0))
+    assert runs[0] == runs[1]
+
+
+def test_an_episode_notices_if_the_hunter_is_replaced(monkeypatch):
+    from game import Game
+    original = Game.update
+    state = {'frames': 0}
+
+    def swap(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == 5:
+            self.hunter = object.__new__(type(self.hunter))
+    monkeypatch.setattr(Game, 'update', swap)
+    with pytest.raises(RuntimeError, match='hunter was replaced'):
+        run_episode(13, 0, horizon=2.0)

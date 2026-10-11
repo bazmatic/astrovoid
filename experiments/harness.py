@@ -149,12 +149,22 @@ def _enemy_count(game):
     return sum(1 for _ in game.entity_manager.get_all_active_enemies())
 
 
+_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
+
+
+def _clear_overrides(game):
+    """The episode's per-instance overrides must not outlive it on the reused Game."""
+    for name in _OVERRIDDEN:
+        game.__dict__.pop(name, None)
+
+
 def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     global _game
     import config
     if _game is None:
         _game = _make_game()
     game = _game
+    _clear_overrides(game)
     now = [1000.0]
     clock = lambda: now[0]
 
@@ -172,6 +182,10 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._summon_hunter((game.ship.x, game.ship.y))
     hunter, controller = game.hunter, game.hunter_controller
     controller.clock = clock
+    # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
+    # with a real-clock controller) must not replace it, and no new beacon may drop.
+    game._summon_hunter = lambda near: None
+    game._jev_beacon_drop_allowed = lambda: False
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
     settings = replace(HunterSettings(), request_interval=params.request_interval)
     hunter.settings = controller.settings = settings
@@ -201,11 +215,14 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
         game.update(1.0)
+        if game.hunter is not hunter or game.hunter_controller is not controller:
+            raise RuntimeError('hunter was replaced during the episode')
         counter.enemies(_enemy_count(game))
         counter.tick(elapsed)
         if start_enemies and _enemy_count(game) == 0:
             end = 'cleared'
             break
     game._close_hunter()
+    _clear_overrides(game)
     return EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
                          counter.hits_taken, counter.idle_seconds, end, counter.spawned)
