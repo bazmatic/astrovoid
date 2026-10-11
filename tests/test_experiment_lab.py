@@ -47,3 +47,56 @@ def test_the_evaluator_scores_the_tune_episodes_in_order(monkeypatch):
 def test_unknown_fidelity_is_an_error():
     with pytest.raises(ValueError):
         lab.make_evaluator(workers=1)(DEFAULT, 'medium')
+
+
+# --- compare ------------------------------------------------------------------
+
+def test_parse_overrides_builds_params_with_numbers_and_switches():
+    params = lab.parse_overrides('steer_band_degrees=25,pursue_unaimed=true,pulse_frames=8')
+    assert params.steer_band_degrees == 25.0 and params.pulse_frames == 8.0
+    assert params.pursue_unaimed is True and params.investigate_memory is False
+    assert lab.parse_overrides('') == DEFAULT
+    assert lab.parse_overrides('investigate_memory=false').investigate_memory is False
+
+
+@pytest.mark.parametrize('bad', ['steer_band_degrees', 'nope=1', 'steer_band_degrees=wide',
+                                 'pursue_unaimed=maybe', 'steer_band_degrees=1e9'])
+def test_parse_overrides_rejects_bad_text(bad):
+    with pytest.raises(ValueError):
+        lab.parse_overrides(bad)
+
+
+def fake_evaluate_factory(kills_for):
+    def fake_evaluate(params, level_set, seeds, horizon, workers):
+        return [EpisodeResult(l, s, 10, 60.0, kills_for(params, l, s), 1, 1, 0.0, 'horizon', 0)
+                for l, s in run.episode_list(level_set, seeds)]
+    return fake_evaluate
+
+
+def test_compare_reports_a_clear_improvement_per_term(monkeypatch):
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate_factory(
+        lambda p, l, s: 6 + (3 if p.pursue_unaimed else 0) + (l + s) % 3))
+    report = lab.compare(DEFAULT, RuleParams(pursue_unaimed=True), 'tune', workers=1)
+    assert report['score']['diff'] > 0 and report['score']['low'] > 0
+    assert report['improves'] is True
+    assert report['wall_hits_per_min']['diff'] == 0
+    assert set(report) >= {'kill_pct_per_min', 'kills_per_min', 'wall_hits_per_min',
+                           'hits_taken_per_min', 'idle_fraction', 'score', 'improves'}
+
+
+def test_compare_does_not_call_noise_an_improvement(monkeypatch):
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate_factory(
+        lambda p, l, s: 6 + ((l * 7 + s * 3 + (1 if p.pursue_unaimed else 0)) % 5 - 2)))
+    report = lab.compare(DEFAULT, RuleParams(pursue_unaimed=True), 'tune', workers=1)
+    assert report['improves'] is False
+
+
+def test_format_report_lists_every_term_and_the_verdict():
+    report = {key: {'base': 1.0, 'candidate': 2.0, 'diff': 1.0, 'low': 0.5, 'high': 1.5}
+              for key in ('kill_pct_per_min', 'kills_per_min', 'wall_hits_per_min',
+                          'hits_taken_per_min', 'idle_fraction', 'score')}
+    report['improves'] = True
+    text = lab.format_report(report, 'tune')
+    for key in ('kill_pct_per_min', 'wall_hits_per_min', 'idle_fraction', 'score'):
+        assert key in text
+    assert 'tune' in text and 'improvement' in text.lower()

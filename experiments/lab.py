@@ -7,7 +7,7 @@ import numpy as np
 from experiments import run
 from experiments.score import Weights, components, improves, mean_components, paired_bootstrap, score
 from experiments.search import CachedEvaluator, optimise
-from hunter.rule_params import DEFAULT, RuleParams
+from hunter.rule_params import DEFAULT, SWITCHES, RuleParams
 
 
 def make_evaluator(workers, horizon_full=90.0, horizon_cheap=45.0, weights=None):
@@ -35,6 +35,56 @@ def baseline_weights(results):
         term_std = float(np.std([row[term] for row in rows]))
         chosen[field] = 0.5 * kill_std / term_std if term_std > 0 and kill_std > 0 else getattr(defaults, field)
     return Weights(**chosen)
+
+
+def parse_overrides(text):
+    """RuleParams from 'name=value,name=value': numbers, or true/false for the switches."""
+    values = {}
+    for item in filter(None, (part.strip() for part in text.split(','))):
+        if '=' not in item:
+            raise ValueError(f'expected name=value, got {item!r}')
+        name, raw = (piece.strip() for piece in item.split('=', 1))
+        if name in SWITCHES:
+            if raw.lower() not in ('true', 'false'):
+                raise ValueError(f'switch {name!r} must be true or false, got {raw!r}')
+            values[name] = raw.lower() == 'true'
+        else:
+            try:
+                values[name] = float(raw)
+            except ValueError:
+                raise ValueError(f'parameter {name!r} must be a number, got {raw!r}') from None
+    return RuleParams.from_dict(values)
+
+
+def compare(base, candidate, level_set, workers, horizon=90.0, weights=None):
+    """Both parameter sets on the same episodes: per term, the means and the paired difference."""
+    weights = weights or Weights()
+    base_results = run.evaluate(base, level_set, run.SEEDS, horizon, workers)
+    candidate_results = run.evaluate(candidate, level_set, run.SEEDS, horizon, workers)
+    report = {}
+    keys = list(components(base_results[0])) + ['score']
+    for key in keys:
+        def value(result):
+            return score(result, weights) if key == 'score' else components(result)[key]
+        base_values = [value(r) for r in base_results]
+        candidate_values = [value(r) for r in candidate_results]
+        diff, low, high = paired_bootstrap(base_values, candidate_values)
+        report[key] = {'base': float(np.mean(base_values)), 'candidate': float(np.mean(candidate_values)),
+                       'diff': diff, 'low': low, 'high': high}
+    report['improves'] = report['score']['low'] > 0
+    return report
+
+
+def format_report(report, level_set):
+    lines = [f'{level_set} set, candidate minus base (paired 95% interval)']
+    for key, row in report.items():
+        if key == 'improves':
+            continue
+        lines.append(f'  {key:20s} {row["base"]:9.3f} -> {row["candidate"]:9.3f}   '
+                     f'{row["diff"]:+8.3f}  ({row["low"]:+.3f} .. {row["high"]:+.3f})')
+    lines.append('  verdict: ' + ('a real improvement (interval above zero)' if report['improves']
+                                  else 'no reliable improvement'))
+    return '\n'.join(lines)
 
 
 def _report(title, results, weights):
@@ -79,10 +129,21 @@ def round1(workers):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('baseline', 'round1'))
+    parser.add_argument('command', choices=('baseline', 'round1', 'compare'))
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
+    parser.add_argument('--candidate', default='', help='compare: name=value,... overrides')
+    parser.add_argument('--base', default='', help='compare: overrides for the base (default: defaults)')
+    parser.add_argument('--set', default='tune', choices=('tune', 'heldout', 'both'),
+                        help='compare: which level set (heldout is for the final check only)')
     args = parser.parse_args(argv)
     run._use_dummy_drivers()
+    if args.command == 'compare':
+        base, candidate = parse_overrides(args.base), parse_overrides(args.candidate)
+        print('base:     ', base.to_dict())
+        print('candidate:', candidate.to_dict())
+        for level_set in (('tune', 'heldout') if args.set == 'both' else (args.set,)):
+            print(format_report(compare(base, candidate, level_set, args.workers), level_set))
+        return
     {'baseline': baseline, 'round1': round1}[args.command](args.workers)
 
 
