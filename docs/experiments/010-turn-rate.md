@@ -51,5 +51,28 @@ are unaffected, and the lab's hunter flies almost entirely with them. But:
 
 ## Decision
 
-Pending: best setting 2.0 (held-out +27.4, and the point where gains flatten). Scope of adoption to be
-chosen; see the notes above.
+Adopted for the **rules pilot only**: `RULES.turn_rate_multiplier` is 2.0 (the best-measured setting and where
+the gains flatten), and the game builds the hunter from `hunter_settings_for(game.hunterPilot)`
+(`hunter/settings_for.py`), which gives the rules pilot's hunter that turn rate. Jev and the student keep
+0.5, because their held left and right turns steer for a whole decision (68 degrees at 0.5, 270 at 2.0).
+A test checks that the game's hunter and the lab's agree on thrust, sight and turn rate.
+
+## New reference baseline (the rules defaults after this change)
+
+6 seeds per level, 90 s horizon, frozen weights:
+
+| term | tune mean | held-out mean |
+|---|---|---|
+| kills, % of all enemies per minute | 120.5 | 110.8 |
+| kills per minute (raw, reported only) | 29.2 | 32.0 |
+| wall hits per minute | 0.90 | 1.01 |
+| hits taken per minute | 1.95 | 2.09 |
+| idle fraction | 0.098 | 0.153 |
+| **score** | **103.0** | **88.2** |
+
+## Still to check by hand
+
+The rules pilot's follow-the-player branch holds left or right inside a 20 degree band, and at 2.0 a held
+decision turns the ship 270 degrees. The lab hides the player, so this branch has not been measured. Play
+beside the hunter with `hunterPilot` set to `"rules"` and watch it keep station. If it flails, the fix is to
+make that branch steer by exact angle (as the course and track modes do), not to lower the turn rate.
