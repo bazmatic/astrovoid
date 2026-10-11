@@ -184,7 +184,7 @@ def test_rules_defaults_are_the_global_defaults_plus_the_adopted_switches():
     from dataclasses import replace
     from hunter.rule_params import RULES
     assert RULES == replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0,
-                            wall_lookahead_cells=2.5, turn_rate_multiplier=2.0)
+                            wall_lookahead_cells=2.5, turn_rate_multiplier=2.0, hunt_first=True)
     assert DEFAULT.investigate_memory is False   # Jev and the student are unchanged
     assert DEFAULT.wall_follow_cruise == 0.6 and DEFAULT.wall_lookahead_cells == 0.75
 
@@ -473,3 +473,10 @@ def test_hunt_first_without_the_enemies_present_key_still_follows():
     raw = following_state(True)
     del raw['enemies_present']
     assert pilot_state(raw, RuleParams(hunt_first=True))['follow_player'] is not None
+
+
+def test_the_rules_pilot_hunts_before_following_by_default_and_jev_does_not():
+    from hunter.rule_params import RULES
+    state = following_state(True)
+    assert pilot_state(state, RULES)['follow_player'] is None
+    assert pilot_state(state, DEFAULT)['follow_player'] is not None   # Jev's instructions describe following

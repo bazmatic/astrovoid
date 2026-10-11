@@ -37,6 +37,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 008 | [thrust](008-thrust.md) | no effect at 0.15 to 1.5; 1.0 worse on held-out (-21.6) | | reverted to 0.25 |
 | 009 | [sensor range](009-sensor-range.md) | +18.4 (0.8) | +6.5 (0.8) | **adopted for every pilot** (0.8); current reference 78.7 / 73.6 |
 | 010 | [turn rate](010-turn-rate.md) | +25.9 (2.0) | +27.4 (2.0) | **adopted for the rules pilot only** (2.0); current reference 103.0 / 88.2 |
+| 011 | [hunt first](011-hunt-first.md) | +0.1 (player visible) | | adopted for the rules pilot; lab cannot see the benefit |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 
