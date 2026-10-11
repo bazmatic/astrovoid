@@ -10,6 +10,7 @@ class RuleParams:
     far_ratio: float = 1.15  # Further than this multiple of the standoff is far
     harmless_speed: float = 15.0  # m/s below which a wall brush is harmless
     wall_follow_cruise: float = 0.6  # Share of the wall-following cruise speed
+    wall_lookahead_cells: float = 0.75  # How far along the wall the follow target sits, in cells
     course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
@@ -57,7 +58,8 @@ BOUNDS = {
     'too_close_ratio': (0.2, 0.95),
     'far_ratio': (1.0, 2.5),
     'harmless_speed': (2.0, 60.0),
-    'wall_follow_cruise': (0.2, 1.2),
+    'wall_follow_cruise': (0.2, 4.0),
+    'wall_lookahead_cells': (0.3, 3.0),
     'course_approach_fraction': (0.3, 1.0),
     'cruising_speed_fraction': (0.1, 0.9),
     'pulse_frames': (1.0, 20.0),

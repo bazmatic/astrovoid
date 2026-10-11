@@ -303,3 +303,37 @@ def test_strafe_falls_back_to_the_roomier_side_when_barely_drifting():
     state = strafing_state(speed=0.0, walls=wall_south)
     state['self']['velocity'] = [0.0, 0.05]   # about 3 m/s, under the drift threshold
     assert pilot_state(state, RuleParams(strafe=True))['strafe']['side'] == 'left'
+
+
+# --- wall-following confidence --------------------------------------------------------
+
+def wall_following_state():
+    """A hunter cut off from the player, with a wall beside it and nothing to shoot."""
+    raw, _ = raw_state()
+    raw['visible_contacts'] = []
+    raw['self']['velocity'] = [0.2, 0.0]
+    raw['visible_walls'] = [[[100.0, 175.0], [300.0, 175.0]]]
+    return raw
+
+
+def test_wall_follow_cruise_range_allows_much_faster_exploration():
+    assert BOUNDS['wall_follow_cruise'][1] >= 3.0
+
+
+def test_wall_look_ahead_is_a_parameter_with_todays_default():
+    assert DEFAULT.wall_lookahead_cells == 0.75
+    assert 'wall_lookahead_cells' in BOUNDS
+
+
+def test_a_longer_look_ahead_puts_the_wall_follow_target_further_along():
+    raw = wall_following_state()
+    near = pilot_state(raw, RuleParams(wall_lookahead_cells=0.5))['wall_follow']
+    far = pilot_state(raw, RuleParams(wall_lookahead_cells=2.0))['wall_follow']
+    assert near['course'] != far['course']
+
+
+def test_a_higher_cruise_lifts_the_wall_follow_speed_limit():
+    raw = wall_following_state()
+    slow = pilot_state(raw, RuleParams(wall_follow_cruise=0.6))['wall_follow']['course']
+    fast = pilot_state(raw, RuleParams(wall_follow_cruise=2.5))['wall_follow']['course']
+    assert fast['speed_limit_metres_per_second'] > slow['speed_limit_metres_per_second']

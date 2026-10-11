@@ -37,7 +37,8 @@ def wall_follow_target(
     heading: float,
     radius: float,
     walls: Sequence[Tuple[Point, Point]],
-    cell_size: float
+    cell_size: float,
+    lookahead_cells: float = 0.75
 ) -> WallFollowTarget:
     """Pick the point to fly towards to follow the nearest wall on the left.
 
@@ -53,11 +54,12 @@ def wall_follow_target(
         radius: Ship radius.
         walls: Wall segments the ship can see, each as (start, end).
         cell_size: Width of a maze cell, which sets the distances used.
+        lookahead_cells: How far along the wall the target sits, in cells.
 
     Returns:
         The target point and the present gap between hull and wall.
     """
-    lookahead = cell_size * 0.75
+    lookahead = cell_size * lookahead_cells
     # Far enough out to clear the hull comfortably, but well inside a one-cell corridor
     standoff = min(cell_size * 0.5, max(radius * 2.5, cell_size * 0.35))
     nearest, nearest_distance = None, None

@@ -304,7 +304,7 @@ def pilot_state(state, params=DEFAULT_PARAMS):
         if not follow['alongside']:
             follow['course'] = course_to(raw_follow['waypoint'],raw_follow['bearing'])
     else:
-        goal = wall_follow_target(origin,heading,radius,walls,cell_size)
+        goal = wall_follow_target(origin,heading,radius,walls,cell_size,params.wall_lookahead_cells)
         bearing = math.degrees(math.atan2(goal.point[1]-origin[1],goal.point[0]-origin[0]))
         wall_follow = {**bearings(bearing),
                        'heading_degrees':bearing % 360,
