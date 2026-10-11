@@ -14,7 +14,7 @@ def test_an_episode_returns_a_result_for_the_request():
     result = run_episode(13, 0, horizon=3.0)
     assert isinstance(result, EpisodeResult)
     assert (result.level, result.seed) == (13, 0)
-    assert result.end in ('cleared', 'died', 'horizon')
+    assert result.end in ('cleared', 'horizon')
     assert 0 < result.elapsed <= 3.0 + 1 / 60
     assert result.enemies_at_start > 0
     assert min(result.kills, result.wall_hits, result.hits_taken, result.idle_seconds) >= 0
@@ -51,17 +51,12 @@ def test_a_short_horizon_ends_an_episode_at_the_horizon():
     assert result.elapsed == pytest.approx(2.0, abs=0.05)
 
 
-def test_a_dead_hunter_ends_the_episode_as_died(monkeypatch):
-    from entities.hunter_ship import HunterShip
-    original_step = HunterShip.step
-
-    def die_on_first_step(self, *args, **kwargs):
-        self.active = False
-        return original_step(self, *args, **kwargs)
-    monkeypatch.setattr(HunterShip, 'step', die_on_first_step)
-    result = run_episode(13, 0, horizon=5.0)
-    assert result.end == 'died' and result.died
-    assert result.elapsed < 1.0
+def test_the_hunter_cannot_die_and_the_episode_runs_on_after_hits(monkeypatch):
+    # In the real game the hunter is indestructible; the lab keeps it so and counts the hits.
+    result = run_episode(26, 0, horizon=15.0)
+    assert result.end in ('cleared', 'horizon')
+    assert result.hits_taken > 0
+    assert not hasattr(result, 'died')
 
 
 def test_a_cleared_level_ends_the_episode_as_cleared(monkeypatch):
@@ -110,3 +105,18 @@ def test_idle_time_starts_after_twenty_seconds_without_a_kill():
     before = counter.idle_seconds
     counter.tick(now=45.0)
     assert counter.idle_seconds == before
+
+
+def test_hits_are_counted_one_per_immunity_window():
+    counter = harness.EventCounter()
+    for now in (0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 1.05, 1.2):
+        counter.hit_taken(now)
+    # 0.0 lands; 0.1-0.4 are inside its 0.5 s window; 0.5 lands; 0.6 is inside; 1.05 lands; 1.2 is inside.
+    assert counter.hits_taken == 3
+
+
+def test_a_contact_held_for_many_frames_is_few_hits():
+    counter = harness.EventCounter()
+    for frame in range(60):
+        counter.hit_taken(frame / 60)   # one second of overlap
+    assert counter.hits_taken == 2

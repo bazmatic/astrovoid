@@ -4,43 +4,50 @@ Date: 2026-10-11. Code: branch `feat/rules-lab` (rules pilot, default `RuleParam
 
 ## Setup
 
-- Scenario: hunter alone (player parked and hidden), 1352x878, damage on
-  (`indestructible=False`, 3 health), horizon 90 simulated seconds.
+- Scenario: hunter alone (player parked and hidden), 1352x878, horizon 90 simulated seconds.
+- The hunter is **indestructible**, as in the game. Episodes end when every enemy is dead or at the
+  horizon. Hits are counted at the damage path, one per 0.5 s window.
 - Tune set: levels 13, 14, 15, 17, 19, 20, 22, 25, 26, 27, 18, 30. Held-out set: 16, 21, 23, 28, 29, 24.
-  Seeds 0 and 1 per level, so 24 tune and 12 held-out episodes.
+  Seeds 0 and 1 per level: 24 tune and 12 held-out episodes.
 - Parameters: all defaults (`hunter/rule_params.py`). Run: `python -m experiments.lab baseline`
-  (36 episodes in 13 s on 12 cores).
+  (36 episodes in 27 s on 12 cores).
 
 ## Results
 
 | term | tune mean | held-out mean | std over all 36 |
 |---|---|---|---|
-| kills per minute | 23.8 | 42.4 | 21.7 |
-| wall hits per minute | 2.64 | 3.35 | 3.84 |
-| hits taken per minute | 5.07 | 6.77 | 3.64 |
-| idle fraction | 0.142 | 0.060 | 0.205 |
-| died | 0.54 | 0.75 | 0.49 |
-| **score** (frozen weights) | **-18.3** | **-7.0** | |
+| kills per minute | 29.9 | 46.1 | 32.4 |
+| wall hits per minute | 2.81 | 3.51 | 3.71 |
+| hits taken per minute | 4.60 | 5.13 | 5.18 |
+| idle fraction | 0.215 | 0.122 | 0.213 |
+| **score** (frozen weights) | **-13.1** | **5.4** | |
 
-How episodes ended over all 36: 22 died, 8 cleared the level, 6 reached the horizon.
+How the 36 episodes ended: 18 cleared the level, 18 reached the horizon.
 
 ## Weights
 
 By the spec's rule (each penalty's weight is 0.5 x std(kills per minute) / std(that term), over
-the baseline episodes): wall 2.8, hit 3.0, idle 53, death 22 (two significant figures). They are
-frozen in `experiments/score.py` and are not changed during a comparison.
+the baseline episodes): wall 4.4, hit 3.1, idle 76 (two significant figures). Frozen in
+`experiments/score.py`; not changed during a comparison.
+
+## History: the first baseline had damage switched on
+
+The first version of the lab made the hunter destructible (3 health) and scored deaths, so that
+enemy hits would cost something. Its baseline showed the hunter destroyed in 61% of episodes, often
+within 6 to 10 simulated seconds on levels 26 to 29. That was a lab artefact, because the real
+hunter cannot die. It also cut episodes short and made the score lumpy, so the lab was changed to
+the indestructible definition above (no death term). A control run showed the kill counter itself is
+sound: with the hunter forced to do nothing, 0 enemies died in 6 of 6 cases.
 
 ## Findings
 
-- **The hunter usually dies.** With damage on it is destroyed in 61% of episodes (54% tune, 75%
-  held-out), often within 6 to 10 simulated seconds on levels 26 to 29, where 25+ enemies start
-  near it. So "not getting hit" is the largest headroom, more than finding enemies.
-- **The kill counter is valid.** Control run: with the hunter forced to do nothing (no fire,
-  coasting), 0 enemies died in 6 of 6 cases, so every counted kill is the hunter's. The idle
-  hunter itself died in 4 to 7 s on those levels.
-- **Kill rate is dominated by the level and by early clears.** Rates use a 20 s floor, so a fast
-  clear scores a very high rate. The tune and held-out means differ mostly because of the level
-  mix (the held-out set has a fast boss level, 24). Comparisons must stay paired by episode, which
-  the search does.
-- **Deaths end episodes early.** A hunter that dies at 8 s has few chances to idle or hit walls;
-  the death term (22) is there so that does not look like a good run.
+- **Kill farming inflates some rates.** On levels 27 and 29 the hunter is credited with 125 and 183
+  kills against 26 and 27 enemies at the start, because lighthouses keep spawning flockers. Such
+  episodes dominate the kill-rate spread (std 32 on a mean of 35) and so raise the weights above
+  what a typical episode would suggest. Comparisons are paired per episode, which cancels the
+  level's scale, but watch for these episodes in any result.
+- **Half the episodes do not finish.** 18 of 36 reach the 90 s horizon with enemies left, and idle
+  time is 18% of the episode on average (up to 66 of 90 s on level 30 seed 0). Finding enemies is
+  likely a bigger lever than shooting them.
+- **Boss levels differ.** Levels 18 and 24 (small mazes, eggs and children) produce 18 to 51 kills in
+  under a minute with 4 to 11 hits taken; level 30 is the opposite (6 to 17 kills, mostly idle).

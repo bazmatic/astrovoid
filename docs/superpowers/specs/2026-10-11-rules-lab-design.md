@@ -29,10 +29,10 @@ replaces the `HunterController` clock.
 An *episode* is one level, one seed, one `RuleParams`.
 
 - Setup: construct `Game` under the dummy SDL drivers at 1352x878 (the real play scale), start the
-  level, mark the player moved, summon the hunter beside the start, hide the player, and set
-  `HunterSettings(indestructible=False)` so damage and death count.
+  level, mark the player moved, summon the hunter beside the start, and hide the player. The
+  hunter stays indestructible, as in the game: hits are counted, not suffered.
 - Step: `game.update(1.0)` per frame; the fake clock advances 1/60 s per frame.
-- End: all enemies dead, the hunter dead, or the horizon (90 simulated seconds).
+- End: all enemies dead, or the horizon (90 simulated seconds). The hunter cannot die.
 - Determinism: after the level starts, `random.seed(seed)`. A test runs one episode twice and
   requires identical metrics.
 - Isolation: one process per episode batch (`multiprocessing`, spawn), each initialising pygame
@@ -43,17 +43,19 @@ An *episode* is one level, one seed, one `RuleParams`.
 - `kills`: the live enemy count falling.
 - `wall_hits`: rising edges of the hunter's wall collision check (a contact held for many frames
   is one hit).
-- `hits_taken`: damage events from enemy contact or bullets, counted at the damage path before
-  the indestructible check, so they count in either mode.
+- `hits_taken`: damage calls from enemy contact or bullets, counted at the damage path and
+  limited to one per 0.5 s (the game's damage-immunity window), so a contact held for many frames
+  is a few hits and one bullet is one hit.
 - `idle_fraction`: share of the episode with no kill in the last 20 seconds (zero while under 20 s
   have passed).
-- `died`: the hunter was destroyed.
 - `elapsed`: simulated seconds until the episode ended, floored at 20 s for rates.
 
 ### Score — `experiments/score.py`
 
 Per episode: `kills_per_min − w_wall·wall_hits_per_min − w_hit·hits_taken_per_min −
-w_idle·idle_fraction − w_death·died`. Every term is also reported on its own, so a gain in one
+w_idle·idle_fraction`. (An earlier version also had a death term, with damage switched on. It was
+removed: the real hunter cannot die, deaths ended 61% of episodes early, and the cliff made scores
+lumpy. See `docs/experiments/001-baseline.md`.) Every term is also reported on its own, so a gain in one
 cannot hide a loss in another. The weights are fixed once, from a baseline run, so each term has
 a comparable scale, and then not changed during a comparison. They are a deliberate human choice;
 the baseline report shows the spread of each term to support it.
@@ -134,8 +136,12 @@ per-term summary and writes the raw results.
 
 - A hunter tuned alone may follow the player worse. The existing hunter tests guard the structure,
   and the scripted-player scenario is the later guard.
-- Penalty weights can be gamed. Idle time and death are in the score for that reason, and the
-  per-term reports are checked, not just the total.
+- Penalty weights can be gamed. Idle time is in the score for that reason, and the per-term
+  reports are checked, not just the total.
+- Kill farming. Lighthouses and egg-laying bosses spawn more enemies, so a hunter can be credited
+  with many more kills than enemies at the start (125 and 183 on two baseline episodes). Comparisons
+  are paired per episode, which cancels the level's scale, but a few such episodes can dominate a
+  mean. Watch for it in the per-term reports.
 - Tuning to the tune levels. The held-out set, scored once per round, exists to catch it.
 - Episode noise from game randomness. Seeding and paired comparisons are the answer, and the
   baseline run reports the spread.

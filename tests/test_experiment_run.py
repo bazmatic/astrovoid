@@ -35,7 +35,7 @@ def test_evaluate_runs_each_episode_in_order(monkeypatch):
 
     def fake_episode(level, seed, params, horizon):
         calls.append((level, seed, horizon))
-        return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, False, 'horizon')
+        return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, 'horizon')
     monkeypatch.setattr(run, '_episode', fake_episode)
     results = run.evaluate(DEFAULT, 'heldout', seeds=(0,), horizon=7.0, workers=1)
     assert [(r.level, r.seed) for r in results] == [(16, 0), (21, 0), (23, 0), (28, 0), (29, 0), (24, 0)]
@@ -46,7 +46,7 @@ def test_a_failing_episode_names_itself(monkeypatch):
     def boom(level, seed, params, horizon):
         if level == 21:
             raise RuntimeError('kaboom')
-        return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, False, 'horizon')
+        return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, 'horizon')
     monkeypatch.setattr(run, '_episode', boom)
     with pytest.raises(run.EpisodeError) as info:
         run.evaluate(RuleParams(pulse_frames=9.0), 'heldout', seeds=(0,), workers=1)
@@ -56,8 +56,8 @@ def test_a_failing_episode_names_itself(monkeypatch):
 
 
 def test_results_round_trip_and_are_written_atomically(tmp_path):
-    results = [EpisodeResult(13, 0, 5, 10.0, 1, 2, 3, 0.5, False, 'horizon'),
-               EpisodeResult(14, 1, 6, 4.0, 6, 0, 1, 0.0, True, 'died')]
+    results = [EpisodeResult(13, 0, 5, 10.0, 1, 2, 3, 0.5, 'horizon'),
+               EpisodeResult(14, 1, 6, 4.0, 6, 0, 1, 0.0, 'horizon')]
     path = tmp_path / 'r.jsonl'
     run.save_results(results, path)
     assert run.load_results(path) == results
@@ -66,7 +66,7 @@ def test_results_round_trip_and_are_written_atomically(tmp_path):
 
 def test_an_interrupted_save_leaves_no_half_written_file(tmp_path, monkeypatch):
     path = tmp_path / 'r.jsonl'
-    results = [EpisodeResult(13, 0, 5, 10.0, 1, 2, 3, 0.5, False, 'horizon')]
+    results = [EpisodeResult(13, 0, 5, 10.0, 1, 2, 3, 0.5, 'horizon')]
     monkeypatch.setattr(run.os, 'replace', lambda *a: (_ for _ in ()).throw(KeyboardInterrupt()))
     with pytest.raises(KeyboardInterrupt):
         run.save_results(results, path)
@@ -86,7 +86,7 @@ def test_load_params_reads_a_json_file_and_rejects_bad_ones(tmp_path):
 
 def test_main_prints_a_summary_and_writes_results(monkeypatch, tmp_path, capsys):
     def fake_episode(level, seed, params, horizon):
-        return EpisodeResult(level, seed, 5, 10.0, 2, 1, 0, 0.0, False, 'horizon')
+        return EpisodeResult(level, seed, 5, 10.0, 2, 1, 0, 0.0, 'horizon')
     monkeypatch.setattr(run, '_episode', fake_episode)
     out = tmp_path / 'out.jsonl'
     run.main(['--set', 'heldout', '--seeds', '1', '--workers', '1', '--out', str(out)])

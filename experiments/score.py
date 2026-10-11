@@ -8,10 +8,9 @@ RATE_FLOOR_SECONDS = 20.0
 @dataclass(frozen=True)
 class Weights:
     # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
-    wall: float = 2.8
-    hit: float = 3.0
-    idle: float = 53.0
-    death: float = 22.0
+    wall: float = 4.4
+    hit: float = 3.1
+    idle: float = 76.0
 
 
 def components(result):
@@ -21,15 +20,13 @@ def components(result):
     return {'kills_per_min': result.kills / minutes,
             'wall_hits_per_min': result.wall_hits / minutes,
             'hits_taken_per_min': result.hits_taken / minutes,
-            'idle_fraction': idle,
-            'died': 1.0 if result.died else 0.0}
+            'idle_fraction': idle}
 
 
 def score(result, weights=Weights()):
     c = components(result)
     return (c['kills_per_min'] - weights.wall * c['wall_hits_per_min']
-            - weights.hit * c['hits_taken_per_min'] - weights.idle * c['idle_fraction']
-            - weights.death * c['died'])
+            - weights.hit * c['hits_taken_per_min'] - weights.idle * c['idle_fraction'])
 
 
 def mean_components(results, weights=Weights()):

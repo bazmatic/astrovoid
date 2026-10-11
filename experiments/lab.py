@@ -31,7 +31,7 @@ def baseline_weights(results):
     defaults = Weights()
     chosen = {}
     for field, term in (('wall', 'wall_hits_per_min'), ('hit', 'hits_taken_per_min'),
-                        ('idle', 'idle_fraction'), ('death', 'died')):
+                        ('idle', 'idle_fraction')):
         term_std = float(np.std([row[term] for row in rows]))
         chosen[field] = 0.5 * kill_std / term_std if term_std > 0 and kill_std > 0 else getattr(defaults, field)
     return Weights(**chosen)

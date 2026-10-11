@@ -15,6 +15,7 @@ from hunter.rules_pilot import RulesClient
 
 FPS = 60
 IDLE_AFTER_SECONDS = 20.0
+DAMAGE_IMMUNITY_SECONDS = HunterSettings().damage_immunity  # one hit per window, as in the game
 SCREEN = (1352, 878)
 
 
@@ -28,8 +29,7 @@ class EpisodeResult:
     wall_hits: int
     hits_taken: int
     idle_seconds: float
-    died: bool
-    end: str  # 'cleared', 'died' or 'horizon'
+    end: str  # 'cleared' or 'horizon'
 
 
 class EventCounter:
@@ -42,6 +42,7 @@ class EventCounter:
         self.idle_seconds = 0.0
         self._enemies = None
         self._in_wall = False
+        self._last_hit = None
         self._last_kill = 0.0
         self._last_tick = None
 
@@ -56,8 +57,11 @@ class EventCounter:
             self.wall_hits += 1
         self._in_wall = bool(hit)
 
-    def hit_taken(self):
-        self.hits_taken += 1
+    def hit_taken(self, now):
+        """A damage call at `now`: it counts once per immunity window, so a held contact is few hits."""
+        if self._last_hit is None or now - self._last_hit >= DAMAGE_IMMUNITY_SECONDS:
+            self.hits_taken += 1
+            self._last_hit = now
 
     def tick(self, now):
         """Time passes: seconds beyond IDLE_AFTER_SECONDS since the last kill are idle."""
@@ -163,8 +167,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._summon_hunter((game.ship.x, game.ship.y))
     hunter, controller = game.hunter, game.hunter_controller
     controller.clock = clock
-    settings = replace(HunterSettings(), indestructible=False,
-                       request_interval=params.request_interval)
+    # The hunter stays indestructible, as in the game; hits are counted, not suffered.
+    settings = replace(HunterSettings(), request_interval=params.request_interval)
     hunter.settings = controller.settings = settings
 
     counter = EventCounter()
@@ -180,11 +184,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     original_damage = hunter.take_damage
 
     def counting_damage():
-        lands = hunter.active and hunter.immunity_remaining <= 0
-        died = original_damage()
-        if lands:
-            counter.hit_taken()
-        return died
+        counter.hit_taken(elapsed)
+        return original_damage()
     hunter.take_damage = counting_damage
 
     start_enemies = _enemy_count(game)
@@ -197,12 +198,9 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
         game.update(1.0)
         counter.enemies(_enemy_count(game))
         counter.tick(elapsed)
-        if not hunter.active:
-            end = 'died'
-            break
         if start_enemies and _enemy_count(game) == 0:
             end = 'cleared'
             break
     game._close_hunter()
     return EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
-                         counter.hits_taken, counter.idle_seconds, end == 'died', end)
+                         counter.hits_taken, counter.idle_seconds, end)
