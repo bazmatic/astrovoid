@@ -45,9 +45,10 @@ class RuleParams:
 
 
 DEFAULT = RuleParams()
-# The rules pilot's own defaults: DEFAULT plus the structural rules experiments have adopted
-# (docs/experiments). Jev and the student keep DEFAULT.
-RULES = replace(DEFAULT, investigate_memory=True)
+# The rules pilot's own defaults: DEFAULT plus what experiments have adopted (docs/experiments):
+# the investigate rule (004) and faster, longer-sighted wall-following (007). Jev and the student
+# keep DEFAULT.
+RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5)
 
 SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe')
 
