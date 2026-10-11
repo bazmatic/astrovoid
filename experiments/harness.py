@@ -198,10 +198,13 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._jev_beacon_drop_allowed = lambda: False
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
     settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
-                       sensor_range_fraction=params.sensor_range_fraction)
+                       sensor_range_fraction=params.sensor_range_fraction,
+                       turn_rate_multiplier=params.turn_rate_multiplier)
     hunter.settings = controller.settings = settings
     # The perception reads its own copy of the settings (how far the hunter sees).
     game.hunter_perception.settings = settings
+    # The ship fixes its turn rate when it is built, so set it on the ship too.
+    hunter.rotation_speed_multiplier = settings.turn_rate_multiplier
 
     counter = EventCounter()
 

@@ -249,3 +249,27 @@ def test_a_longer_sight_changes_what_the_hunter_does():
     long = run_episode(14, 0, params=RuleParams(sensor_range_fraction=1.0), horizon=20.0)
     assert (short.kills, short.wall_hits, short.hits_taken, round(short.idle_seconds, 2)) != \
            (long.kills, long.wall_hits, long.hits_taken, round(long.idle_seconds, 2))
+
+
+def test_turn_rate_multiplier_reaches_the_hunter_ship(monkeypatch):
+    from entities.hunter_ship import HunterShip
+    from hunter.rule_params import RuleParams
+    seen = {}
+    original = HunterShip.step
+
+    def spy(self, *args, **kwargs):
+        seen['rate'] = self.current_rotation_speed
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(HunterShip, 'step', spy)
+    run_episode(13, 0, params=RuleParams(turn_rate_multiplier=0.5), horizon=1.0)
+    slow = seen['rate']
+    run_episode(13, 0, params=RuleParams(turn_rate_multiplier=2.0), horizon=1.0)
+    assert seen['rate'] == pytest.approx(slow * 4)
+
+
+def test_a_faster_turn_changes_the_episode():
+    from hunter.rule_params import RuleParams
+    slow = run_episode(14, 0, params=RuleParams(turn_rate_multiplier=0.25), horizon=20.0)
+    fast = run_episode(14, 0, params=RuleParams(turn_rate_multiplier=3.0), horizon=20.0)
+    assert (slow.kills, slow.wall_hits, slow.hits_taken, round(slow.idle_seconds, 2)) != \
+           (fast.kills, fast.wall_hits, fast.hits_taken, round(fast.idle_seconds, 2))

@@ -422,3 +422,15 @@ def test_sensor_range_fraction_is_a_bounded_parameter_that_matches_the_hunter_de
     # The lab applies it to the hunter; the game uses HunterSettings. They must not drift apart silently.
     assert DEFAULT.sensor_range_fraction == HunterSettings().sensor_range_fraction == 0.8   # 009
     assert RULES.sensor_range_fraction == HunterSettings().sensor_range_fraction
+
+
+# --- turn rate -------------------------------------------------------------------------
+
+def test_turn_rate_multiplier_is_a_bounded_parameter_that_matches_the_hunter_default():
+    from hunter.model import HunterSettings
+    from hunter.rule_params import RULES
+    assert 'turn_rate_multiplier' in BOUNDS
+    low, high = BOUNDS['turn_rate_multiplier']
+    assert low < 0.5 < high and high >= 3.0
+    assert DEFAULT.turn_rate_multiplier == HunterSettings().turn_rate_multiplier == 0.5
+    assert RULES.turn_rate_multiplier == HunterSettings().turn_rate_multiplier

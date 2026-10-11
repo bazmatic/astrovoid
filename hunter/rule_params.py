@@ -22,6 +22,8 @@ class RuleParams:
     # How far the hunter sees, as a share of the maze's width. Also a hunter property (HunterSettings);
     # a test keeps the two equal.
     sensor_range_fraction: float = 0.8
+    # How fast the hunter turns, as a share of the player's. Also a hunter property (HunterSettings).
+    turn_rate_multiplier: float = 0.5
     strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
@@ -74,5 +76,6 @@ BOUNDS = {
     'pulse_frames': (1.0, 20.0),
     'thrust_multiplier': (0.1, 6.0),
     'sensor_range_fraction': (0.15, 1.5),
+    'turn_rate_multiplier': (0.1, 4.0),
     'strafe_cells': (0.3, 3.0),
 }
