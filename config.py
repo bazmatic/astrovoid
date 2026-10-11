@@ -389,9 +389,9 @@ class GameSettings:
 @dataclass
 class AutoplaySettings:
     # Unattended runs (AUTOPLAY=1): the player is parked and the hunter flies each level.
-    firstLevel: int = 4
-    lastLevel: int = 12
-    timeLimitSeconds: float = 90.0
+    firstLevel: int = 13
+    lastLevel: int = 30
+    timeLimitSeconds: float = 120.0
     # Keep the parked player out of the hunter's view, so it explores and meets enemies
     # instead of sitting beside the player.
     hidePlayer: bool = True
