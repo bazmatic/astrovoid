@@ -7,10 +7,11 @@ RATE_FLOOR_SECONDS = 20.0
 
 @dataclass(frozen=True)
 class Weights:
-    wall: float = 0.5
-    hit: float = 2.0
-    idle: float = 5.0
-    death: float = 10.0
+    # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
+    wall: float = 2.8
+    hit: float = 3.0
+    idle: float = 53.0
+    death: float = 22.0
 
 
 def components(result):
