@@ -207,6 +207,12 @@ def pilot_state(state, params=DEFAULT_PARAMS):
                  'burn_heading_degrees':round(solution.heading_degrees,1),
                  'burn_seconds':round(solution.burn_frames/fps,2)}
     motion['brake'] = brake
+    def worth_burning(frames, thrust):
+        """A burn counts once it is more than noise. At or near rest any burn does: the cutoff is there
+        to stop jitter while cruising, and applied to a hunter hemmed in by a wall it left a course that
+        wanted a tiny speed unflown forever."""
+        return frames >= min_burn_frames(thrust) or (frames > 0 and speed*fps < params.harmless_speed)
+
     def engage_reading():
         """The worked approach to the enemy fire control is engaging, or None.
 
@@ -239,10 +245,10 @@ def pilot_state(state, params=DEFAULT_PARAMS):
                     'closing_speed_metres_per_second':round(closing*fps,1),
                     'target_closing_speed_metres_per_second':round(target,1),
                     'holding_still':speed*fps < params.harmless_speed,
-                    'burn_needed':burn_frames >= min_burn_frames(thrust_per_frame),
+                    'burn_needed':worth_burning(burn_frames, thrust_per_frame),
                     'burn_heading_degrees':round(
                         (heading+solution['lead_degrees_off_nose']) % 360,1),
-                    'burn_seconds':round(burn_frames/fps,2) if burn_frames >= min_burn_frames(thrust_per_frame) else 0}
+                    'burn_seconds':round(burn_frames/fps,2) if worth_burning(burn_frames, thrust_per_frame) else 0}
         return None
 
     def course_to(point, bearing, cruise=None):
@@ -276,7 +282,7 @@ def pilot_state(state, params=DEFAULT_PARAMS):
         if correction is None:
             return None
         return {# The navigator times the burn itself, so even a short one can be flown.
-                'burn_needed':correction.burn_frames >= min_burn_frames(thrust),
+                'burn_needed':worth_burning(correction.burn_frames, thrust),
                 'burn_heading_degrees':round(correction.heading_degrees,1),
                 'burn_degrees_off_nose':round(correction.degrees_off_nose,1),
                 'burn_degrees_off_nose_at_next_decision':
