@@ -395,9 +395,8 @@ class AutoplaySettings:
     # Keep the parked player out of the hunter's view, so it explores and meets enemies
     # instead of sitting beside the player.
     hidePlayer: bool = True
-    # With the player hidden, end a level once the hunter has reached no new maze cell and
-    # met no enemy for this long (0 turns it off).
-    stuckSeconds: float = 15.0
+    # End a level when the hunter has killed nothing for this long (0 turns it off).
+    noKillSeconds: float = 20.0
 
 
 @dataclass

@@ -343,6 +343,6 @@
     "lastLevel": 30,
     "timeLimitSeconds": 120,
     "hidePlayer": true,
-    "stuckSeconds": 15
+    "noKillSeconds": 20
   }
 }

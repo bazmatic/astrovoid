@@ -423,9 +423,8 @@ Set `WINDOW_SIZE=1352x878` to run in a window of that size (the whole game world
 The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
 `timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it
 explores the maze and meets enemies instead of sitting beside the player.
-With the player hidden, a level also ends when the hunter has reached no new maze cell and
-met no enemy for `stuckSeconds` (15; 0 turns it off), so a hunter caught in a loop does not
-fill the logs.
+A level also ends when no enemy has been killed for `noKillSeconds` (20; 0 turns it off), so
+a hunter caught in a loop or wandering lost does not fill the logs.
 
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
 The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the

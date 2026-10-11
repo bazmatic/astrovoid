@@ -87,69 +87,60 @@ def test_inverted_range_is_rejected():
 
 
 
-# --- stuck detection ---------------------------------------------------------
+# --- no-kill rule ------------------------------------------------------------
 
-def stuck_director(clock, stuck=15, limit=300):
-    d = AutoplayDirector(4, 6, limit, clock=clock, stuck_seconds=stuck)
+def kill_director(clock, seconds=20, limit=300):
+    d = AutoplayDirector(4, 6, limit, clock=clock, no_kill_seconds=seconds)
     d.start_level(enemy_count=5)
     return d
 
 
-def test_a_hunter_that_finds_no_new_ground_is_stuck():
+def test_a_level_with_no_kill_for_too_long_ends():
     clock = Clock()
-    d = stuck_director(clock)
-    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
-    clock.now += 14
-    assert d.end_reason(5, True, hunter_cell=(1, 2)) is None
-    clock.now += 14
-    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None  # revisiting is not progress
+    d = kill_director(clock)
+    clock.now += 19.9
+    assert d.end_reason(5, True) is None
+    clock.now += 0.2
+    assert d.end_reason(5, True) == 'no_kill'
+
+
+def test_each_kill_restarts_the_clock():
+    clock = Clock()
+    d = kill_director(clock)
+    for left in (4, 3, 2, 1):
+        clock.now += 19
+        assert d.end_reason(left, True) is None
+    clock.now += 21
+    assert d.end_reason(1, True) == 'no_kill'
+
+
+def test_enemies_spawning_are_not_kills_but_later_kills_still_count():
+    clock = Clock()
+    d = kill_director(clock)
+    clock.now += 15
+    assert d.end_reason(8, True) is None   # three more appeared
+    clock.now += 15
+    assert d.end_reason(7, True) is None   # one of them died: a kill at +30
+    clock.now += 19
+    assert d.end_reason(7, True) is None
     clock.now += 2
-    assert d.end_reason(5, True, hunter_cell=(1, 2)) == 'stuck'
+    assert d.end_reason(7, True) == 'no_kill'
 
 
-def test_reaching_new_cells_keeps_resetting_the_clock():
+def test_zero_no_kill_seconds_disables_the_rule():
     clock = Clock()
-    d = stuck_director(clock)
-    for step in range(10):
-        clock.now += 10
-        assert d.end_reason(5, True, hunter_cell=(step, 0)) is None
-
-
-def test_an_enemy_nearby_counts_as_progress():
-    clock = Clock()
-    d = stuck_director(clock)
-    d.end_reason(5, True, hunter_cell=(1, 1))
-    for _ in range(5):
-        clock.now += 10
-        assert d.end_reason(5, True, hunter_cell=(1, 1), enemy_near=True) is None
-    clock.now += 16
-    assert d.end_reason(5, True, hunter_cell=(1, 1), enemy_near=False) == 'stuck'
-
-
-def test_no_cell_means_stuck_is_not_judged():
-    clock = Clock()
-    d = stuck_director(clock)
-    d.end_reason(5, True)
-    clock.now += 100
+    d = kill_director(clock, seconds=0)
+    clock.now += 200
     assert d.end_reason(5, True) is None
 
 
-def test_zero_stuck_seconds_disables_the_rule():
+def test_start_level_restarts_the_no_kill_clock():
     clock = Clock()
-    d = stuck_director(clock, stuck=0)
-    d.end_reason(5, True, hunter_cell=(1, 1))
-    clock.now += 200
-    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
-
-
-def test_start_level_forgets_the_ground_already_covered():
-    clock = Clock()
-    d = stuck_director(clock)
-    d.end_reason(5, True, hunter_cell=(1, 1))
-    clock.now += 14
+    d = kill_director(clock)
+    clock.now += 19
     d.start_level(enemy_count=5)
-    clock.now += 14
-    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
+    clock.now += 19
+    assert d.end_reason(5, True) is None
 
 # --- Game integration -------------------------------------------------------
 
@@ -175,7 +166,7 @@ def make_game(tmp_path, monkeypatch):
     monkeypatch.setattr(SETTINGS.autoplay, 'firstLevel', 4)
     monkeypatch.setattr(SETTINGS.autoplay, 'lastLevel', 6)
     monkeypatch.setattr(SETTINGS.autoplay, 'timeLimitSeconds', 90)
-    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 0)
+    monkeypatch.setattr(SETTINGS.autoplay, 'noKillSeconds', 0)
     manager = ProfileManager(tmp_path / 'profiles.json')
     monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
     monkeypatch.setitem(Game.__init__.__globals__, 'SoundManager', Mock)
@@ -292,26 +283,27 @@ def test_the_player_is_always_visible_outside_autoplay(make_game):
     assert game._hunter_sees_player() is True
 
 
-def test_a_stuck_hunter_ends_the_level_when_the_player_is_hidden(make_game, monkeypatch):
-    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 15)
+def test_no_kill_for_twenty_seconds_ends_the_level(make_game, monkeypatch):
+    monkeypatch.setattr(SETTINGS.autoplay, 'noKillSeconds', 20)
     game = make_game()
-    game._enemy_near_hunter = lambda: False
     now = [game.autoplay._started_at]
     game.autoplay.clock = lambda: now[0]
     game.update(1.0)
     assert game.level == 4
-    now[0] += 16
+    now[0] += 21
     game.update(1.0)
     assert game.level == 5
 
 
-def test_stuck_is_not_judged_when_the_player_is_visible(make_game, monkeypatch):
-    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 15)
-    monkeypatch.setattr(SETTINGS.autoplay, 'hidePlayer', False)
+def test_a_kill_keeps_the_level_going(make_game, monkeypatch):
+    monkeypatch.setattr(SETTINGS.autoplay, 'noKillSeconds', 20)
     game = make_game()
     now = [game.autoplay._started_at]
     game.autoplay.clock = lambda: now[0]
     game.update(1.0)
-    now[0] += 60
+    now[0] += 15
+    next(iter(game.entity_manager.get_all_active_enemies())).active = False
+    game.update(1.0)
+    now[0] += 15
     game.update(1.0)
     assert game.level == 4
