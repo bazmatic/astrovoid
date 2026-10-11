@@ -1,0 +1,3 @@
+# Only needed to train a student (tools/train_student.py); the game never imports these.
+torch>=2.2
+scikit-learn>=1.4

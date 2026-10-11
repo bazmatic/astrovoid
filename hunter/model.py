@@ -65,7 +65,7 @@ class HunterSettings:
     request_timeout: float = 1.0
     # How far the hunter sees, as a share of the maze's width. It is the same distance
     # on screen whatever the maze's cell size, so sight does not shrink in dense mazes.
-    sensor_range_fraction: float = 0.4
+    sensor_range_fraction: float = 0.8
     max_contacts: int = 24
     max_projectiles: int = 32
     max_memory_contacts: int = 32

@@ -402,6 +402,31 @@ selects a model; the default is `jev-latest`. To enter the key privately for one
 venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
 ```
 
+### Offline student pilot
+
+`game.hunterPilot` in `config/settings.json` chooses the hunter's pilot: `"jev"` (default),
+`"student"` (a small network trained to imitate Jev, no key or network needed), `"rules"` (the
+same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or training),
+or `"auto"` (Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
+to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a student with
+`venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
+`assets/student/jev_student.npz`.
+
+#### Unattended data collection
+
+`AUTOPLAY=1 ./run.sh` skips the menus and runs levels with no one at the controls. The player
+ship stays parked and cannot fail or finish a level; a hunter is summoned beside it and flies
+each level on its own. A level ends when the time limit passes, every enemy is destroyed, or
+the hunter dies, and the next level starts at once, wrapping from `autoplay.lastLevel` back to
+`autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
+`true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
+Set `WINDOW_SIZE=1352x878` to run in a window of that size (the whole game world scales to it).
+The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
+`timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it
+explores the maze and meets enemies instead of sitting beside the player.
+A level also ends when no enemy has been killed for `noKillSeconds` (20; 0 turns it off), so
+a hunter caught in a loop or wandering lost does not fill the logs.
+
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
 The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the
 way from your start to the exit, on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one.

@@ -2,6 +2,7 @@
 import asyncio
 import json
 import math
+from tests.hunter_engine import scaled_seconds
 from dataclasses import replace
 from types import SimpleNamespace
 
@@ -143,7 +144,7 @@ def test_engage_reading_far_from_the_enemy_calls_for_a_closing_burn():
     engage = reading(ship_at((500, 500)), enemies=[Enemy((850, 500), 'static')])['engage']
     assert engage['range_state'] == 'far'
     assert engage['distance_metres'] == pytest.approx(350)
-    assert engage['burn_needed'] and engage['burn_seconds'] > 0.2
+    assert engage['burn_needed'] and engage['burn_seconds'] > scaled_seconds(0.2, HunterShip((0, 0)).thrust_force)
     assert engage['target_closing_speed_metres_per_second'] > 0
     assert engage['holding_still']
 

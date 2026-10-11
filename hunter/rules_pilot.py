@@ -1,0 +1,64 @@
+"""A pilot that applies the Jev question criteria as plain rules, with no model or key."""
+from types import SimpleNamespace
+from hunter.rule_params import RULES
+
+
+def _navigation_course(state):
+    """The course the navigator flies: the first of these to be present, in priority order."""
+    for key in ('strafe', 'collect_powerup', 'pursue', 'investigate', 'follow_player', 'wall_follow'):
+        block = state.get(key)
+        if block is not None:
+            return block.get('course')
+    return None
+
+
+def decide(state, params=None):
+    """{'turn', 'thrust', 'fire'} choices for a pilot state, per the criteria in PILOT_QUESTIONS."""
+    params = params or RULES
+    brake = (state.get('motion') or {}).get('brake') or {}
+    too_fast = brake.get('speed_state') == 'too_fast'
+    enemies = [c for c in state.get('visible_contacts') or [] if c.get('allegiance') == 'enemy']
+    aimed = any(c.get('aim') for c in enemies)
+    course = _navigation_course(state)
+    engage = state.get('engage')
+    # A dodge: swing the nose aside for one decision, then track again; braking comes first.
+    strafe = None if too_fast else state.get('strafe')
+
+    if too_fast or (not aimed and course is not None) or (aimed and strafe):
+        turn = 'course'
+    elif aimed:
+        turn = 'track'
+    else:
+        offset = (state.get('follow_player') or {}).get('degrees_off_nose_at_next_decision')
+        turn = ('left' if offset is not None and offset < -params.steer_band_degrees else
+                'right' if offset is not None and offset > params.steer_band_degrees else 'none')
+
+    if too_fast:
+        thrust = 'burn'
+    elif strafe:
+        thrust = 'burn' if (strafe.get('course') or {}).get('burn_needed') else 'coast'
+    elif (engage and engage.get('burn_needed')) or (
+            not engage and course and course.get('burn_needed')):
+        thrust = 'burn'
+    elif engage and engage.get('holding_still') and engage.get('range_state') == 'in_range':
+        thrust = 'pulse'
+    elif not engage and course is None and brake.get('thrust_effect') == 'slows':
+        thrust = 'thrust'
+    else:
+        thrust = 'coast'
+    return {'turn': turn, 'thrust': thrust, 'fire': 'fire' if aimed else 'hold'}
+
+
+class RulesClient:
+    """Answers like the Jev client, from decide()."""
+
+    def __init__(self, params=None):
+        self.params = params or RULES
+
+    async def system_one(self, *, state, questions=None, **_):
+        return SimpleNamespace(choices={
+            head: SimpleNamespace(choice=choice, confidence=1.0, probabilities={choice: 1.0})
+            for head, choice in decide(state, self.params).items()})
+
+    async def aclose(self):
+        pass

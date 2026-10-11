@@ -334,6 +334,15 @@
   "game": {
     "criticalWarningThreshold": 20,
     "hunterLevelInterval": 1,
-    "hunterFirstLevel": 4
+    "hunterFirstLevel": 4,
+    "hunterPilot": "jev",
+    "recordPilotDecisions": false
+  },
+  "autoplay": {
+    "firstLevel": 13,
+    "lastLevel": 30,
+    "timeLimitSeconds": 120,
+    "hidePlayer": true,
+    "noKillSeconds": 20
   }
 }

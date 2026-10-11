@@ -1,0 +1,85 @@
+"""The numbers the rules hunter is tuned by. Defaults are the game's current values."""
+from dataclasses import asdict, dataclass, fields, replace
+
+
+@dataclass(frozen=True)
+class RuleParams:
+    steer_band_degrees: float = 20.0  # Within this of the nose, hold no steering
+    engage_standoff_cells: float = 1.5  # The distance the hunter fights from, in maze cells
+    too_close_ratio: float = 0.6  # Closer than this share of the standoff is too close
+    far_ratio: float = 1.15  # Further than this multiple of the standoff is far
+    harmless_speed: float = 15.0  # m/s below which a wall brush is harmless
+    # Share of sqrt(thrust x standoff) that wall-following cruises at. It scales with the engine, so a
+    # stronger one would need a smaller value to keep the same pace (0.3 at thrust 1.0 = 0.6 at 0.25).
+    wall_follow_cruise: float = 0.6
+    wall_lookahead_cells: float = 0.75  # How far along the wall the follow target sits, in cells
+    course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
+    cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
+    pulse_frames: float = 6.0  # Length of one engine pulse, in frames
+    # The hunter ship's engine, as a share of the player's. A ship property: the lab applies it to the
+    # hunter, and adopting a value means changing HunterSettings (a test keeps the two equal).
+    thrust_multiplier: float = 0.25
+    # How far the hunter sees, as a share of the maze's width. Also a hunter property (HunterSettings);
+    # a test keeps the two equal.
+    sensor_range_fraction: float = 0.8
+    # How fast the hunter turns, as a share of the player's. Also a hunter property (HunterSettings).
+    turn_rate_multiplier: float = 0.5
+    strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
+    # Structural switches: whole rules that are off until an experiment shows they help.
+    pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
+    investigate_memory: bool = False  # Head for where a remembered enemy was last seen
+    strafe: bool = False  # While fighting, dodge sideways between aimed bursts
+    # While any enemy remains alive, even out of sight, hunt instead of following the player.
+    hunt_first: bool = False
+
+    def to_dict(self):
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data):
+        known = {f.name for f in fields(cls)}
+        values = {}
+        for name, value in data.items():
+            if name not in known:
+                raise ValueError(f'unknown rule parameter {name!r}')
+            if name in SWITCHES:
+                if not isinstance(value, bool):
+                    raise ValueError(f'rule switch {name!r} must be true or false, got {value!r}')
+                values[name] = value
+                continue
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(f'rule parameter {name!r} must be a number, got {value!r}')
+            low, high = BOUNDS[name]
+            if not low <= value <= high:
+                raise ValueError(f'rule parameter {name!r}={value} is outside {low}..{high}')
+            values[name] = float(value)
+        return cls(**values)
+
+
+DEFAULT = RuleParams()
+# The rules pilot's own defaults: DEFAULT plus what experiments have adopted (docs/experiments):
+# the investigate rule (004), faster, longer-sighted wall-following (007) and a faster turn (010; the
+# game builds the rules pilot's hunter that way, see hunter/settings_for.py) and hunting before following
+# the player while any enemy remains (011). Jev and the student keep DEFAULT.
+RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5,
+                turn_rate_multiplier=2.0, hunt_first=True)
+
+SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe', 'hunt_first')
+
+# The ranges the search may explore, and the limits from_dict accepts.
+BOUNDS = {
+    'steer_band_degrees': (2.0, 60.0),
+    'engage_standoff_cells': (0.5, 4.0),
+    'too_close_ratio': (0.2, 0.95),
+    'far_ratio': (1.0, 2.5),
+    'harmless_speed': (2.0, 60.0),
+    'wall_follow_cruise': (0.2, 4.0),
+    'wall_lookahead_cells': (0.3, 3.0),
+    'course_approach_fraction': (0.3, 1.0),
+    'cruising_speed_fraction': (0.1, 0.9),
+    'pulse_frames': (1.0, 20.0),
+    'thrust_multiplier': (0.1, 6.0),
+    'sensor_range_fraction': (0.15, 1.5),
+    'turn_rate_multiplier': (0.1, 4.0),
+    'strafe_cells': (0.3, 3.0),
+}

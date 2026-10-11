@@ -2,14 +2,24 @@
 import math
 from hunter.braking import braking_solution, hull_travel
 from hunter.course import course_correction
+from hunter.rule_params import DEFAULT as DEFAULT_PARAMS
 from hunter.visibility import visible_point
 from hunter.wall_follow import wall_follow_target
 
 
 # Below this a brush with a wall is harmless, so the hunter is never told to brake.
-HARMLESS_SPEED_METRES_PER_SECOND = 15
+HARMLESS_SPEED_METRES_PER_SECOND = DEFAULT_PARAMS.harmless_speed
 # The distance the hunter fights from, in maze cells.
-ENGAGE_STANDOFF_CELLS = 1.5
+ENGAGE_STANDOFF_CELLS = DEFAULT_PARAMS.engage_standoff_cells
+# A burn shorter than this is noise, not a correction. It is 2 frames of thrust at the reference
+# engine, kept as the same change of speed when the engine is stronger (but never below one frame,
+# the smallest burn there is).
+MIN_BURN_FRAMES = 2
+REFERENCE_THRUST_PER_FRAME = 0.0375
+
+
+def min_burn_frames(thrust_per_frame):
+    return max(1.0, MIN_BURN_FRAMES*REFERENCE_THRUST_PER_FRAME/thrust_per_frame)
 
 
 def direction(bearing, heading):
@@ -57,7 +67,7 @@ def firing_solution(relative, velocity, shot_speed):
     return frames,math.degrees(math.atan2(ry+vy*frames,rx+vx*frames))
 
 
-def pilot_state(state):
+def pilot_state(state, params=DEFAULT_PARAMS):
     ship = state.get('self', {})
     origin = ship.get('position', [0,0])
     heading = ship.get('heading', 0)
@@ -172,7 +182,7 @@ def pilot_state(state):
         # The need is noticed up to a decision late and acted on a decision after that.
         reaction_frames=2*horizon_frames,
         # Slow enough that touching a wall does not matter.
-        harmless_speed=HARMLESS_SPEED_METRES_PER_SECOND/fps)
+        harmless_speed=params.harmless_speed/fps)
     brake = {'speed_state':'slow', 'safe_speed_metres_per_second':None,
              'stopping_distance_metres':0, 'thrust_effect':None,
              'retrograde_degrees_off_nose':None,
@@ -185,7 +195,7 @@ def pilot_state(state):
             motion['seconds_to_wall_impact'] = round(solution.frames_to_impact/fps,2)
         retrograde = round(solution.degrees_off_nose,1)
         brake = {'speed_state':('too_fast' if solution.must_brake else
-                                'cruising' if speed > solution.safe_speed*.5 else 'slow'),
+                                'cruising' if speed > solution.safe_speed*params.cruising_speed_fraction else 'slow'),
                  'safe_speed_metres_per_second':round(solution.safe_speed*fps,1),
                  'stopping_distance_metres':round(solution.stopping_distance,1),
                  'thrust_effect':('slows' if abs(retrograde) <= 60 else
@@ -197,6 +207,12 @@ def pilot_state(state):
                  'burn_heading_degrees':round(solution.heading_degrees,1),
                  'burn_seconds':round(solution.burn_frames/fps,2)}
     motion['brake'] = brake
+    def worth_burning(frames, thrust):
+        """A burn counts once it is more than noise. At or near rest any burn does: the cutoff is there
+        to stop jitter while cruising, and applied to a hunter hemmed in by a wall it left a course that
+        wanted a tiny speed unflown forever."""
+        return frames >= min_burn_frames(thrust) or (frames > 0 and speed*fps < params.harmless_speed)
+
     def engage_reading():
         """The worked approach to the enemy fire control is engaging, or None.
 
@@ -212,7 +228,7 @@ def pilot_state(state):
             if solution is None:
                 continue
             distance = c['distance']
-            standoff = ENGAGE_STANDOFF_CELLS*cell_size
+            standoff = params.engage_standoff_cells*cell_size
             toward = [c['relative_position'][i]/distance if distance else 0 for i in (0,1)]
             closing = sum((velocity[i]-c['velocity'][i])*toward[i] for i in (0,1))
             deceleration = thrust_per_frame*fps*fps
@@ -224,15 +240,15 @@ def pilot_state(state):
             return {'id':c['id'],
                     'distance_metres':distance,
                     'standoff_metres':standoff,
-                    'range_state':('too_close' if distance < standoff*.6 else
-                                   'far' if distance > standoff*1.15 else 'in_range'),
+                    'range_state':('too_close' if distance < standoff*params.too_close_ratio else
+                                   'far' if distance > standoff*params.far_ratio else 'in_range'),
                     'closing_speed_metres_per_second':round(closing*fps,1),
                     'target_closing_speed_metres_per_second':round(target,1),
-                    'holding_still':speed*fps < HARMLESS_SPEED_METRES_PER_SECOND,
-                    'burn_needed':burn_frames >= 2,
+                    'holding_still':speed*fps < params.harmless_speed,
+                    'burn_needed':worth_burning(burn_frames, thrust_per_frame),
                     'burn_heading_degrees':round(
                         (heading+solution['lead_degrees_off_nose']) % 360,1),
-                    'burn_seconds':round(burn_frames/fps,2) if burn_frames >= 2 else 0}
+                    'burn_seconds':round(burn_frames/fps,2) if worth_burning(burn_frames, thrust_per_frame) else 0}
         return None
 
     def course_to(point, bearing, cruise=None):
@@ -260,13 +276,13 @@ def pilot_state(state):
         correction = course_correction(
             origin,velocity,heading,point,thrust=thrust,speed_limit=limit/fps,
             # Holding right at the limit leaves no slack for lag; a little under it does.
-            approach_speed=None if cruise is None else limit/fps*.7,
+            approach_speed=None if cruise is None else limit/fps*params.course_approach_fraction,
             rotation_per_frame=physics.get('rotation_per_frame',5),
             friction=physics.get('friction_per_frame',1))
         if correction is None:
             return None
         return {# The navigator times the burn itself, so even a short one can be flown.
-                'burn_needed':correction.burn_frames >= 2,
+                'burn_needed':worth_burning(correction.burn_frames, thrust),
                 'burn_heading_degrees':round(correction.heading_degrees,1),
                 'burn_degrees_off_nose':round(correction.degrees_off_nose,1),
                 'burn_degrees_off_nose_at_next_decision':
@@ -289,6 +305,9 @@ def pilot_state(state):
     # Cut off: no player, or no open route to it. Then there is nobody to follow,
     # and the hunter explores along a wall instead.
     cut_off = raw_follow is None or raw_follow['route_distance'] is None
+    # While enemies remain, hunting comes before keeping station with the player.
+    if params.hunt_first and state.get('enemies_present', False):
+        cut_off = True
     follow = wall_follow = None
     if not cut_off:
         follow = {**bearings(raw_follow['bearing']),
@@ -303,7 +322,7 @@ def pilot_state(state):
         if not follow['alongside']:
             follow['course'] = course_to(raw_follow['waypoint'],raw_follow['bearing'])
     else:
-        goal = wall_follow_target(origin,heading,radius,walls,cell_size)
+        goal = wall_follow_target(origin,heading,radius,walls,cell_size,params.wall_lookahead_cells)
         bearing = math.degrees(math.atan2(goal.point[1]-origin[1],goal.point[0]-origin[0]))
         wall_follow = {**bearings(bearing),
                        'heading_degrees':bearing % 360,
@@ -312,8 +331,49 @@ def pilot_state(state):
                        # with it: the engine can only bend the path so tightly.
                        'course':course_to(
                            goal.point,bearing,
-                           cruise=.6*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
-    return {'snapshot_at_seconds':state.get('snapshot_at',0),
+                           cruise=params.wall_follow_cruise*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
+    engage = engage_reading()
+    # Strafing: the engine only pushes along the nose and tracking holds the nose on the target,
+    # so a sideways nudge means swinging the nose aside for one decision. It is offered only right
+    # after a tracking decision, which alternates aiming and dodging, and never while braking.
+    strafe = None
+    if (params.strafe and engage is not None and turning['direction'] == 'track'
+            and brake['speed_state'] != 'too_fast'):
+        room = {side: space[side]['clearance_metres'] for side in ('left', 'right')}
+        # Nothing brakes, so a sideways nudge keeps going: dodge against the drift it already has,
+        # so the nudges cancel out. With little drift, take the side with more room.
+        drift = motion['rightward_speed_metres_per_second']
+        if abs(drift) > params.harmless_speed*.5:
+            side = 'left' if drift > 0 else 'right'
+        else:
+            side = 'right' if room['right'] >= room['left'] else 'left'
+        reach = params.strafe_cells*cell_size
+        if room[side] > max(radius*3, 1):
+            aside = math.radians(heading+(90 if side == 'right' else -90))
+            point = (origin[0]+reach*math.cos(aside), origin[1]+reach*math.sin(aside))
+            sideways = course_to(point, math.degrees(aside) % 360)
+            if sideways is not None:
+                strafe = {'side':side, 'clearance_metres':room[side], 'course':sideways}
+    pursue = investigate = None
+    if params.pursue_unaimed:
+        # A visible enemy no shot can reach yet: close in on the nearest, rather than ignore it.
+        unaimed = [c for c in visible if c['allegiance'] == 'enemy' and aim(c) is None]
+        if unaimed:
+            nearest = min(unaimed, key=lambda c: c['distance'])
+            pursue = {**bearings(nearest['bearing']), 'heading_degrees':nearest['bearing'] % 360,
+                      'distance_metres':nearest['distance'],
+                      'course':course_to(nearest['position'], nearest['bearing'])}
+    if params.investigate_memory:
+        # An enemy seen lately but out of sight now: go to where it was last seen.
+        gone = [c for c in state.get('remembered_contacts', [])
+                if c['allegiance'] == 'enemy' and c['id'] not in visible_ids]
+        if gone:
+            nearest = min(gone, key=lambda c: c['distance'])
+            investigate = {**bearings(nearest['bearing']), 'heading_degrees':nearest['bearing'] % 360,
+                           'distance_metres':nearest['distance'],
+                           'age_seconds':round(nearest.get('age', 0), 1),
+                           'course':course_to(nearest['position'], nearest['bearing'])}
+    result = {'snapshot_at_seconds':state.get('snapshot_at',0),
             'speed_metres_per_second':speed*fps,
             'heading_degrees':heading % 360,
             'velocity_heading_degrees':velocity_heading % 360 if speed else None,
@@ -329,7 +389,15 @@ def pilot_state(state):
                                    if c['id'] not in visible_ids],
             'hostile_projectiles':[contact(c) for c in state.get('visible_projectiles',[])
                                    if c['allegiance']=='enemy'],
-            'engage':engage_reading(),
+            'engage':engage,
             'collect_powerup':collect,
             'follow_player':follow,
             'wall_follow':wall_follow}
+    # Only present when its switch is on, so the default state is exactly as before.
+    if strafe is not None:
+        result['strafe'] = strafe
+    if pursue is not None:
+        result['pursue'] = pursue
+    if investigate is not None:
+        result['investigate'] = investigate
+    return result

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -379,6 +379,24 @@ class GameSettings:
     criticalWarningThreshold: int
     hunterLevelInterval: int
     hunterFirstLevel: int
+    # Which pilot flies the hunter: "jev", "student" (the trained imitation), "rules" (the
+    # question criteria as plain code) or "auto" (Jev when it is available, the student otherwise).
+    hunterPilot: str = "jev"
+    # Log Jev's decisions under .astrovoid-local/decisions/ as training data.
+    recordPilotDecisions: bool = False
+
+
+@dataclass
+class AutoplaySettings:
+    # Unattended runs (AUTOPLAY=1): the player is parked and the hunter flies each level.
+    firstLevel: int = 13
+    lastLevel: int = 30
+    timeLimitSeconds: float = 120.0
+    # Keep the parked player out of the hunter's view, so it explores and meets enemies
+    # instead of sitting beside the player.
+    hidePlayer: bool = True
+    # End a level when the hunter has killed nothing for this long (0 turns it off).
+    noKillSeconds: float = 20.0
 
 
 @dataclass
@@ -409,6 +427,7 @@ class Settings:
     starAnimation: StarAnimationSettings
     ui: UISettings
     game: GameSettings
+    autoplay: AutoplaySettings = field(default_factory=AutoplaySettings)
 
 
 def _load_settings_json() -> dict:
@@ -584,7 +603,8 @@ def load_settings() -> Settings:
             menuParticles=raw["ui"]["menuParticles"],
             fonts=fonts
         ),
-        game=GameSettings(**raw["game"])
+        game=GameSettings(**raw["game"]),
+        autoplay=AutoplaySettings(**raw.get("autoplay", {})),
     )
 
 
