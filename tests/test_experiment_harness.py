@@ -92,6 +92,7 @@ def test_kill_counter_ignores_spawns_and_counts_drops():
     counter.enemies(11)
     counter.enemies(8)    # three died at once
     assert counter.kills == 4
+    assert counter.spawned == 2
 
 
 def test_idle_time_starts_after_twenty_seconds_without_a_kill():
@@ -120,3 +121,9 @@ def test_a_contact_held_for_many_frames_is_few_hits():
     for frame in range(60):
         counter.hit_taken(frame / 60)   # one second of overlap
     assert counter.hits_taken == 2
+
+
+def test_a_farming_level_reports_the_enemies_that_spawned():
+    result = run_episode(27, 0, horizon=25.0)
+    assert result.enemies_spawned >= 0
+    assert result.kills <= result.enemies_at_start + result.enemies_spawned

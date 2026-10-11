@@ -91,7 +91,7 @@ def test_main_prints_a_summary_and_writes_results(monkeypatch, tmp_path, capsys)
     out = tmp_path / 'out.jsonl'
     run.main(['--set', 'heldout', '--seeds', '1', '--workers', '1', '--out', str(out)])
     text = capsys.readouterr().out
-    assert 'kills_per_min' in text and 'score' in text and str(out) in text
+    assert 'kill_pct_per_min' in text and 'score' in text and str(out) in text
     assert len(run.load_results(out)) == 6
 
 

@@ -16,7 +16,7 @@ def test_baseline_weights_scale_each_penalty_to_half_the_kill_spread():
     results = fake_results()
     weights = lab.baseline_weights(results)
     rows = [components(r) for r in results]
-    kill_std = np.std([r['kills_per_min'] for r in rows])
+    kill_std = np.std([r['kill_pct_per_min'] for r in rows])
     assert weights.wall == pytest.approx(0.5 * kill_std / np.std([r['wall_hits_per_min'] for r in rows]))
     assert weights.hit == pytest.approx(0.5 * kill_std / np.std([r['hits_taken_per_min'] for r in rows]))
     assert weights.idle == pytest.approx(0.5 * kill_std / np.std([r['idle_fraction'] for r in rows]))

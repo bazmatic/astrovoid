@@ -30,6 +30,7 @@ class EpisodeResult:
     hits_taken: int
     idle_seconds: float
     end: str  # 'cleared' or 'horizon'
+    enemies_spawned: int = 0  # enemies that appeared during the episode (spawners, eggs)
 
 
 class EventCounter:
@@ -37,6 +38,7 @@ class EventCounter:
 
     def __init__(self):
         self.kills = 0
+        self.spawned = 0
         self.wall_hits = 0
         self.hits_taken = 0
         self.idle_seconds = 0.0
@@ -47,9 +49,12 @@ class EventCounter:
         self._last_tick = None
 
     def enemies(self, count):
+        """The live enemy count this frame: a fall is kills, a rise is spawns."""
         if self._enemies is not None and count < self._enemies:
             self.kills += self._enemies - count
             self._last_kill = self._last_tick if self._last_tick is not None else 0.0
+        elif self._enemies is not None and count > self._enemies:
+            self.spawned += count - self._enemies
         self._enemies = count
 
     def wall(self, hit):
@@ -203,4 +208,4 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
             break
     game._close_hunter()
     return EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
-                         counter.hits_taken, counter.idle_seconds, end)
+                         counter.hits_taken, counter.idle_seconds, end, counter.spawned)

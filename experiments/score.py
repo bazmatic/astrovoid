@@ -8,16 +8,20 @@ RATE_FLOOR_SECONDS = 20.0
 @dataclass(frozen=True)
 class Weights:
     # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
-    wall: float = 4.4
-    hit: float = 3.1
-    idle: float = 76.0
+    wall: float = 9.6
+    hit: float = 6.8
+    idle: float = 170.0
 
 
 def components(result):
     """Each term of the score on its own, so no gain can hide a loss."""
     minutes = max(result.elapsed, RATE_FLOOR_SECONDS) / 60.0
     idle = result.idle_seconds / result.elapsed if result.elapsed > 0 else 0.0
-    return {'kills_per_min': result.kills / minutes,
+    # The share of every enemy that existed (those at the start and those that spawned) killed
+    # per minute, so a level that keeps spawning enemies cannot be farmed for a bigger number.
+    total = result.enemies_at_start + result.enemies_spawned
+    return {'kill_pct_per_min': 100.0 * result.kills / total / minutes if total else 0.0,
+            'kills_per_min': result.kills / minutes,
             'wall_hits_per_min': result.wall_hits / minutes,
             'hits_taken_per_min': result.hits_taken / minutes,
             'idle_fraction': idle}
@@ -25,7 +29,7 @@ def components(result):
 
 def score(result, weights=Weights()):
     c = components(result)
-    return (c['kills_per_min'] - weights.wall * c['wall_hits_per_min']
+    return (c['kill_pct_per_min'] - weights.wall * c['wall_hits_per_min']
             - weights.hit * c['hits_taken_per_min'] - weights.idle * c['idle_fraction'])
 
 

@@ -27,7 +27,7 @@ def make_evaluator(workers, horizon_full=90.0, horizon_cheap=45.0, weights=None)
 def baseline_weights(results):
     """Each penalty is weighted so its spread can swing the score by half the kill rate's spread."""
     rows = [components(r) for r in results]
-    kill_std = float(np.std([row['kills_per_min'] for row in rows]))
+    kill_std = float(np.std([row['kill_pct_per_min'] for row in rows]))
     defaults = Weights()
     chosen = {}
     for field, term in (('wall', 'wall_hits_per_min'), ('hit', 'hits_taken_per_min'),

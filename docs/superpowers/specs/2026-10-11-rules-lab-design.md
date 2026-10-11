@@ -40,7 +40,7 @@ An *episode* is one level, one seed, one `RuleParams`.
 
 ### Counters
 
-- `kills`: the live enemy count falling.
+- `kills`: the live enemy count falling. `enemies_spawned`: the live count rising (spawners, eggs).
 - `wall_hits`: rising edges of the hunter's wall collision check (a contact held for many frames
   is one hit).
 - `hits_taken`: damage calls from enemy contact or bullets, counted at the damage path and
@@ -52,7 +52,7 @@ An *episode* is one level, one seed, one `RuleParams`.
 
 ### Score — `experiments/score.py`
 
-Per episode: `kills_per_min − w_wall·wall_hits_per_min − w_hit·hits_taken_per_min −
+Per episode: `kill_pct_per_min − w_wall·wall_hits_per_min − w_hit·hits_taken_per_min −
 w_idle·idle_fraction`. (An earlier version also had a death term, with damage switched on. It was
 removed: the real hunter cannot die, deaths ended 61% of episodes early, and the cliff made scores
 lumpy. See `docs/experiments/001-baseline.md`.) Every term is also reported on its own, so a gain in one
