@@ -36,6 +36,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 007 | [confident exploration](007-confident-exploration.md) | +11.3 | +5.3 | **adopted** (cruise 2.0, look-ahead 2.5); current reference 53.6 / 72.2 |
 | 008 | [thrust](008-thrust.md) | no effect at 0.15 to 1.5; 1.0 worse on held-out (-21.6) | | reverted to 0.25 |
 | 009 | [sensor range](009-sensor-range.md) | +18.4 (0.8) | +6.5 (0.8) | **adopted for every pilot** (0.8); current reference 78.7 / 73.6 |
+| 010 | [turn rate](010-turn-rate.md) | +25.9 (2.0) | +27.4 (2.0) | best 2.0; adoption scope pending (held steering) |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 
