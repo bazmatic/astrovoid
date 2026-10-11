@@ -121,3 +121,50 @@ def test_parse_overrides_applies_on_top_of_a_base():
     params = lab.parse_overrides('steer_band_degrees=25', RULES)
     assert params.steer_band_degrees == 25.0 and params.investigate_memory is True
     assert lab.parse_overrides('investigate_memory=false', RULES).investigate_memory is False
+
+
+# --- review fixes ---------------------------------------------------------------
+
+def test_the_confirm_fidelity_uses_fresh_seeds_on_the_tune_levels(monkeypatch):
+    seen = []
+
+    def fake_evaluate(params, level_set, seeds, horizon, workers):
+        seen.append((level_set, tuple(seeds), horizon))
+        return [EpisodeResult(l, s, 5, 30.0, l % 4, 0, 0, 0.0, 'horizon', 0)
+                for l, s in run.episode_list(level_set, seeds)]
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate)
+    evaluator = lab.make_evaluator(workers=2)
+    assert len(evaluator(DEFAULT, 'confirm')) == 72
+    level_set, seeds, horizon = seen[0]
+    assert level_set == 'tune' and horizon == 90.0
+    assert set(seeds).isdisjoint(run.SEEDS) and len(seeds) == len(run.SEEDS)
+
+
+def test_round1_is_adopted_only_if_the_held_out_levels_agree(tmp_path):
+    from hunter.rule_params import RuleParams
+    best = RuleParams(steer_band_degrees=25.0)
+    clearly_better = lab.finish_round1(best, [1.0] * 20, [3.0] * 20, tmp_path)
+    assert clearly_better is True
+    assert (tmp_path / 'round1-best.json').exists() and not (tmp_path / 'round1-rejected.json').exists()
+    for name in ('round1-best.json', 'round1-rejected.json'):
+        (tmp_path / name).unlink(missing_ok=True)
+    noise = lab.finish_round1(best, [1.0, 3.0] * 10, [3.0, 1.0] * 10, tmp_path)
+    assert noise is False
+    assert (tmp_path / 'round1-rejected.json').exists() and not (tmp_path / 'round1-best.json').exists()
+
+
+@pytest.mark.parametrize('which,expected_name', [('rules', 'rules'), ('default', 'default')])
+def test_baseline_can_be_taken_of_the_rules_or_the_global_defaults(monkeypatch, tmp_path, which, expected_name):
+    from hunter.rule_params import RULES
+    seen = []
+
+    def fake_evaluate(params, level_set, seeds, horizon, workers):
+        seen.append(params)
+        return [EpisodeResult(l, s, 5, 30.0, l % 4 + 1, 1, 1, 1.0, 'horizon', 0)
+                for l, s in run.episode_list(level_set, seeds)]
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate)
+    monkeypatch.setattr(lab.run, 'RESULTS_DIR', tmp_path)
+    lab.baseline(workers=1, of=which)
+    assert all(p == (RULES if which == 'rules' else DEFAULT) for p in seen)
+    assert (tmp_path / f'baseline-{expected_name}-tune.jsonl').exists()
+    assert (tmp_path / f'baseline-{expected_name}-heldout.jsonl').exists()

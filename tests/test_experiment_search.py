@@ -79,3 +79,54 @@ def test_optimise_improves_on_the_baseline_and_keeps_a_log():
 def test_optimise_keeps_the_baseline_when_nothing_beats_it():
     final, log = optimise(CachedEvaluator(lambda p, f: [1.0] * 24), n=10, keep=2, seed=0)
     assert final == DEFAULT
+
+
+# --- review fixes ---------------------------------------------------------------
+
+def test_sampled_candidates_keep_the_baselines_switches():
+    from hunter.rule_params import RULES
+    rng = np.random.default_rng(0)
+    for _ in range(20):
+        assert sample_params(rng, base=RULES).investigate_memory is True
+        assert sample_params(rng).investigate_memory is False
+
+
+def test_random_search_candidates_carry_the_baselines_switches():
+    from hunter.rule_params import RULES
+    seen = []
+
+    def evaluate(params, fidelity):
+        seen.append(params.investigate_memory)
+        return [1.0] * 6
+    random_search(CachedEvaluator(evaluate), baseline=RULES, n=8, keep=2, seed=0)
+    assert seen and all(seen)
+
+
+def test_hill_climb_uses_a_stricter_interval_than_a_single_comparison():
+    base = np.array([5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
+    nudge = base + np.array([0.9, 1.0, 0.1, 0.9, 1.0, 0.1, 0.9, 1.0])
+    from experiments.score import paired_bootstrap
+    assert paired_bootstrap(base, nudge, level=0.95)[1] > 0
+    assert paired_bootstrap(base, nudge, level=0.999)[1] < paired_bootstrap(base, nudge, level=0.95)[1]
+
+
+def test_confirmation_on_fresh_seeds_rejects_a_screening_fluke():
+    calls = []
+
+    def evaluate(params, fidelity):
+        calls.append(fidelity)
+        if fidelity == 'confirm':
+            return [5.0] * 24            # on fresh seeds nothing beats the baseline
+        return [5.0 + (3.0 if params != DEFAULT else 0.0)] * 24   # but screening loved everything
+    final, _ = optimise(CachedEvaluator(evaluate), n=6, keep=2, seed=0)
+    assert 'confirm' in calls
+    assert final == DEFAULT
+
+
+def test_confirmation_accepts_a_candidate_that_also_wins_on_fresh_seeds():
+    def evaluate(params, fidelity):
+        gain = (params.steer_band_degrees - DEFAULT.steer_band_degrees) / 10.0
+        rng = np.random.default_rng(4)
+        return list(5.0 + gain + rng.normal(0, 0.05, 24))
+    final, _ = optimise(CachedEvaluator(evaluate), n=40, keep=3, seed=1)
+    assert final.steer_band_degrees > DEFAULT.steer_band_degrees

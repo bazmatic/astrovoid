@@ -42,18 +42,21 @@ def mean_components(results, weights=Weights()):
     return mean
 
 
-def paired_bootstrap(base, candidate, samples=2000, seed=0):
-    """(mean difference, 2.5th, 97.5th percentile) of candidate - base over paired episodes."""
+def paired_bootstrap(base, candidate, samples=2000, seed=0, level=0.95):
+    """(mean difference, lower, upper) of candidate - base over paired episodes, at `level`."""
+    if not 0.0 < level < 1.0:
+        raise ValueError('level must be between 0 and 1')
     base, candidate = np.asarray(base, dtype=float), np.asarray(candidate, dtype=float)
     if base.shape != candidate.shape or base.ndim != 1 or not len(base):
         raise ValueError('base and candidate must be equal-length, non-empty score lists')
     diffs = candidate - base
     rng = np.random.default_rng(seed)
     means = rng.choice(diffs, size=(samples, len(diffs)), replace=True).mean(axis=1)
-    return (float(diffs.mean()), float(np.percentile(means, 2.5)),
-            float(np.percentile(means, 97.5)))
+    tail = 100.0 * (1.0 - level) / 2.0
+    return (float(diffs.mean()), float(np.percentile(means, tail)),
+            float(np.percentile(means, 100.0 - tail)))
 
 
 def improves(base, candidate, **kwargs):
-    """True when the candidate beats the base by more than the noise (95% interval above zero)."""
+    """True when the candidate beats the base by more than the noise (interval above zero)."""
     return paired_bootstrap(base, candidate, **kwargs)[1] > 0

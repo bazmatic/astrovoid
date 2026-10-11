@@ -23,7 +23,7 @@ def test_defaults_are_todays_values():
     assert DEFAULT == RuleParams(
         steer_band_degrees=20.0, engage_standoff_cells=1.5, too_close_ratio=0.6, far_ratio=1.15,
         harmless_speed=15.0, wall_follow_cruise=0.6, course_approach_fraction=0.7,
-        cruising_speed_fraction=0.5, pulse_frames=6.0, request_interval=0.25)
+        cruising_speed_fraction=0.5, pulse_frames=6.0)
 
 
 def test_every_default_is_inside_its_bounds():
@@ -215,3 +215,11 @@ def test_the_rules_pilot_investigates_a_remembered_enemy_by_default():
     assert action.course and action.burn_heading == pytest.approx(expected)
     plain = asyncio.run(JevPilot(RulesClient(DEFAULT)).decide(observation)).action
     assert plain.burn_heading != pytest.approx(expected, abs=0.5) or not plain.course
+
+
+def test_request_interval_is_not_a_rule_parameter():
+    # It only ever worked inside the lab: the game's controller uses its own interval.
+    assert 'request_interval' not in DEFAULT.to_dict()
+    assert 'request_interval' not in BOUNDS
+    with pytest.raises(ValueError):
+        RuleParams.from_dict({'request_interval': 0.2})

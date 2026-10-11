@@ -76,9 +76,13 @@ def load_results(path):
 
 
 def load_params(path):
+    """The rules defaults, with any settings in the JSON file applied on top."""
     if path is None:
         return RULES
-    return RuleParams.from_dict(json.loads(Path(path).read_text(encoding='utf-8')))
+    data = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(data, dict):
+        raise ValueError('a params file must contain a JSON object')
+    return RuleParams.from_dict({**RULES.to_dict(), **data})
 
 
 def main(argv=None):

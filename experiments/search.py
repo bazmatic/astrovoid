@@ -6,8 +6,9 @@ from experiments.score import improves, paired_bootstrap
 from hunter.rule_params import BOUNDS, DEFAULT, RuleParams
 
 
-def sample_params(rng, bounds=BOUNDS):
-    return RuleParams(**{name: float(rng.uniform(low, high)) for name, (low, high) in bounds.items()})
+def sample_params(rng, bounds=BOUNDS, base=DEFAULT):
+    """Random numbers within bounds on top of `base`, so its switches carry over."""
+    return replace(base, **{name: float(rng.uniform(low, high)) for name, (low, high) in bounds.items()})
 
 
 class CachedEvaluator:
@@ -33,13 +34,16 @@ def _mean(evaluate, params, fidelity):
 def random_search(evaluate, baseline=DEFAULT, n=40, keep=4, seed=0):
     """The best `keep` of `n` random candidates: screened cheaply, ranked at full fidelity."""
     rng = np.random.default_rng(seed)
-    candidates = [sample_params(rng) for _ in range(n)]
+    candidates = [sample_params(rng, base=baseline) for _ in range(n)]
     screened = sorted(candidates, key=lambda p: _mean(evaluate, p, 'cheap'), reverse=True)[:keep]
     return sorted(screened, key=lambda p: _mean(evaluate, p, 'full'), reverse=True)
 
 
-def hill_climb(evaluate, start, step=0.15, max_sweeps=3, seed=0, bounds=BOUNDS):
-    """Try each parameter up and down by `step`; keep a move only if it clearly improves."""
+def hill_climb(evaluate, start, step=0.15, max_sweeps=3, seed=0, bounds=BOUNDS, confidence=0.99):
+    """Try each parameter up and down by `step`; keep a move only if it clearly improves.
+
+    Dozens of moves are tried, so each must clear a stricter interval than a single comparison.
+    """
     rng = np.random.default_rng(seed)
     current, log = start, []
     names = list(bounds)
@@ -56,7 +60,7 @@ def hill_climb(evaluate, start, step=0.15, max_sweeps=3, seed=0, bounds=BOUNDS):
                 candidate = replace(current, **{name: target})
                 base_scores = evaluate(current, 'full')
                 new_scores = evaluate(candidate, 'full')
-                mean_diff, lo, hi = paired_bootstrap(base_scores, new_scores)
+                mean_diff, lo, hi = paired_bootstrap(base_scores, new_scores, level=confidence)
                 accepted = lo > 0
                 log.append({'param': name, 'from': value, 'to': target, 'accepted': accepted,
                             'mean_diff': mean_diff, 'low': lo, 'high': hi})
@@ -69,11 +73,23 @@ def hill_climb(evaluate, start, step=0.15, max_sweeps=3, seed=0, bounds=BOUNDS):
 
 
 def optimise(evaluate, baseline=DEFAULT, n=40, keep=4, seed=0):
-    """Random search for a start, then hill-climb from it if it beats the baseline."""
+    """Random search for a start, hill-climb from it, then confirm the result on fresh seeds.
+
+    Screening picks the best of many candidates and hill-climbing makes many comparisons, so the
+    final answer is only returned if it also beats the baseline on seeds nothing was chosen on
+    (evaluator fidelity 'confirm'); otherwise the baseline is returned.
+    """
     base_scores = evaluate(baseline, 'full')
     start = baseline
     for candidate in random_search(evaluate, baseline, n, keep, seed):
         if improves(base_scores, evaluate(candidate, 'full')):
             start = candidate
             break
-    return hill_climb(evaluate, start, seed=seed)
+    final, log = hill_climb(evaluate, start, seed=seed)
+    if final == baseline:
+        return baseline, log
+    mean_diff, lo, hi = paired_bootstrap(evaluate(baseline, 'confirm'), evaluate(final, 'confirm'))
+    confirmed = lo > 0
+    log.append({'param': 'CONFIRM', 'from': None, 'to': None, 'accepted': confirmed,
+                'mean_diff': mean_diff, 'low': lo, 'high': hi})
+    return (final if confirmed else baseline), log

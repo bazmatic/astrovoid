@@ -13,7 +13,6 @@ class RuleParams:
     course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
-    request_interval: float = 0.25  # Seconds between pilot decisions
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
     investigate_memory: bool = False  # Head for where a remembered enemy was last seen
@@ -60,5 +59,4 @@ BOUNDS = {
     'course_approach_fraction': (0.3, 1.0),
     'cruising_speed_fraction': (0.1, 0.9),
     'pulse_frames': (1.0, 20.0),
-    'request_interval': (0.05, 0.5),
 }

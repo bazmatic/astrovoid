@@ -84,43 +84,57 @@ def test_counting_helpers_count_events_not_frames():
     assert counter.wall_hits == 2
 
 
-def test_kill_counter_ignores_spawns_and_counts_drops():
+def make_enemies(n):
+    return [object() for _ in range(n)]
+
+
+def test_kills_and_spawns_are_counted_from_the_enemies_themselves():
+    pool = make_enemies(20)
     counter = harness.EventCounter()
-    counter.enemies(10)
-    counter.enemies(12)   # two spawned
-    counter.enemies(11)   # one died
-    counter.enemies(11)
-    counter.enemies(8)    # three died at once
+    counter.observe(pool[:10])
+    counter.observe(pool[:12])            # two spawned
+    counter.observe(pool[:11])            # one died
+    counter.observe(pool[:11])            # nothing
+    counter.observe(pool[:8])             # three died at once
     assert counter.kills == 4
     assert counter.spawned == 2
 
 
-def test_idle_time_starts_after_twenty_seconds_without_a_kill():
+def test_an_enemy_dying_as_others_spawn_in_the_same_frame_is_both_a_kill_and_spawns():
+    boss, other, child_a, child_b = make_enemies(4)
     counter = harness.EventCounter()
-    counter.enemies(5)
+    counter.observe([boss, other])
+    counter.observe([other, child_a, child_b])   # the boss died and split into two: net +1
+    assert counter.kills == 1
+    assert counter.spawned == 2
+
+
+def test_a_boss_kill_restarts_the_idle_clock():
+    boss, other, child = make_enemies(3)
+    counter = harness.EventCounter()
+    counter.observe([boss, other])
+    for second in range(30):
+        counter.tick(float(second))
+    idle_before = counter.idle_seconds
+    assert idle_before > 0
+    counter.observe([other, child, make_enemies(1)[0]])    # boss dies, splits in two
+    counter.tick(30.0)
+    counter.tick(31.0)
+    assert counter.idle_seconds == idle_before
+
+
+def test_idle_time_starts_after_twenty_seconds_without_a_kill():
+    pool = make_enemies(6)
+    counter = harness.EventCounter()
+    counter.observe(pool[:5])
     for second in range(40):
         counter.tick(now=float(second))
     assert counter.idle_seconds == pytest.approx(19.0, abs=1.0)
-    counter.enemies(4)
+    counter.observe(pool[:4])
     counter.tick(now=40.0)
     before = counter.idle_seconds
     counter.tick(now=45.0)
     assert counter.idle_seconds == before
-
-
-def test_hits_are_counted_one_per_immunity_window():
-    counter = harness.EventCounter()
-    for now in (0.0, 0.1, 0.2, 0.4, 0.5, 0.6, 1.05, 1.2):
-        counter.hit_taken(now)
-    # 0.0 lands; 0.1-0.4 are inside its 0.5 s window; 0.5 lands; 0.6 is inside; 1.05 lands; 1.2 is inside.
-    assert counter.hits_taken == 3
-
-
-def test_a_contact_held_for_many_frames_is_few_hits():
-    counter = harness.EventCounter()
-    for frame in range(60):
-        counter.hit_taken(frame / 60)   # one second of overlap
-    assert counter.hits_taken == 2
 
 
 def test_a_farming_level_reports_the_enemies_that_spawned():

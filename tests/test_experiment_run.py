@@ -73,6 +73,15 @@ def test_an_interrupted_save_leaves_no_half_written_file(tmp_path, monkeypatch):
     assert not path.exists()
 
 
+def test_a_partial_params_file_is_applied_on_top_of_the_rules_defaults(tmp_path):
+    from hunter.rule_params import RULES
+    partial = tmp_path / 'partial.json'
+    partial.write_text(json.dumps({'pulse_frames': 5}))
+    params = run.load_params(partial)
+    assert params.pulse_frames == 5.0
+    assert params.investigate_memory is RULES.investigate_memory is True
+
+
 def test_load_params_reads_a_json_file_and_rejects_bad_ones(tmp_path):
     good = tmp_path / 'p.json'
     good.write_text(json.dumps({'steer_band_degrees': 25}))
@@ -83,6 +92,10 @@ def test_load_params_reads_a_json_file_and_rejects_bad_ones(tmp_path):
     bad.write_text(json.dumps({'nope': 1}))
     with pytest.raises(ValueError):
         run.load_params(bad)
+    notobject = tmp_path / 'list.json'
+    notobject.write_text('[1, 2]')
+    with pytest.raises(ValueError, match='object'):
+        run.load_params(notobject)
 
 
 def test_main_prints_a_summary_and_writes_results(monkeypatch, tmp_path, capsys):

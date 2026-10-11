@@ -92,3 +92,14 @@ def test_spawned_enemies_enter_the_total_so_farming_cannot_exceed_full_marks():
 def test_a_level_with_no_enemies_has_a_zero_kill_percentage():
     c = components(result(enemies_at_start=0, enemies_spawned=0, kills=0))
     assert c['kill_pct_per_min'] == 0.0
+
+
+def test_a_stricter_confidence_level_widens_the_interval():
+    rng = np.random.default_rng(3)
+    base = rng.normal(5, 2, 30)
+    better = base + 0.6 + rng.normal(0, 1.0, 30)
+    _, low95, high95 = paired_bootstrap(base, better, level=0.95)
+    _, low99, high99 = paired_bootstrap(base, better, level=0.99)
+    assert low99 < low95 and high99 > high95
+    with pytest.raises(ValueError):
+        paired_bootstrap(base, better, level=1.5)

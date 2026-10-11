@@ -42,20 +42,30 @@ class EventCounter:
         self.wall_hits = 0
         self.hits_taken = 0
         self.idle_seconds = 0.0
-        self._enemies = None
+        self._alive = None
         self._in_wall = False
         self._last_hit = None
         self._last_kill = 0.0
         self._last_tick = None
 
-    def enemies(self, count):
-        """The live enemy count this frame: a fall is kills, a rise is spawns."""
-        if self._enemies is not None and count < self._enemies:
-            self.kills += self._enemies - count
-            self._last_kill = self._last_tick if self._last_tick is not None else 0.0
-        elif self._enemies is not None and count > self._enemies:
-            self.spawned += count - self._enemies
-        self._enemies = count
+    def observe(self, enemies):
+        """The enemies alive this frame. One alive before and not now was killed; a new one spawned.
+
+        Tracking the enemies themselves, not their number, keeps a boss that dies and splits into
+        two in one frame (net +1) from looking like a spawn and no kill.
+        """
+        current = list(enemies)
+        if self._alive is not None:
+            now_ids = {id(enemy) for enemy in current}
+            before_ids = {id(enemy) for enemy in self._alive}
+            died = sum(1 for enemy in self._alive if id(enemy) not in now_ids)
+            born = sum(1 for enemy in current if id(enemy) not in before_ids)
+            if died:
+                self.kills += died
+                self._last_kill = self._last_tick if self._last_tick is not None else 0.0
+            self.spawned += born
+        # Holding the objects keeps their ids from being reused by new enemies.
+        self._alive = current
 
     def wall(self, hit):
         if hit and not self._in_wall:
@@ -145,8 +155,8 @@ def reset():
     _game = None
 
 
-def _enemy_count(game):
-    return sum(1 for _ in game.entity_manager.get_all_active_enemies())
+def _active_enemies(game):
+    return list(game.entity_manager.get_all_active_enemies())
 
 
 _OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
@@ -187,7 +197,7 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._summon_hunter = lambda near: None
     game._jev_beacon_drop_allowed = lambda: False
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
-    settings = replace(HunterSettings(), request_interval=params.request_interval)
+    settings = HunterSettings()
     hunter.settings = controller.settings = settings
 
     counter = EventCounter()
@@ -207,8 +217,9 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
         return original_damage()
     hunter.take_damage = counting_damage
 
-    start_enemies = _enemy_count(game)
-    counter.enemies(start_enemies)
+    alive = _active_enemies(game)
+    start_enemies = len(alive)
+    counter.observe(alive)
     end = 'horizon'
     elapsed = 0.0
     for _ in range(int(horizon * FPS)):
@@ -217,9 +228,10 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
         game.update(1.0)
         if game.hunter is not hunter or game.hunter_controller is not controller:
             raise RuntimeError('hunter was replaced during the episode')
-        counter.enemies(_enemy_count(game))
+        alive = _active_enemies(game)
+        counter.observe(alive)
         counter.tick(elapsed)
-        if start_enemies and _enemy_count(game) == 0:
+        if start_enemies and not alive:
             end = 'cleared'
             break
     game._close_hunter()

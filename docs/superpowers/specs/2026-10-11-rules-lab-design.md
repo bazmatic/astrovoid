@@ -79,7 +79,9 @@ can be added to either set later.
 the defaults. A regression test checks that default parameters give identical decisions to the
 current code on recorded states, and that the existing hunter tests still pass.
 
-Initial numeric parameters (all existing values):
+Initial numeric parameters (all existing values). `request_interval` was dropped from this list: the
+game's controller uses its own interval, so tuning it would be a lab-only gain.
+
 
 | parameter | now | where |
 |---|---|---|
@@ -92,7 +94,6 @@ Initial numeric parameters (all existing values):
 | `course_approach_fraction` | 0.7 | `pilot_sensors` |
 | `cruising_speed_fraction` | 0.5 | `pilot_sensors` |
 | `pulse_frames` | 6 | `model` |
-| `request_interval` (s) | 0.25 | `HunterSettings` |
 
 Structural variants are switches on `RuleParams` that default off (for example `burn_when_slow`,
 the Jev tendency measured on the logged data), so an A/B comparison runs on identical seeds.
