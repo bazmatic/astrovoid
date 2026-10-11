@@ -48,7 +48,8 @@ An *episode* is one level, one seed, one `RuleParams`.
   is a few hits and one bullet is one hit.
 - `idle_fraction`: share of the episode with no kill in the last 20 seconds (zero while under 20 s
   have passed).
-- `elapsed`: simulated seconds until the episode ended, floored at 20 s for rates.
+- `elapsed`: simulated seconds until the episode ended, floored at 45 s for rates (a very quick
+  clear would otherwise give an extreme rate).
 
 ### Score — `experiments/score.py`
 
@@ -66,7 +67,8 @@ the baseline report shows the spread of each term to support it.
 
 Tune set: levels 13, 14, 15, 17, 19, 20, 22, 25, 26, 27 plus boss levels 18 and 30.
 Held-out set: levels 16, 21, 23, 28, 29 plus boss level 24.
-Seeds 0 and 1 per level. Both sets mix boss and normal levels. The held-out set is scored once per
+Seeds 0 to 5 per level (72 tune and 36 held-out episodes; two seeds were too few to see small
+effects, see `docs/experiments/002-round1-numeric-search.md`). Both sets mix boss and normal levels. The held-out set is scored once per
 round, reported, and never used to choose a candidate. Levels 4 to 12 are not included yet; they
 can be added to either set later.
 
@@ -127,7 +129,7 @@ per-term summary and writes the raw results.
    seed twice gives identical metrics); the fake clock is what the controller sees.
 2. Counters: wall hits count rising edges only; damage counts with indestructible on and off; kills
    do not count enemies spawning.
-3. Score: components combine as stated; the 20 s floor on `elapsed`; a hunter that never moves
+3. Score: components combine as stated; the 45 s floor on `elapsed`; a hunter that never moves
    scores worse than the baseline.
 4. Params: defaults reproduce current decisions on recorded states; each parameter reaches the
    code that uses it (a changed value changes a decision).

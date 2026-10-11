@@ -28,6 +28,10 @@ def test_score_combines_the_components_with_the_weights():
     assert score(result(), w) == pytest.approx(60.0 - 3.0 - 4.0 - 1.0)
 
 
+def test_the_rate_floor_is_forty_five_seconds():
+    assert RATE_FLOOR_SECONDS == 45.0
+
+
 def test_rates_use_a_floor_so_a_very_short_episode_is_finite():
     c = components(result(elapsed=0.5, kills=1, idle_seconds=0.0))
     assert c['kills_per_min'] == pytest.approx(1 / (RATE_FLOOR_SECONDS / 60))

@@ -39,8 +39,8 @@ def test_the_evaluator_scores_the_tune_episodes_in_order(monkeypatch):
     evaluator = lab.make_evaluator(workers=3)
     full = evaluator(DEFAULT, 'full')
     cheap = evaluator(DEFAULT, 'cheap')
-    assert len(full) == 24 and len(cheap) == 12
-    assert seen == [('tune', (0, 1), 90.0, 3), ('tune', (0,), 45.0, 3)]
+    assert len(full) == 72 and len(cheap) == 24
+    assert seen == [('tune', (0, 1, 2, 3, 4, 5), 90.0, 3), ('tune', (0, 1), 45.0, 3)]
     assert evaluator(DEFAULT, 'full') == full
 
 

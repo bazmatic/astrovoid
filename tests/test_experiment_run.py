@@ -18,13 +18,13 @@ def test_level_sets_are_disjoint_and_complete():
     for boss in (18, 30):
         assert boss in run.TUNE_LEVELS
     assert 24 in run.HELDOUT_LEVELS
-    assert run.SEEDS == (0, 1)
+    assert run.SEEDS == (0, 1, 2, 3, 4, 5)
 
 
 def test_episode_list_is_levels_times_seeds_in_a_fixed_order():
     episodes = run.episode_list('heldout')
-    assert len(episodes) == 12
-    assert episodes[0] == (16, 0) and episodes[1] == (16, 1) and episodes[2] == (21, 0)
+    assert len(episodes) == 36
+    assert episodes[:6] == [(16, seed) for seed in range(6)] and episodes[6] == (21, 0)
     assert run.episode_list('tune', seeds=(0,))[:2] == [(13, 0), (14, 0)]
     with pytest.raises(KeyError):
         run.episode_list('everything')

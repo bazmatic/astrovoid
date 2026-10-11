@@ -13,7 +13,7 @@ from hunter.rule_params import DEFAULT, RuleParams
 
 TUNE_LEVELS = (13, 14, 15, 17, 19, 20, 22, 25, 26, 27, 18, 30)
 HELDOUT_LEVELS = (16, 21, 23, 28, 29, 24)
-SEEDS = (0, 1)
+SEEDS = (0, 1, 2, 3, 4, 5)
 LEVEL_SETS = {'tune': TUNE_LEVELS, 'heldout': HELDOUT_LEVELS}
 RESULTS_DIR = Path(__file__).resolve().parents[1] / '.astrovoid-local' / 'experiments'
 

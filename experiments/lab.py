@@ -17,7 +17,7 @@ def make_evaluator(workers, horizon_full=90.0, horizon_cheap=45.0, weights=None)
         if fidelity == 'full':
             results = run.evaluate(params, 'tune', run.SEEDS, horizon_full, workers)
         elif fidelity == 'cheap':
-            results = run.evaluate(params, 'tune', (0,), horizon_cheap, workers)
+            results = run.evaluate(params, 'tune', run.SEEDS[:2], horizon_cheap, workers)
         else:
             raise ValueError(f'unknown fidelity {fidelity!r}')
         return [score(r, weights) for r in results]
