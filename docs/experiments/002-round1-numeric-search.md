@@ -1,5 +1,11 @@
 # 002: Round 1, numeric search
 
+> **Superseded in detail.** This run predates the harness fix described in `001-baseline.md`
+> (a mid-episode hunter re-summon made results depend on machine speed and undercounted hits).
+> Its conclusion, that 24 episodes could not detect small effects, still stands and was the reason
+> for the six-seed design, but its numbers should not be quoted. Redoing it on the fixed lab is
+> listed as a follow-up.
+
 Date: 2026-10-11. Baseline: 001. Search: `python -m experiments.lab round1` (12 minutes on 12 cores).
 
 ## Hypothesis and prediction

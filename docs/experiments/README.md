@@ -22,7 +22,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 
 | # | experiment | tune score | held-out score | decision |
 |---|---|---|---|---|
-| 001 | [baseline](001-baseline.md) | 41.0 | 58.3 | reference |
+| 001 | [baseline](001-baseline.md) | 40.4 | 57.7 | reference |
 | 002 | [round 1 numeric search](002-round1-numeric-search.md) | no move accepted | n/a | defaults kept; test too weak |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.

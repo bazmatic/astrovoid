@@ -17,19 +17,19 @@ Date: 2026-10-11. Code: branch `feat/rules-lab` (rules pilot, default `RuleParam
 
 | term | tune mean | held-out mean | std over all 108 |
 |---|---|---|---|
-| kills, % of all enemies per minute | 85.2 | 93.7 | 33.8 |
-| kills per minute (raw, reported only) | 26.3 | 30.9 | 24.3 |
-| wall hits per minute | 3.24 | 2.81 | 5.15 |
-| hits taken per minute | 4.37 | 3.94 | 4.96 |
-| idle fraction | 0.246 | 0.168 | 0.223 |
-| **score** (frozen weights) | **41.0** | **58.3** | |
+| kills, % of all enemies per minute | 86.3 | 94.0 | 34.8 |
+| kills per minute (raw, reported only) | 26.7 | 31.5 | 24.3 |
+| wall hits per minute | 3.44 | 2.85 | 5.13 |
+| hits taken per minute | 4.60 | 3.97 | 4.93 |
+| idle fraction | 0.232 | 0.163 | 0.224 |
+| **score** (frozen weights) | **40.4** | **57.7** | |
 
 How the 108 episodes ended: 53 cleared the level, 55 reached the horizon.
 
 ## Weights
 
 By the spec's rule (each penalty's weight is 0.5 x std(kills, % per minute) / std(that term), over
-the baseline episodes): wall 3.3, hit 3.4, idle 76 (two significant figures). Frozen in
+the baseline episodes): wall 3.4, hit 3.5, idle 78 (two significant figures). Frozen in
 `experiments/score.py`; not changed during a comparison.
 
 ## History: the first baseline had damage switched on
@@ -50,12 +50,23 @@ sound: with the hunter forced to do nothing, 0 enemies died in 6 of 6 cases.
   per minute; on those levels it is 57 to 120 %/min, in line with the rest. Raw kills per minute is
   still reported.
 - **Half the episodes do not finish.** 55 of 108 reach the 90 s horizon with enemies left, and idle
-  time is 22% of the episode on average (up to two thirds of the episode on some level 30 seeds). Finding enemies is
+  time is 21% of the episode on average (up to two thirds of the episode on some level 30 seeds). Finding enemies is
   likely a bigger lever than shooting them.
-- **Boss levels differ.** Levels 18 and 24 (small mazes, eggs and children) clear quickly with 4 to 11
-  hits taken; level 30 is the opposite, mostly idle.
+- **Boss levels differ.** Levels 18 and 24 (small mazes, eggs and children) clear quickly; level 30 is
+  the opposite, mostly idle.
 
-## Revision note
+## Revision note (a harness bug, found and fixed)
+
+After the first comparisons on this baseline, two episodes of the same level and seed gave different
+results in different runs (10 of 72 differed). The cause was in the lab, not the hunter: picking up a
+Jev beacon re-summoned the hunter mid-episode. The new hunter's controller used the real clock, so
+results depended on machine speed, and the harness kept counting the old hunter, so hits and wall
+hits after the re-summon were not counted at all. Each episode now keeps its one hunter and one
+simulated clock (and raises if the hunter is ever replaced), and two parallel runs of 72 episodes now
+match exactly. Every number in this file and in 002 was produced before the fix; this file has been
+redone, and 002 has not (see its note).
+
+## Earlier revisions
 
 This baseline was redone twice after changes to the lab: the death term was dropped (indestructible
 hunter), kills became a share of all enemies, and then the comparison was strengthened with six seeds
