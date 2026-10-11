@@ -56,9 +56,11 @@ class RuleParams:
 
 DEFAULT = RuleParams()
 # The rules pilot's own defaults: DEFAULT plus what experiments have adopted (docs/experiments):
-# the investigate rule (004) and faster, longer-sighted wall-following (007). Jev and the student
-# keep DEFAULT.
-RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5)
+# the investigate rule (004), faster, longer-sighted wall-following (007) and a faster turn (010; the
+# game builds the rules pilot's hunter that way, see hunter/settings_for.py). Jev and the student keep
+# DEFAULT.
+RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5,
+                turn_rate_multiplier=2.0)
 
 SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe')
 

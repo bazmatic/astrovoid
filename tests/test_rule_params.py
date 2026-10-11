@@ -184,7 +184,7 @@ def test_rules_defaults_are_the_global_defaults_plus_the_adopted_switches():
     from dataclasses import replace
     from hunter.rule_params import RULES
     assert RULES == replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0,
-                            wall_lookahead_cells=2.5)
+                            wall_lookahead_cells=2.5, turn_rate_multiplier=2.0)
     assert DEFAULT.investigate_memory is False   # Jev and the student are unchanged
     assert DEFAULT.wall_follow_cruise == 0.6 and DEFAULT.wall_lookahead_cells == 0.75
 
@@ -433,4 +433,6 @@ def test_turn_rate_multiplier_is_a_bounded_parameter_that_matches_the_hunter_def
     low, high = BOUNDS['turn_rate_multiplier']
     assert low < 0.5 < high and high >= 3.0
     assert DEFAULT.turn_rate_multiplier == HunterSettings().turn_rate_multiplier == 0.5
-    assert RULES.turn_rate_multiplier == HunterSettings().turn_rate_multiplier
+    # The rules pilot's hunter turns faster (010); hunter_settings_for applies it, and a test in
+    # tests/test_hunter_settings_for.py keeps the game and the lab in step.
+    assert RULES.turn_rate_multiplier == 2.0

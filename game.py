@@ -48,6 +48,7 @@ from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
 from hunter.fire_control import find_firing_solution
 from hunter.perception import HunterPerception
+from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 import logging
@@ -401,11 +402,12 @@ class Game:
             logging.getLogger(__name__).warning('Hunter not summoned: %s', exc)
             return
         self._close_hunter()
-        self.hunter = HunterShip(pos)
-        self.hunter_perception = HunterPerception()
+        settings = hunter_settings_for(config.SETTINGS.game.hunterPilot)
+        self.hunter = HunterShip(pos, settings)
+        self.hunter_perception = HunterPerception(settings)
         if self.hunter_worker is None:
             self.hunter_worker = PilotWorker()
-        self.hunter_controller = HunterController(self.hunter_worker)
+        self.hunter_controller = HunterController(self.hunter_worker, settings)
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
