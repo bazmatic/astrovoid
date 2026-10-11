@@ -1,6 +1,6 @@
 """A pilot that applies the Jev question criteria as plain rules, with no model or key."""
 from types import SimpleNamespace
-from hunter.rule_params import DEFAULT
+from hunter.rule_params import RULES
 
 
 def _navigation_course(state):
@@ -14,7 +14,7 @@ def _navigation_course(state):
 
 def decide(state, params=None):
     """{'turn', 'thrust', 'fire'} choices for a pilot state, per the criteria in PILOT_QUESTIONS."""
-    params = params or DEFAULT
+    params = params or RULES
     brake = (state.get('motion') or {}).get('brake') or {}
     too_fast = brake.get('speed_state') == 'too_fast'
     enemies = [c for c in state.get('visible_contacts') or [] if c.get('allegiance') == 'enemy']
@@ -47,7 +47,7 @@ class RulesClient:
     """Answers like the Jev client, from decide()."""
 
     def __init__(self, params=None):
-        self.params = params
+        self.params = params or RULES
 
     async def system_one(self, *, state, questions=None, **_):
         return SimpleNamespace(choices={

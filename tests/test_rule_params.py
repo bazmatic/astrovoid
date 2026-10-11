@@ -174,3 +174,44 @@ def test_investigate_ignores_a_remembered_enemy_that_is_visible_again():
     seen = raw['visible_contacts'][0]
     raw['remembered_contacts'] = [dict(seen, age=1.0)]
     assert pilot_state(raw, RuleParams(investigate_memory=True)).get('investigate') is None
+
+
+# --- the rules pilot's own defaults ---------------------------------------------
+
+def test_rules_defaults_are_the_global_defaults_plus_the_adopted_switches():
+    from dataclasses import replace
+    from hunter.rule_params import RULES
+    assert RULES == replace(DEFAULT, investigate_memory=True)
+    assert DEFAULT.investigate_memory is False   # Jev and the student are unchanged
+
+
+def test_the_rules_client_carries_the_rules_defaults_and_jev_pilot_uses_them():
+    from hunter.rule_params import RULES
+    client = RulesClient()
+    assert client.params == RULES
+    assert JevPilot(client).params == RULES
+    custom = RuleParams(steer_band_degrees=33.0)
+    assert JevPilot(RulesClient(custom)).params == custom
+    assert JevPilot(RulesClient(custom), RuleParams(steer_band_degrees=9.0)).params.steer_band_degrees == 9.0
+
+    class NotRules:
+        async def system_one(self, **_):
+            raise AssertionError
+    assert JevPilot(NotRules()).params == DEFAULT
+
+
+def test_the_rules_pilot_investigates_a_remembered_enemy_by_default():
+    from hunter.rule_params import RULES
+    raw, obs = raw_state()
+    raw['self']['velocity'] = [0.2, 0.0]   # slow, so braking does not take the course
+    raw['visible_contacts'] = []
+    raw['remembered_contacts'] = [{
+        'id': 7, 'type': 'patrol', 'allegiance': 'enemy', 'position': [150, 600],
+        'relative_position': [0, 450], 'velocity': [0, 0], 'heading': 0, 'radius': 8,
+        'distance': 450.0, 'bearing': 90.0, 'age': 2.0}]
+    observation = obs.__class__(obs.generation, obs.snapshot_at, json.dumps(raw))
+    expected = pilot_state(raw, RULES)['investigate']['course']['burn_heading_degrees']
+    action = asyncio.run(JevPilot(RulesClient()).decide(observation)).action
+    assert action.course and action.burn_heading == pytest.approx(expected)
+    plain = asyncio.run(JevPilot(RulesClient(DEFAULT)).decide(observation)).action
+    assert plain.burn_heading != pytest.approx(expected, abs=0.5) or not plain.course

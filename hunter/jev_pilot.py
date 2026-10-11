@@ -347,7 +347,8 @@ class JevPilot:
     def __init__(self, client, params=None):
         from hunter.rule_params import DEFAULT
         self.client = client
-        self.params = params or DEFAULT
+        # A client that carries its own parameters (the rules pilot) sets them for its state too.
+        self.params = params or getattr(client, 'params', None) or DEFAULT
 
     async def decide(self, observation):
         observation_state = json.loads(observation.state_json)

@@ -7,7 +7,7 @@ import numpy as np
 from experiments import run
 from experiments.score import Weights, components, improves, mean_components, paired_bootstrap, score
 from experiments.search import CachedEvaluator, optimise
-from hunter.rule_params import DEFAULT, SWITCHES, RuleParams
+from hunter.rule_params import DEFAULT, RULES, SWITCHES, RuleParams
 
 
 def make_evaluator(workers, horizon_full=90.0, horizon_cheap=45.0, weights=None):
@@ -37,8 +37,8 @@ def baseline_weights(results):
     return Weights(**chosen)
 
 
-def parse_overrides(text):
-    """RuleParams from 'name=value,name=value': numbers, or true/false for the switches."""
+def parse_overrides(text, base=DEFAULT):
+    """`base` with 'name=value,name=value' applied: numbers, or true/false for the switches."""
     values = {}
     for item in filter(None, (part.strip() for part in text.split(','))):
         if '=' not in item:
@@ -53,7 +53,7 @@ def parse_overrides(text):
                 values[name] = float(raw)
             except ValueError:
                 raise ValueError(f'parameter {name!r} must be a number, got {raw!r}') from None
-    return RuleParams.from_dict(values)
+    return RuleParams.from_dict({**base.to_dict(), **values})
 
 
 def compare(base, candidate, level_set, workers, horizon=90.0, weights=None, seeds=None):
@@ -95,8 +95,8 @@ def _report(title, results, weights):
 
 
 def baseline(workers):
-    tune = run.evaluate(DEFAULT, 'tune', run.SEEDS, 90.0, workers)
-    heldout = run.evaluate(DEFAULT, 'heldout', run.SEEDS, 90.0, workers)
+    tune = run.evaluate(RULES, 'tune', run.SEEDS, 90.0, workers)
+    heldout = run.evaluate(RULES, 'heldout', run.SEEDS, 90.0, workers)
     run.save_results(tune, run.RESULTS_DIR / 'baseline-tune.jsonl')
     run.save_results(heldout, run.RESULTS_DIR / 'baseline-heldout.jsonl')
     weights = baseline_weights(tune + heldout)
@@ -113,14 +113,14 @@ def baseline(workers):
 def round1(workers):
     weights = Weights()
     evaluator = make_evaluator(workers, weights=weights)
-    best, log = optimise(evaluator)
+    best, log = optimise(evaluator, baseline=RULES)
     out = run.RESULTS_DIR / 'round1-best.json'
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(best.to_dict(), indent=2))
     print('best parameters:', best.to_dict())
     for entry in log:
         print(('  KEPT ' if entry['accepted'] else '  tried'), entry)
-    base_held = [score(r, weights) for r in run.evaluate(DEFAULT, 'heldout', run.SEEDS, 90.0, workers)]
+    base_held = [score(r, weights) for r in run.evaluate(RULES, 'heldout', run.SEEDS, 90.0, workers)]
     best_held = [score(r, weights) for r in run.evaluate(best, 'heldout', run.SEEDS, 90.0, workers)]
     mean, low, high = paired_bootstrap(base_held, best_held)
     print(f'\nheld-out, best minus baseline: {mean:+.3f} (95% interval {low:+.3f} .. {high:+.3f})')
@@ -132,8 +132,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('baseline', 'round1', 'compare'))
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
-    parser.add_argument('--candidate', default='', help='compare: name=value,... overrides')
-    parser.add_argument('--base', default='', help='compare: overrides for the base (default: defaults)')
+    parser.add_argument('--candidate', default='', help='compare: name=value,... applied on the rules defaults')
+    parser.add_argument('--base', default='', help='compare: overrides for the base (default: the rules defaults)')
     parser.add_argument('--seeds', type=int, default=len(run.SEEDS),
                         help='compare: seeds per level (more seeds detect smaller effects)')
     parser.add_argument('--set', default='tune', choices=('tune', 'heldout', 'both'),
@@ -141,7 +141,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     run._use_dummy_drivers()
     if args.command == 'compare':
-        base, candidate = parse_overrides(args.base), parse_overrides(args.candidate)
+        base, candidate = parse_overrides(args.base, RULES), parse_overrides(args.candidate, RULES)
         print('base:     ', base.to_dict())
         print('candidate:', candidate.to_dict())
         for level_set in (('tune', 'heldout') if args.set == 'both' else (args.set,)):

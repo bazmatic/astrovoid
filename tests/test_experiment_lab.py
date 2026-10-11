@@ -114,3 +114,10 @@ def test_compare_uses_the_requested_number_of_seeds(monkeypatch):
     assert seen == [tuple(range(12)), tuple(range(12))]
     lab.compare(DEFAULT, DEFAULT, 'tune', workers=1)
     assert seen[-1] == run.SEEDS
+
+
+def test_parse_overrides_applies_on_top_of_a_base():
+    from hunter.rule_params import RULES
+    params = lab.parse_overrides('steer_band_degrees=25', RULES)
+    assert params.steer_band_degrees == 25.0 and params.investigate_memory is True
+    assert lab.parse_overrides('investigate_memory=false', RULES).investigate_memory is False

@@ -77,7 +77,8 @@ def test_load_params_reads_a_json_file_and_rejects_bad_ones(tmp_path):
     good = tmp_path / 'p.json'
     good.write_text(json.dumps({'steer_band_degrees': 25}))
     assert run.load_params(good).steer_band_degrees == 25.0
-    assert run.load_params(None) == DEFAULT
+    from hunter.rule_params import RULES
+    assert run.load_params(None) == RULES
     bad = tmp_path / 'bad.json'
     bad.write_text(json.dumps({'nope': 1}))
     with pytest.raises(ValueError):

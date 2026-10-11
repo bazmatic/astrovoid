@@ -6,6 +6,9 @@ Experiments that refine the rules hunter (`hunter/rules_pilot.py`). Design:
 ## How to run
 
 - `venv/bin/python -m experiments.lab baseline`: default rules on the tune and held-out sets.
+- `venv/bin/python -m experiments.lab compare --candidate investigate_memory=true --set tune --seeds 18`:
+  paired comparison of a candidate against the current rules defaults (`RULES`), per term. Use
+  `--set heldout` once, at the end.
 - `venv/bin/python -m experiments.lab round1`: random search plus hill-climbing over the numbers
   in `hunter/rule_params.py`, then one held-out check.
 - `venv/bin/python -m experiments.run --params FILE.json --set tune|heldout`: score any parameter
@@ -23,6 +26,8 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | # | experiment | tune score | held-out score | decision |
 |---|---|---|---|---|
 | 001 | [baseline](001-baseline.md) | 40.4 | 57.7 | reference |
-| 002 | [round 1 numeric search](002-round1-numeric-search.md) | no move accepted | n/a | defaults kept; test too weak |
+| 002 | [round 1 numeric search](002-round1-numeric-search.md) | no move accepted | n/a | superseded (pre-fix lab; too few seeds) |
+| 003 | [pursue unaimed](003-pursue-unaimed.md) | +0.0 | n/a | rejected: the switch never fires |
+| 004 | [investigate memory](004-investigate-memory.md) | +4.8 | +4.7 | **adopted** as `RULES` |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.

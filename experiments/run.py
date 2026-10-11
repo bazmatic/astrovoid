@@ -9,7 +9,7 @@ from pathlib import Path
 
 from experiments.harness import EpisodeResult
 from experiments.score import mean_components
-from hunter.rule_params import DEFAULT, RuleParams
+from hunter.rule_params import DEFAULT, RULES, RuleParams
 
 TUNE_LEVELS = (13, 14, 15, 17, 19, 20, 22, 25, 26, 27, 18, 30)
 HELDOUT_LEVELS = (16, 21, 23, 28, 29, 24)
@@ -77,7 +77,7 @@ def load_results(path):
 
 def load_params(path):
     if path is None:
-        return DEFAULT
+        return RULES
     return RuleParams.from_dict(json.loads(Path(path).read_text(encoding='utf-8')))
 
 

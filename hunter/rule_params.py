@@ -1,5 +1,5 @@
 """The numbers the rules hunter is tuned by. Defaults are the game's current values."""
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, fields, replace
 
 
 @dataclass(frozen=True)
@@ -43,6 +43,9 @@ class RuleParams:
 
 
 DEFAULT = RuleParams()
+# The rules pilot's own defaults: DEFAULT plus the structural rules experiments have adopted
+# (docs/experiments). Jev and the student keep DEFAULT.
+RULES = replace(DEFAULT, investigate_memory=True)
 
 SWITCHES = ('pursue_unaimed', 'investigate_memory')
 
