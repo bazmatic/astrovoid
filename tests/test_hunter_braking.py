@@ -1,5 +1,6 @@
 """Braking helper: the wall the hull will really reach, and whether the ship can stop for it."""
 import math
+from tests.hunter_engine import scaled_seconds
 import random
 
 import pytest
@@ -199,7 +200,8 @@ def test_braking_when_told_to_always_stops_short_of_the_wall(open_space, seed):
     for _ in range(int(solution.burn_frames)):
         ship.step(1, PilotAction(0, True, False))
     assert gap() > 0.0, 'reached the wall'
-    assert math.hypot(ship.vx, ship.vy) < 0.1
+    # A burn is whole frames, so it cannot leave less than one frame of thrust behind.
+    assert math.hypot(ship.vx, ship.vy) < max(0.1, ship.thrust_force)
     # ... and it did not brake needlessly early: it stops within a few lengths of the wall
     assert gap() < 40.0
 
@@ -250,7 +252,7 @@ def test_too_fast_hands_the_navigator_the_braking_burn():
     burn = navigation_course(state)
     assert burn['burn_needed']
     assert burn['burn_heading_degrees'] == brake['burn_heading_degrees']
-    assert burn['burn_seconds'] == brake['burn_seconds'] > 0.5
+    assert burn['burn_seconds'] == brake['burn_seconds'] > scaled_seconds(0.5, HunterShip((0, 0)).thrust_force)
 
 
 def test_pilot_rules_fly_the_braking_burn_with_the_navigator():

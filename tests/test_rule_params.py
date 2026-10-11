@@ -20,10 +20,13 @@ def raw_state(enemies=(), heading=10):
 
 
 def test_defaults_are_todays_values():
+    # The hunter's thrust is 1.0 (decision, docs/experiments/008) and the wall-follow cruise is 0.3 so
+    # that Jev's and the student's absolute pace stays what it was at thrust 0.25 and cruise 0.6.
     assert DEFAULT == RuleParams(
         steer_band_degrees=20.0, engage_standoff_cells=1.5, too_close_ratio=0.6, far_ratio=1.15,
-        harmless_speed=15.0, wall_follow_cruise=0.6, course_approach_fraction=0.7,
-        cruising_speed_fraction=0.5, pulse_frames=6.0)
+        harmless_speed=15.0, wall_follow_cruise=0.3, wall_lookahead_cells=0.75,
+        course_approach_fraction=0.7, cruising_speed_fraction=0.5, pulse_frames=6.0,
+        strafe_cells=1.0, thrust_multiplier=1.0)
 
 
 def test_every_default_is_inside_its_bounds():
@@ -181,10 +184,10 @@ def test_investigate_ignores_a_remembered_enemy_that_is_visible_again():
 def test_rules_defaults_are_the_global_defaults_plus_the_adopted_switches():
     from dataclasses import replace
     from hunter.rule_params import RULES
-    assert RULES == replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0,
+    assert RULES == replace(DEFAULT, investigate_memory=True, wall_follow_cruise=1.0,
                             wall_lookahead_cells=2.5)
     assert DEFAULT.investigate_memory is False   # Jev and the student are unchanged
-    assert DEFAULT.wall_follow_cruise == 0.6 and DEFAULT.wall_lookahead_cells == 0.75
+    assert DEFAULT.wall_follow_cruise == 0.3 and DEFAULT.wall_lookahead_cells == 0.75
 
 
 def test_the_rules_client_carries_the_rules_defaults_and_jev_pilot_uses_them():
@@ -348,8 +351,61 @@ def test_thrust_multiplier_is_a_bounded_parameter_that_matches_the_ship_default(
     assert 'thrust_multiplier' in BOUNDS
     low, high = BOUNDS['thrust_multiplier']
     assert low <= 0.25 <= high and high >= 1.5
+    assert HunterSettings().thrust_multiplier == 1.0   # set by decision, see docs/experiments/008
     # The lab applies it to the hunter ship; the game uses HunterSettings. They must not drift apart
     # silently, or a lab-only gain would look like a real one.
     assert DEFAULT.thrust_multiplier == HunterSettings().thrust_multiplier
     from hunter.rule_params import RULES
     assert RULES.thrust_multiplier == HunterSettings().thrust_multiplier
+
+
+# --- the minimum burn scales with the engine ---------------------------------------
+
+def standing_still_with_a_wall(thrust):
+    """A stationary hunter beside a wall: wall-follow wants a small speed-up to cruise."""
+    ship = HunterShip((150, 170))
+    ship.settings = replace_settings(thrust)
+    ship.angle = 180.0
+    obs = HunterPerception().observe(ship, maze(), None, [], [], NEUTRAL, 0, 1)
+    raw = json.loads(obs.state_json)
+    raw['follow_player'] = None
+    return raw
+
+
+def replace_settings(thrust):
+    from dataclasses import replace
+    from hunter.model import HunterSettings
+    return replace(HunterSettings(), thrust_multiplier=thrust)
+
+
+def cruising_just_short_of_cruise(thrust, shortfall):
+    """Heading west along a wall `shortfall` px/frame slower than the wall-follow cruise."""
+    raw = standing_still_with_a_wall(thrust)
+    cruise = pilot_state(raw)['wall_follow']['course']['speed_after_metres_per_second'] / raw['physics']['fps']
+    raw['self']['velocity'] = [-(cruise - shortfall), 0.0]
+    return raw
+
+
+def test_a_sub_two_frame_burn_still_counts_when_the_engine_is_strong():
+    # A shortfall of 0.2 px/frame is 5 frames of the old engine and 1.33 of the new one. The old
+    # two-frame cutoff would have dropped it, leaving a strong engine unable to make small corrections.
+    for thrust, frames in ((0.25, 0.2 / 0.0375), (1.0, 0.2 / 0.15)):
+        course = pilot_state(cruising_just_short_of_cruise(thrust, 0.2))['wall_follow']['course']
+        assert course['burn_needed'] is True, thrust
+        assert course['burn_seconds'] * 60 == pytest.approx(frames, abs=0.35)
+    assert 1.0 < 0.2 / 0.15 < 2.0
+
+
+def test_a_correction_below_one_frame_of_the_strong_engine_is_not_a_burn():
+    course = pilot_state(cruising_just_short_of_cruise(1.0, 0.05))['wall_follow']['course']
+    assert course['burn_needed'] is False   # the computed length (0.6 frames) is below the 1-frame floor
+    assert course['burn_seconds'] * 60 < 1.0
+
+
+def test_the_weak_engine_keeps_the_two_frame_cutoff_exactly():
+    from hunter.pilot_sensors import MIN_BURN_FRAMES, REFERENCE_THRUST_PER_FRAME, min_burn_frames
+    assert MIN_BURN_FRAMES == 2 and REFERENCE_THRUST_PER_FRAME == pytest.approx(0.0375)
+    assert min_burn_frames(0.0375) == 2
+    assert min_burn_frames(0.15) == 1          # floor: one frame is the smallest burn
+    assert min_burn_frames(0.075) == 1.0
+    assert min_burn_frames(0.01) == pytest.approx(2 * 0.0375 / 0.01)   # weaker engines wait longer

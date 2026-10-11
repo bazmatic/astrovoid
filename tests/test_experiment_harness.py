@@ -216,7 +216,7 @@ def test_thrust_multiplier_reaches_the_hunter_ship(monkeypatch):
 
 def test_a_stronger_engine_changes_the_episode():
     from hunter.rule_params import RuleParams
-    base = run_episode(14, 0, horizon=20.0)
+    base = run_episode(14, 0, params=RuleParams(thrust_multiplier=0.25), horizon=20.0)
     strong = run_episode(14, 0, params=RuleParams(thrust_multiplier=1.0), horizon=20.0)
     assert (base.kills, base.wall_hits, base.hits_taken, base.idle_seconds) != \
            (strong.kills, strong.wall_hits, strong.hits_taken, strong.idle_seconds)

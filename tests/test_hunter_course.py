@@ -1,5 +1,6 @@
 """Course correction: the turn and burn that point the hunter's motion at a target."""
 import math
+from tests.hunter_engine import scaled_seconds
 import random
 
 import pytest
@@ -159,7 +160,9 @@ def test_flying_the_correction_points_the_motion_at_the_target(seed):
 
     final_speed = math.hypot(ship.vx, ship.vy)
     travel = math.degrees(math.atan2(ship.vy, ship.vx))
-    assert abs(off(travel, bearing(ship.get_pos(), target))) < 2.0
+    # Burns are whole frames, so a stronger engine steers in coarser steps: about 2 degrees at the
+    # reference engine, up to about 3.3 at four times its thrust.
+    assert abs(off(travel, bearing(ship.get_pos(), target))) < 4.0
     assert final_speed <= limit + 0.05
     assert final_speed == pytest.approx(correction.final_speed, abs=0.08)
     # The burn never pushes the speed above where it started or the limit, whichever is higher.
@@ -206,7 +209,7 @@ def test_pilot_is_shown_the_course_to_the_waypoint():
     course = follow_reading(near_ship(heading=90.0), (450, 500))['follow_player']['course']
     assert course['burn_needed']
     assert course['burn_degrees_off_nose'] == pytest.approx(-90.0, abs=1.0)
-    assert course['burn_seconds'] > 0.2
+    assert course['burn_seconds'] > scaled_seconds(0.2, near_ship().thrust_force)
     assert 0 < course['speed_after_metres_per_second'] <= course['speed_limit_metres_per_second']
 
 
