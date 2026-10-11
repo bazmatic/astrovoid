@@ -157,3 +157,42 @@ def test_jev_pilot_flies_the_course_of_the_pursue_block():
     s2 = {'motion': {'brake': {}}, 'investigate': {'course': {'burn_needed': False, 'burn_heading_degrees': 5.0,
                                                            'burn_seconds': 0.0}}}
     assert navigation_course(s2)['burn_heading_degrees'] == 5.0
+
+
+# --- strafe -----------------------------------------------------------------------
+
+STRAFE_COURSE = dict(COURSE, burn_needed=True, burn_heading_degrees=90.0)
+
+
+def test_a_strafe_block_swings_the_nose_aside_but_keeps_the_trigger_on():
+    s = state(visible_contacts=[enemy()], engage={'burn_needed': False, 'holding_still': False,
+                                                  'range_state': 'in_range'},
+              strafe={'side': 'left', 'course': STRAFE_COURSE})
+    assert decide(s) == {'turn': 'course', 'thrust': 'burn', 'fire': 'fire'}
+
+
+def test_a_strafe_course_that_needs_no_burn_coasts():
+    s = state(visible_contacts=[enemy()], engage={'burn_needed': True},
+              strafe={'side': 'right', 'course': dict(COURSE, burn_needed=False)})
+    assert decide(s)['turn'] == 'course' and decide(s)['thrust'] == 'coast'
+
+
+def test_braking_outranks_strafing():
+    s = state(visible_contacts=[enemy()], strafe={'side': 'left', 'course': STRAFE_COURSE},
+              motion={'brake': {'speed_state': 'too_fast'}})
+    assert decide(s) == {'turn': 'course', 'thrust': 'burn', 'fire': 'fire'}
+
+
+def test_without_a_strafe_block_an_aimed_enemy_is_still_tracked():
+    s = state(visible_contacts=[enemy()], engage={'burn_needed': True})
+    assert decide(s) == {'turn': 'track', 'thrust': 'burn', 'fire': 'fire'}
+
+
+def test_jev_pilot_flies_the_strafe_course_not_the_engage_burn():
+    from hunter.jev_pilot import navigation_course, worked_burn
+    s = {'motion': {'brake': {}}, 'strafe': {'course': {'burn_needed': True, 'burn_heading_degrees': 123.0,
+                                                      'burn_seconds': 0.2}},
+         'engage': {'burn_needed': True, 'burn_heading_degrees': 5.0, 'burn_seconds': 1.0},
+         'wall_follow': {'course': {'burn_needed': True, 'burn_heading_degrees': 11.0, 'burn_seconds': 1.0}}}
+    assert navigation_course(s)['burn_heading_degrees'] == 123.0
+    assert worked_burn(s)['burn_heading_degrees'] == 123.0

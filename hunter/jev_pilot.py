@@ -284,14 +284,16 @@ def navigation_course(state):
     if brake.get('speed_state') == 'too_fast':
         return {'burn_needed': True, 'burn_heading_degrees': brake['burn_heading_degrees'],
                 'burn_seconds': brake['burn_seconds']}
-    navigation = (state.get('collect_powerup') or state.get('pursue') or state.get('investigate')
-                  or state.get('follow_player') or state.get('wall_follow'))
+    navigation = (state.get('strafe') or state.get('collect_powerup') or state.get('pursue')
+                  or state.get('investigate') or state.get('follow_player') or state.get('wall_follow'))
     return navigation.get('course') if navigation else None
 
 
 def worked_burn(state):
     """The burn the engine setting `burn` flies: braking first, then the fight, then the course."""
     brake = state.get('motion', {}).get('brake', {})
+    if brake.get('speed_state') != 'too_fast' and state.get('strafe'):
+        return state['strafe']['course']
     if brake.get('speed_state') != 'too_fast' and state.get('engage'):
         return state['engage']
     return navigation_course(state)

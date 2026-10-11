@@ -13,9 +13,11 @@ class RuleParams:
     course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
+    strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
     investigate_memory: bool = False  # Head for where a remembered enemy was last seen
+    strafe: bool = False  # While fighting, dodge sideways between aimed bursts
 
     def to_dict(self):
         return asdict(self)
@@ -46,7 +48,7 @@ DEFAULT = RuleParams()
 # (docs/experiments). Jev and the student keep DEFAULT.
 RULES = replace(DEFAULT, investigate_memory=True)
 
-SWITCHES = ('pursue_unaimed', 'investigate_memory')
+SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe')
 
 # The ranges the search may explore, and the limits from_dict accepts.
 BOUNDS = {
@@ -59,4 +61,5 @@ BOUNDS = {
     'course_approach_fraction': (0.3, 1.0),
     'cruising_speed_fraction': (0.1, 0.9),
     'pulse_frames': (1.0, 20.0),
+    'strafe_cells': (0.3, 3.0),
 }

@@ -314,6 +314,22 @@ def pilot_state(state, params=DEFAULT_PARAMS):
                        'course':course_to(
                            goal.point,bearing,
                            cruise=params.wall_follow_cruise*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
+    engage = engage_reading()
+    # Strafing: the engine only pushes along the nose and tracking holds the nose on the target,
+    # so a sideways nudge means swinging the nose aside for one decision. It is offered only right
+    # after a tracking decision, which alternates aiming and dodging, and never while braking.
+    strafe = None
+    if (params.strafe and engage is not None and turning['direction'] == 'track'
+            and brake['speed_state'] != 'too_fast'):
+        room = {side: space[side]['clearance_metres'] for side in ('left', 'right')}
+        side = 'right' if room['right'] >= room['left'] else 'left'
+        reach = params.strafe_cells*cell_size
+        if room[side] > max(radius*3, 1):
+            aside = math.radians(heading+(90 if side == 'right' else -90))
+            point = (origin[0]+reach*math.cos(aside), origin[1]+reach*math.sin(aside))
+            sideways = course_to(point, math.degrees(aside) % 360)
+            if sideways is not None:
+                strafe = {'side':side, 'clearance_metres':room[side], 'course':sideways}
     pursue = investigate = None
     if params.pursue_unaimed:
         # A visible enemy no shot can reach yet: close in on the nearest, rather than ignore it.
@@ -349,11 +365,13 @@ def pilot_state(state, params=DEFAULT_PARAMS):
                                    if c['id'] not in visible_ids],
             'hostile_projectiles':[contact(c) for c in state.get('visible_projectiles',[])
                                    if c['allegiance']=='enemy'],
-            'engage':engage_reading(),
+            'engage':engage,
             'collect_powerup':collect,
             'follow_player':follow,
             'wall_follow':wall_follow}
     # Only present when its switch is on, so the default state is exactly as before.
+    if strafe is not None:
+        result['strafe'] = strafe
     if pursue is not None:
         result['pursue'] = pursue
     if investigate is not None:

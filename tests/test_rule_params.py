@@ -124,7 +124,7 @@ def moving_away_state():
 
 
 def test_switches_default_off_and_leave_the_state_unchanged():
-    assert SWITCHES == ('pursue_unaimed', 'investigate_memory')
+    assert SWITCHES == ('pursue_unaimed', 'investigate_memory', 'strafe')
     assert DEFAULT.pursue_unaimed is False and DEFAULT.investigate_memory is False
     raw = moving_away_state()
     state = pilot_state(raw)
@@ -223,3 +223,59 @@ def test_request_interval_is_not_a_rule_parameter():
     assert 'request_interval' not in BOUNDS
     with pytest.raises(ValueError):
         RuleParams.from_dict({'request_interval': 0.2})
+
+
+# --- the strafe switch --------------------------------------------------------------
+
+def strafing_state(walls=None, tracking=True, heading=0, speed=0.3):
+    """A slow hunter aiming at an enemy dead ahead, last steering `track`, with the given walls."""
+    ship = HunterShip((150, 150))
+    ship.vx, ship.vy, ship.angle = speed, 0, heading
+    obs = HunterPerception().observe(ship, maze(), None, [Enemy((250, 150), 'patrol', 1)], [], NEUTRAL, 0, 1)
+    raw = json.loads(obs.state_json)
+    raw['previous_action'] = {'track': tracking, 'turn': 0}
+    if walls is not None:
+        raw['visible_walls'] = walls
+    return raw
+
+
+def test_strafe_is_a_switch_that_defaults_off():
+    assert 'strafe' in SWITCHES and DEFAULT.strafe is False
+    assert 'strafe' not in pilot_state(strafing_state())
+
+
+def test_strafe_offers_a_sideways_course_while_tracking_an_enemy():
+    state = pilot_state(strafing_state(), RuleParams(strafe=True))
+    strafe = state['strafe']
+    assert strafe['side'] in ('left', 'right')
+    assert strafe['course'] is not None and 'burn_heading_degrees' in strafe['course']
+    # The burn heading is roughly across the line to the enemy (the nose points at it).
+    assert abs(abs(strafe['course']['burn_degrees_off_nose']) - 90) < 45
+
+
+def test_strafe_goes_to_the_side_with_more_room():
+    # A wall just south of the hunter (south is right of an east-pointing nose): go left.
+    wall_south = [[[100.0, 165.0], [200.0, 165.0]]]
+    assert pilot_state(strafing_state(walls=wall_south), RuleParams(strafe=True))['strafe']['side'] == 'left'
+    wall_north = [[[100.0, 135.0], [200.0, 135.0]]]
+    assert pilot_state(strafing_state(walls=wall_north), RuleParams(strafe=True))['strafe']['side'] == 'right'
+
+
+@pytest.mark.parametrize('why,state', [
+    ('not tracking last decision', lambda: strafing_state(tracking=False)),
+    ('too fast, so braking comes first', lambda: strafing_state(speed=9.0)),
+])
+def test_strafe_is_absent_when_its_conditions_do_not_hold(why, state):
+    assert pilot_state(state(), RuleParams(strafe=True)).get('strafe') is None, why
+
+
+def test_strafe_is_absent_when_both_sides_are_blocked():
+    walls = [[[100.0, 165.0], [200.0, 165.0]], [[100.0, 135.0], [200.0, 135.0]]]
+    assert pilot_state(strafing_state(walls=walls), RuleParams(strafe=True)).get('strafe') is None
+
+
+def test_strafe_distance_is_a_bounded_parameter():
+    assert 'strafe_cells' in BOUNDS
+    near = pilot_state(strafing_state(), RuleParams(strafe=True, strafe_cells=0.5))['strafe']
+    far = pilot_state(strafing_state(), RuleParams(strafe=True, strafe_cells=2.5))['strafe']
+    assert near['course'] != far['course']

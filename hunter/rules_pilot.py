@@ -5,7 +5,7 @@ from hunter.rule_params import RULES
 
 def _navigation_course(state):
     """The course the navigator flies: the first of these to be present, in priority order."""
-    for key in ('collect_powerup', 'pursue', 'investigate', 'follow_player', 'wall_follow'):
+    for key in ('strafe', 'collect_powerup', 'pursue', 'investigate', 'follow_player', 'wall_follow'):
         block = state.get(key)
         if block is not None:
             return block.get('course')
@@ -21,8 +21,10 @@ def decide(state, params=None):
     aimed = any(c.get('aim') for c in enemies)
     course = _navigation_course(state)
     engage = state.get('engage')
+    # A dodge: swing the nose aside for one decision, then track again; braking comes first.
+    strafe = None if too_fast else state.get('strafe')
 
-    if too_fast or (not aimed and course is not None):
+    if too_fast or (not aimed and course is not None) or (aimed and strafe):
         turn = 'course'
     elif aimed:
         turn = 'track'
@@ -31,7 +33,11 @@ def decide(state, params=None):
         turn = ('left' if offset is not None and offset < -params.steer_band_degrees else
                 'right' if offset is not None and offset > params.steer_band_degrees else 'none')
 
-    if too_fast or (engage and engage.get('burn_needed')) or (
+    if too_fast:
+        thrust = 'burn'
+    elif strafe:
+        thrust = 'burn' if (strafe.get('course') or {}).get('burn_needed') else 'coast'
+    elif (engage and engage.get('burn_needed')) or (
             not engage and course and course.get('burn_needed')):
         thrust = 'burn'
     elif engage and engage.get('holding_still') and engage.get('range_state') == 'in_range':
