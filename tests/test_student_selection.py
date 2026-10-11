@@ -94,3 +94,14 @@ def test_recording_is_skipped_in_frozen_builds(settings, fake_jev, monkeypatch):
     settings('jev', record=True)
     monkeypatch.setattr(sys, 'frozen', True, raising=False)
     assert isinstance(create_client(), FakeJev)
+
+
+def test_rules_mode_needs_no_key_or_model_and_never_records(settings, monkeypatch, tmp_path):
+    from hunter.rules_pilot import RulesClient
+    from hunter.student import recorder
+    monkeypatch.setattr(recorder, 'DECISIONS_DIR', tmp_path)
+    monkeypatch.delenv('TYPESAFE_API_KEY', raising=False)
+    monkeypatch.setattr(student_client, 'MODEL_PATH', str(tmp_path / 'absent.npz'))
+    settings('rules', record=True)
+    assert isinstance(create_client(), RulesClient)
+    assert not list(tmp_path.iterdir())

@@ -405,8 +405,9 @@ venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = 
 ### Offline student pilot
 
 `game.hunterPilot` in `config/settings.json` chooses the hunter's pilot: `"jev"` (default),
-`"student"` (a small network trained to imitate Jev, no key or network needed), or `"auto"`
-(Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
+`"student"` (a small network trained to imitate Jev, no key or network needed), `"rules"` (the
+same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or training),
+or `"auto"` (Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
 to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a student with
 `venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
 `assets/student/jev_student.npz`.

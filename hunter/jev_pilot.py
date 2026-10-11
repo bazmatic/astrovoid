@@ -322,8 +322,11 @@ def create_client():
     from config import SETTINGS
     from hunter.student.client import load_student_client
     mode = SETTINGS.game.hunterPilot
-    if mode not in ('jev', 'student', 'auto'):
+    if mode not in ('jev', 'student', 'auto', 'rules'):
         raise PilotUnavailable('invalid_configuration')
+    if mode == 'rules':
+        from hunter.rules_pilot import RulesClient
+        return RulesClient()
     if mode == 'student':
         return load_student_client()
     try:
