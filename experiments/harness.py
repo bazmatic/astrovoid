@@ -168,7 +168,11 @@ def _clear_overrides(game):
         game.__dict__.pop(name, None)
 
 
-def run_episode(level, seed, params=DEFAULT, horizon=90.0):
+def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None):
+    """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
+
+    `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
+    """
     global _game
     import config
     if _game is None:
@@ -187,7 +191,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game.scoring.calculate_current_potential_score = lambda *a, **k: {
         'potential_score': 1000, 'score_percentage': 1.0}
     game.maze.check_exit_reached = lambda *a, **k: False
-    game._hunter_sees_player = lambda: False
+    if hide_player:
+        game._hunter_sees_player = lambda: False
     game.hunter_worker = SyncWorker(params, clock)
     game._summon_hunter((game.ship.x, game.ship.y))
     hunter, controller = game.hunter, game.hunter_controller
@@ -237,6 +242,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
         alive = _active_enemies(game)
         counter.observe(alive)
         counter.tick(elapsed)
+        if trace is not None:
+            trace(elapsed, game, hunter)
         if start_enemies and not alive:
             end = 'cleared'
             break

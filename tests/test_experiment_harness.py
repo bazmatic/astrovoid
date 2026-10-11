@@ -273,3 +273,20 @@ def test_a_faster_turn_changes_the_episode():
     fast = run_episode(14, 0, params=RuleParams(turn_rate_multiplier=3.0), horizon=20.0)
     assert (slow.kills, slow.wall_hits, slow.hits_taken, round(slow.idle_seconds, 2)) != \
            (fast.kills, fast.wall_hits, fast.hits_taken, round(fast.idle_seconds, 2))
+
+
+def test_the_player_is_hidden_from_the_hunter_by_default_and_can_be_shown(monkeypatch):
+    import experiments.harness as h
+    seen = []
+    from hunter.perception import HunterPerception
+    original = HunterPerception.observe
+
+    def spy(self, hunter, maze, player, *args, **kwargs):
+        seen.append(player)
+        return original(self, hunter, maze, player, *args, **kwargs)
+    monkeypatch.setattr(HunterPerception, 'observe', spy)
+    run_episode(13, 0, horizon=1.0)
+    assert seen and all(player is None for player in seen)
+    seen.clear()
+    run_episode(13, 0, horizon=1.0, hide_player=False)
+    assert seen and all(player is not None for player in seen)
