@@ -12,12 +12,17 @@ cut idle time and raise the kill rate, without more wall or enemy hits.
 
 | run | score | kills, % per min | idle fraction | wall hits | enemy hits |
 |---|---|---|---|---|---|
-| tune, 6 seeds (72 episodes) | +6.8 (-0.7 to +14.5) | +3.4 (-2.3 to +9.2) | -0.030 (-0.068 to +0.009) | -0.157 | -0.146 |
-| tune, 18 seeds (216 episodes) | **+4.8 (+1.1 to +8.9)** | **+2.9 (+0.2 to +6.0)** | **-0.022 (-0.042 to -0.005)** | -0.037 | +0.009 |
-| held-out, 18 seeds (108 episodes) | **+4.7 (+0.8 to +9.2)** | **+3.9 (+1.0 to +7.2)** | -0.015 (-0.037 to +0.004) | -0.010 | +0.123 (-0.012 to +0.300) |
+| tune, 6 seeds (72 episodes) | +6.7 (-0.7 to +14.4) | +3.3 (-2.4 to +9.2) | -0.030 (-0.068 to +0.009) | -0.157 | -0.146 |
+| tune, 18 seeds (216 episodes) | **+4.7 (+1.1 to +8.8)** | **+2.9 (+0.2 to +6.0)** | **-0.022 (-0.042 to -0.005)** | -0.037 | +0.009 |
+| held-out, 18 seeds (108 episodes) | **+4.6 (+0.8 to +9.2)** | **+3.9 (+1.0 to +7.2)** | -0.015 (-0.036 to +0.004) | -0.010 | +0.123 (-0.012 to +0.300) |
 
-(Differences are candidate minus base; intervals are paired 95% bootstrap.) Base scores at 18 seeds:
-42.9 on tune and 51.6 on held-out.
+(Differences are candidate minus base; intervals are paired 95% bootstrap. All three rows were produced
+after the harness fixes described in 001 and the later counter fix, so they are current.) Base scores at
+18 seeds: 44.3 on tune and 52.0 on held-out.
+
+Note on the procedure: the 6-seed look was inconclusive and the comparison was then repeated with 18
+seeds (which include seeds 0 to 5). That is optional stopping, so the tune result alone would be weak
+evidence; the held-out set, scored once and never used to choose, is the confirmation.
 
 ## Interpretation
 

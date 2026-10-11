@@ -12,7 +12,7 @@ class Weights:
     # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
     wall: float = 3.4
     hit: float = 3.5
-    idle: float = 78.0
+    idle: float = 77.0
 
 
 def components(result):
