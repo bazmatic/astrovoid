@@ -420,7 +420,8 @@ the hunter dies, and the next level starts at once, wrapping from `autoplay.last
 `autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
 `true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
 The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
-`timeLimitSeconds`.
+`timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it
+explores the maze and meets enemies instead of sitting beside the player.
 
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
 The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the

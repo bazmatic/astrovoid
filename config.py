@@ -392,6 +392,9 @@ class AutoplaySettings:
     firstLevel: int = 4
     lastLevel: int = 12
     timeLimitSeconds: float = 90.0
+    # Keep the parked player out of the hunter's view, so it explores and meets enemies
+    # instead of sitting beside the player.
+    hidePlayer: bool = True
 
 
 @dataclass

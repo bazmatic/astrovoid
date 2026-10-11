@@ -192,3 +192,35 @@ def test_reaching_the_exit_does_not_end_the_level(make_game):
     game.update(1.0)
     assert not game.exit_explosion_active
     assert game.state == config.STATE_PLAYING
+
+
+def watch_player_argument(game):
+    seen = []
+    original = game.hunter_perception.observe
+
+    def spy(hunter, maze, player, *args, **kwargs):
+        seen.append(player)
+        return original(hunter, maze, player, *args, **kwargs)
+    game.hunter_perception.observe = spy
+    return seen
+
+
+def test_the_player_is_hidden_from_the_hunter_by_default(make_game):
+    assert SETTINGS.autoplay.hidePlayer is True
+    game = make_game()
+    seen = watch_player_argument(game)
+    game.update(1.0)
+    assert seen and all(player is None for player in seen)
+
+
+def test_the_player_is_visible_when_hiding_is_off(make_game, monkeypatch):
+    monkeypatch.setattr(SETTINGS.autoplay, 'hidePlayer', False)
+    game = make_game()
+    seen = watch_player_argument(game)
+    game.update(1.0)
+    assert seen and all(player is game.ship for player in seen)
+
+
+def test_the_player_is_always_visible_outside_autoplay(make_game):
+    game = make_game(autoplay=False)
+    assert game._hunter_sees_player() is True

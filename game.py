@@ -198,6 +198,10 @@ class Game:
             len(list(self.entity_manager.get_all_active_enemies())),
             hunter_present=self.hunter is not None)
 
+    def _hunter_sees_player(self) -> bool:
+        """Whether the hunter may perceive the player: not when autoplay hides the parked one."""
+        return not (self.autoplay is not None and config.SETTINGS.autoplay.hidePlayer)
+
     def _autoplay_level_over(self) -> bool:
         """Move on to the next level when the director says this one is over."""
         reason = self.autoplay.end_reason(
@@ -417,7 +421,7 @@ class Game:
             return
         def observe(now, generation):
             return self.hunter_perception.observe(
-                self.hunter, self.maze, self.ship,
+                self.hunter, self.maze, self.ship if self._hunter_sees_player() else None,
                 [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
                  self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones)
                  for enemy in group], self.projectiles,

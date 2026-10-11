@@ -341,6 +341,7 @@
   "autoplay": {
     "firstLevel": 4,
     "lastLevel": 12,
-    "timeLimitSeconds": 90
+    "timeLimitSeconds": 90,
+    "hidePlayer": true
   }
 }
