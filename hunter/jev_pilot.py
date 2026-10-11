@@ -344,12 +344,14 @@ def create_client():
 
 
 class JevPilot:
-    def __init__(self, client):
+    def __init__(self, client, params=None):
+        from hunter.rule_params import DEFAULT
         self.client = client
+        self.params = params or DEFAULT
 
     async def decide(self, observation):
         observation_state = json.loads(observation.state_json)
-        state = pilot_state(observation_state)
+        state = pilot_state(observation_state, self.params)
         state['previous_states'] = observation_state.get('previous_states', [])
         result = await self.client.system_one(
             state=state,
@@ -358,6 +360,8 @@ class JevPilot:
         # A fresh copy each time: the ship tells one decision from the next by identity,
         # so that a repeated pulse pulses again.
         action = replace(ACTIONS['_'.join(answer.choice for answer in answers)])
+        if answers[1].choice == 'pulse':
+            action = replace(action, burn_frames=self.params.pulse_frames)
         # The navigator and the worked burn fly what the pilot was looking at when it chose.
         fps = observation_state.get('physics', {}).get('fps', 60)
         course = navigation_course(state) if action.course else None

@@ -2,14 +2,15 @@
 import math
 from hunter.braking import braking_solution, hull_travel
 from hunter.course import course_correction
+from hunter.rule_params import DEFAULT as DEFAULT_PARAMS
 from hunter.visibility import visible_point
 from hunter.wall_follow import wall_follow_target
 
 
 # Below this a brush with a wall is harmless, so the hunter is never told to brake.
-HARMLESS_SPEED_METRES_PER_SECOND = 15
+HARMLESS_SPEED_METRES_PER_SECOND = DEFAULT_PARAMS.harmless_speed
 # The distance the hunter fights from, in maze cells.
-ENGAGE_STANDOFF_CELLS = 1.5
+ENGAGE_STANDOFF_CELLS = DEFAULT_PARAMS.engage_standoff_cells
 
 
 def direction(bearing, heading):
@@ -57,7 +58,7 @@ def firing_solution(relative, velocity, shot_speed):
     return frames,math.degrees(math.atan2(ry+vy*frames,rx+vx*frames))
 
 
-def pilot_state(state):
+def pilot_state(state, params=DEFAULT_PARAMS):
     ship = state.get('self', {})
     origin = ship.get('position', [0,0])
     heading = ship.get('heading', 0)
@@ -172,7 +173,7 @@ def pilot_state(state):
         # The need is noticed up to a decision late and acted on a decision after that.
         reaction_frames=2*horizon_frames,
         # Slow enough that touching a wall does not matter.
-        harmless_speed=HARMLESS_SPEED_METRES_PER_SECOND/fps)
+        harmless_speed=params.harmless_speed/fps)
     brake = {'speed_state':'slow', 'safe_speed_metres_per_second':None,
              'stopping_distance_metres':0, 'thrust_effect':None,
              'retrograde_degrees_off_nose':None,
@@ -185,7 +186,7 @@ def pilot_state(state):
             motion['seconds_to_wall_impact'] = round(solution.frames_to_impact/fps,2)
         retrograde = round(solution.degrees_off_nose,1)
         brake = {'speed_state':('too_fast' if solution.must_brake else
-                                'cruising' if speed > solution.safe_speed*.5 else 'slow'),
+                                'cruising' if speed > solution.safe_speed*params.cruising_speed_fraction else 'slow'),
                  'safe_speed_metres_per_second':round(solution.safe_speed*fps,1),
                  'stopping_distance_metres':round(solution.stopping_distance,1),
                  'thrust_effect':('slows' if abs(retrograde) <= 60 else
@@ -212,7 +213,7 @@ def pilot_state(state):
             if solution is None:
                 continue
             distance = c['distance']
-            standoff = ENGAGE_STANDOFF_CELLS*cell_size
+            standoff = params.engage_standoff_cells*cell_size
             toward = [c['relative_position'][i]/distance if distance else 0 for i in (0,1)]
             closing = sum((velocity[i]-c['velocity'][i])*toward[i] for i in (0,1))
             deceleration = thrust_per_frame*fps*fps
@@ -224,11 +225,11 @@ def pilot_state(state):
             return {'id':c['id'],
                     'distance_metres':distance,
                     'standoff_metres':standoff,
-                    'range_state':('too_close' if distance < standoff*.6 else
-                                   'far' if distance > standoff*1.15 else 'in_range'),
+                    'range_state':('too_close' if distance < standoff*params.too_close_ratio else
+                                   'far' if distance > standoff*params.far_ratio else 'in_range'),
                     'closing_speed_metres_per_second':round(closing*fps,1),
                     'target_closing_speed_metres_per_second':round(target,1),
-                    'holding_still':speed*fps < HARMLESS_SPEED_METRES_PER_SECOND,
+                    'holding_still':speed*fps < params.harmless_speed,
                     'burn_needed':burn_frames >= 2,
                     'burn_heading_degrees':round(
                         (heading+solution['lead_degrees_off_nose']) % 360,1),
@@ -260,7 +261,7 @@ def pilot_state(state):
         correction = course_correction(
             origin,velocity,heading,point,thrust=thrust,speed_limit=limit/fps,
             # Holding right at the limit leaves no slack for lag; a little under it does.
-            approach_speed=None if cruise is None else limit/fps*.7,
+            approach_speed=None if cruise is None else limit/fps*params.course_approach_fraction,
             rotation_per_frame=physics.get('rotation_per_frame',5),
             friction=physics.get('friction_per_frame',1))
         if correction is None:
@@ -312,7 +313,7 @@ def pilot_state(state):
                        # with it: the engine can only bend the path so tightly.
                        'course':course_to(
                            goal.point,bearing,
-                           cruise=.6*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
+                           cruise=params.wall_follow_cruise*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
     return {'snapshot_at_seconds':state.get('snapshot_at',0),
             'speed_metres_per_second':speed*fps,
             'heading_degrees':heading % 360,
