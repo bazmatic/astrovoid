@@ -32,7 +32,9 @@ and `HunterController` are unchanged. Two new clients implement or wrap it:
 
 - **`RecordingJevClient(inner, sink)`** wraps the real Jev client. After each successful
   `system_one` call it queues one JSONL record: the exact `state` passed, the three choices,
-  the three confidences, latency, model name, a run ID and a level ID. Failed or malformed
+  each with its confidence and its full `probabilities` (the API returns them; `null` when the
+  client gives none), latency, model name and a run ID. One run is one client instance, which
+  is one level attempt, and it writes its own `<run_id>.jsonl` file. Failed or malformed
   responses are not recorded (no label). Responses the controller later discards as stale are
   recorded, since the label is still Jev's answer to that state. A writer thread drains the
   queue, so recording never blocks the Pygame loop or the decision; a full or failing sink
@@ -41,12 +43,14 @@ and `HunterController` are unchanged. Two new clients implement or wrap it:
   forward pass and returns the same result shape, with each head's softmax probability for the
   chosen option as `confidence`.
 
-Records go to `.astrovoid-local/decisions/` (gitignored). If the question instructions or
+Records go to `.astrovoid-local/decisions/` (gitignored). Recording is skipped in frozen
+(PyInstaller) builds, where the project directory is not writable in a useful place. If the question instructions or
 criteria change, clear that directory and record again; there is no versioning or filtering.
 
 ### Switching
 
-`config/settings.json` gains:
+`config/settings.json` gains two keys in its existing `game` section (`GameSettings` in
+`config.py` gets matching fields with defaults):
 
 - `pilot`: `"jev"` (default, today's behaviour), `"student"`, or `"auto"`. `auto` uses Jev when
   `TYPESAFE_API_KEY` is set and the SDK imports, and the student otherwise.
@@ -78,8 +82,9 @@ same code runs at training and inference.
 ### Model and training — `tools/train_student.py`
 
 - MLP: two hidden layers of 128, a shared trunk, three softmax heads (5, 4, 2).
-- Loss is the sum of the three cross-entropies. No class reweighting at first; weighting labels
-  by Jev's confidence is an option.
+- Targets are Jev's `probabilities` per head (soft labels), falling back to one-hot on the
+  chosen option when a record has none. Loss is the sum of the three soft cross-entropies. No
+  class reweighting.
 - **Split by run ID**, not by row, because consecutive decisions are near-duplicates.
 - Reports on held-out runs: per-head agreement, joint agreement (all three heads match), a
   most-common-answer baseline per head, and a decision-tree baseline on the same features.
@@ -88,9 +93,9 @@ same code runs at training and inference.
 
 ### Model file
 
-One `.npz`: weights, normalisation statistics, the encoder's feature-name list, and the
-held-out metrics. About 100 KB; committed under `assets/student/`. At load,
-`JevStudentClient` compares the stored feature-name list with the encoder's and raises
+One `.npz`: weights, normalisation statistics, the encoder's feature-name list, the head
+labels (taken from the `criteria` keys of `PILOT_QUESTIONS`), and the held-out metrics. About 100 KB; committed under `assets/student/`. At load,
+`JevStudentClient` compares the stored feature-name list and head labels with the current ones and raises
 `PilotUnavailable('invalid_model')` on any mismatch, so a stale model after an encoder edit
 fails loudly instead of producing confident nonsense.
 
@@ -119,8 +124,10 @@ Fake clock and injected clients; no API calls.
 - Where a pilot label would sit on screen. The project owner removed status text near the
   hunter on purpose, so any label needs explicit approval first.
 
-## Open questions for planning
+## Resolved during planning
 
-- Is numpy already a runtime dependency, and does `pyinstaller.spec` need to bundle
-  `assets/student/`?
-- Does the existing `.astrovoid-local/` directory have an established layout to follow?
+- numpy is already a runtime dependency (`requirements.txt`). `pyinstaller.spec` already bundles
+  the whole `assets/` tree; only the lazily imported `hunter.student.*` modules need adding to
+  `hiddenimports`.
+- `.astrovoid-local/` is a gitignored directory that currently holds only the API key file;
+  `decisions/` becomes a sibling of it.
