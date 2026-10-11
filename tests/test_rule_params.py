@@ -279,3 +279,27 @@ def test_strafe_distance_is_a_bounded_parameter():
     near = pilot_state(strafing_state(), RuleParams(strafe=True, strafe_cells=0.5))['strafe']
     far = pilot_state(strafing_state(), RuleParams(strafe=True, strafe_cells=2.5))['strafe']
     assert near['course'] != far['course']
+
+
+def test_strafe_dodges_against_its_sideways_drift():
+    # East-pointing nose: south is right. Drifting right (south) -> dodge left, and the reverse.
+    drifting_right = strafing_state(speed=0.0)
+    drifting_right['self']['velocity'] = [0.0, 0.5]
+    assert pilot_state(drifting_right, RuleParams(strafe=True))['strafe']['side'] == 'left'
+    drifting_left = strafing_state(speed=0.0)
+    drifting_left['self']['velocity'] = [0.0, -0.5]
+    assert pilot_state(drifting_left, RuleParams(strafe=True))['strafe']['side'] == 'right'
+
+
+def test_strafe_drift_rule_still_respects_blocked_sides():
+    # Drifting right would send the dodge left, but a wall just north blocks it: no dodge at all.
+    state = strafing_state(speed=0.0, walls=[[[100.0, 135.0], [200.0, 135.0]]])
+    state['self']['velocity'] = [0.0, 0.5]
+    assert pilot_state(state, RuleParams(strafe=True)).get('strafe') is None
+
+
+def test_strafe_falls_back_to_the_roomier_side_when_barely_drifting():
+    wall_south = [[[100.0, 165.0], [200.0, 165.0]]]
+    state = strafing_state(speed=0.0, walls=wall_south)
+    state['self']['velocity'] = [0.0, 0.05]   # about 3 m/s, under the drift threshold
+    assert pilot_state(state, RuleParams(strafe=True))['strafe']['side'] == 'left'

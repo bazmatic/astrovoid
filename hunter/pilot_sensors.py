@@ -322,7 +322,13 @@ def pilot_state(state, params=DEFAULT_PARAMS):
     if (params.strafe and engage is not None and turning['direction'] == 'track'
             and brake['speed_state'] != 'too_fast'):
         room = {side: space[side]['clearance_metres'] for side in ('left', 'right')}
-        side = 'right' if room['right'] >= room['left'] else 'left'
+        # Nothing brakes, so a sideways nudge keeps going: dodge against the drift it already has,
+        # so the nudges cancel out. With little drift, take the side with more room.
+        drift = motion['rightward_speed_metres_per_second']
+        if abs(drift) > params.harmless_speed*.5:
+            side = 'left' if drift > 0 else 'right'
+        else:
+            side = 'right' if room['right'] >= room['left'] else 'left'
         reach = params.strafe_cells*cell_size
         if room[side] > max(radius*3, 1):
             aside = math.radians(heading+(90 if side == 'right' else -90))
