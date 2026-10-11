@@ -14,6 +14,9 @@ class RuleParams:
     course_approach_fraction: float = 0.7  # Share of the speed limit a course holds at
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
+    # The hunter ship's engine, as a share of the player's. A ship property: the lab applies it to the
+    # hunter, and adopting a value means changing HunterSettings (a test keeps the two equal).
+    thrust_multiplier: float = 0.25
     strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
@@ -64,5 +67,6 @@ BOUNDS = {
     'course_approach_fraction': (0.3, 1.0),
     'cruising_speed_fraction': (0.1, 0.9),
     'pulse_frames': (1.0, 20.0),
+    'thrust_multiplier': (0.1, 2.0),
     'strafe_cells': (0.3, 3.0),
 }

@@ -197,7 +197,7 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._summon_hunter = lambda near: None
     game._jev_beacon_drop_allowed = lambda: False
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
-    settings = HunterSettings()
+    settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier)
     hunter.settings = controller.settings = settings
 
     counter = EventCounter()

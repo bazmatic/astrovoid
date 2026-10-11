@@ -339,3 +339,17 @@ def test_a_higher_cruise_lifts_the_wall_follow_speed_limit():
     slow = pilot_state(raw, RuleParams(wall_follow_cruise=0.6))['wall_follow']['course']
     fast = pilot_state(raw, RuleParams(wall_follow_cruise=2.5))['wall_follow']['course']
     assert fast['speed_limit_metres_per_second'] > slow['speed_limit_metres_per_second']
+
+
+# --- ship thrust --------------------------------------------------------------------
+
+def test_thrust_multiplier_is_a_bounded_parameter_that_matches_the_ship_default():
+    from hunter.model import HunterSettings
+    assert 'thrust_multiplier' in BOUNDS
+    low, high = BOUNDS['thrust_multiplier']
+    assert low <= 0.25 <= high and high >= 1.5
+    # The lab applies it to the hunter ship; the game uses HunterSettings. They must not drift apart
+    # silently, or a lab-only gain would look like a real one.
+    assert DEFAULT.thrust_multiplier == HunterSettings().thrust_multiplier
+    from hunter.rule_params import RULES
+    assert RULES.thrust_multiplier == HunterSettings().thrust_multiplier

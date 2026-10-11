@@ -196,3 +196,27 @@ def test_an_episode_notices_if_the_hunter_is_replaced(monkeypatch):
     monkeypatch.setattr(Game, 'update', swap)
     with pytest.raises(RuntimeError, match='hunter was replaced'):
         run_episode(13, 0, horizon=2.0)
+
+
+def test_thrust_multiplier_reaches_the_hunter_ship(monkeypatch):
+    from hunter.rule_params import RuleParams
+    seen = {}
+    from entities.hunter_ship import HunterShip
+    original = HunterShip.step
+
+    def spy(self, *args, **kwargs):
+        seen['thrust'] = self.thrust_force
+        return original(self, *args, **kwargs)
+    monkeypatch.setattr(HunterShip, 'step', spy)
+    run_episode(13, 0, params=RuleParams(thrust_multiplier=0.25), horizon=1.0)
+    weak = seen['thrust']
+    run_episode(13, 0, params=RuleParams(thrust_multiplier=1.0), horizon=1.0)
+    assert seen['thrust'] == pytest.approx(weak * 4)
+
+
+def test_a_stronger_engine_changes_the_episode():
+    from hunter.rule_params import RuleParams
+    base = run_episode(14, 0, horizon=20.0)
+    strong = run_episode(14, 0, params=RuleParams(thrust_multiplier=1.0), horizon=20.0)
+    assert (base.kills, base.wall_hits, base.hits_taken, base.idle_seconds) != \
+           (strong.kills, strong.wall_hits, strong.hits_taken, strong.idle_seconds)
