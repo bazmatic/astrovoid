@@ -100,3 +100,17 @@ def test_format_report_lists_every_term_and_the_verdict():
     for key in ('kill_pct_per_min', 'wall_hits_per_min', 'idle_fraction', 'score'):
         assert key in text
     assert 'tune' in text and 'improvement' in text.lower()
+
+
+def test_compare_uses_the_requested_number_of_seeds(monkeypatch):
+    seen = []
+
+    def fake_evaluate(params, level_set, seeds, horizon, workers):
+        seen.append(tuple(seeds))
+        return [EpisodeResult(l, s, 10, 60.0, 6, 1, 1, 0.0, 'horizon', 0)
+                for l, s in run.episode_list(level_set, seeds)]
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate)
+    lab.compare(DEFAULT, RuleParams(investigate_memory=True), 'tune', workers=1, seeds=tuple(range(12)))
+    assert seen == [tuple(range(12)), tuple(range(12))]
+    lab.compare(DEFAULT, DEFAULT, 'tune', workers=1)
+    assert seen[-1] == run.SEEDS

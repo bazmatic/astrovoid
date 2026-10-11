@@ -56,11 +56,12 @@ def parse_overrides(text):
     return RuleParams.from_dict(values)
 
 
-def compare(base, candidate, level_set, workers, horizon=90.0, weights=None):
+def compare(base, candidate, level_set, workers, horizon=90.0, weights=None, seeds=None):
     """Both parameter sets on the same episodes: per term, the means and the paired difference."""
     weights = weights or Weights()
-    base_results = run.evaluate(base, level_set, run.SEEDS, horizon, workers)
-    candidate_results = run.evaluate(candidate, level_set, run.SEEDS, horizon, workers)
+    seeds = tuple(seeds) if seeds is not None else run.SEEDS
+    base_results = run.evaluate(base, level_set, seeds, horizon, workers)
+    candidate_results = run.evaluate(candidate, level_set, seeds, horizon, workers)
     report = {}
     keys = list(components(base_results[0])) + ['score']
     for key in keys:
@@ -133,6 +134,8 @@ def main(argv=None):
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
     parser.add_argument('--candidate', default='', help='compare: name=value,... overrides')
     parser.add_argument('--base', default='', help='compare: overrides for the base (default: defaults)')
+    parser.add_argument('--seeds', type=int, default=len(run.SEEDS),
+                        help='compare: seeds per level (more seeds detect smaller effects)')
     parser.add_argument('--set', default='tune', choices=('tune', 'heldout', 'both'),
                         help='compare: which level set (heldout is for the final check only)')
     args = parser.parse_args(argv)
@@ -142,7 +145,8 @@ def main(argv=None):
         print('base:     ', base.to_dict())
         print('candidate:', candidate.to_dict())
         for level_set in (('tune', 'heldout') if args.set == 'both' else (args.set,)):
-            print(format_report(compare(base, candidate, level_set, args.workers), level_set))
+            print(format_report(compare(base, candidate, level_set, args.workers,
+                                        seeds=range(args.seeds)), level_set))
         return
     {'baseline': baseline, 'round1': round1}[args.command](args.workers)
 
