@@ -42,10 +42,30 @@ reliably. The gain is kills and less idling, paid for in collisions.
 
 ## Decision
 
-Best setting: 0.8 (it cleared zero on both sets; 0.6 did not on held-out). **Not yet adopted:** sight is a
-property of the hunter that Jev and the student share, and the game builds the hunter with the default
-`HunterSettings`. Adopting it for the rules pilot only needs a small hook in the game; adopting it for
-everyone means changing the default (and retraining the student, which was trained at 0.4).
+Adopted for every pilot: `HunterSettings.sensor_range_fraction` (and the `RuleParams` default, kept equal by a
+test) is now **0.8**. Best setting was 0.8 (it cleared zero on both sets; 0.6 did not on held-out). The hunter
+is shared by Jev, the student and the rules pilot, so all three now see farther.
+
+Consequences to know about:
+- **Jev** gets a larger `sensor_range_metres` and sees more contacts. Not measured (it needs the API).
+- **The student model** was trained at 0.4 and is now out of date; it should be retrained on data recorded
+  at 0.8 (autoplay records it).
+- Six tests had constants tied to 0.4 (the sight distance, a powerup "out of range", a strafe angle) and
+  were updated. The braking test used a speed computed for a wall at the edge of sight; with sight at 800 px
+  the wall 600 px ahead is in view from the start, so the safe speed is now worked out for that wall.
+
+## New reference baseline (the rules defaults after this change)
+
+6 seeds per level, 90 s horizon, frozen weights:
+
+| term | tune mean | held-out mean |
+|---|---|---|
+| kills, % of all enemies per minute | 113.7 | 110.3 |
+| kills per minute (raw, reported only) | 31.2 | 36.9 |
+| wall hits per minute | 3.67 | 3.60 |
+| hits taken per minute | 4.60 | 4.56 |
+| idle fraction | 0.083 | 0.110 |
+| **score** | **78.7** | **73.6** |
 
 ## Caveats
 
