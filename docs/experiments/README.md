@@ -32,6 +32,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 003 | [pursue unaimed](003-pursue-unaimed.md) | +0.0 | n/a | rejected: the switch never fires |
 | 004 | [investigate memory](004-investigate-memory.md) | +4.7 | +4.6 | **adopted** as `RULES` |
 | 005 | [baseline, rules defaults](005-baseline-rules.md) | 48.6 | 65.7 | current reference |
+| 006 | [strafe](006-strafe.md) | -36.8 to -50.1 | n/a | rejected: more hits, fewer kills |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 
