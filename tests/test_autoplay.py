@@ -86,6 +86,71 @@ def test_inverted_range_is_rejected():
         director(first=9, last=4)
 
 
+
+# --- stuck detection ---------------------------------------------------------
+
+def stuck_director(clock, stuck=15, limit=300):
+    d = AutoplayDirector(4, 6, limit, clock=clock, stuck_seconds=stuck)
+    d.start_level(enemy_count=5)
+    return d
+
+
+def test_a_hunter_that_finds_no_new_ground_is_stuck():
+    clock = Clock()
+    d = stuck_director(clock)
+    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
+    clock.now += 14
+    assert d.end_reason(5, True, hunter_cell=(1, 2)) is None
+    clock.now += 14
+    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None  # revisiting is not progress
+    clock.now += 2
+    assert d.end_reason(5, True, hunter_cell=(1, 2)) == 'stuck'
+
+
+def test_reaching_new_cells_keeps_resetting_the_clock():
+    clock = Clock()
+    d = stuck_director(clock)
+    for step in range(10):
+        clock.now += 10
+        assert d.end_reason(5, True, hunter_cell=(step, 0)) is None
+
+
+def test_an_enemy_nearby_counts_as_progress():
+    clock = Clock()
+    d = stuck_director(clock)
+    d.end_reason(5, True, hunter_cell=(1, 1))
+    for _ in range(5):
+        clock.now += 10
+        assert d.end_reason(5, True, hunter_cell=(1, 1), enemy_near=True) is None
+    clock.now += 16
+    assert d.end_reason(5, True, hunter_cell=(1, 1), enemy_near=False) == 'stuck'
+
+
+def test_no_cell_means_stuck_is_not_judged():
+    clock = Clock()
+    d = stuck_director(clock)
+    d.end_reason(5, True)
+    clock.now += 100
+    assert d.end_reason(5, True) is None
+
+
+def test_zero_stuck_seconds_disables_the_rule():
+    clock = Clock()
+    d = stuck_director(clock, stuck=0)
+    d.end_reason(5, True, hunter_cell=(1, 1))
+    clock.now += 200
+    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
+
+
+def test_start_level_forgets_the_ground_already_covered():
+    clock = Clock()
+    d = stuck_director(clock)
+    d.end_reason(5, True, hunter_cell=(1, 1))
+    clock.now += 14
+    d.start_level(enemy_count=5)
+    clock.now += 14
+    assert d.end_reason(5, True, hunter_cell=(1, 1)) is None
+
 # --- Game integration -------------------------------------------------------
 
 import pygame
@@ -110,6 +175,7 @@ def make_game(tmp_path, monkeypatch):
     monkeypatch.setattr(SETTINGS.autoplay, 'firstLevel', 4)
     monkeypatch.setattr(SETTINGS.autoplay, 'lastLevel', 6)
     monkeypatch.setattr(SETTINGS.autoplay, 'timeLimitSeconds', 90)
+    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 0)
     manager = ProfileManager(tmp_path / 'profiles.json')
     monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
     monkeypatch.setitem(Game.__init__.__globals__, 'SoundManager', Mock)
@@ -224,3 +290,28 @@ def test_the_player_is_visible_when_hiding_is_off(make_game, monkeypatch):
 def test_the_player_is_always_visible_outside_autoplay(make_game):
     game = make_game(autoplay=False)
     assert game._hunter_sees_player() is True
+
+
+def test_a_stuck_hunter_ends_the_level_when_the_player_is_hidden(make_game, monkeypatch):
+    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 15)
+    game = make_game()
+    game._enemy_near_hunter = lambda: False
+    now = [game.autoplay._started_at]
+    game.autoplay.clock = lambda: now[0]
+    game.update(1.0)
+    assert game.level == 4
+    now[0] += 16
+    game.update(1.0)
+    assert game.level == 5
+
+
+def test_stuck_is_not_judged_when_the_player_is_visible(make_game, monkeypatch):
+    monkeypatch.setattr(SETTINGS.autoplay, 'stuckSeconds', 15)
+    monkeypatch.setattr(SETTINGS.autoplay, 'hidePlayer', False)
+    game = make_game()
+    now = [game.autoplay._started_at]
+    game.autoplay.clock = lambda: now[0]
+    game.update(1.0)
+    now[0] += 60
+    game.update(1.0)
+    assert game.level == 4

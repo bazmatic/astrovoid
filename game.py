@@ -47,6 +47,7 @@ from utils.math_utils import get_angle_to_point
 from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
 from hunter.fire_control import find_firing_solution
+from hunter.model import HunterSettings
 from hunter.perception import HunterPerception
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
@@ -177,7 +178,8 @@ class Game:
         """Run unattended: skip the menus and let the hunter fly level after level."""
         settings = config.SETTINGS.autoplay
         self.autoplay = AutoplayDirector(
-            settings.firstLevel, settings.lastLevel, settings.timeLimitSeconds)
+            settings.firstLevel, settings.lastLevel, settings.timeLimitSeconds,
+            stuck_seconds=settings.stuckSeconds)
         if not (config.SETTINGS.game.recordPilotDecisions
                 and config.SETTINGS.game.hunterPilot == 'jev'):
             logging.getLogger(__name__).warning(
@@ -202,11 +204,24 @@ class Game:
         """Whether the hunter may perceive the player: not when autoplay hides the parked one."""
         return not (self.autoplay is not None and config.SETTINGS.autoplay.hidePlayer)
 
+    def _enemy_near_hunter(self) -> bool:
+        """Whether any enemy is within the hunter's sensor range (walls aside)."""
+        if self.hunter is None:
+            return False
+        reach = HunterSettings().sensor_range(self.maze)
+        return any(math.hypot(x - self.hunter.x, y - self.hunter.y) <= reach
+                   for x, y in (enemy.get_pos() for enemy in self.entity_manager.get_all_active_enemies()))
+
     def _autoplay_level_over(self) -> bool:
         """Move on to the next level when the director says this one is over."""
+        # Without the player to stay beside, a hunter that stops finding new ground is stuck.
+        judge_stuck = self.hunter is not None and not self._hunter_sees_player()
         reason = self.autoplay.end_reason(
             enemies_left=sum(1 for _ in self.entity_manager.get_all_active_enemies()),
-            hunter_alive=self.hunter is not None and self.hunter.active)
+            hunter_alive=self.hunter is not None and self.hunter.active,
+            hunter_cell=((int(self.hunter.x // self.maze.cell_size_x),
+                          int(self.hunter.y // self.maze.cell_size_y)) if judge_stuck else None),
+            enemy_near=judge_stuck and self._enemy_near_hunter())
         if reason is None:
             return False
         logging.getLogger(__name__).info('Autoplay level %d over (%s)', self.level, reason)

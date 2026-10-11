@@ -342,6 +342,7 @@
     "firstLevel": 13,
     "lastLevel": 30,
     "timeLimitSeconds": 120,
-    "hidePlayer": true
+    "hidePlayer": true,
+    "stuckSeconds": 15
   }
 }
