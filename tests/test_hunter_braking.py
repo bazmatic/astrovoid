@@ -267,16 +267,19 @@ def test_pilot_rules_fly_the_braking_burn_with_the_navigator():
 
 @pytest.mark.parametrize('share,heading', [(0.95, 0.0), (0.95, 90.0), (0.8, 200.0), (0.5, 300.0)])
 def test_rule_following_pilot_stops_short_of_a_wall_dead_ahead(open_space, share, heading):
-    """Flying as fast as the rules allow in the open, the real ship still stops for a wall
-    that comes into sensor range dead ahead."""
+    """Flying at a share of the speed the readings call safe for the wall dead ahead, the real
+    ship, with the pilot's decisions landing late, still stops short of it."""
     from maze.wall_segment import WallSegment
     from tests.test_hunter_perception import maze
     from tests.test_hunter_wall_follow import fly_by_the_rules
     world = maze()
     world.cell_size_x = world.cell_size_y = 60
-    probe = moving_ship((50000.0, 50000.0), (1.0, 0.0), heading)
-    safe = brake_reading(probe, [])['motion']['brake']['safe_speed_metres_per_second'] / 60
     world.walls = [WallSegment((50600.0, 49000.0), (50600.0, 51000.0), 3)]
+    # The safe speed depends on how far the wall is and how far the hunter sees, so work it out for
+    # this wall. A reading with no wall assumes one at the edge of sight, which is now beyond it.
+    probe = moving_ship((50000.0, 50000.0), (1.0, 0.0), heading)
+    safe = brake_reading(probe, [((50600.0, 49000.0), (50600.0, 51000.0))])['motion']['brake'][
+        'safe_speed_metres_per_second'] / 60
     ship = moving_ship((50000.0, 50000.0), (safe * share, 0.0), heading)
     closest = []
     fly_by_the_rules(ship, world, 30, lambda frame: closest.append(50600.0 - ship.x - ship.radius))

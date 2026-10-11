@@ -21,7 +21,7 @@ class RuleParams:
     thrust_multiplier: float = 0.25
     # How far the hunter sees, as a share of the maze's width. Also a hunter property (HunterSettings);
     # a test keeps the two equal.
-    sensor_range_fraction: float = 0.4
+    sensor_range_fraction: float = 0.8
     strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at

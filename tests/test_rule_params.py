@@ -1,5 +1,6 @@
 import asyncio
 import json
+import math
 import pytest
 from entities.enemy import Enemy
 from entities.hunter_ship import HunterShip
@@ -252,8 +253,9 @@ def test_strafe_offers_a_sideways_course_while_tracking_an_enemy():
     strafe = state['strafe']
     assert strafe['side'] in ('left', 'right')
     assert strafe['course'] is not None and 'burn_heading_degrees' in strafe['course']
-    # The burn heading is roughly across the line to the enemy (the nose points at it).
-    assert abs(abs(strafe['course']['burn_degrees_off_nose']) - 90) < 45
+    # The burn heading is mostly across the line to the enemy (the nose points at it), though it also
+    # works off the sideways-free speed the hunter already has.
+    assert abs(math.sin(math.radians(strafe['course']['burn_degrees_off_nose']))) > 0.5
 
 
 def test_strafe_goes_to_the_side_with_more_room():
@@ -416,7 +418,7 @@ def test_sensor_range_fraction_is_a_bounded_parameter_that_matches_the_hunter_de
     from hunter.rule_params import RULES
     assert 'sensor_range_fraction' in BOUNDS
     low, high = BOUNDS['sensor_range_fraction']
-    assert low < 0.4 < high and high >= 1.0
+    assert low < 0.8 < high and high >= 1.0
     # The lab applies it to the hunter; the game uses HunterSettings. They must not drift apart silently.
-    assert DEFAULT.sensor_range_fraction == HunterSettings().sensor_range_fraction == 0.4
+    assert DEFAULT.sensor_range_fraction == HunterSettings().sensor_range_fraction == 0.8   # 009
     assert RULES.sensor_range_fraction == HunterSettings().sensor_range_fraction

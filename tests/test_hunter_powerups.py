@@ -60,7 +60,9 @@ def test_a_powerup_behind_a_wall_out_of_range_or_collected_is_not_sensed():
     ship = ship_at((500, 500))
     hidden = raw(ship, [PowerupCrystal((700, 500))], walls=[((600, 0), (600, 1000))])
     assert hidden['visible_powerups'] == []
-    assert raw(ship, [PowerupCrystal((990, 500))])['visible_powerups'] == []
+    # Sight is 800 px, most of this 1000 px maze, so out of range needs a ship near one edge.
+    assert raw(ship_at((100, 500)), [PowerupCrystal((990, 500))])['visible_powerups'] == []
+    assert len(raw(ship_at((300, 500)), [PowerupCrystal((990, 500))])['visible_powerups']) == 1
     collected = PowerupCrystal((600, 500))
     collected.die()
     assert raw(ship, [collected])['visible_powerups'] == []
