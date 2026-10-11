@@ -411,6 +411,17 @@ to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a 
 `venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
 `assets/student/jev_student.npz`.
 
+#### Unattended data collection
+
+`AUTOPLAY=1 ./run.sh` skips the menus and runs levels with no one at the controls. The player
+ship stays parked and cannot fail or finish a level; a hunter is summoned beside it and flies
+each level on its own. A level ends when the time limit passes, every enemy is destroyed, or
+the hunter dies, and the next level starts at once, wrapping from `autoplay.lastLevel` back to
+`autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
+`true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
+The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
+`timeLimitSeconds`.
+
 Opt in through a level's JSON file; see [level configuration](levels/README.md).
 The beacon is the hunter's arrowhead inside a turning amber ring. One lies in the maze, a third of the
 way from your start to the exit, on every level from level 4 (`game.hunterFirstLevel` in `config/settings.json`), except boss levels; `game.hunterLevelInterval` spaces them out. A level file can place one anywhere or forbid one.

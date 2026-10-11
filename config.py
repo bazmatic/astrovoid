@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
@@ -387,6 +387,14 @@ class GameSettings:
 
 
 @dataclass
+class AutoplaySettings:
+    # Unattended runs (AUTOPLAY=1): the player is parked and the hunter flies each level.
+    firstLevel: int = 4
+    lastLevel: int = 12
+    timeLimitSeconds: float = 90.0
+
+
+@dataclass
 class Settings:
     screen: ScreenSettings
     ship: ShipSettings
@@ -414,6 +422,7 @@ class Settings:
     starAnimation: StarAnimationSettings
     ui: UISettings
     game: GameSettings
+    autoplay: AutoplaySettings = field(default_factory=AutoplaySettings)
 
 
 def _load_settings_json() -> dict:
@@ -589,7 +598,8 @@ def load_settings() -> Settings:
             menuParticles=raw["ui"]["menuParticles"],
             fonts=fonts
         ),
-        game=GameSettings(**raw["game"])
+        game=GameSettings(**raw["game"]),
+        autoplay=AutoplaySettings(**raw.get("autoplay", {})),
     )
 
 

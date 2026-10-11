@@ -337,5 +337,10 @@
     "hunterFirstLevel": 4,
     "hunterPilot": "jev",
     "recordPilotDecisions": false
+  },
+  "autoplay": {
+    "firstLevel": 4,
+    "lastLevel": 12,
+    "timeLimitSeconds": 90
   }
 }

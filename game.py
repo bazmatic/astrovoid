@@ -34,6 +34,7 @@ from rendering.level_select_menu import LevelSelectMenu
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
+from game_handlers.autoplay import AutoplayDirector
 from game_handlers.entity_manager import EntityManager
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
@@ -54,6 +55,7 @@ import logging
 
 class Game:
     """Main game class managing state and game loop."""
+    autoplay = None  # An AutoplayDirector when the game runs unattended (AUTOPLAY=1)
     CRITICAL_WARNING_THRESHOLD = config.SETTINGS.game.criticalWarningThreshold
     
     def __init__(self, screen: pygame.Surface):
@@ -168,6 +170,45 @@ class Game:
             self._initialize_splash_screen()
         self.reset_scoring_to_profile_state()
         self.quit_confirmation_selection = 0
+        if os.getenv('AUTOPLAY', '').lower() in ('1', 'true', 'yes', 'on'):
+            self._start_autoplay()
+
+    def _start_autoplay(self) -> None:
+        """Run unattended: skip the menus and let the hunter fly level after level."""
+        settings = config.SETTINGS.autoplay
+        self.autoplay = AutoplayDirector(
+            settings.firstLevel, settings.lastLevel, settings.timeLimitSeconds)
+        if not (config.SETTINGS.game.recordPilotDecisions
+                and config.SETTINGS.game.hunterPilot == 'jev'):
+            logging.getLogger(__name__).warning(
+                'Autoplay is running without recording Jev decisions: set game.hunterPilot '
+                'to "jev" and game.recordPilotDecisions to true to collect training data')
+        self._begin_autoplay_level()
+
+    def _begin_autoplay_level(self) -> None:
+        """Start the director's level with the player parked and a hunter beside it."""
+        self.level = self.autoplay.level
+        self.state = config.STATE_PLAYING
+        self.start_level()
+        # No first move will come from a person: open the level the way one would.
+        self.player_has_moved = True
+        self.ship.game_started = True
+        self._summon_hunter((self.ship.x, self.ship.y))
+        self.autoplay.start_level(
+            len(list(self.entity_manager.get_all_active_enemies())),
+            hunter_present=self.hunter is not None)
+
+    def _autoplay_level_over(self) -> bool:
+        """Move on to the next level when the director says this one is over."""
+        reason = self.autoplay.end_reason(
+            enemies_left=sum(1 for _ in self.entity_manager.get_all_active_enemies()),
+            hunter_alive=self.hunter is not None and self.hunter.active)
+        if reason is None:
+            return False
+        logging.getLogger(__name__).info('Autoplay level %d over (%s)', self.level, reason)
+        self.autoplay.advance()
+        self._begin_autoplay_level()
+        return True
     
     def _initialize_splash_screen(self) -> None:
         """Initialize splash screen state."""
@@ -498,6 +539,8 @@ class Game:
         
         if not self.ship or not self.maze:
             return
+        if self.autoplay is not None and self._autoplay_level_over():
+            return
         
         self.maze.update(dt)
 
@@ -574,6 +617,9 @@ class Game:
             # Update the set
             self.keys_pressed_at_start = keys_still_pressed
         
+        if self.autoplay is not None:
+            commands = []  # Nobody is flying the player: it stays parked
+
         # Filter out ALL movement commands if we should ignore input
         # This prevents keys pressed at menu from affecting gameplay
         if should_filter_commands:
@@ -609,7 +655,7 @@ class Game:
         
         # Check if we should ignore fire (same logic as command filtering)
         space_still_pressed = pygame.K_SPACE in self.keys_pressed_at_start
-        should_ignore_fire = ignore_input or space_still_pressed
+        should_ignore_fire = ignore_input or space_still_pressed or self.autoplay is not None
         
         if not should_ignore_fire:
             try:
@@ -755,7 +801,7 @@ class Game:
         self._update_powerup_crystals(dt)
         
         # Check exit reached
-        if self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
+        if self.autoplay is None and self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
             if not self.exit_explosion_active:
                 # Start exit explosion
                 self.exit_explosion_active = True
@@ -783,7 +829,7 @@ class Game:
         self._update_critical_warning(potential_score)
         
         # When score reaches zero, freeze all action and start fade
-        if potential_score <= 0 and not self.game_frozen:
+        if potential_score <= 0 and not self.game_frozen and self.autoplay is None:
             self.game_frozen = True
             self._start_game_over_sequence(current_time)
         
