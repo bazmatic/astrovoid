@@ -305,6 +305,9 @@ def pilot_state(state, params=DEFAULT_PARAMS):
     # Cut off: no player, or no open route to it. Then there is nobody to follow,
     # and the hunter explores along a wall instead.
     cut_off = raw_follow is None or raw_follow['route_distance'] is None
+    # While enemies remain, hunting comes before keeping station with the player.
+    if params.hunt_first and state.get('enemies_present', False):
+        cut_off = True
     follow = wall_follow = None
     if not cut_off:
         follow = {**bearings(raw_follow['bearing']),

@@ -31,7 +31,7 @@ def test_a_term_that_never_varies_keeps_the_default_weight():
 def test_the_evaluator_scores_the_tune_episodes_in_order(monkeypatch):
     seen = []
 
-    def fake_evaluate(params, level_set, seeds, horizon, workers):
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
         seen.append((level_set, seeds, horizon, workers))
         return [EpisodeResult(l, s, 5, 30.0, l % 4, 0, 0, 0.0, 'horizon')
                 for l, s in run.episode_list(level_set, seeds)]
@@ -67,7 +67,7 @@ def test_parse_overrides_rejects_bad_text(bad):
 
 
 def fake_evaluate_factory(kills_for):
-    def fake_evaluate(params, level_set, seeds, horizon, workers):
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
         return [EpisodeResult(l, s, 10, 60.0, kills_for(params, l, s), 1, 1, 0.0, 'horizon', 0)
                 for l, s in run.episode_list(level_set, seeds)]
     return fake_evaluate
@@ -105,7 +105,7 @@ def test_format_report_lists_every_term_and_the_verdict():
 def test_compare_uses_the_requested_number_of_seeds(monkeypatch):
     seen = []
 
-    def fake_evaluate(params, level_set, seeds, horizon, workers):
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
         seen.append(tuple(seeds))
         return [EpisodeResult(l, s, 10, 60.0, 6, 1, 1, 0.0, 'horizon', 0)
                 for l, s in run.episode_list(level_set, seeds)]
@@ -128,7 +128,7 @@ def test_parse_overrides_applies_on_top_of_a_base():
 def test_the_confirm_fidelity_uses_fresh_seeds_on_the_tune_levels(monkeypatch):
     seen = []
 
-    def fake_evaluate(params, level_set, seeds, horizon, workers):
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
         seen.append((level_set, tuple(seeds), horizon))
         return [EpisodeResult(l, s, 5, 30.0, l % 4, 0, 0, 0.0, 'horizon', 0)
                 for l, s in run.episode_list(level_set, seeds)]
@@ -158,7 +158,7 @@ def test_baseline_can_be_taken_of_the_rules_or_the_global_defaults(monkeypatch, 
     from hunter.rule_params import RULES
     seen = []
 
-    def fake_evaluate(params, level_set, seeds, horizon, workers):
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
         seen.append(params)
         return [EpisodeResult(l, s, 5, 30.0, l % 4 + 1, 1, 1, 1.0, 'horizon', 0)
                 for l, s in run.episode_list(level_set, seeds)]
@@ -168,3 +168,18 @@ def test_baseline_can_be_taken_of_the_rules_or_the_global_defaults(monkeypatch, 
     assert all(p == (RULES if which == 'rules' else DEFAULT) for p in seen)
     assert (tmp_path / f'baseline-{expected_name}-tune.jsonl').exists()
     assert (tmp_path / f'baseline-{expected_name}-heldout.jsonl').exists()
+
+
+def test_compare_can_run_with_the_player_visible(monkeypatch):
+    seen = []
+
+    def fake_evaluate(params, level_set, seeds, horizon, workers, hide_player=True):
+        seen.append(hide_player)
+        return [EpisodeResult(l, s, 10, 60.0, 6, 1, 1, 0.0, 'horizon', 0)
+                for l, s in run.episode_list(level_set, seeds)]
+    monkeypatch.setattr(lab.run, 'evaluate', fake_evaluate)
+    lab.compare(DEFAULT, RuleParams(hunt_first=True), 'tune', workers=1)
+    assert seen == [True, True]
+    seen.clear()
+    lab.compare(DEFAULT, RuleParams(hunt_first=True), 'tune', workers=1, hide_player=False)
+    assert seen == [False, False]

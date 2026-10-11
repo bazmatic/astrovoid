@@ -29,6 +29,8 @@ class RuleParams:
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
     investigate_memory: bool = False  # Head for where a remembered enemy was last seen
     strafe: bool = False  # While fighting, dodge sideways between aimed bursts
+    # While any enemy remains alive, even out of sight, hunt instead of following the player.
+    hunt_first: bool = False
 
     def to_dict(self):
         return asdict(self)
@@ -62,7 +64,7 @@ DEFAULT = RuleParams()
 RULES = replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0, wall_lookahead_cells=2.5,
                 turn_rate_multiplier=2.0)
 
-SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe')
+SWITCHES = ('pursue_unaimed', 'investigate_memory', 'strafe', 'hunt_first')
 
 # The ranges the search may explore, and the limits from_dict accepts.
 BOUNDS = {

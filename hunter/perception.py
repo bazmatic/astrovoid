@@ -85,6 +85,8 @@ class HunterPerception:
             'sensor_range': radius,
             'previous_action': asdict(previous_action),
             'snapshot_at': now,
+            # Whether any enemy is still alive anywhere, seen or not (an ally is told the level is not clear).
+            'enemies_present': any(getattr(enemy, 'active', True) for enemy in enemies),
             'visible_contacts': contacts[:self.settings.max_contacts],
             'visible_projectiles': bullets[:self.settings.max_projectiles],
             'visible_powerups': crystals[:self.settings.max_contacts],

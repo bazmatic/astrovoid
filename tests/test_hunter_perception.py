@@ -103,3 +103,18 @@ def test_sight_range_is_the_same_distance_whatever_the_cell_size():
     for world in (coarse, dense):
         assert sees(world, 790)
         assert not sees(world, 810)
+
+
+# --- enemies that remain ---------------------------------------------------------
+
+def test_the_state_says_whether_any_enemy_is_still_alive_even_out_of_sight():
+    ship = HunterShip((150, 150))
+    world = maze()
+    world.walls = [WallSegment((180, 0), (180, 900), 3)]
+    hidden = Enemy((250, 150), 'patrol', 1)          # behind a wall, so not visible
+    state = read(HunterPerception(), ship, world, [hidden], 0)
+    assert state['visible_contacts'] == []
+    assert state['enemies_present'] is True
+    hidden.active = False
+    assert read(HunterPerception(), ship, world, [hidden], 0)['enemies_present'] is False
+    assert read(HunterPerception(), ship, world, [], 0)['enemies_present'] is False

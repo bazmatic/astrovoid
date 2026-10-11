@@ -126,7 +126,7 @@ def moving_away_state():
 
 
 def test_switches_default_off_and_leave_the_state_unchanged():
-    assert SWITCHES == ('pursue_unaimed', 'investigate_memory', 'strafe')
+    assert SWITCHES == ('pursue_unaimed', 'investigate_memory', 'strafe', 'hunt_first')
     assert DEFAULT.pursue_unaimed is False and DEFAULT.investigate_memory is False
     raw = moving_away_state()
     state = pilot_state(raw)
@@ -436,3 +436,40 @@ def test_turn_rate_multiplier_is_a_bounded_parameter_that_matches_the_hunter_def
     # The rules pilot's hunter turns faster (010); hunter_settings_for applies it, and a test in
     # tests/test_hunter_settings_for.py keeps the game and the lab in step.
     assert RULES.turn_rate_multiplier == 2.0
+
+
+# --- hunt before following -----------------------------------------------------------
+
+def following_state(enemies_present):
+    """A hunter with a player in plain sight and a clear route to it, and no enemy in sight."""
+    raw, _ = raw_state()
+    raw['visible_contacts'] = []
+    raw['enemies_present'] = enemies_present
+    raw['follow_player'] = {'bearing': 0.0, 'waypoint': [400.0, 150.0], 'waypoint_distance': 250.0,
+                            'route_distance': 250.0, 'player_visible': True, 'player_distance': 250.0}
+    raw['visible_walls'] = [[[100.0, 175.0], [300.0, 175.0]]]
+    return raw
+
+
+def test_hunt_first_is_a_switch_that_defaults_off():
+    assert 'hunt_first' in SWITCHES and DEFAULT.hunt_first is False
+
+
+def test_by_default_the_hunter_follows_the_player_whether_or_not_enemies_remain():
+    for present in (True, False):
+        state = pilot_state(following_state(present))
+        assert state['follow_player'] is not None and state['wall_follow'] is None
+
+
+def test_with_hunt_first_it_follows_only_once_no_enemy_remains():
+    params = RuleParams(hunt_first=True)
+    hunting = pilot_state(following_state(True), params)
+    assert hunting['follow_player'] is None and hunting['wall_follow'] is not None
+    following = pilot_state(following_state(False), params)
+    assert following['follow_player'] is not None and following['wall_follow'] is None
+
+
+def test_hunt_first_without_the_enemies_present_key_still_follows():
+    raw = following_state(True)
+    del raw['enemies_present']
+    assert pilot_state(raw, RuleParams(hunt_first=True))['follow_player'] is not None

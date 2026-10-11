@@ -61,12 +61,12 @@ def parse_overrides(text, base=DEFAULT):
     return RuleParams.from_dict({**base.to_dict(), **values})
 
 
-def compare(base, candidate, level_set, workers, horizon=90.0, weights=None, seeds=None):
+def compare(base, candidate, level_set, workers, horizon=90.0, weights=None, seeds=None, hide_player=True):
     """Both parameter sets on the same episodes: per term, the means and the paired difference."""
     weights = weights or Weights()
     seeds = tuple(seeds) if seeds is not None else run.SEEDS
-    base_results = run.evaluate(base, level_set, seeds, horizon, workers)
-    candidate_results = run.evaluate(candidate, level_set, seeds, horizon, workers)
+    base_results = run.evaluate(base, level_set, seeds, horizon, workers, hide_player=hide_player)
+    candidate_results = run.evaluate(candidate, level_set, seeds, horizon, workers, hide_player=hide_player)
     report = {}
     keys = list(components(base_results[0])) + ['score']
     for key in keys:
@@ -153,6 +153,8 @@ def main(argv=None):
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
     parser.add_argument('--candidate', default='', help='compare: name=value,... applied on the rules defaults')
     parser.add_argument('--base', default='', help='compare: overrides for the base (default: the rules defaults)')
+    parser.add_argument('--player', default='hidden', choices=('hidden', 'visible'),
+                        help='compare: hide the parked player from the hunter (default), or let it see it')
     parser.add_argument('--seeds', type=int, default=len(run.SEEDS),
                         help='compare: seeds per level (more seeds detect smaller effects)')
     parser.add_argument('--set', default='tune', choices=('tune', 'heldout', 'both'),
@@ -165,7 +167,8 @@ def main(argv=None):
         print('candidate:', candidate.to_dict())
         for level_set in (('tune', 'heldout') if args.set == 'both' else (args.set,)):
             print(format_report(compare(base, candidate, level_set, args.workers,
-                                        seeds=range(args.seeds)), level_set))
+                                        seeds=range(args.seeds), hide_player=args.player == 'hidden'),
+                                 level_set))
         return
     if args.command == 'baseline':
         baseline(args.workers, args.baseline_of)
