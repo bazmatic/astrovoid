@@ -419,6 +419,7 @@ each level on its own. A level ends when the time limit passes, every enemy is d
 the hunter dies, and the next level starts at once, wrapping from `autoplay.lastLevel` back to
 `autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
 `true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
+Set `WINDOW_SIZE=1352x878` to run in a window of that size (the whole game world scales to it).
 The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
 `timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it
 explores the maze and meets enemies instead of sitting beside the player.
