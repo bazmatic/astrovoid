@@ -14,6 +14,9 @@ class RuleParams:
     cruising_speed_fraction: float = 0.5  # Share of the safe speed that counts as cruising
     pulse_frames: float = 6.0  # Length of one engine pulse, in frames
     request_interval: float = 0.25  # Seconds between pilot decisions
+    # Structural switches: whole rules that are off until an experiment shows they help.
+    pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
+    investigate_memory: bool = False  # Head for where a remembered enemy was last seen
 
     def to_dict(self):
         return asdict(self)
@@ -25,6 +28,11 @@ class RuleParams:
         for name, value in data.items():
             if name not in known:
                 raise ValueError(f'unknown rule parameter {name!r}')
+            if name in SWITCHES:
+                if not isinstance(value, bool):
+                    raise ValueError(f'rule switch {name!r} must be true or false, got {value!r}')
+                values[name] = value
+                continue
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(f'rule parameter {name!r} must be a number, got {value!r}')
             low, high = BOUNDS[name]
@@ -35,6 +43,8 @@ class RuleParams:
 
 
 DEFAULT = RuleParams()
+
+SWITCHES = ('pursue_unaimed', 'investigate_memory')
 
 # The ranges the search may explore, and the limits from_dict accepts.
 BOUNDS = {

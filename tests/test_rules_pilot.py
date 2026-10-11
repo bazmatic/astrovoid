@@ -122,3 +122,38 @@ def test_jev_pilot_decides_with_the_rules_client():
     decision = asyncio.run(JevPilot(RulesClient()).decide(obs))
     assert decision.action.track and decision.action.fire
     assert decision.confidence == 1.0
+
+
+# --- structural switches: pursue and investigate ------------------------------
+
+PURSUE_COURSE = dict(COURSE, burn_needed=True)
+
+
+def test_a_pursue_course_is_flown_when_no_enemy_has_an_aim():
+    s = state(pursue={'course': PURSUE_COURSE})
+    assert decide(s) == {'turn': 'course', 'thrust': 'burn', 'fire': 'hold'}
+
+
+def test_an_aimed_enemy_beats_pursuit():
+    s = state(visible_contacts=[enemy()], pursue={'course': PURSUE_COURSE})
+    assert decide(s)['turn'] == 'track'
+
+
+def test_course_priority_is_powerup_pursue_investigate_player_wall():
+    burn = {'course': PURSUE_COURSE}
+    still = {'course': COURSE}
+    assert decide(state(collect_powerup=still, pursue=burn))['thrust'] == 'coast'
+    assert decide(state(pursue=burn, investigate=still))['thrust'] == 'burn'
+    assert decide(state(investigate=burn, follow_player=dict(still, degrees_off_nose_at_next_decision=0)))['thrust'] == 'burn'
+    assert decide(state(investigate=still, wall_follow=burn))['thrust'] == 'coast'
+
+
+def test_jev_pilot_flies_the_course_of_the_pursue_block():
+    from hunter.jev_pilot import navigation_course
+    s = {'motion': {'brake': {}}, 'pursue': {'course': {'burn_needed': True, 'burn_heading_degrees': 77.0,
+                                                      'burn_seconds': 1.0}},
+         'wall_follow': {'course': {'burn_needed': True, 'burn_heading_degrees': 11.0, 'burn_seconds': 1.0}}}
+    assert navigation_course(s)['burn_heading_degrees'] == 77.0
+    s2 = {'motion': {'brake': {}}, 'investigate': {'course': {'burn_needed': False, 'burn_heading_degrees': 5.0,
+                                                           'burn_seconds': 0.0}}}
+    assert navigation_course(s2)['burn_heading_degrees'] == 5.0

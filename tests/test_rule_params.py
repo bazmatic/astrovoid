@@ -7,7 +7,7 @@ from hunter.jev_pilot import JevPilot
 from hunter.model import ACTIONS, NEUTRAL
 from hunter.perception import HunterPerception
 from hunter.pilot_sensors import pilot_state
-from hunter.rule_params import BOUNDS, DEFAULT, RuleParams
+from hunter.rule_params import BOUNDS, DEFAULT, SWITCHES, RuleParams
 from hunter.rules_pilot import RulesClient, decide
 from tests.test_hunter_perception import maze
 
@@ -29,7 +29,7 @@ def test_defaults_are_todays_values():
 def test_every_default_is_inside_its_bounds():
     for name, (low, high) in BOUNDS.items():
         assert low < getattr(DEFAULT, name) < high
-    assert set(BOUNDS) == set(DEFAULT.to_dict())
+    assert set(BOUNDS) == set(DEFAULT.to_dict()) - set(SWITCHES)
 
 
 def test_default_params_change_nothing():
@@ -112,3 +112,65 @@ def test_pulse_frames_reach_the_action():
     longer = asyncio.run(JevPilot(Pulse(), RuleParams(pulse_frames=12.0)).decide(obs)).action
     assert default.burn_frames == ACTIONS['none_pulse_hold'].burn_frames
     assert longer.burn_frames == 12.0
+
+
+# --- structural switches ------------------------------------------------------
+
+def moving_away_state():
+    """A real raw state with one visible enemy that runs away too fast to be shot."""
+    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw['visible_contacts'][0]['velocity'] = [20.0, 0.0]
+    return raw
+
+
+def test_switches_default_off_and_leave_the_state_unchanged():
+    assert SWITCHES == ('pursue_unaimed', 'investigate_memory')
+    assert DEFAULT.pursue_unaimed is False and DEFAULT.investigate_memory is False
+    raw = moving_away_state()
+    state = pilot_state(raw)
+    assert 'pursue' not in state and 'investigate' not in state
+
+
+def test_switches_round_trip_and_reject_non_booleans():
+    params = RuleParams(pursue_unaimed=True)
+    assert RuleParams.from_dict(params.to_dict()) == params
+    assert RuleParams.from_dict({'investigate_memory': True}).investigate_memory is True
+    for bad in ({'pursue_unaimed': 1}, {'pursue_unaimed': 'yes'}, {'investigate_memory': 0.5}):
+        with pytest.raises(ValueError):
+            RuleParams.from_dict(bad)
+    assert hash(params) != hash(DEFAULT) or params != DEFAULT
+
+
+def test_pursue_gives_a_course_to_a_visible_enemy_that_cannot_be_aimed_at():
+    raw = moving_away_state()
+    assert pilot_state(raw)['visible_contacts'][0]['aim'] is None
+    pursue = pilot_state(raw, RuleParams(pursue_unaimed=True))['pursue']
+    assert pursue['distance_metres'] == pytest.approx(100.0)
+    assert pursue['course'] is not None and 'burn_needed' in pursue['course']
+
+
+def test_pursue_is_absent_when_the_enemy_can_be_aimed_at():
+    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    assert pilot_state(raw)['visible_contacts'][0]['aim'] is not None
+    assert pilot_state(raw, RuleParams(pursue_unaimed=True)).get('pursue') is None
+
+
+def test_investigate_heads_for_the_nearest_remembered_enemy_that_is_out_of_sight():
+    raw, _ = raw_state()
+    raw['visible_contacts'] = []
+    near = {'id': 7, 'type': 'patrol', 'allegiance': 'enemy', 'position': [400, 150],
+            'relative_position': [250, 0], 'velocity': [0, 0], 'heading': 0, 'radius': 8,
+            'distance': 250.0, 'bearing': 0.0, 'age': 2.0}
+    far = dict(near, id=8, position=[900, 150], relative_position=[750, 0], distance=750.0)
+    raw['remembered_contacts'] = [far, near]
+    investigate = pilot_state(raw, RuleParams(investigate_memory=True))['investigate']
+    assert investigate['distance_metres'] == pytest.approx(250.0)
+    assert investigate['course'] is not None
+    assert 'investigate' not in pilot_state(raw)
+
+
+def test_investigate_ignores_a_remembered_enemy_that_is_visible_again():
+    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    seen = raw['visible_contacts'][0]
+    raw['remembered_contacts'] = [dict(seen, age=1.0)]
+    assert pilot_state(raw, RuleParams(investigate_memory=True)).get('investigate') is None

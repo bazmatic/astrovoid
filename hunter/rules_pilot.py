@@ -4,8 +4,8 @@ from hunter.rule_params import DEFAULT
 
 
 def _navigation_course(state):
-    """The course the navigator flies: the first of powerup, player, wall to be present."""
-    for key in ('collect_powerup', 'follow_player', 'wall_follow'):
+    """The course the navigator flies: the first of these to be present, in priority order."""
+    for key in ('collect_powerup', 'pursue', 'investigate', 'follow_player', 'wall_follow'):
         block = state.get(key)
         if block is not None:
             return block.get('course')

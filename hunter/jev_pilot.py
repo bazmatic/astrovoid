@@ -284,8 +284,8 @@ def navigation_course(state):
     if brake.get('speed_state') == 'too_fast':
         return {'burn_needed': True, 'burn_heading_degrees': brake['burn_heading_degrees'],
                 'burn_seconds': brake['burn_seconds']}
-    navigation = (state.get('collect_powerup') or state.get('follow_player')
-                  or state.get('wall_follow'))
+    navigation = (state.get('collect_powerup') or state.get('pursue') or state.get('investigate')
+                  or state.get('follow_player') or state.get('wall_follow'))
     return navigation.get('course') if navigation else None
 
 

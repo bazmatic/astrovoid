@@ -314,7 +314,26 @@ def pilot_state(state, params=DEFAULT_PARAMS):
                        'course':course_to(
                            goal.point,bearing,
                            cruise=params.wall_follow_cruise*math.sqrt(physics.get('thrust_per_frame',.0375)*goal.standoff)*fps)}
-    return {'snapshot_at_seconds':state.get('snapshot_at',0),
+    pursue = investigate = None
+    if params.pursue_unaimed:
+        # A visible enemy no shot can reach yet: close in on the nearest, rather than ignore it.
+        unaimed = [c for c in visible if c['allegiance'] == 'enemy' and aim(c) is None]
+        if unaimed:
+            nearest = min(unaimed, key=lambda c: c['distance'])
+            pursue = {**bearings(nearest['bearing']), 'heading_degrees':nearest['bearing'] % 360,
+                      'distance_metres':nearest['distance'],
+                      'course':course_to(nearest['position'], nearest['bearing'])}
+    if params.investigate_memory:
+        # An enemy seen lately but out of sight now: go to where it was last seen.
+        gone = [c for c in state.get('remembered_contacts', [])
+                if c['allegiance'] == 'enemy' and c['id'] not in visible_ids]
+        if gone:
+            nearest = min(gone, key=lambda c: c['distance'])
+            investigate = {**bearings(nearest['bearing']), 'heading_degrees':nearest['bearing'] % 360,
+                           'distance_metres':nearest['distance'],
+                           'age_seconds':round(nearest.get('age', 0), 1),
+                           'course':course_to(nearest['position'], nearest['bearing'])}
+    result = {'snapshot_at_seconds':state.get('snapshot_at',0),
             'speed_metres_per_second':speed*fps,
             'heading_degrees':heading % 360,
             'velocity_heading_degrees':velocity_heading % 360 if speed else None,
@@ -334,3 +353,9 @@ def pilot_state(state, params=DEFAULT_PARAMS):
             'collect_powerup':collect,
             'follow_player':follow,
             'wall_follow':wall_follow}
+    # Only present when its switch is on, so the default state is exactly as before.
+    if pursue is not None:
+        result['pursue'] = pursue
+    if investigate is not None:
+        result['investigate'] = investigate
+    return result
