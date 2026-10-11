@@ -35,6 +35,7 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 006 | [strafe](006-strafe.md) | -36.8 to -50.1 | n/a | rejected: more hits, fewer kills |
 | 007 | [confident exploration](007-confident-exploration.md) | +11.3 | +5.3 | **adopted** (cruise 2.0, look-ahead 2.5); current reference 53.6 / 72.2 |
 | 008 | [thrust](008-thrust.md) | no effect at 0.15 to 1.5; 1.0 worse on held-out (-21.6) | | reverted to 0.25 |
+| 009 | [sensor range](009-sensor-range.md) | +18.4 (0.8) | +6.5 (0.8) | best 0.8; adoption scope pending |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 
