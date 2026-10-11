@@ -19,6 +19,9 @@ class RuleParams:
     # The hunter ship's engine, as a share of the player's. A ship property: the lab applies it to the
     # hunter, and adopting a value means changing HunterSettings (a test keeps the two equal).
     thrust_multiplier: float = 0.25
+    # How far the hunter sees, as a share of the maze's width. Also a hunter property (HunterSettings);
+    # a test keeps the two equal.
+    sensor_range_fraction: float = 0.4
     strafe_cells: float = 1.0  # How far aside a strafing dodge aims, in maze cells
     # Structural switches: whole rules that are off until an experiment shows they help.
     pursue_unaimed: bool = False  # Close in on a visible enemy that cannot yet be shot at
@@ -70,5 +73,6 @@ BOUNDS = {
     'cruising_speed_fraction': (0.1, 0.9),
     'pulse_frames': (1.0, 20.0),
     'thrust_multiplier': (0.1, 6.0),
+    'sensor_range_fraction': (0.15, 1.5),
     'strafe_cells': (0.3, 3.0),
 }

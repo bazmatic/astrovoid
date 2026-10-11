@@ -1,3 +1,4 @@
+import json
 import pytest
 from experiments import harness
 from experiments.harness import EpisodeResult, run_episode
@@ -220,3 +221,31 @@ def test_a_stronger_engine_changes_the_episode():
     strong = run_episode(14, 0, params=RuleParams(thrust_multiplier=1.0), horizon=20.0)
     assert (base.kills, base.wall_hits, base.hits_taken, base.idle_seconds) != \
            (strong.kills, strong.wall_hits, strong.hits_taken, strong.idle_seconds)
+
+
+def test_sensor_range_fraction_reaches_the_perception_and_fire_control():
+    import experiments.harness as h
+    from hunter.rule_params import RuleParams
+    seen = {}
+    original = h.SyncWorker.submit
+
+    def spy(self, observation):
+        seen['range'] = json.loads(observation.state_json)['sensor_range']
+        return original(self, observation)
+    h.SyncWorker.submit = spy
+    try:
+        run_episode(13, 0, params=RuleParams(sensor_range_fraction=0.2), horizon=1.0)
+        short = seen['range']
+        run_episode(13, 0, params=RuleParams(sensor_range_fraction=0.8), horizon=1.0)
+        long = seen['range']
+    finally:
+        h.SyncWorker.submit = original
+    assert long == pytest.approx(short * 4)
+
+
+def test_a_longer_sight_changes_what_the_hunter_does():
+    from hunter.rule_params import RuleParams
+    short = run_episode(14, 0, params=RuleParams(sensor_range_fraction=0.15), horizon=20.0)
+    long = run_episode(14, 0, params=RuleParams(sensor_range_fraction=1.0), horizon=20.0)
+    assert (short.kills, short.wall_hits, short.hits_taken, round(short.idle_seconds, 2)) != \
+           (long.kills, long.wall_hits, long.hits_taken, round(long.idle_seconds, 2))

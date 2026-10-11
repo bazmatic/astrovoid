@@ -197,8 +197,11 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0):
     game._summon_hunter = lambda near: None
     game._jev_beacon_drop_allowed = lambda: False
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
-    settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier)
+    settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
+                       sensor_range_fraction=params.sensor_range_fraction)
     hunter.settings = controller.settings = settings
+    # The perception reads its own copy of the settings (how far the hunter sees).
+    game.hunter_perception.settings = settings
 
     counter = EventCounter()
 

@@ -407,3 +407,16 @@ def test_the_weak_engine_keeps_the_two_frame_cutoff_exactly():
     assert min_burn_frames(0.15) == 1          # floor: one frame is the smallest burn
     assert min_burn_frames(0.075) == 1.0
     assert min_burn_frames(0.01) == pytest.approx(2 * 0.0375 / 0.01)   # weaker engines wait longer
+
+
+# --- sensor range ----------------------------------------------------------------------
+
+def test_sensor_range_fraction_is_a_bounded_parameter_that_matches_the_hunter_default():
+    from hunter.model import HunterSettings
+    from hunter.rule_params import RULES
+    assert 'sensor_range_fraction' in BOUNDS
+    low, high = BOUNDS['sensor_range_fraction']
+    assert low < 0.4 < high and high >= 1.0
+    # The lab applies it to the hunter; the game uses HunterSettings. They must not drift apart silently.
+    assert DEFAULT.sensor_range_fraction == HunterSettings().sensor_range_fraction == 0.4
+    assert RULES.sensor_range_fraction == HunterSettings().sensor_range_fraction
