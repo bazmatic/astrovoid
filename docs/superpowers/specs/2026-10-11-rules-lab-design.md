@@ -53,7 +53,9 @@ An *episode* is one level, one seed, one `RuleParams`.
 ### Score — `experiments/score.py`
 
 Per episode: `kill_pct_per_min − w_wall·wall_hits_per_min − w_hit·hits_taken_per_min −
-w_idle·idle_fraction`. (An earlier version also had a death term, with damage switched on. It was
+w_idle·idle_fraction`, where `kill_pct_per_min` is the percentage of all enemies that existed
+(those at the start plus those that spawned) killed per minute. Using the total that includes
+spawns means a level with a spawner cannot be farmed for a bigger number. (An earlier version also had a death term, with damage switched on. It was
 removed: the real hunter cannot die, deaths ended 61% of episodes early, and the cliff made scores
 lumpy. See `docs/experiments/001-baseline.md`.) Every term is also reported on its own, so a gain in one
 cannot hide a loss in another. The weights are fixed once, from a baseline run, so each term has
@@ -138,10 +140,9 @@ per-term summary and writes the raw results.
   and the scripted-player scenario is the later guard.
 - Penalty weights can be gamed. Idle time is in the score for that reason, and the per-term
   reports are checked, not just the total.
-- Kill farming. Lighthouses and egg-laying bosses spawn more enemies, so a hunter can be credited
-  with many more kills than enemies at the start (125 and 183 on two baseline episodes). Comparisons
-  are paired per episode, which cancels the level's scale, but a few such episodes can dominate a
-  mean. Watch for it in the per-term reports.
+- Kill farming. Lighthouses and egg-laying bosses spawn more enemies (the baseline credited 125 and
+  183 raw kills on two levels that start with about 26). The score therefore uses the percentage of
+  all enemies that existed, which removes the effect; raw kills per minute is still reported.
 - Tuning to the tune levels. The held-out set, scored once per round, exists to catch it.
 - Episode noise from game randomness. Seeding and paired comparisons are the answer, and the
   baseline run reports the spread.
