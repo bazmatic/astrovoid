@@ -243,15 +243,33 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
         return original_damage()
     hunter.take_damage = counting_damage
 
+    if recorder is not None:
+        original_step = hunter.step
+
+        def recording_step(dt, action, solution=None):
+            before = hunter.angle
+            shots = original_step(dt, action, solution)
+            recorder.add_frame(rotation=((hunter.angle - before + 180.0) % 360.0) - 180.0,
+                               engine=bool(hunter.pilot_thrusting), trigger=bool(action.fire or shots))
+            return shots
+        hunter.step = recording_step
+        recorder.begin(game, hunter, settings)
+
     alive = _active_enemies(game)
     start_enemies = len(alive)
     counter.observe(alive)
     end = 'horizon'
     elapsed = 0.0
-    for _ in range(int(horizon * FPS)):
+    for frame in range(int(horizon * FPS)):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
+        if recorder is not None:
+            recorder.before_frame(game, hunter)
+        if labeller is not None:
+            labeller.before_frame(game, hunter, frame)
         game.update(1.0)
+        if recorder is not None:
+            recorder.after_frame()
         if game.hunter is not hunter or game.hunter_controller is not controller:
             raise RuntimeError('hunter was replaced during the episode')
         alive = _active_enemies(game)
@@ -264,5 +282,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
             break
     game._close_hunter()
     _clear_overrides(game)
-    return EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
-                         counter.hits_taken, counter.idle_seconds, end, counter.spawned)
+    result = EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
+                           counter.hits_taken, counter.idle_seconds, end, counter.spawned)
+    if on_result is not None:
+        on_result(result)
+    return result
