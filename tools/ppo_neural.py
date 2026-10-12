@@ -3,6 +3,7 @@ import argparse
 import functools
 import os
 import sys
+import time
 from pathlib import Path
 import numpy as np
 from hunter.neural.policy import HEAD_SIZES, NeuralPolicy
@@ -164,19 +165,62 @@ def kl_coefficient(iteration, iterations, start=0.1, end=0.02, fade=0.5):
 
 
 def _rollout_job(job, shaping=None):
+    import time
     from experiments.rollout import fly_rollout
     level, seed, spec = job
-    return fly_rollout(level, seed, spec, **(shaping or {}))
+    started = time.perf_counter()
+    flown = fly_rollout(level, seed, spec, **(shaping or {}))
+    flown['wall'] = time.perf_counter() - started
+    return flown
 
 
-def pool_rollout(jobs, workers, shaping=None):
-    from experiments import run
-    fly = functools.partial(_rollout_job, shaping=shaping)
-    if workers <= 1:
-        return [fly(job) for job in jobs]
-    import multiprocessing
-    with multiprocessing.get_context('spawn').Pool(workers, initializer=run._use_dummy_drivers) as pool:
-        return pool.map(fly, jobs, chunksize=1)
+def _indexed_job(fly, item):
+    index, job = item
+    return index, fly(job)
+
+
+def longest_first(jobs, estimates):
+    """Submission order for the pool: levels not yet timed first, then the slowest levels, so no long flight starts last."""
+    return sorted(range(len(jobs)), key=lambda i: (jobs[i][0] in estimates, -estimates.get(jobs[i][0], 0.0), i))
+
+
+class PoolRollout:
+    """Flies jobs on a pool of worker processes that stays up between iterations.
+
+    Results come back in job order whatever order the workers finish in, so the training batch does not depend on
+    scheduling. Jobs go out slowest level first, judged by the previous iteration's wall times.
+    """
+
+    def __init__(self, workers, shaping=None, job=None):
+        self.fly = job or functools.partial(_rollout_job, shaping=shaping)
+        self.estimates = {}
+        self._pool = None
+        if workers > 1:
+            import multiprocessing
+            from experiments import run
+            self._pool = multiprocessing.get_context('spawn').Pool(workers, initializer=run._use_dummy_drivers)
+
+    def __call__(self, jobs, workers=None):
+        order = longest_first(jobs, self.estimates)
+        items = [(i, jobs[i]) for i in order]
+        if self._pool is None:
+            pairs = [_indexed_job(self.fly, item) for item in items]
+        else:
+            pairs = list(self._pool.imap_unordered(functools.partial(_indexed_job, self.fly), items, chunksize=1))
+        results = [None] * len(jobs)
+        for index, flown in pairs:
+            results[index] = flown
+        times = {}
+        for (level, _, _), flown in zip(jobs, results):
+            times.setdefault(level, []).append(flown.get('wall', 0.0))
+        self.estimates = {level: sum(t) / len(t) for level, t in times.items()}
+        return results
+
+    def close(self):
+        if self._pool is not None:
+            self._pool.close()
+            self._pool.join()
+            self._pool = None
 
 
 def make_gate(workers, seeds, decision_frames, turn_rate):
@@ -205,7 +249,8 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5,
     rng = np.random.default_rng(seed)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rollout = rollout or functools.partial(pool_rollout, shaping=shaping)
+    pooled = None if rollout else PoolRollout(workers, shaping)
+    rollout = rollout or (lambda jobs, count: pooled(jobs))
     gate = gate or make_gate(workers, check_seeds, decision_frames, turn_rate)
     net, ref = build_net(policy), build_net(policy)
     for parameter in ref.parameters():
@@ -214,31 +259,40 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5,
     current = out_dir / 'iter_start.npz'
     export(net, policy, current)
     history, best_score, best_path, passed = [], None, None, False
-    for iteration in range(iterations):
-        jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate)
-        flown = rollout(jobs, workers)
-        stats = improve(net, ref, optimiser, flown, policy.mean, policy.scale,
-                        kl_coefficient(iteration, iterations), rng)
-        results = [e['result'] for e in flown]
-        summary = mean_components(results)
-        stats.update(iteration=iteration, mean_return=float(np.mean([e['rewards'].sum() for e in flown])),
-                     score=summary['score'], kills_per_min=summary['kills_per_min'],
-                     wall_hits_per_min=summary['wall_hits_per_min'],
-                     hits_taken_per_min=summary['hits_taken_per_min'])
-        current = out_dir / f'iter{iteration:04d}.npz'
-        export(net, policy, current)
-        if (iteration + 1) % check_every == 0:
-            report = gate(current)
-            stats['gate_score'] = report['student']['score']
-            stats['gate_passed'] = bool(report['passed'])
-            if best_score is None or stats['gate_score'] > best_score:
-                best_score, best_path = stats['gate_score'], current
-                (out_dir / 'best.npz').write_bytes(current.read_bytes())
-            passed = bool(report['passed'])
-        history.append(stats)
-        log(' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items()))
-        if passed:
-            break
+    try:
+        for iteration in range(iterations):
+            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate)
+            t0 = time.perf_counter()
+            flown = rollout(jobs, workers)
+            t1 = time.perf_counter()
+            stats = improve(net, ref, optimiser, flown, policy.mean, policy.scale,
+                            kl_coefficient(iteration, iterations), rng)
+            results = [e['result'] for e in flown]
+            summary = mean_components(results)
+            stats.update(iteration=iteration, mean_return=float(np.mean([e['rewards'].sum() for e in flown])),
+                         score=summary['score'], kills_per_min=summary['kills_per_min'],
+                         wall_hits_per_min=summary['wall_hits_per_min'],
+                         hits_taken_per_min=summary['hits_taken_per_min'],
+                         rollout_s=t1 - t0, update_s=time.perf_counter() - t1)
+            current = out_dir / f'iter{iteration:04d}.npz'
+            export(net, policy, current)
+            if (iteration + 1) % check_every == 0:
+                t2 = time.perf_counter()
+                report = gate(current)
+                stats['gate_s'] = time.perf_counter() - t2
+                stats['gate_score'] = report['student']['score']
+                stats['gate_passed'] = bool(report['passed'])
+                if best_score is None or stats['gate_score'] > best_score:
+                    best_score, best_path = stats['gate_score'], current
+                    (out_dir / 'best.npz').write_bytes(current.read_bytes())
+                passed = bool(report['passed'])
+            history.append(stats)
+            log(' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items()))
+            if passed:
+                break
+    finally:
+        if pooled is not None:
+            pooled.close()
     (out_dir / 'iter_start.npz').unlink(missing_ok=True)
     return {'best': out_dir / 'best.npz' if best_path else None, 'history': history, 'passed': passed}
 

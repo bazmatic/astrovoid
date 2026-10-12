@@ -104,12 +104,55 @@ def test_the_checkpoints_are_flown_greedily_by_the_default_gate(tmp_path, monkey
 def test_the_default_rollout_carries_the_penalty_scales(monkeypatch, tmp_path):
     seen = []
 
-    def fake_pool(jobs, workers, shaping=None):
-        seen.append(shaping)
-        return fake_rollout_factory()(jobs, workers)
-    monkeypatch.setattr(ppo, 'pool_rollout', fake_pool)
+    class FakePool:
+        def __init__(self, workers, shaping=None):
+            seen.append(shaping)
+
+        def __call__(self, jobs):
+            return fake_rollout_factory()(jobs, 1)
+
+        def close(self):
+            seen.append('closed')
+    monkeypatch.setattr(ppo, 'PoolRollout', FakePool)
     start = tmp_path / 'start.npz'
     random_policy(0, hidden=16, embed=8).save(start)
     ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=4, workers=1, check_every=99,
                  shaping={'wall_scale': 5.0, 'still_penalty': 2.0}, log=lambda *_: None)
-    assert seen == [{'wall_scale': 5.0, 'still_penalty': 2.0}]
+    assert seen == [{'wall_scale': 5.0, 'still_penalty': 2.0}, 'closed']
+
+
+def test_each_iteration_logs_where_its_time_went(tmp_path):
+    start = tmp_path / 'start.npz'
+    random_policy(0, hidden=16, embed=8).save(start)
+    result = ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=4, workers=1, check_every=99,
+                          rollout=fake_rollout_factory(), log=lambda *_: None)
+    assert result['history'][0]['rollout_s'] >= 0 and result['history'][0]['update_s'] > 0
+
+
+def _timed_job(job):
+    import os
+    import time
+    level, seed, spec = job
+    time.sleep(0.02 * (level % 3))
+    return {'pid': os.getpid(), 'level': level, 'seed': seed, 'wall': 0.02 * (level % 3)}
+
+
+def test_longest_first_orders_by_the_level_estimates_and_keeps_unknown_levels_first():
+    jobs = [(13, 0, None), (14, 1, None), (15, 2, None), (16, 3, None)]
+    order = ppo.longest_first(jobs, {13: 5.0, 14: 9.0, 15: 1.0})
+    assert order == [3, 1, 0, 2]                       # level 16 is unknown: it goes first; then 9, 5, 1
+    assert ppo.longest_first(jobs, {}) == [0, 1, 2, 3]  # nothing known: submission order
+
+
+def test_the_pool_returns_results_in_job_order_and_reuses_its_workers():
+    jobs = [(level, level * 10, None) for level in (14, 13, 15, 14, 13, 15)]
+    pooled = ppo.PoolRollout(2, job=_timed_job)
+    try:
+        first = pooled(jobs)
+        second = pooled(jobs)
+    finally:
+        pooled.close()
+    assert [(e['level'], e['seed']) for e in first] == [(l, s) for l, s, _ in jobs]
+    assert [(e['level'], e['seed']) for e in second] == [(l, s) for l, s, _ in jobs]
+    assert {e['pid'] for e in first + second} <= {e['pid'] for e in first} | {e['pid'] for e in second}
+    assert len({e['pid'] for e in first + second}) <= 2          # two workers, the same two both times
