@@ -180,11 +180,6 @@ class Game:
         self.autoplay = AutoplayDirector(
             settings.firstLevel, settings.lastLevel, settings.timeLimitSeconds,
             no_kill_seconds=settings.noKillSeconds)
-        if not (config.SETTINGS.game.recordPilotDecisions
-                and config.SETTINGS.game.hunterPilot == 'jev'):
-            logging.getLogger(__name__).warning(
-                'Autoplay is running without recording Jev decisions: set game.hunterPilot '
-                'to "jev" and game.recordPilotDecisions to true to collect training data')
         self._begin_autoplay_level()
 
     def _begin_autoplay_level(self) -> None:

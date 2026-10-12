@@ -402,15 +402,12 @@ selects a model; the default is `jev-latest`. To enter the key privately for one
 venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
 ```
 
-### Offline student pilot
+### Choosing the hunter's pilot
 
 `game.hunterPilot` in `config/settings.json` chooses the hunter's pilot: `"jev"` (default),
-`"student"` (a small network trained to imitate Jev, no key or network needed), `"rules"` (the
-same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or training),
-or `"auto"` (Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
-to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a student with
-`venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
-`assets/student/jev_student.npz`.
+`"rules"` (the same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or
+training), or `"neural"` (a network that flies with the basic controls only; see
+`docs/superpowers/specs/2026-10-12-neural-student-design.md`).
 
 #### Unattended data collection
 
@@ -418,8 +415,7 @@ to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a 
 ship stays parked and cannot fail or finish a level; a hunter is summoned beside it and flies
 each level on its own. A level ends when the time limit passes, every enemy is destroyed, or
 the hunter dies, and the next level starts at once, wrapping from `autoplay.lastLevel` back to
-`autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
-`true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
+`autoplay.firstLevel`. Nothing is written to your profile. Esc or closing the window quits.
 Set `WINDOW_SIZE=1352x878` to run in a window of that size (the whole game world scales to it).
 The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
 `timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it

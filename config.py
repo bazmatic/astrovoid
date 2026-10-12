@@ -379,11 +379,9 @@ class GameSettings:
     criticalWarningThreshold: int
     hunterLevelInterval: int
     hunterFirstLevel: int
-    # Which pilot flies the hunter: "jev", "student" (the trained imitation), "rules" (the
-    # question criteria as plain code) or "auto" (Jev when it is available, the student otherwise).
+    # Which pilot flies the hunter: "jev", "rules" (the question criteria as plain code) or "neural"
+    # (a network that flies with the basic controls only).
     hunterPilot: str = "jev"
-    # Log Jev's decisions under .astrovoid-local/decisions/ as training data.
-    recordPilotDecisions: bool = False
 
 
 @dataclass
