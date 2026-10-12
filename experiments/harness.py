@@ -168,6 +168,11 @@ def _clear_overrides(game):
         game.__dict__.pop(name, None)
 
 
+def load_student_policy(student):
+    from experiments.student import load_policy
+    return load_policy(student)
+
+
 def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
@@ -195,7 +200,16 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     if hide_player:
         game._hunter_sees_player = lambda: False
     game.hunter_worker = SyncWorker(params, clock)
-    game._summon_hunter((game.ship.x, game.ship.y))
+    if student is not None and load_student_policy(student) is None:
+        raise ValueError(f'student weights unusable: {student.weights}')
+    # The lab builds its own pilot below; the game's neural setting must not leak into a rules episode.
+    configured = config.SETTINGS.game.hunterPilot
+    if configured == 'neural':
+        config.SETTINGS.game.hunterPilot = 'rules'
+    try:
+        game._summon_hunter((game.ship.x, game.ship.y))
+    finally:
+        config.SETTINGS.game.hunterPilot = configured
     hunter, controller = game.hunter, game.hunter_controller
     if student is None:
         controller.clock = clock

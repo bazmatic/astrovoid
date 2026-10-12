@@ -63,6 +63,12 @@ class NeuralPolicy:
             policy = cls({k: data[k] for k in _PARAMS}, data['mean'], data['scale'])
             if policy.params['embed_w'].shape[1] != SENSE_SIZE:
                 raise InvalidPolicy('senses layout differs from this build')
+            if policy.mean.shape != (SENSE_SIZE,) or policy.scale.shape != (SENSE_SIZE,):
+                raise InvalidPolicy('standardisation does not fit the senses layout')
+            logits, _ = policy.step(np.zeros(SENSE_SIZE, dtype=np.float32), policy.initial_state())
+            if not all(np.isfinite(v).all() and v.shape == (n,) for v, n in
+                       ((logits[k], HEAD_SIZES[k]) for k in HEAD_SIZES)):
+                raise InvalidPolicy('weights do not run')
             return policy
         except InvalidPolicy:
             raise

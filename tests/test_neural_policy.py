@@ -72,3 +72,15 @@ def test_load_rejects_missing_truncated_foreign_and_mismatched_files(tmp_path):
     np.savez(other, **data)
     with pytest.raises(InvalidPolicy, match='layout'):
         NeuralPolicy.load(other)
+
+
+def test_load_rejects_files_whose_internal_shapes_do_not_fit(tmp_path):
+    for key, bad in (('mean', np.zeros(SENSE_SIZE + 3, dtype=np.float32)),
+                     ('turn_w', np.zeros((3, 7), dtype=np.float32))):
+        path = tmp_path / f'{key}.npz'
+        random_policy(8).save(path)
+        data = dict(np.load(path))
+        data[key] = bad
+        np.savez(path, **data)
+        with pytest.raises(InvalidPolicy):
+            NeuralPolicy.load(path)

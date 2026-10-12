@@ -1,5 +1,7 @@
 """Asks the rules pilot what it would do at a state the student reached, for teacher-corrected rounds."""
 import asyncio
+import copy
+import random
 from hunter.fire_control import find_firing_solution
 from hunter.jev_pilot import JevPilot
 from hunter.model import NEUTRAL
@@ -15,18 +17,19 @@ TEACHER_INTERVAL_FRAMES = 15
 
 def snapshot(hunter):
     state = {name: getattr(hunter, name) for name in _FIELDS}
-    state['thrust_particles'] = list(hunter.thrust_particles)      # a list the step appends to
+    state['thrust_particles'] = copy.deepcopy(hunter.thrust_particles)      # the step appends to and edits these
     return state
 
 
 def restore(hunter, state):
     for name, value in state.items():
-        setattr(hunter, name, list(value) if name == 'thrust_particles' else value)
+        setattr(hunter, name, copy.deepcopy(value) if name == 'thrust_particles' else value)
 
 
 def trial_controls(game, hunter, action, frames):
     """The (turn, thrust, fire) the ship would execute over `frames` frames of `action`, state restored."""
     saved = snapshot(hunter)
+    random_state = random.getstate()           # the step's particles draw from the episode's seeded stream
     rate = hunter.current_rotation_speed
     record = []
     try:
@@ -43,6 +46,7 @@ def trial_controls(game, hunter, action, frames):
                            bool(hunter.pilot_thrusting), bool(action.fire or shots)))
     finally:
         restore(hunter, saved)
+        random.setstate(random_state)
     return step_labels(record, rate)
 
 

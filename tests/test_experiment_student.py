@@ -56,11 +56,6 @@ def test_a_different_turn_rate_changes_the_episode(spec, tmp_path):
            (b.kills, b.wall_hits, b.hits_taken, round(b.idle_seconds, 2))
 
 
-def test_a_missing_weights_file_makes_a_still_hunter_not_a_crash(tmp_path):
-    result = run_episode(13, 0, horizon=3.0, student=StudentSpec(weights=str(tmp_path / 'absent.npz')))
-    assert result.end in ('cleared', 'horizon')
-
-
 def test_evaluate_passes_the_student_to_each_episode(monkeypatch, spec):
     seen = []
 
@@ -78,3 +73,17 @@ def test_evaluate_passes_the_student_to_each_episode(monkeypatch, spec):
 
 def test_the_policy_is_loaded_once_per_process(spec):
     assert load_policy(spec) is load_policy(spec)
+
+
+def test_the_rules_episode_stays_the_rules_pilot_whatever_the_game_setting(monkeypatch):
+    from config import SETTINGS
+    from hunter.controller import HunterController
+    seen = []
+    monkeypatch.setattr(SETTINGS.game, 'hunterPilot', 'neural')
+    run_episode(13, 0, horizon=1.0, trace=lambda t, game, hunter: seen.append(game.hunter_controller))
+    assert seen and all(isinstance(c, HunterController) for c in seen)
+
+
+def test_a_missing_weights_file_is_an_error_in_the_lab(tmp_path):
+    with pytest.raises(ValueError, match='weights'):
+        run_episode(13, 0, horizon=1.0, student=StudentSpec(weights=str(tmp_path / 'absent.npz')))

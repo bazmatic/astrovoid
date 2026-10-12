@@ -100,3 +100,16 @@ def test_the_shadow_teacher_decides_every_fifteen_frames_and_labels_with_its_hel
     assert seen[0] is seen[14] and seen[15] is seen[29] and seen[15] is not seen[0]
     controls = teacher.label(game, hunter, 6)
     assert controls[0] in (0, 1, 2)
+
+
+def test_a_trial_does_not_disturb_the_global_random_stream_or_the_particles():
+    import copy
+    import random
+    game, hunter = real_game_at()
+    hunter.thrust_particles.append({'x': 1.0, 'y': 2.0, 'vx': 0.1, 'vy': 0.1, 'life': 5.0, 'size': 3.0})   # make sure there is one to mutate
+    random.seed(5)
+    state = random.getstate()
+    particles = copy.deepcopy(hunter.thrust_particles)
+    shadow.trial_controls(game, hunter, PilotAction(1, True, False), frames=6)
+    assert random.getstate() == state
+    assert hunter.thrust_particles == particles
