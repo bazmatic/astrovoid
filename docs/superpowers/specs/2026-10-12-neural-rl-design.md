@@ -26,10 +26,11 @@ Given at the moment each event happens, per episode:
 | a kill | +100 / (enemies at start + enemies spawned in that episode) |
 | a wall hit | -3.4 |
 | an enemy hit | -3.5 |
-| each second idle | -77 / episode length in seconds, summed over the idle frames |
+| each second idle | -77 / 60 (about -1.28), per second of idling |
 
-An episode's undiscounted return equals its lab score times its length in minutes (the lab's 45 s floor on short
-episodes is ignored in training; the gate still uses the lab's score). The weights are `experiments.score.Weights`,
+An episode's undiscounted return equals its lab score times its length in minutes (exactly, for episodes of at
+least 45 s; the lab's floor on shorter ones is ignored in training, and the gate still uses the lab's score). The
+idle term has this simple form because the lab's idle penalty is 77 x idle fraction x minutes = 77 x idle seconds / 60. The weights are `experiments.score.Weights`,
 imported, never copied. Discount 0.99 per decision step and GAE lambda 0.95 are starting values, recorded in the
 experiment notes if changed.
 
@@ -41,8 +42,10 @@ experiment notes if changed.
   counter. Deterministic given the policy, the seed and the random generator seed.
 - `tools/ppo_neural.py`: the learner. Loads the shipped `.npz` into the torch `TorchNet` (from `tools/train_neural.py`),
   runs iterations of rollouts across a worker pool, computes advantages (GAE) with a small learned value head, and
-  updates with the PPO clipped objective on windows of 64 consecutive steps, the first 16 as unscored warm-up (as in
-  stage 2). Adds a KL penalty towards the frozen imitation policy, fading over the first part of training. Saves the
+  updates with the PPO clipped objective on whole episodes (at most 900 decision steps) as sequences, so the memory
+  state during training is the continuous one the policy has in play. (Stage 2's 64-step windows with a warm-up were
+  for supervised learning; they would mismatch how the rollouts were generated.) Episode ends, including the horizon,
+  are treated as terminal. Adds a KL penalty towards the frozen imitation policy, fading over the first part of training. Saves the
   policy as the same `.npz` format; the value head is training-only and is not saved.
 - `experiments/neural_lab.py`: unchanged; it is the judge. A `--sample` switch is not needed (the gate flies greedily).
 - `NeuralController` already has `greedy` and `rng`; rollouts use `greedy=False` with a seeded generator.
