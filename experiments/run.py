@@ -31,23 +31,24 @@ def _use_dummy_drivers():
     os.environ['SDL_AUDIODRIVER'] = 'dummy'
 
 
-def _episode(level, seed, params, horizon, hide_player=True):
+def _episode(level, seed, params, horizon, hide_player=True, student=None):
     from experiments.harness import run_episode
-    return run_episode(level, seed, params, horizon, hide_player=hide_player)
+    return run_episode(level, seed, params, horizon, hide_player=hide_player, student=student)
 
 
 def _run_one(args):
-    level, seed, params_dict, horizon, hide_player = args
+    level, seed, params_dict, horizon, hide_player, student = args
     params = RuleParams(**params_dict)
     try:
-        return _episode(level, seed, params, horizon, hide_player)
+        return _episode(level, seed, params, horizon, hide_player, student)
     except Exception as exc:
         raise EpisodeError(
             f'level {level} seed {seed} params {params_dict}: {type(exc).__name__}: {exc}') from None
 
 
-def evaluate(params=DEFAULT, level_set='tune', seeds=SEEDS, horizon=90.0, workers=1, hide_player=True):
-    jobs = [(level, seed, params.to_dict(), horizon, hide_player)
+def evaluate(params=DEFAULT, level_set='tune', seeds=SEEDS, horizon=90.0, workers=1, hide_player=True,
+             student=None):
+    jobs = [(level, seed, params.to_dict(), horizon, hide_player, student)
             for level, seed in episode_list(level_set, seeds)]
     if workers <= 1:
         return [_run_one(job) for job in jobs]

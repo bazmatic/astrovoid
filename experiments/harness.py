@@ -159,7 +159,7 @@ def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
 
-_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
+_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_neural_senses')
 
 
 def _clear_overrides(game):
@@ -168,7 +168,8 @@ def _clear_overrides(game):
         game.__dict__.pop(name, None)
 
 
-def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None):
+def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
+                student=None, recorder=None, labeller=None, on_result=None):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
@@ -196,7 +197,15 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     game.hunter_worker = SyncWorker(params, clock)
     game._summon_hunter((game.ship.x, game.ship.y))
     hunter, controller = game.hunter, game.hunter_controller
-    controller.clock = clock
+    if student is None:
+        controller.clock = clock
+    else:
+        # A student flies through the game's own neural path: replace whatever controller the
+        # configured pilot built with a NeuralController on the student's weights.
+        from experiments.student import load_policy
+        from hunter.neural.controller import NeuralController
+        controller = NeuralController(load_policy(student), student.decision_frames, greedy=student.greedy)
+        game.hunter_controller = controller
     # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
     # with a real-clock controller) must not replace it, and no new beacon may drop.
     game._summon_hunter = lambda near: None
@@ -204,8 +213,14 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
     settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
                        sensor_range_fraction=params.sensor_range_fraction,
-                       turn_rate_multiplier=params.turn_rate_multiplier)
-    hunter.settings = controller.settings = settings
+                       turn_rate_multiplier=(params.turn_rate_multiplier if student is None
+                                             else student.turn_rate))
+    hunter.settings = settings
+    if student is None:
+        controller.settings = settings
+    else:
+        from hunter.senses import Senses
+        game.hunter_senses = Senses(settings)
     # The perception reads its own copy of the settings (how far the hunter sees).
     game.hunter_perception.settings = settings
     # The ship fixes its turn rate when it is built, so set it on the ship too.
