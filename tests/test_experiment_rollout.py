@@ -85,3 +85,35 @@ def test_a_hit_scale_multiplies_only_the_enemy_hit_penalty(spec):
     from experiments.score import Weights
     extra = 4.0 * Weights().hit * plain['result'].hits_taken
     assert float(plain['rewards'].sum() - heavy['rewards'].sum()) == pytest.approx(extra, rel=1e-4, abs=1e-3)
+
+
+class _Counter:
+    kills = wall_hits = hits_taken = spawned = 0
+    idle_seconds = 0.0
+
+
+def _fly_frames(recorder, speeds, max_speed=10.0):
+    """Feed the recorder one decision step of frames at the given speeds (no events happen)."""
+    from types import SimpleNamespace
+    recorder._start_enemies = 1
+    for frame, speed in enumerate(speeds):
+        controller = SimpleNamespace(frames=frame, last_controls=(1, 0, 0))
+        game = SimpleNamespace(hunter_controller=controller)
+        hunter = SimpleNamespace(vx=speed, vy=0.0, max_speed=max_speed)
+        recorder.before_frame(game, hunter)
+        recorder.counted(_Counter(), frame / 60.0)
+        if frame == 0:
+            recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
+        recorder.after_frame()
+    return recorder.arrays()[2]
+
+
+def test_near_motionless_frames_cost_the_still_penalty_per_second():
+    recorder = rollout.RolloutRecorder(6, still_penalty=3.0, still_speed=0.15)
+    rewards = _fly_frames(recorder, [0.0, 0.5, 1.4, 1.6, 5.0, 9.0])       # 3 frames under 15% of 10
+    assert rewards[0] == pytest.approx(-3.0 * 3 / 60.0)
+
+
+def test_moving_hunters_and_the_default_pay_no_still_penalty():
+    assert _fly_frames(rollout.RolloutRecorder(6, still_penalty=3.0), [5.0] * 6)[0] == 0.0
+    assert _fly_frames(rollout.RolloutRecorder(6), [0.0] * 6)[0] == 0.0

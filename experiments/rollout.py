@@ -1,6 +1,7 @@
 """Flies the neural student with sampled controls and records what it needs to learn from the episode."""
+import math
 import numpy as np
-from experiments.harness import run_episode
+from experiments.harness import FPS, run_episode
 from experiments.score import Weights
 from hunter.rule_params import RULES
 from hunter.senses import SENSE_SIZE
@@ -11,12 +12,14 @@ KILL_REWARD_TOTAL = 100.0       # shared across every enemy that existed in the 
 class RolloutRecorder:
     """Per decision step: the senses, the controls the policy chose, and the events that followed."""
 
-    def __init__(self, decision_frames, wall_scale=1.0, hit_scale=1.0):
+    def __init__(self, decision_frames, wall_scale=1.0, hit_scale=1.0, still_penalty=0.0, still_speed=0.15):
         self.decision_frames = decision_frames
         self.wall_scale = wall_scale      # shaping: multiplies the wall-hit penalty in the reward only
         self.hit_scale = hit_scale        # likewise for the enemy-hit penalty
+        self.still_penalty = still_penalty    # shaping: points lost per second spent slower than still_speed
+        self.still_speed = still_speed        # as a fraction of the hunter's top speed
         self.senses, self.controls = [], []
-        self._events = []                 # per step: kills, wall hits, enemy hits, idle seconds
+        self._events = []                 # per step: kills, wall hits, enemy hits, idle seconds, near-still seconds
         self._pending = False
         self._controller = None
         self._counter = None
@@ -39,7 +42,9 @@ class RolloutRecorder:
         self._controller = game.hunter_controller
         if self._controller.frames % self.decision_frames == 0:
             self._pending = True
-            self._events.append([0, 0, 0, 0.0])
+            self._events.append([0, 0, 0, 0.0, 0.0])
+        if self._events and math.hypot(hunter.vx, hunter.vy) < self.still_speed * hunter.max_speed:
+            self._events[-1][4] += 1.0 / FPS
 
     def add_frame(self, rotation, engine, trigger):
         pass
@@ -62,16 +67,18 @@ class RolloutRecorder:
         spawned = self._counter.spawned if self._counter is not None else 0
         total = max(self._start_enemies + spawned, 1)
         weights = Weights()
-        events = np.asarray(self._events[:n], dtype=np.float64).reshape(n, 4)
+        events = np.asarray(self._events[:n], dtype=np.float64).reshape(n, 5)
         rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.wall * self.wall_scale * events[:, 1]
-                   - weights.hit * self.hit_scale * events[:, 2] - weights.idle / 60.0 * events[:, 3])
+                   - weights.hit * self.hit_scale * events[:, 2] - weights.idle / 60.0 * events[:, 3]
+                   - self.still_penalty * events[:, 4])
         return (np.asarray(self.senses[:n], dtype=np.float32).reshape(n, SENSE_SIZE),
                 np.asarray(self.controls[:n], dtype=np.int8).reshape(n, 3),
                 rewards.astype(np.float32))
 
 
-def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0):
-    recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale)
+def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
+                still_penalty=0.0, still_speed=0.15):
+    recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed)
     result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder)
     senses, controls, rewards = recorder.arrays()
     return {'senses': senses, 'controls': controls, 'rewards': rewards, 'result': result}
