@@ -48,6 +48,9 @@ from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
 from hunter.fire_control import find_firing_solution
 from hunter.perception import HunterPerception
+from hunter.senses import Senses
+from hunter.neural.controller import NeuralController
+from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
@@ -92,6 +95,7 @@ class Game:
         self.hunter = None
         self.hunter_controller = None
         self.hunter_perception = None
+        self.hunter_senses = None
         self.hunter_worker = None
         self.jev_beacon_level = False
         
@@ -388,6 +392,7 @@ class Game:
         self.hunter = None
         self.hunter_controller = None
         self.hunter_perception = None
+        self.hunter_senses = None
 
     def _summon_hunter(self, near) -> None:
         """Bring the hunter in beside a collected Jev beacon, replacing one that has died."""
@@ -397,12 +402,29 @@ class Game:
             logging.getLogger(__name__).warning('Hunter not summoned: %s', exc)
             return
         self._close_hunter()
-        settings = hunter_settings_for(config.SETTINGS.game.hunterPilot)
+        mode = config.SETTINGS.game.hunterPilot
+        settings = hunter_settings_for(mode)
         self.hunter = HunterShip(pos, settings)
         self.hunter_perception = HunterPerception(settings)
+        if mode == 'neural':
+            self.hunter_senses = Senses(settings)
+            self.hunter_controller = NeuralController(
+                load_neural_policy(), config.SETTINGS.game.neuralDecisionFrames)
+            return
         if self.hunter_worker is None:
             self.hunter_worker = PilotWorker()
         self.hunter_controller = HunterController(self.hunter_worker, settings)
+
+    def _hunter_entities(self):
+        return [enemy for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
+                                    self.split_bosses, self.mother_bosses, self.babies, self.eggs,
+                                    self.anemones) for enemy in group]
+
+    def _neural_senses(self, last_controls, now):
+        return self.hunter_senses.observe(
+            self.hunter, self.maze, self._hunter_entities(), self.projectiles,
+            [c for c in self.powerup_crystals if not isinstance(c, JevBeacon)],
+            self.ship if self._hunter_sees_player() else None, last_controls, now)
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -420,13 +442,14 @@ class Game:
         def observe(now, generation):
             return self.hunter_perception.observe(
                 self.hunter, self.maze, self.ship if self._hunter_sees_player() else None,
-                [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
-                 self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones)
-                 for enemy in group], self.projectiles,
+                self._hunter_entities(), self.projectiles,
                 self.hunter_controller.action, now, generation,
                 # A Jev beacon is the player's to collect, not the hunter's
                 powerups=[c for c in self.powerup_crystals if not isinstance(c, JevBeacon)])
-        action = self.hunter_controller.tick(observe)
+        if getattr(self.hunter_controller, 'kind', None) == 'neural':
+            action = self.hunter_controller.tick(self._neural_senses)
+        else:
+            action = self.hunter_controller.tick(observe)
         if self.hunter_controller.status != 'active':
             self.hunter.cancel_burst()
         # Fire control is only consulted while the pilot is engaging something.

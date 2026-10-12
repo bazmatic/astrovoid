@@ -47,3 +47,10 @@ def test_the_game_builds_the_hunter_for_the_pilot_that_flies_it(game, monkeypatc
     assert game.hunter_perception.settings.turn_rate_multiplier == turn
     assert game.hunter_controller.settings.turn_rate_multiplier == turn
     assert hunter.current_rotation_speed == pytest.approx(hunter.base_rotation_speed * turn)
+
+
+def test_the_neural_pilot_gets_its_own_turn_rate_and_nothing_else_changes():
+    from dataclasses import replace
+    neural = hunter_settings_for('neural')
+    assert neural.turn_rate_multiplier == SETTINGS.game.neuralTurnRate
+    assert replace(neural, turn_rate_multiplier=HunterSettings().turn_rate_multiplier) == HunterSettings()

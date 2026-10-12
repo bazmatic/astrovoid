@@ -12,6 +12,9 @@ def hunter_settings_for(mode):
     angle (course and track modes), so its hunter takes the turn rate the lab found best
     (docs/experiments/010-turn-rate.md). Both are otherwise the same hunter.
     """
+    if mode == 'neural':
+        import config
+        return replace(HunterSettings(), turn_rate_multiplier=config.SETTINGS.game.neuralTurnRate)
     if mode == 'rules':
         return replace(HunterSettings(), thrust_multiplier=RULES.thrust_multiplier,
                        sensor_range_fraction=RULES.sensor_range_fraction,

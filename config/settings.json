@@ -335,7 +335,9 @@
     "criticalWarningThreshold": 20,
     "hunterLevelInterval": 1,
     "hunterFirstLevel": 4,
-    "hunterPilot": "jev"
+    "hunterPilot": "jev",
+    "neuralDecisionFrames": 6,
+    "neuralTurnRate": 1.0
   },
   "autoplay": {
     "firstLevel": 13,

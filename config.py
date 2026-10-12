@@ -382,6 +382,10 @@ class GameSettings:
     # Which pilot flies the hunter: "jev", "rules" (the question criteria as plain code) or "neural"
     # (a network that flies with the basic controls only).
     hunterPilot: str = "jev"
+    # The neural pilot decides every this many frames and holds its controls between, and its hunter
+    # turns at this share of the player's rate.
+    neuralDecisionFrames: int = 6
+    neuralTurnRate: float = 1.0
 
 
 @dataclass
