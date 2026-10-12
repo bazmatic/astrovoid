@@ -76,3 +76,12 @@ def test_a_wall_scale_multiplies_only_the_wall_penalty(spec):
     from experiments.score import Weights
     extra = 4.0 * Weights().wall * plain['result'].wall_hits
     assert float(plain['rewards'].sum() - heavy['rewards'].sum()) == pytest.approx(extra, rel=1e-4, abs=1e-3)
+
+
+def test_a_hit_scale_multiplies_only_the_enemy_hit_penalty(spec):
+    plain = rollout.fly_rollout(14, 300, spec, horizon=50.0)
+    heavy = rollout.fly_rollout(14, 300, spec, horizon=50.0, hit_scale=5.0)
+    assert heavy['result'] == plain['result']
+    from experiments.score import Weights
+    extra = 4.0 * Weights().hit * plain['result'].hits_taken
+    assert float(plain['rewards'].sum() - heavy['rewards'].sum()) == pytest.approx(extra, rel=1e-4, abs=1e-3)

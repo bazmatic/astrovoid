@@ -163,15 +163,15 @@ def kl_coefficient(iteration, iterations, start=0.1, end=0.02, fade=0.5):
     return end if iteration >= span else start + (end - start) * iteration / span
 
 
-def _rollout_job(job, wall_scale=1.0):
+def _rollout_job(job, wall_scale=1.0, hit_scale=1.0):
     from experiments.rollout import fly_rollout
     level, seed, spec = job
-    return fly_rollout(level, seed, spec, wall_scale=wall_scale)
+    return fly_rollout(level, seed, spec, wall_scale=wall_scale, hit_scale=hit_scale)
 
 
-def pool_rollout(jobs, workers, wall_scale=1.0):
+def pool_rollout(jobs, workers, wall_scale=1.0, hit_scale=1.0):
     from experiments import run
-    fly = functools.partial(_rollout_job, wall_scale=wall_scale)
+    fly = functools.partial(_rollout_job, wall_scale=wall_scale, hit_scale=hit_scale)
     if workers <= 1:
         return [fly(job) for job in jobs]
     import multiprocessing
@@ -197,7 +197,7 @@ def make_gate(workers, seeds, decision_frames, turn_rate):
 
 
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5, check_seeds=6, lr=1e-4,
-             seed=0, decision_frames=6, turn_rate=1.0, rollout=None, gate=None, log=print, wall_scale=1.0):
+             seed=0, decision_frames=6, turn_rate=1.0, rollout=None, gate=None, log=print, wall_scale=1.0, hit_scale=1.0):
     import torch
     from experiments.score import mean_components
     policy = NeuralPolicy.load(start)                  # raises InvalidPolicy: never train from nothing
@@ -205,7 +205,7 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5,
     rng = np.random.default_rng(seed)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    rollout = rollout or functools.partial(pool_rollout, wall_scale=wall_scale)
+    rollout = rollout or functools.partial(pool_rollout, wall_scale=wall_scale, hit_scale=hit_scale)
     gate = gate or make_gate(workers, check_seeds, decision_frames, turn_rate)
     net, ref = build_net(policy), build_net(policy)
     for parameter in ref.parameters():
@@ -254,11 +254,13 @@ def main(argv=None):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--wall-scale', type=float, default=1.0,
                         help='multiplies the wall-hit penalty in the training reward (the gate is unchanged)')
+    parser.add_argument('--hit-scale', type=float, default=1.0,
+                        help='multiplies the enemy-hit penalty in the training reward (the gate is unchanged)')
     args = parser.parse_args(argv)
     from experiments import run
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers,
-                      args.check_every, lr=args.lr, wall_scale=args.wall_scale)
+                      args.check_every, lr=args.lr, wall_scale=args.wall_scale, hit_scale=args.hit_scale)
     print('gate passed on the tune set' if result['passed'] else 'budget used without passing the tune gate',
           '| best:', result['best'])
 
