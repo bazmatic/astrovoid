@@ -116,7 +116,8 @@ Each is a lab comparison on the student, with the notebook entries in `docs/expe
 ## Removed
 
 The Jev-imitating student: `hunter/student/` (client, network, encoder, recorder), `tools/train_student.py`,
-`assets/student/`, `requirements-train.txt` entries only it needed, the `student` and `auto` modes,
+`assets/student/`, the scikit-learn line of `requirements-train.txt` (torch stays for the new trainer), the
+`student` and `auto` modes,
 `game.recordPilotDecisions`, and their tests and README sections. Autoplay stays without its recording hook;
 the rules lab and Jev stay.
 
