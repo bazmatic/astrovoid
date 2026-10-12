@@ -337,7 +337,8 @@
     "hunterFirstLevel": 4,
     "hunterPilot": "jev",
     "neuralDecisionFrames": 6,
-    "neuralTurnRate": 1.0
+    "neuralTurnRate": 1.0,
+    "lowGraphics": false
   },
   "autoplay": {
     "firstLevel": 13,

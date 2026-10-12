@@ -9,6 +9,8 @@ keeps it from going slack.
 import math
 from typing import Callable, List, Tuple
 
+import config
+
 Point = Tuple[float, float]
 
 
@@ -33,6 +35,8 @@ def drag_chain(
         stiffness_tip: Pull towards the rest pose at the tip.
         snap: Jump straight to the rest pose, e.g. on first use or after a teleport.
     """
+    if config.SETTINGS.game.lowGraphics and not snap:
+        return                  # tentacles only look different: leave them where they are
     chain[0] = anchor
     last = len(chain) - 1
     for i in range(1, len(chain)):

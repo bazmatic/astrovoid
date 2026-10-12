@@ -173,7 +173,7 @@ def load_student_policy(student):
     return load_policy(student)
 
 
-def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
+def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
@@ -306,3 +306,14 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     if on_result is not None:
         on_result(result)
     return result
+
+
+def run_episode(*args, low_graphics=True, **kwargs):
+    """One episode (see _run_episode). Tentacle physics is off unless asked for: nothing in the game reads it."""
+    import config
+    previous = config.SETTINGS.game.lowGraphics
+    config.SETTINGS.game.lowGraphics = low_graphics
+    try:
+        return _run_episode(*args, **kwargs)
+    finally:
+        config.SETTINGS.game.lowGraphics = previous

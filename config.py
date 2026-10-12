@@ -386,6 +386,9 @@ class GameSettings:
     # turns at this share of the player's rate.
     neuralDecisionFrames: int = 6
     neuralTurnRate: float = 1.0
+    # Skips the drag physics of squid and jellyfish tentacles (they only look different: nothing reads them).
+    # The lab turns it on for training and evaluation, where nobody watches.
+    lowGraphics: bool = False
 
 
 @dataclass
