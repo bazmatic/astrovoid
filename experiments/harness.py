@@ -218,7 +218,10 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
         # configured pilot built with a NeuralController on the student's weights.
         from experiments.student import load_policy
         from hunter.neural.controller import NeuralController
-        controller = NeuralController(load_policy(student), student.decision_frames, greedy=student.greedy)
+        import numpy as np
+        controller = NeuralController(
+            load_policy(student), student.decision_frames, greedy=student.greedy,
+            rng=None if student.greedy else np.random.default_rng(student.sample_seed))
         game.hunter_controller = controller
     # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
     # with a real-clock controller) must not replace it, and no new beacon may drop.
@@ -289,6 +292,8 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
         alive = _active_enemies(game)
         counter.observe(alive)
         counter.tick(elapsed)
+        if recorder is not None and hasattr(recorder, 'counted'):
+            recorder.counted(counter, elapsed)
         if trace is not None:
             trace(elapsed, game, hunter)
         if start_enemies and not alive:

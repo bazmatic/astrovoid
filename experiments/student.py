@@ -10,6 +10,7 @@ class StudentSpec:
     decision_frames: int = 6
     turn_rate: float = 1.0
     greedy: bool = True
+    sample_seed: int = 0          # seeds the sampling generator when greedy is False
 
 
 @functools.lru_cache(maxsize=8)
