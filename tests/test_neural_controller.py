@@ -83,3 +83,17 @@ def test_close_stops_it():
     controller = NeuralController(random_policy(6), decision_frames=1)
     controller.close()
     assert controller.tick(Spy()) == NEUTRAL
+
+
+def test_an_override_replaces_exactly_one_decision_and_is_then_cleared():
+    from hunter.model import PilotAction
+    controller = NeuralController(random_policy(7), decision_frames=2)
+    spy = Spy()
+    controller.tick(spy)                                   # frame 0 decides normally
+    controller.override = PilotAction(1, True, True)       # the teacher's choice for the next decision
+    controller.tick(spy)                                   # frame 1: held, override not yet used
+    taken = controller.tick(spy)                           # frame 2: decides, override applies
+    assert taken == PilotAction(1, True, True) and controller.override is None
+    assert controller.last_controls == (2, 1, 1)
+    controller.tick(spy)
+    assert controller.tick(spy) is not taken               # frame 4 decides normally again

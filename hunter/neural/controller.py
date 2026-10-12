@@ -15,6 +15,7 @@ class NeuralController:
         self.unavailable = policy is None
         self.closed = False
         self.action = NEUTRAL
+        self.override = None          # a PilotAction that replaces the next decision (teacher-corrected rounds)
         self.status = 'unavailable' if self.unavailable else 'waiting'
         self.frames = 0
         self.last_controls = (1, 0, 0)
@@ -45,6 +46,10 @@ class NeuralController:
             controls, self._state = self.policy.act(senses, self._state, self.greedy, self.rng)
             self.last_controls = (controls[0], 1 if controls[1] else 0, 1 if controls[2] else 0)
             self.action = to_action(controls)
+            if self.override is not None:
+                self.action, self.override = self.override, None
+                self.last_controls = (self.action.turn + 1, 1 if self.action.thrust else 0,
+                                      1 if self.action.fire else 0)
         self.frames += 1
         self.status = 'active'
         return self.action
