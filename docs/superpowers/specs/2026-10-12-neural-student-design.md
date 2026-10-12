@@ -1,5 +1,7 @@
 # Neural student: a basic-controls pilot, taught by the rules pilot
 
+Status: implemented on branch feat/neural-student; results in docs/experiments/012-014. The closed-loop gate was not met (held-out score ratio 0.58, wall hits x5.9, enemy hits x2.1); the owner accepted the policy as the starting point for stage 3.
+
 ## Goal and context
 
 The Jev-imitating student is replaced by a student that flies the hunter with only the basic controls the

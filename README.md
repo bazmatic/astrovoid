@@ -409,6 +409,15 @@ venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = 
 training), or `"neural"` (a network that flies with the basic controls only; see
 `docs/superpowers/specs/2026-10-12-neural-student-design.md`).
 
+The neural pilot decides every `game.neuralDecisionFrames` frames and turns at `game.neuralTurnRate` times the
+player's rate. Its weights are `assets/neural/hunter.npz` (the hunter coasts and shows as unavailable if the
+file is missing or does not match the senses layout). To rebuild them: record the rules pilot with
+`venv/bin/python -m experiments.teach`, train with `venv/bin/python -m tools.train_neural --data DIR --out PATH`
+(needs `requirements-train.txt`), then run corrected rounds with `venv/bin/python -m experiments.dagger` and
+check the gate with `venv/bin/python -m experiments.neural_lab gate --weights PATH`. The experiments are
+written up in `docs/experiments/012` to `014`. The shipped policy did not meet the gate (held-out score 0.58 of
+the rules pilot's, about 6 times its wall hits); it is the starting point for learning from environmental feedback.
+
 #### Unattended data collection
 
 `AUTOPLAY=1 ./run.sh` skips the menus and runs levels with no one at the controls. The player
