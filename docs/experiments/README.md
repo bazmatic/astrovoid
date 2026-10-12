@@ -38,6 +38,9 @@ paired 95% bootstrap interval on the tune set excludes zero.
 | 009 | [sensor range](009-sensor-range.md) | +18.4 (0.8) | +6.5 (0.8) | **adopted for every pilot** (0.8); current reference 78.7 / 73.6 |
 | 010 | [turn rate](010-turn-rate.md) | +25.9 (2.0) | +27.4 (2.0) | **adopted for the rules pilot only** (2.0); current reference 103.0 / 88.2 |
 | 011 | [hunt first](011-hunt-first.md) | +0.1 (player visible) | | adopted for the rules pilot; lab cannot see the benefit |
+| 012 | [neural turn rate](012-neural-turn-rate.md) | | | student round 0 fails the gate at every rate; 1.0 chosen |
+| 013 | [neural decision rate](013-neural-decision-rate.md) | | | 6 frames kept; 3 not clearly better |
+| 014 | [neural rounds](014-neural-rounds.md) | | | five rounds: score ratio 0.83 best, walls x5; held-out gate failed (0.58), accepted |
 
 Add an entry per experiment: hypothesis, prediction, change, results with all terms, decision.
 
