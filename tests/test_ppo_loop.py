@@ -99,3 +99,17 @@ def test_the_checkpoints_are_flown_greedily_by_the_default_gate(tmp_path, monkey
     assert 'passed' in report and 'student' in report
     gate(str(tmp_path / 'again.npz'))
     assert sum(1 for s in seen if s is None) == 1              # the rules reference is flown once
+
+
+def test_the_default_rollout_carries_the_wall_scale(monkeypatch, tmp_path):
+    seen = []
+
+    def fake_pool(jobs, workers, wall_scale=1.0):
+        seen.append(wall_scale)
+        return fake_rollout_factory()(jobs, workers)
+    monkeypatch.setattr(ppo, 'pool_rollout', fake_pool)
+    start = tmp_path / 'start.npz'
+    random_policy(0, hidden=16, embed=8).save(start)
+    ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=4, workers=1, check_every=99,
+                 wall_scale=5.0, log=lambda *_: None)
+    assert seen == [5.0]

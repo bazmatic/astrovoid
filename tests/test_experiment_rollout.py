@@ -67,3 +67,12 @@ def test_the_weights_file_is_not_modified_by_flying(spec):
     before = open(spec.weights, 'rb').read()
     rollout.fly_rollout(14, 301, spec, horizon=4.0)
     assert open(spec.weights, 'rb').read() == before
+
+
+def test_a_wall_scale_multiplies_only_the_wall_penalty(spec):
+    plain = rollout.fly_rollout(14, 300, spec, horizon=50.0)
+    heavy = rollout.fly_rollout(14, 300, spec, horizon=50.0, wall_scale=5.0)
+    assert heavy['result'] == plain['result']                          # flying is unchanged
+    from experiments.score import Weights
+    extra = 4.0 * Weights().wall * plain['result'].wall_hits
+    assert float(plain['rewards'].sum() - heavy['rewards'].sum()) == pytest.approx(extra, rel=1e-4, abs=1e-3)

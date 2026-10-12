@@ -11,8 +11,9 @@ KILL_REWARD_TOTAL = 100.0       # shared across every enemy that existed in the 
 class RolloutRecorder:
     """Per decision step: the senses, the controls the policy chose, and the events that followed."""
 
-    def __init__(self, decision_frames):
+    def __init__(self, decision_frames, wall_scale=1.0):
         self.decision_frames = decision_frames
+        self.wall_scale = wall_scale      # shaping: multiplies the wall-hit penalty in the reward only
         self.senses, self.controls = [], []
         self._events = []                 # per step: kills, wall hits, enemy hits, idle seconds
         self._pending = False
@@ -61,15 +62,15 @@ class RolloutRecorder:
         total = max(self._start_enemies + spawned, 1)
         weights = Weights()
         events = np.asarray(self._events[:n], dtype=np.float64).reshape(n, 4)
-        rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.wall * events[:, 1]
+        rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.wall * self.wall_scale * events[:, 1]
                    - weights.hit * events[:, 2] - weights.idle / 60.0 * events[:, 3])
         return (np.asarray(self.senses[:n], dtype=np.float32).reshape(n, SENSE_SIZE),
                 np.asarray(self.controls[:n], dtype=np.int8).reshape(n, 3),
                 rewards.astype(np.float32))
 
 
-def fly_rollout(level, seed, spec, horizon=90.0):
-    recorder = RolloutRecorder(spec.decision_frames)
+def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0):
+    recorder = RolloutRecorder(spec.decision_frames, wall_scale)
     result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder)
     senses, controls, rewards = recorder.arrays()
     return {'senses': senses, 'controls': controls, 'rewards': rewards, 'result': result}
