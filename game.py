@@ -57,6 +57,12 @@ from hunter.worker import PilotWorker
 import logging
 
 
+
+def _hunter_hotkey_enabled() -> bool:
+    """Whether the H test key may call in the hunter: set ASTROVOID_HUNTER_HOTKEY to 1 (off by default)."""
+    return os.environ.get('ASTROVOID_HUNTER_HOTKEY', '').strip().lower() not in ('', '0', 'false', 'no')
+
+
 class Game:
     """Main game class managing state and game loop."""
     autoplay = None  # An AutoplayDirector when the game runs unattended (AUTOPLAY=1)
@@ -463,6 +469,21 @@ class Game:
             self.projectiles.extend(shots)
         self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
 
+    def _hotkey_summon_hunter(self) -> None:
+        """Test key (ASTROVOID_HUNTER_HOTKEY): call the hunter in now.
+
+        A Jev beacon still lying in the level is the hunter waiting to be called, so it is collected as the
+        player would, rather than a second hunter being added. With none left, the hunter appears beside the
+        ship, replacing any that is flying.
+        """
+        beacon = next((c for c in self.powerup_crystals if isinstance(c, JevBeacon) and c.active), None)
+        if beacon is not None:
+            beacon.die()
+            self.sound_manager.play_powerup_activation()
+            self._summon_hunter(beacon.get_pos())
+        else:
+            self._summon_hunter((self.ship.x, self.ship.y))
+
     def _stop_dead_hunter(self) -> None:
         if self.hunter is not None and not self.hunter.active:
             self.hunter_controller.close()
@@ -492,6 +513,8 @@ class Game:
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_h and self.state == config.STATE_PLAYING and _hunter_hotkey_enabled():
+                    self._hotkey_summon_hunter()
                 # Handle splash screen input
                 if self.state == config.STATE_SPLASH and self.splash_screen:
                     self.splash_screen.handle_event(event)

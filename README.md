@@ -418,6 +418,10 @@ check the gate with `venv/bin/python -m experiments.neural_lab gate --weights PA
 written up in `docs/experiments/012` to `014`. The shipped policy did not meet the gate (held-out score 0.58 of
 the rules pilot's, about 6 times its wall hits); it is the starting point for learning from environmental feedback.
 
+To try a pilot without hunting for a Jev beacon, start the game with `ASTROVOID_HUNTER_HOTKEY=1` (for example
+`ASTROVOID_HUNTER_HOTKEY=1 ./run.sh`): pressing **H** during a level collects the beacon if one is still lying there, otherwise
+calls the hunter in beside your ship (replacing one that is flying). The key does nothing without the variable.
+
 #### Unattended data collection
 
 `AUTOPLAY=1 ./run.sh` skips the menus and runs levels with no one at the controls. The player
