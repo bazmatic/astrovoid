@@ -344,8 +344,9 @@ def main(argv=None):
     from experiments import run
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers,
-                      args.check_every, lr=args.lr, gate_limits=None if args.always_check else GATE_LIMITS, shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
-                                'still_penalty': args.still_penalty})
+                      args.check_every, lr=args.lr, gate_limits=None if args.always_check else GATE_LIMITS,
+                      shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
+                               'still_penalty': args.still_penalty})
     print('gate passed on the tune set' if result['passed'] else 'budget used without passing the tune gate',
           '| best:', result['best'])
 
