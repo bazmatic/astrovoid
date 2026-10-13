@@ -1,6 +1,6 @@
 # Pilot Duel and the "Fun" menu
 
-Status: design, awaiting review.
+Status: implemented on branch feat/pilot-duel.
 
 ## Goal
 

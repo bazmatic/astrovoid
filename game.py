@@ -515,6 +515,7 @@ class Game:
         self._close_hunter()
         random.seed(0)
         self.maze = Maze(1, complexity=MazeComplexity.EMPTY, grid_size=DUEL_GRID_SIZE)
+        self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
         self.ship = Ship(self.maze.start_pos)    # the hidden spectator: only here so spawns keep clear of it
         self.projectiles = []
         worker = self._make_duel_worker()
