@@ -145,6 +145,7 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_START = ROOT / 'assets' / 'neural' / 'hunter.npz'
 DEFAULT_OUT = ROOT / '.astrovoid-local' / 'neural' / 'rl'
 TRAIN_SEEDS = 100             # seeds 300-399
+DEFAULT_HORIZON = 90.0        # seconds of game time per training episode unless the shaping says otherwise
 
 
 def make_jobs(iteration, count, weights, decision_frames, turn_rate):
@@ -281,6 +282,8 @@ def main(argv=None):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--wall-scale', type=float, default=1.0,
                         help='multiplies the wall-collision penalty in the training reward (the score is unchanged)')
+    parser.add_argument('--horizon', type=float, default=DEFAULT_HORIZON,
+                        help='seconds of game time per training episode')
     parser.add_argument('--still-penalty', type=float, default=0.0,
                         help='points lost per second spent near-motionless in the training reward')
     parser.add_argument('--hit-scale', type=float, default=1.0,
@@ -290,7 +293,7 @@ def main(argv=None):
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
-                               'still_penalty': args.still_penalty})
+                               'still_penalty': args.still_penalty, 'horizon': args.horizon})
     print('done | last checkpoint:', result['last'])
 
 

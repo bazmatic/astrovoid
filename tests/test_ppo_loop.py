@@ -143,3 +143,13 @@ def test_progress_lines_are_flushed_so_a_redirected_log_shows_them(monkeypatch):
     monkeypatch.setattr(sys, 'stdout', Spy())
     ppo.log_line('iteration=0')
     assert Spy.flushes >= 1
+
+
+def test_the_training_horizon_comes_from_the_shaping_and_defaults_to_ninety_seconds(tmp_path):
+    path = tmp_path / 'p.npz'
+    random_policy(0).save(path)
+    from experiments.student import StudentSpec
+    job = (14, 300, StudentSpec(weights=str(path), greedy=False))
+    short = ppo._rollout_job(job, shaping={'horizon': 4.0})
+    assert short['result'].elapsed == pytest.approx(4.0, abs=0.05) and short['result'].end == 'horizon'
+    assert ppo.DEFAULT_HORIZON == 90.0
