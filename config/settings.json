@@ -341,8 +341,8 @@
     "lowGraphics": false,
     "duelHealth": 5,
     "duelTimeoutSeconds": 120.0,
-    "duelMazeComplexity": "EXTREME",
-    "duelMazeGridSize": 32
+    "duelMazeComplexity": "COMPLEX",
+    "duelMazeGridSize": 26
   },
   "autoplay": {
     "firstLevel": 13,

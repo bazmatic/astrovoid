@@ -393,9 +393,9 @@ class GameSettings:
     duelHealth: int = 5
     duelTimeoutSeconds: float = 120.0
     # The duel's maze: a complexity name (EMPTY, SIMPLE, NORMAL, COMPLEX or EXTREME) and its cells per side.
-    # EXTREME at 32 is how the densest real levels (20 to 27) are built.
-    duelMazeComplexity: str = "EXTREME"
-    duelMazeGridSize: int = 32
+    # COMPLEX at 26 is how real level 13 is built.
+    duelMazeComplexity: str = "COMPLEX"
+    duelMazeGridSize: int = 26
 
 
 @dataclass

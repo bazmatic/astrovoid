@@ -69,7 +69,7 @@ def _hunter_hotkey_enabled() -> bool:
 
 
 DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel returns to the FUN list
-DUEL_MAZE_LEVEL = 27          # the level number the duel's maze is generated as (its look and seed)
+DUEL_MAZE_LEVEL = 13          # the level number the duel's maze is generated as (its look and seed)
 
 class Game:
     """Main game class managing state and game loop."""

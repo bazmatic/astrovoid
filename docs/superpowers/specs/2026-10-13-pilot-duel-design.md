@@ -5,7 +5,7 @@ Status: implemented on branch feat/pilot-duel.
 ## Goal
 
 A new main-menu item, **FUN**, holds experimental levels. It starts with one: **Pilot fight: Rules vs Vibes**, an
-dense (EXTREME complexity, as in the late levels) maze in which the rules pilot and the neural pilot, each flying a hunter, treat each other as the enemy and fight
+rocky (COMPLEX, built like level 13) maze in which the rules pilot and the neural pilot, each flying a hunter, treat each other as the enemy and fight
 until one is destroyed. The player watches; they do not fly.
 
 "Vibes" is the neural pilot. The name appears only in the menu.
@@ -36,7 +36,7 @@ until one is destroyed. The player watches; they do not fly.
   shots stay friendly.
 - **Start positions.** The farthest-apart pair of safe cells that have a clear line of sight within the pilots' sensor
   range (a pilot only fights what it can see, and a rocky maze can hide the far corner), facing each other.
-- **The maze.** `game.duelMazeComplexity` (EXTREME) at `game.duelMazeGridSize` (32), built as level 27, with no enemies.
+- **The maze.** `game.duelMazeComplexity` (COMPLEX) at `game.duelMazeGridSize` (26), built as level 13, with no enemies.
 - **Missing neural weights.** If the weights file is missing or invalid, the duel does not start. The screen shows
   "Vibes unavailable" with no winner and returns to the FUN list; it does not crash.
 - **Isolation.** The duel lives in its own module and state. The single-hunter game loop, the Jev beacon and the normal
