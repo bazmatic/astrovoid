@@ -15,7 +15,7 @@ until one is destroyed. The player watches; they do not fly.
 1. Main menu: START GAME, LEVELS, **FUN**, SELECT PROFILE, CONTROLS, QUIT.
 2. FUN opens a list of experimental levels (one entry for now: "Pilot fight: Rules vs Vibes"). Up and down move,
    confirm starts, cancel goes back to the main menu. Keyboard and controller, like the level select.
-3. The duel: a dense maze, two hunters starting as far apart as they can be while still seeing each other, the rules hunter and the neural hunter in distinguishable
+3. The duel: a rocky maze, two hunters starting in random places where they can see each other, the rules hunter and the neural hunter in distinguishable
    colours with a small name tag. The player's ship is hidden and takes no part. A health pip row for each hunter.
 4. The level ends when one hunter is destroyed. A banner names the winner ("Rules wins", "Vibes wins"), then the game
    returns to the FUN list. If neither is destroyed within 120 seconds, or both are destroyed in the same frame, the banner says
@@ -34,8 +34,9 @@ until one is destroyed. The player watches; they do not fly.
   fired by one hunter damages the other (and never the one that fired it). Projectile damage and the damage-immunity
   window follow the existing hunter rules. Outside the duel nothing changes: hunters stay indestructible and their
   shots stay friendly.
-- **Start positions.** The farthest-apart pair of safe cells that have a clear line of sight within the pilots' sensor
-  range (a pilot only fights what it can see, and a rocky maze can hide the far corner), facing each other.
+- **Start positions.** Random on every duel: a random safe cell for each hunter, the second within the pilots' sensor
+  range with a clear line of sight to the first and at least a quarter of that range away (a pilot only fights what it can
+  see), facing each other.
 - **The maze.** `game.duelMazeComplexity` (COMPLEX) at `game.duelMazeGridSize` (26), built as level 13, with no enemies.
 - **Missing neural weights.** If the weights file is missing or invalid, the duel does not start. The screen shows
   "Vibes unavailable" with no winner and returns to the FUN list; it does not crash.
