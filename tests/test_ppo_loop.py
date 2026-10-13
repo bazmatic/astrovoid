@@ -101,6 +101,10 @@ def test_the_checkpoints_are_flown_greedily_by_the_default_gate(tmp_path, monkey
     assert sum(1 for s in seen if s is None) == 1              # the rules reference is flown once
 
 
+def no_gate(path):
+    return {'student': {'score': 0.0}, 'passed': False}
+
+
 def test_the_default_rollout_carries_the_penalty_scales(monkeypatch, tmp_path):
     seen = []
 
@@ -117,7 +121,7 @@ def test_the_default_rollout_carries_the_penalty_scales(monkeypatch, tmp_path):
     start = tmp_path / 'start.npz'
     random_policy(0, hidden=16, embed=8).save(start)
     ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=4, workers=1, check_every=99,
-                 shaping={'wall_scale': 5.0, 'still_penalty': 2.0}, log=lambda *_: None)
+                 shaping={'wall_scale': 5.0, 'still_penalty': 2.0}, gate=no_gate, log=lambda *_: None)
     assert seen == [{'wall_scale': 5.0, 'still_penalty': 2.0}, 'closed']
 
 
@@ -125,7 +129,7 @@ def test_each_iteration_logs_where_its_time_went(tmp_path):
     start = tmp_path / 'start.npz'
     random_policy(0, hidden=16, embed=8).save(start)
     result = ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=4, workers=1, check_every=99,
-                          rollout=fake_rollout_factory(), log=lambda *_: None)
+                          rollout=fake_rollout_factory(), gate=no_gate, log=lambda *_: None)
     assert result['history'][0]['rollout_s'] >= 0 and result['history'][0]['update_s'] > 0
 
 
@@ -170,3 +174,53 @@ def test_progress_lines_are_flushed_so_a_redirected_log_shows_them(monkeypatch):
     monkeypatch.setattr(sys, 'stdout', Spy())
     ppo.log_line('iteration=0')
     assert Spy.flushes >= 1
+
+
+def collision_rollout(wall_hits, hits_taken):
+    """Rollouts as in fake_rollout_factory, but every 30 s episode has these collision counts."""
+    base = fake_rollout_factory()
+
+    def rollout(jobs, workers):
+        episodes = base(jobs, workers)
+        for e in episodes:
+            r = e['result']
+            e['result'] = EpisodeResult(r.level, r.seed, 5, 30.0, 1, wall_hits, hits_taken, 0.0, 'horizon', 0)
+        return episodes
+    return rollout
+
+
+def run_with(tmp_path, rollout, **kwargs):
+    start = tmp_path / 'start.npz'
+    if not start.exists():
+        random_policy(0, hidden=16, embed=8).save(start)
+    calls = []
+
+    def gate(path):
+        calls.append(path.name)
+        return {'student': {'score': 5.0}, 'passed': False}
+    result = ppo.train_rl(start, tmp_path / 'out', iterations=6, episodes=4, workers=1, check_every=2,
+                          rollout=rollout, gate=gate, log=lambda *_: None, **kwargs)
+    return result, calls
+
+
+def test_the_gate_is_skipped_while_training_collisions_are_far_above_the_limits(tmp_path):
+    # 4 wall hits and 4 enemy hits in 30 s is 8 a minute each: nowhere near passing
+    result, calls = run_with(tmp_path, collision_rollout(4, 4))
+    assert calls == ['iter0005.npz']                    # only the one final check, so a best policy exists
+    assert [bool(h.get('gate_skipped')) for h in result['history']] == [False, True, False, True, False, True]
+    assert result['best'] is not None
+
+
+def test_the_gate_runs_on_schedule_when_collisions_are_low(tmp_path):
+    result, calls = run_with(tmp_path, collision_rollout(0, 0))
+    assert calls == ['iter0001.npz', 'iter0003.npz', 'iter0005.npz']
+
+
+def test_without_limits_the_gate_runs_on_schedule_whatever_the_collisions(tmp_path):
+    result, calls = run_with(tmp_path, collision_rollout(4, 4), gate_limits=None)
+    assert calls == ['iter0001.npz', 'iter0003.npz', 'iter0005.npz']
+
+
+def test_one_limit_exceeded_is_enough_to_skip(tmp_path):
+    _, calls = run_with(tmp_path, collision_rollout(0, 4))               # walls fine, enemy hits 8 a minute
+    assert calls == ['iter0005.npz']
