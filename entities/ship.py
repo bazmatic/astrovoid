@@ -53,6 +53,7 @@ class Ship(RotatingThrusterShip):
         self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
         self.sound_manager = SoundManager()  # Initialize sound manager
         self.shield_active = False
+        self.observer = False  # observer mode: invulnerable (as if shielded), invisible, unseen by enemies
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no energy consumed during this period
         self.game_started = False  # Flag to prevent shield timer countdown until game starts
@@ -264,7 +265,7 @@ class Ship(RotatingThrusterShip):
     
     def on_wall_collision(self) -> None:
         """Handle wall collision - set damage state unless the shield took the hit."""
-        if self.shield_active:
+        if self.is_shield_active():
             return
         self.damaged = True
         self.damage_timer = 30
@@ -288,7 +289,7 @@ class Ship(RotatingThrusterShip):
         Returns:
             True if shield is active, False otherwise.
         """
-        return self.shield_active
+        return self.shield_active or self.observer
     
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""

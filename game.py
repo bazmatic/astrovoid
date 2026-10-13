@@ -220,6 +220,8 @@ class Game:
 
     def _hunter_sees_player(self) -> bool:
         """Whether the hunter may perceive the player: not when autoplay hides the parked one."""
+        if self.ship is not None and self.ship.observer:
+            return False
         return not (self.autoplay is not None and config.SETTINGS.autoplay.hidePlayer)
 
     def _autoplay_level_over(self) -> bool:
@@ -308,6 +310,7 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        self.ship.observer = config.observer_mode_enabled()
         # Explicitly reset velocity and previous position to prevent visual jumps
         self.ship.vx = 0.0
         self.ship.vy = 0.0
@@ -855,7 +858,7 @@ class Game:
                 self.scoring.record_wall_collision()
         
         # Only update enemies after player has made their first move
-        player_pos = (self.ship.x, self.ship.y) if self.ship else None
+        player_pos = (self.ship.x, self.ship.y) if self.ship and not self.ship.observer else None
         if self.player_has_moved:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
@@ -1219,7 +1222,7 @@ class Game:
             projectile.draw(self.screen)
         
         # Draw ship (hide during exit explosion)
-        if not self.exit_explosion_active:
+        if not self.exit_explosion_active and not self.ship.observer:
             self.ship.draw(self.screen)
         
         # Draw UI (hide during exit explosion)

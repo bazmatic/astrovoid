@@ -40,6 +40,8 @@ class ScoringSystem:
         # Testing switch: with NO_POWER_DRAIN set, power stays full, so a level
         # never fails and has no time limit. Final scores are unaffected.
         self.power_drain_enabled = os.getenv('NO_POWER_DRAIN', '').lower() not in ('1', 'true', 'yes', 'on')
+        if config.observer_mode_enabled():
+            self.power_drain_enabled = False      # an observer cannot run out of power
     
     def start_level(self, current_time: float) -> None:
         """Start tracking a new level.

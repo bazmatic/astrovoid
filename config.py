@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -912,3 +913,8 @@ FONT_SIZE_HINT = SETTINGS.ui.fonts.hint
 HUNTER_LEVEL_INTERVAL = SETTINGS.game.hunterLevelInterval
 # No hunter flies before this level
 HUNTER_FIRST_LEVEL = SETTINGS.game.hunterFirstLevel
+
+
+def observer_mode_enabled() -> bool:
+    """Testing switch: ASTROVOID_OBSERVER=1 makes the player an invulnerable, invisible observer (off by default)."""
+    return os.environ.get('ASTROVOID_OBSERVER', '').strip().lower() not in ('', '0', 'false', 'no')
