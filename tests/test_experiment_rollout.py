@@ -117,3 +117,9 @@ def test_near_motionless_frames_cost_the_still_penalty_per_second():
 def test_moving_hunters_and_the_default_pay_no_still_penalty():
     assert _fly_frames(rollout.RolloutRecorder(6, still_penalty=3.0), [5.0] * 6)[0] == 0.0
     assert _fly_frames(rollout.RolloutRecorder(6), [0.0] * 6)[0] == 0.0
+
+
+def test_a_random_start_rollout_begins_from_a_different_view_of_the_maze(spec):
+    here = rollout.fly_rollout(14, 300, spec, horizon=3.0)
+    there = rollout.fly_rollout(14, 300, spec, horizon=3.0, random_start=True)
+    assert len(there['senses']) >= 25 and not np.array_equal(here['senses'][0], there['senses'][0])

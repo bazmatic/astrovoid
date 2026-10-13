@@ -307,3 +307,26 @@ def test_the_player_is_hidden_from_the_hunter_by_default_and_can_be_shown(monkey
     seen.clear()
     run_episode(13, 0, horizon=1.0, hide_player=False)
     assert seen and all(player is not None for player in seen)
+
+
+def _start_position(level, seed, **kwargs):
+    from experiments.harness import run_episode
+    seen = []
+    run_episode(level, seed, horizon=0.1, trace=lambda t, game, hunter: seen.append((hunter.x, hunter.y)), **kwargs)
+    return seen[0]
+
+
+def test_a_random_start_puts_the_hunter_somewhere_new_for_each_seed_and_the_same_place_for_the_same_seed():
+    default = _start_position(14, 1)
+    starts = {_start_position(14, seed, random_start=True) for seed in range(6)}
+    assert len(starts) >= 4                                   # six seeds, mostly different places
+    assert default not in starts or len(starts) > 1
+    assert _start_position(14, 3, random_start=True) == _start_position(14, 3, random_start=True)
+
+
+def test_a_random_start_is_inside_the_maze_and_leaves_the_default_untouched():
+    import config
+    for seed in range(4):
+        x, y = _start_position(20, seed, random_start=True)
+        assert 0 <= x <= config.SCREEN_WIDTH and 0 <= y <= config.SCREEN_HEIGHT
+    assert _start_position(20, 0) == _start_position(20, 0, random_start=False)

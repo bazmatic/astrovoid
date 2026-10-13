@@ -77,8 +77,8 @@ class RolloutRecorder:
 
 
 def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
-                still_penalty=0.0, still_speed=0.15):
+                still_penalty=0.0, still_speed=0.15, random_start=False):
     recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed)
-    result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder)
+    result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder, random_start=random_start)
     senses, controls, rewards = recorder.arrays()
     return {'senses': senses, 'controls': controls, 'rewards': rewards, 'result': result}

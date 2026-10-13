@@ -282,6 +282,8 @@ def main(argv=None):
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--wall-scale', type=float, default=1.0,
                         help='multiplies the wall-collision penalty in the training reward (the score is unchanged)')
+    parser.add_argument('--fixed-start', action='store_true',
+                        help='start the hunter beside the player on every episode instead of at a random open cell')
     parser.add_argument('--horizon', type=float, default=DEFAULT_HORIZON,
                         help='seconds of game time per training episode')
     parser.add_argument('--still-penalty', type=float, default=0.0,
@@ -293,7 +295,8 @@ def main(argv=None):
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
-                               'still_penalty': args.still_penalty, 'horizon': args.horizon})
+                               'still_penalty': args.still_penalty, 'horizon': args.horizon,
+                               'random_start': not args.fixed_start})
     print('done | last checkpoint:', result['last'])
 
 

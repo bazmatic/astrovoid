@@ -165,6 +165,15 @@ def reset():
     _game = None
 
 
+def _random_cell_centre(game, level, seed):
+    """The centre of an open maze cell picked from (level, seed), without touching the global random stream."""
+    maze = game.maze
+    cells = [(col, row) for row in range(maze.grid_height) for col in range(maze.grid_width)
+             if not maze.grid[row][col]]
+    col, row = random.Random(f'start-{level}-{seed}').choice(cells)
+    return maze.position_calculator.grid_center_to_screen(col, row)
+
+
 def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
@@ -184,9 +193,10 @@ def load_student_policy(student):
 
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
-                student=None, recorder=None, labeller=None, on_result=None):
+                student=None, recorder=None, labeller=None, on_result=None, random_start=False):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
+    `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
     `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
     """
     global _game
@@ -217,7 +227,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     if configured == 'neural':
         config.SETTINGS.game.hunterPilot = 'rules'
     try:
-        game._summon_hunter((game.ship.x, game.ship.y))
+        game._summon_hunter(_random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y))
     finally:
         config.SETTINGS.game.hunterPilot = configured
     hunter, controller = game.hunter, game.hunter_controller
