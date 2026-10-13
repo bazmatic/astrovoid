@@ -39,10 +39,11 @@ class Combatant:
 class DuelArena:
     """Two hunters, each shown the other as an enemy, until one is destroyed or the time runs out."""
 
-    def __init__(self, maze, combatants, timeout_seconds, clock=time.monotonic):
+    def __init__(self, maze, combatants, timeout_seconds, clock=time.monotonic, enemies=None):
         if len(combatants) != 2:
             raise ValueError('a duel needs exactly two combatants')
         self.maze, self.sides, self.clock = maze, list(combatants), clock
+        self.enemies = enemies                      # a DuelEnemies, or None for a pure duel
         self.timeout_seconds = timeout_seconds
         self.elapsed = 0.0
         self.result = None
@@ -62,6 +63,8 @@ class DuelArena:
         now = self.clock()
         for side in self.sides:
             self._fly(side, dt, now)
+        if self.enemies is not None:
+            self.enemies.update(dt, [side.hunter for side in self.sides])
         first, second = self.sides
         if first.hunter.active and second.hunter.active:
             first.hunter.check_circle_collision(second.hunter.get_pos(), second.hunter.radius, second.hunter)
@@ -73,16 +76,18 @@ class DuelArena:
         if not hunter.active:
             side.controller.close()
             return
-        threats = self.shots[other.name]            # only the opponent's bullets are a danger to this pilot
+        foes = [other.hunter] + (self.enemies.active() if self.enemies is not None else [])
+        # Only the opponent's bullets (and the enemies') are a danger to this pilot, not its own
+        threats = self.shots[other.name] + (self.enemies.bullets if self.enemies is not None else [])
         if getattr(side.controller, 'kind', None) == 'neural':
             action = side.controller.tick(lambda last_controls, t: side.perception.observe(
-                hunter, self.maze, [other.hunter], threats, [], None, last_controls, t))
+                hunter, self.maze, foes, threats, [], None, last_controls, t))
         else:
             action = side.controller.tick(lambda t, generation: side.perception.observe(
-                hunter, self.maze, None, [other.hunter], threats, side.controller.action, t, generation))
+                hunter, self.maze, None, foes, threats, side.controller.action, t, generation))
         solution = None
         if action.track or action.fire or hunter.burst_remaining:
-            solution = find_firing_solution(hunter, [other.hunter], self.maze, hunter.settings)
+            solution = find_firing_solution(hunter, foes, self.maze, hunter.settings)
         shots = hunter.step(dt, action, solution)
         if shots:
             for shot in shots:
@@ -98,12 +103,16 @@ class DuelArena:
                 shot.update(dt)
                 if shot.active:
                     shot.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
+                if shot.active and self.enemies is not None and self.enemies.shot_hits(shot):
+                    shot.active = False
                 if shot.active and victim.active and shot.check_circle_collision(victim.get_pos(), victim.radius):
                     shot.active = False
                     victim.take_damage()
                 if shot.active:
                     alive.append(shot)
             self.shots[side.name] = alive
+        if self.enemies is not None:
+            self.enemies.move_bullets(dt, [side.hunter for side in self.sides])
 
     def _judge(self):
         down = [side for side in self.sides if not side.hunter.active]

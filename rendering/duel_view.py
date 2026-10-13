@@ -15,6 +15,16 @@ def banner_text(result):
 
 def draw_duel(screen, arena):
     arena.maze.draw(screen)
+    if arena.enemies is not None:
+        focus = arena.sides[0].hunter.get_pos()
+        manager = arena.enemies.entity_manager
+        for enemy in manager.enemies:
+            enemy.draw(screen, focus)
+        for flocker in manager.flockers:
+            if flocker.active:
+                flocker.draw(screen)
+        for bullet in arena.enemies.bullets:
+            bullet.draw(screen)
     tag_font = get_font(22)
     for side in arena.sides:
         for shot in arena.shots[side.name]:

@@ -57,6 +57,7 @@ from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
+from hunter.duel_enemies import DuelEnemies
 from hunter.rules_pilot import RulesClient
 from maze.config import MazeComplexity
 import logging
@@ -534,6 +535,10 @@ class Game:
             self.fun_menu.notice = f'Duel unavailable: {exc}'
             self.state = config.STATE_FUN
             return
+        random.seed()                            # the maze was built from a fixed seed; the enemies are random
+        enemies = DuelEnemies(self.maze, self.sound_manager)
+        enemies.spawn([side.hunter.get_pos() for side in self.duel.sides])
+        self.duel.enemies = enemies
         self.duel_worker = worker
         self.duel_banner_until = None
         self.state = config.STATE_DUEL

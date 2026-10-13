@@ -40,6 +40,11 @@ until one is destroyed. The player watches; they do not fly.
 - **The maze.** `game.duelMazeComplexity` (COMPLEX) at `game.duelMazeGridSize` (26), built as level 13, with no enemies.
 - **Missing neural weights.** If the weights file is missing or invalid, the duel does not start. The screen shows
   "Vibes unavailable" with no winner and returns to the FUN list; it does not crash.
+- **Enemies.** Each duel spawns a random handful (2 to 4 roaming enemies and 1 to 3 flockers) at random open spots at
+  least 300 px from both hunters. They run on the game's own enemy code and go after whichever hunter is nearer; both
+  pilots see them as enemies, a hunter's shot kills one, and an enemy's touch or bullet costs a hunter a hit, so enemies
+  can decide the fight (or draw it). They do not respawn and score nothing. Replay squids, bosses, eggs, anemones and
+  flighthouses are not used (the squids replay the player's earlier run, which a duel does not have).
 - **Isolation.** The duel lives in its own module and state. The single-hunter game loop, the Jev beacon and the normal
   levels are not touched, so nothing that works today can change.
 
