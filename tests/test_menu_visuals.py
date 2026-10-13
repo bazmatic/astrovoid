@@ -263,7 +263,7 @@ class TestControlsScreen:
 
     def test_main_menu_no_longer_carries_the_key_mappings(self, screen):
         game, _ = self.make_game()
-        assert game.main_menu.menu_options == ["START GAME", "LEVELS", "SELECT PROFILE", "CONTROLS", "QUIT"]
+        assert game.main_menu.menu_options == ["START GAME", "LEVELS", "FUN", "SELECT PROFILE", "CONTROLS", "QUIT"]
         assert not hasattr(game.main_menu, 'controls_surface')
 
     def test_controls_option_opens_the_screen_and_escape_returns(self, screen):

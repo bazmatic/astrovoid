@@ -69,6 +69,9 @@ class MenuStateHandler(StateHandler):
             elif selected_option == "LEVELS":
                 game.level_select_menu.refresh()
                 game.state = config.STATE_LEVEL_SELECT
+            elif selected_option == "FUN":
+                game.fun_menu.refresh()
+                game.state = config.STATE_FUN
             elif selected_option == "SELECT PROFILE":
                 game.profile_selection_menu.refresh_profiles()
                 game.state = config.STATE_PROFILE_SELECTION
@@ -94,6 +97,9 @@ class MenuStateHandler(StateHandler):
                 elif selected_option == "LEVELS":
                     game.level_select_menu.refresh()
                     game.state = config.STATE_LEVEL_SELECT
+                elif selected_option == "FUN":
+                    game.fun_menu.refresh()
+                    game.state = config.STATE_FUN
                 elif selected_option == "SELECT PROFILE":
                     game.profile_selection_menu.refresh_profiles()
                     game.state = config.STATE_PROFILE_SELECTION
@@ -539,6 +545,70 @@ class LevelCompleteStateHandler(StateHandler):
         return False
 
 
+class FunStateHandler(StateHandler):
+    """The FUN list: up and down choose, confirm starts, cancel goes back to the main menu."""
+
+    def __init__(self):
+        self.last_navigation_time = 0.0
+
+    def _start(self, game):
+        entry = game.fun_menu.selected_entry
+        if entry is not None:
+            game.start_fun_entry(entry.key)
+        return True
+
+    def handle_keyboard(self, event, game):
+        if event.key == pygame.K_UP:
+            game.fun_menu.navigate(-1)
+            return True
+        if event.key == pygame.K_DOWN:
+            game.fun_menu.navigate(1)
+            return True
+        if event.key in (pygame.K_RETURN, pygame.K_SPACE):
+            return self._start(game)
+        if event.key in (pygame.K_ESCAPE, pygame.K_q):
+            game.state = config.STATE_MENU
+            return True
+        return False
+
+    def handle_controller(self, event, game):
+        if event.type == pygame.JOYBUTTONDOWN:
+            if game.input_handler.is_controller_menu_confirm_pressed(event.button):
+                return self._start(game)
+            if game.input_handler.is_controller_menu_cancel_pressed(event.button):
+                game.state = config.STATE_MENU
+                return True
+        now = time.monotonic()
+        if now - self.last_navigation_time < 0.15:
+            return False
+        step = 0
+        if event.type == pygame.JOYHATMOTION:
+            step = event.value[1] * -1
+        elif event.type == pygame.JOYAXISMOTION and event.axis in (1, 3) and abs(event.value) > config.CONTROLLER_DEADZONE:
+            step = 1 if event.value > 0 else -1
+        if step:
+            game.fun_menu.navigate(step)
+            self.last_navigation_time = now
+            return True
+        return False
+
+
+class DuelStateHandler(StateHandler):
+    """During a duel the only input is cancel, which ends it."""
+
+    def handle_keyboard(self, event, game):
+        if event.key in (pygame.K_ESCAPE, pygame.K_q):
+            game.end_duel()
+            return True
+        return False
+
+    def handle_controller(self, event, game):
+        if event.type == pygame.JOYBUTTONDOWN and game.input_handler.is_controller_menu_cancel_pressed(event.button):
+            game.end_duel()
+            return True
+        return False
+
+
 class StateHandlerRegistry:
     """Registry for state handlers."""
     
@@ -549,6 +619,8 @@ class StateHandlerRegistry:
             config.STATE_PROFILE_SELECTION: ProfileSelectionStateHandler(),
             config.STATE_CONTROLS: ControlsStateHandler(),
             config.STATE_LEVEL_SELECT: LevelSelectStateHandler(),
+            config.STATE_FUN: FunStateHandler(),
+            config.STATE_DUEL: DuelStateHandler(),
             config.STATE_PLAYING: PlayingStateHandler(),
             config.STATE_QUIT_CONFIRM: QuitConfirmStateHandler(),
             config.STATE_LEVEL_COMPLETE: LevelCompleteStateHandler(),

@@ -31,6 +31,8 @@ from rendering.level_complete_menu import LevelCompleteMenu
 from rendering.profile_selection_menu import ProfileSelectionMenu
 from rendering.controls_menu import ControlsMenu
 from rendering.level_select_menu import LevelSelectMenu
+from rendering.fun_menu import FunMenu
+from rendering.duel_view import draw_duel
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
@@ -54,6 +56,9 @@ from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
+from hunter.duel import build_duel
+from hunter.rules_pilot import RulesClient
+from maze.config import MazeComplexity
 import logging
 
 
@@ -62,6 +67,9 @@ def _hunter_hotkey_enabled() -> bool:
     """Whether the H test key may call in the hunter: set ASTROVOID_HUNTER_HOTKEY to 1 (off by default)."""
     return os.environ.get('ASTROVOID_HUNTER_HOTKEY', '').strip().lower() not in ('', '0', 'false', 'no')
 
+
+DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel returns to the FUN list
+DUEL_GRID_SIZE = 14           # the duel maze's cells per side
 
 class Game:
     """Main game class managing state and game loop."""
@@ -174,6 +182,10 @@ class Game:
         self.main_menu = MainMenu(screen)
         self.controls_menu = ControlsMenu(screen)
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
+        self.fun_menu = FunMenu(screen)
+        self.duel = None                 # the pilot fight in progress (STATE_DUEL)
+        self.duel_worker = None
+        self.duel_banner_until = None
         self.level_complete_menu = LevelCompleteMenu(screen)
         self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
@@ -484,6 +496,65 @@ class Game:
         else:
             self._summon_hunter((self.ship.x, self.ship.y))
 
+    def start_fun_entry(self, key: str) -> None:
+        """Start the FUN-list entry with this key."""
+        if key == 'pilot_duel':
+            self.start_duel()
+
+    def _make_duel_worker(self):
+        """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""
+        return PilotWorker(client_factory=RulesClient)
+
+    def start_duel(self) -> None:
+        """Pilot fight: the rules pilot's hunter against the neural pilot's, in an empty maze, player watching."""
+        policy = load_neural_policy()
+        if policy is None:
+            self.fun_menu.notice = 'Vibes unavailable: no neural policy found'
+            self.state = config.STATE_FUN
+            return
+        self._close_hunter()
+        random.seed(0)
+        self.maze = Maze(1, complexity=MazeComplexity.EMPTY, grid_size=DUEL_GRID_SIZE)
+        self.ship = Ship(self.maze.start_pos)    # the hidden spectator: only here so spawns keep clear of it
+        self.projectiles = []
+        worker = self._make_duel_worker()
+        game_settings = config.SETTINGS.game
+        try:
+            self.duel = build_duel(self.maze, self.ship, worker, policy, game_settings.duelHealth,
+                                   game_settings.duelTimeoutSeconds, game_settings.neuralDecisionFrames)
+        except ValueError as exc:
+            worker.close()
+            self.fun_menu.notice = f'Duel unavailable: {exc}'
+            self.state = config.STATE_FUN
+            return
+        self.duel_worker = worker
+        self.duel_banner_until = None
+        self.state = config.STATE_DUEL
+
+    def _update_duel(self, dt: float) -> None:
+        if self.duel is None:
+            return
+        self.duel.update(dt)
+        if self.duel.result is not None:
+            if self.duel_banner_until is None:
+                self.duel_banner_until = time.monotonic() + DUEL_BANNER_SECONDS
+            elif time.monotonic() >= self.duel_banner_until:
+                self.end_duel()
+
+    def end_duel(self) -> None:
+        """Leave the duel for the FUN list, closing its controllers and worker; the normal game is left clean."""
+        if self.duel is not None:
+            self.duel.close()
+            self.duel = None
+        if self.duel_worker is not None:
+            self.duel_worker.close()
+            self.duel_worker.join(2.0)
+            self.duel_worker = None
+        self.duel_banner_until = None
+        self.projectiles = []
+        self.fun_menu.refresh()
+        self.state = config.STATE_FUN
+
     def _stop_dead_hunter(self) -> None:
         if self.hunter is not None and not self.hunter.active:
             self.hunter_controller.close()
@@ -525,6 +596,12 @@ class Game:
     
     def update(self, dt: float) -> None:
         """Update game state."""
+        if self.state == config.STATE_DUEL:
+            self._update_duel(dt)
+            return
+        if self.state == config.STATE_FUN:
+            self.fun_menu.update(dt)
+            return
         hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
                           and not self.exit_explosion_active and not self.game_frozen
                           and not self.game_over_active)
@@ -997,6 +1074,11 @@ class Game:
             self.level_select_menu.draw()
         elif self.state == config.STATE_CONTROLS:
             self.controls_menu.draw()
+        elif self.state == config.STATE_FUN:
+            self.fun_menu.draw()
+        elif self.state == config.STATE_DUEL:
+            if self.duel is not None:
+                draw_duel(self.screen, self.duel)
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
@@ -1300,6 +1382,8 @@ class Game:
 
 
         finally:
+            if self.duel is not None:
+                self.end_duel()
             self._close_hunter()
             if self.hunter_worker is not None:
                 self.hunter_worker.close()

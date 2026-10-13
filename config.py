@@ -389,6 +389,9 @@ class GameSettings:
     # Skips the drag physics of squid and jellyfish tentacles (they only look different: nothing reads them).
     # The lab turns it on for training and evaluation, where nobody watches.
     lowGraphics: bool = False
+    # The pilot duel (FUN menu): hits each hunter survives, and the game seconds before it is called a draw.
+    duelHealth: int = 5
+    duelTimeoutSeconds: float = 120.0
 
 
 @dataclass
@@ -621,6 +624,8 @@ STATES_DEFAULTS = {
     "profileSelection": "profile_selection",
     "controls": "controls",
     "levelSelect": "level_select",
+    "fun": "fun",
+    "duel": "duel",
     "playing": "playing",
     "levelComplete": "level_complete",
     "quitConfirm": "quit_confirm"
@@ -865,6 +870,8 @@ STATE_MENU = STATES_DEFAULTS["menu"]
 STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
 STATE_CONTROLS = STATES_DEFAULTS["controls"]
 STATE_LEVEL_SELECT = STATES_DEFAULTS["levelSelect"]
+STATE_FUN = STATES_DEFAULTS["fun"]
+STATE_DUEL = STATES_DEFAULTS["duel"]
 STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
 STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]
