@@ -40,7 +40,7 @@ def test_collisions_and_idling_cost_and_kills_pay(spec):
     result = r['result']
     if result.kills == 0:
         assert not (r['rewards'] > 0).any()              # nothing pays without a kill
-    if result.wall_hits == 0 and result.hits_taken == 0 and result.idle_seconds == 0 and result.kills == 0:
+    if result.wall_impulse == 0 and result.hits_taken == 0 and result.idle_seconds == 0 and result.kills == 0:
         assert not r['rewards'].any()                    # nothing happened, nothing earned
     assert (r['rewards'] < 0).any() or result.kills > 0 or not (
         result.wall_hits or result.hits_taken or result.idle_seconds)
@@ -74,7 +74,7 @@ def test_a_wall_scale_multiplies_only_the_wall_penalty(spec):
     heavy = rollout.fly_rollout(14, 300, spec, horizon=50.0, wall_scale=5.0)
     assert heavy['result'] == plain['result']                          # flying is unchanged
     from experiments.score import Weights
-    extra = 4.0 * Weights().wall * plain['result'].wall_hits
+    extra = 4.0 * Weights().quotient * plain['result'].wall_impulse
     assert float(plain['rewards'].sum() - heavy['rewards'].sum()) == pytest.approx(extra, rel=1e-4, abs=1e-3)
 
 
@@ -88,7 +88,7 @@ def test_a_hit_scale_multiplies_only_the_enemy_hit_penalty(spec):
 
 
 class _Counter:
-    kills = wall_hits = hits_taken = spawned = 0
+    kills = wall_impulse = hits_taken = spawned = 0
     idle_seconds = 0.0
 
 

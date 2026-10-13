@@ -19,7 +19,7 @@ class RolloutRecorder:
         self.still_penalty = still_penalty    # shaping: points lost per second spent slower than still_speed
         self.still_speed = still_speed        # as a fraction of the hunter's top speed
         self.senses, self.controls = [], []
-        self._events = []                 # per step: kills, wall hits, enemy hits, idle seconds, near-still seconds
+        self._events = []                 # per step: kills, wall impulse, enemy hits, idle seconds, near-still seconds
         self._pending = False
         self._controller = None
         self._counter = None
@@ -55,7 +55,7 @@ class RolloutRecorder:
             self._pending = False
 
     def counted(self, counter, elapsed):
-        current = (counter.kills, counter.wall_hits, counter.hits_taken, counter.idle_seconds)
+        current = (counter.kills, counter.wall_impulse, counter.hits_taken, counter.idle_seconds)
         for i, (now, before) in enumerate(zip(current, self._previous)):
             self._events[-1][i] += now - before
         self._previous = current
@@ -68,7 +68,7 @@ class RolloutRecorder:
         total = max(self._start_enemies + spawned, 1)
         weights = Weights()
         events = np.asarray(self._events[:n], dtype=np.float64).reshape(n, 5)
-        rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.wall * self.wall_scale * events[:, 1]
+        rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.quotient * self.wall_scale * events[:, 1]
                    - weights.hit * self.hit_scale * events[:, 2] - weights.idle / 60.0 * events[:, 3]
                    - self.still_penalty * events[:, 4])
         return (np.asarray(self.senses[:n], dtype=np.float32).reshape(n, SENSE_SIZE),

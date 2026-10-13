@@ -145,10 +145,6 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_START = ROOT / 'assets' / 'neural' / 'hunter.npz'
 DEFAULT_OUT = ROOT / '.astrovoid-local' / 'neural' / 'rl'
 TRAIN_SEEDS = 100             # seeds 300-399
-# The gate is only worth its cost when training looks close to passing: the mean wall hits and enemy hits per minute
-# over the last check_every iterations must be under these. The gate allows 1.25x the rules pilot's (about 1.1 and
-# 2.5); training flights are sampled, which costs a little, so these are looser.
-GATE_LIMITS = (1.5, 3.1)
 
 
 def make_jobs(iteration, count, weights, decision_frames, turn_rate):
@@ -227,36 +223,13 @@ class PoolRollout:
             self._pool = None
 
 
-def make_gate(workers, seeds, decision_frames, turn_rate):
-    """gate(path) -> report: the checkpoint flown greedily against the rules pilot on the tune set."""
-    from experiments import neural_lab, run
-    from experiments.student import StudentSpec
-    from hunter.rule_params import RULES
-    seed_list = tuple(range(seeds))
-    reference = []
-
-    def gate(path):
-        if not reference:
-            reference.append(run.evaluate(RULES, 'tune', seed_list, 90.0, workers))
-        spec = StudentSpec(weights=str(path), decision_frames=decision_frames, turn_rate=turn_rate)
-        student = run.evaluate(RULES, 'tune', seed_list, 90.0, workers, student=spec)
-        return neural_lab.gate_report(reference[0], student)
-    return gate
-
-
-def _within(recent, limits):
-    """Whether the mean wall hits and enemy hits per minute over `recent` iterations are under the limits."""
-    walls = np.mean([r['wall_hits_per_min'] for r in recent])
-    hits = np.mean([r['hits_taken_per_min'] for r in recent])
-    return walls <= limits[0] and hits <= limits[1]
-
-
 def log_line(*parts):
     print(*parts, flush=True)         # a log redirected to a file is otherwise block-buffered
 
 
-def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5, check_seeds=6, lr=1e-4,
-             seed=0, decision_frames=6, turn_rate=1.0, rollout=None, gate=None, log=log_line, shaping=None, gate_limits=GATE_LIMITS):
+def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=0, decision_frames=6,
+             turn_rate=1.0, rollout=None, log=log_line, shaping=None):
+    """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint."""
     import torch
     from experiments.score import mean_components
     policy = NeuralPolicy.load(start)                  # raises InvalidPolicy: never train from nothing
@@ -266,25 +239,13 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5,
     out_dir.mkdir(parents=True, exist_ok=True)
     pooled = None if rollout else PoolRollout(workers, shaping)
     rollout = rollout or (lambda jobs, count: pooled(jobs))
-    gate = gate or make_gate(workers, check_seeds, decision_frames, turn_rate)
     net, ref = build_net(policy), build_net(policy)
     for parameter in ref.parameters():
         parameter.requires_grad_(False)
     optimiser = torch.optim.Adam(net.parameters(), lr=lr)
     current = out_dir / 'iter_start.npz'
     export(net, policy, current)
-    history, state = [], {'best_score': None, 'best_path': None, 'passed': False}
-
-    def check(path, stats):
-        t2 = time.perf_counter()
-        report = gate(path)
-        stats['gate_s'] = time.perf_counter() - t2
-        stats['gate_score'] = report['student']['score']
-        stats['gate_passed'] = bool(report['passed'])
-        if state['best_score'] is None or stats['gate_score'] > state['best_score']:
-            state['best_score'], state['best_path'] = stats['gate_score'], path
-            (out_dir / 'best.npz').write_bytes(path.read_bytes())
-        state['passed'] = bool(report['passed'])
+    history = []
     try:
         for iteration in range(iterations):
             jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate)
@@ -293,34 +254,21 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5,
             t1 = time.perf_counter()
             stats = improve(net, ref, optimiser, flown, policy.mean, policy.scale,
                             kl_coefficient(iteration, iterations), rng)
-            results = [e['result'] for e in flown]
-            summary = mean_components(results)
+            summary = mean_components([e['result'] for e in flown])
             stats.update(iteration=iteration, mean_return=float(np.mean([e['rewards'].sum() for e in flown])),
                          score=summary['score'], kills_per_min=summary['kills_per_min'],
-                         wall_hits_per_min=summary['wall_hits_per_min'],
+                         wall_quotient_per_min=summary['wall_quotient_per_min'],
                          hits_taken_per_min=summary['hits_taken_per_min'],
                          rollout_s=t1 - t0, update_s=time.perf_counter() - t1)
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
-            if (iteration + 1) % check_every == 0:
-                recent = history[-(check_every - 1):] + [stats] if check_every > 1 else [stats]
-                if gate_limits is None or _within(recent, gate_limits):
-                    check(current, stats)
-                else:
-                    stats['gate_skipped'] = True
             history.append(stats)
             log(' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items()))
-            if state['passed']:
-                break
     finally:
         if pooled is not None:
             pooled.close()
-    if state['best_path'] is None and history:          # the gate never ran: judge the last policy so there is a best
-        check(current, history[-1])
-        log(' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in history[-1].items()))
     (out_dir / 'iter_start.npz').unlink(missing_ok=True)
-    return {'best': out_dir / 'best.npz' if state['best_path'] else None, 'history': history,
-            'passed': state['passed']}
+    return {'last': current if history else None, 'history': history}
 
 
 def main(argv=None):
@@ -330,25 +278,20 @@ def main(argv=None):
     parser.add_argument('--iterations', type=int, default=100)
     parser.add_argument('--episodes', type=int, default=96)
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
-    parser.add_argument('--check-every', type=int, default=5)
     parser.add_argument('--lr', type=float, default=1e-4)
     parser.add_argument('--wall-scale', type=float, default=1.0,
-                        help='multiplies the wall-hit penalty in the training reward (the gate is unchanged)')
-    parser.add_argument('--always-check', action='store_true',
-                        help='run the gate every --check-every iterations even when training collisions are far too high')
+                        help='multiplies the wall-collision penalty in the training reward (the score is unchanged)')
     parser.add_argument('--still-penalty', type=float, default=0.0,
                         help='points lost per second spent near-motionless in the training reward')
     parser.add_argument('--hit-scale', type=float, default=1.0,
-                        help='multiplies the enemy-hit penalty in the training reward (the gate is unchanged)')
+                        help='multiplies the enemy-hit penalty in the training reward (the score is unchanged)')
     args = parser.parse_args(argv)
     from experiments import run
     run._use_dummy_drivers()
-    result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers,
-                      args.check_every, lr=args.lr, gate_limits=None if args.always_check else GATE_LIMITS,
+    result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
                                'still_penalty': args.still_penalty})
-    print('gate passed on the tune set' if result['passed'] else 'budget used without passing the tune gate',
-          '| best:', result['best'])
+    print('done | last checkpoint:', result['last'])
 
 
 if __name__ == '__main__':

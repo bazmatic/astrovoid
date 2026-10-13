@@ -85,6 +85,23 @@ def test_counting_helpers_count_events_not_frames():
     assert counter.wall_hits == 2
 
 
+def test_the_counter_adds_up_the_impulse_of_every_collision_frame():
+    from experiments.harness import EventCounter
+    counter = EventCounter()
+    counter.wall(True, 0.5)
+    counter.wall(True, 0.25)          # still in contact: one hit, more impulse
+    counter.wall(False)
+    counter.wall(True, 1.0)
+    assert counter.wall_hits == 2 and counter.wall_impulse == pytest.approx(1.75)
+
+
+def test_an_episode_reports_the_impulse_walls_took_from_the_hunter():
+    from experiments.harness import run_episode
+    result = run_episode(20, 0, horizon=40.0, student=None)
+    assert result.wall_hits >= 1                  # this level and seed touch a wall
+    assert result.wall_impulse > 0
+
+
 def make_enemies(n):
     return [object() for _ in range(n)]
 

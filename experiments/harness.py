@@ -1,5 +1,6 @@
 """Runs one hunter episode headlessly on the real game, faster than real time."""
 import asyncio
+import math
 import os
 import random
 import tempfile
@@ -31,6 +32,7 @@ class EpisodeResult:
     idle_seconds: float
     end: str  # 'cleared' or 'horizon'
     enemies_spawned: int = 0  # enemies that appeared during the episode (spawners, eggs)
+    wall_impulse: float = 0.0  # speed the walls took from the hunter, summed over collision frames, in top speeds
 
 
 class EventCounter:
@@ -40,6 +42,7 @@ class EventCounter:
         self.kills = 0
         self.spawned = 0
         self.wall_hits = 0
+        self.wall_impulse = 0.0
         self.hits_taken = 0
         self.idle_seconds = 0.0
         self._alive = None
@@ -67,9 +70,16 @@ class EventCounter:
         # Holding the objects keeps their ids from being reused by new enemies.
         self._alive = current
 
-    def wall(self, hit):
+    def wall(self, hit, impulse=0.0):
+        """A wall collision check: `hit` if the hunter touched a wall, `impulse` the speed that took from it.
+
+        A new contact is one hit; every frame of contact adds its impulse, so a hard crash costs a lot, a glancing
+        scrape little, and pushing into a wall adds up while it lasts.
+        """
         if hit and not self._in_wall:
             self.wall_hits += 1
+        if hit:
+            self.wall_impulse += impulse
         self._in_wall = bool(hit)
 
     def hit_taken(self, now):
@@ -248,8 +258,9 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     original_wall = hunter.check_wall_collision
 
     def counting_wall(*args, **kwargs):
+        vx, vy = hunter.vx, hunter.vy
         hit = original_wall(*args, **kwargs)
-        counter.wall(hit)
+        counter.wall(hit, math.hypot(hunter.vx - vx, hunter.vy - vy) / max(hunter.max_speed, 1e-6))
         return hit
     hunter.check_wall_collision = counting_wall
 
@@ -302,7 +313,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     game._close_hunter()
     _clear_overrides(game)
     result = EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
-                           counter.hits_taken, counter.idle_seconds, end, counter.spawned)
+                           counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse)
     if on_result is not None:
         on_result(result)
     return result
