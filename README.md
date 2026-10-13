@@ -108,6 +108,7 @@ Set these in the environment when launching, for example `NO_POWER_DRAIN=1 ./run
 - `NO_POWER_DRAIN=1`: the power gauge stays full, so a level never fails and has no time limit. The score awarded on finishing a level is still calculated normally.
 - `START_LEVEL=5`: start at the given level.
 - `WINDOWED=1`: run in a window instead of fullscreen.
+- `ASTROVOID_OBSERVER=1`: the player becomes an invulnerable, invisible observer. Enemy shots, contacts and wall hits cost nothing (the ship still stops at walls), the ship is not drawn, enemies and the hunter do not see or target it, and power never drains. The ship still flies and fires. Combine it with `ASTROVOID_HUNTER_HOTKEY=1` and `game.hunterPilot` to watch a pilot fly.
 
 ## Building Distributables
 
@@ -402,15 +403,31 @@ selects a model; the default is `jev-latest`. To enter the key privately for one
 venv/bin/python -c 'import getpass, os, runpy; os.environ["TYPESAFE_API_KEY"] = getpass.getpass("TypeSafe API key: "); runpy.run_path("main.py", run_name="__main__")'
 ```
 
-### Offline student pilot
+### Choosing the hunter's pilot
 
 `game.hunterPilot` in `config/settings.json` chooses the hunter's pilot: `"jev"` (default),
-`"student"` (a small network trained to imitate Jev, no key or network needed), `"rules"` (the
-same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or training),
-or `"auto"` (Jev when it is available, the student otherwise). Set `game.recordPilotDecisions` to `true`
-to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a student with
-`venv/bin/python -m tools.train_student` (see `requirements-train.txt`); the model lives at
-`assets/student/jev_student.npz`.
+`"rules"` (the same criteria written as plain code in `hunter/rules_pilot.py`: no key, model or
+training), or `"neural"` (a network that flies with the basic controls only; see
+`docs/superpowers/specs/2026-10-12-neural-student-design.md`).
+
+The neural pilot decides every `game.neuralDecisionFrames` frames and turns at `game.neuralTurnRate` times the
+player's rate. Its weights are `assets/neural/hunter.npz` (the hunter coasts and shows as unavailable if the
+file is missing or does not match the senses layout). To rebuild them: record the rules pilot with
+`venv/bin/python -m experiments.teach`, train with `venv/bin/python -m tools.train_neural --data DIR --out PATH`
+(needs `requirements-train.txt`), then run corrected rounds with `venv/bin/python -m experiments.dagger` and
+check the gate with `venv/bin/python -m experiments.neural_lab gate --weights PATH`. The experiments are
+written up in `docs/experiments/012` to `014`. The shipped policy did not meet the gate (held-out score 0.58 of
+the rules pilot's, about 6 times its wall hits); it is the starting point for learning from environmental feedback.
+
+To try a pilot without hunting for a Jev beacon, start the game with `ASTROVOID_HUNTER_HOTKEY=1` (for example
+`ASTROVOID_HUNTER_HOTKEY=1 ./run.sh`): pressing **H** during a level collects the beacon if one is still lying there, otherwise
+calls the hunter in beside your ship (replacing one that is flying). The key does nothing without the variable.
+
+The **FUN** item on the main menu holds experimental levels. The first is **Pilot fight: Rules vs Vibes**: the rules
+pilot's hunter (green) and the neural pilot's hunter (magenta) fight in a rocky maze (COMPLEX, built like level 13) scattered with a few random enemies while you watch, each shown the
+other as its enemy. It uses whatever policy is in `assets/neural/hunter.npz`; each hunter takes `game.duelHealth` hits (5),
+and a fight not settled within `game.duelTimeoutSeconds` (120) is a draw. Escape leaves it. It does not touch your
+profile.
 
 #### Unattended data collection
 
@@ -418,8 +435,7 @@ to log Jev's decisions to `.astrovoid-local/decisions/` while it flies. Train a 
 ship stays parked and cannot fail or finish a level; a hunter is summoned beside it and flies
 each level on its own. A level ends when the time limit passes, every enemy is destroyed, or
 the hunter dies, and the next level starts at once, wrapping from `autoplay.lastLevel` back to
-`autoplay.firstLevel`. Nothing is written to your profile. Set `game.recordPilotDecisions` to
-`true` first, or the run collects nothing (it logs a warning). Esc or closing the window quits.
+`autoplay.firstLevel`. Nothing is written to your profile. Esc or closing the window quits.
 Set `WINDOW_SIZE=1352x878` to run in a window of that size (the whole game world scales to it).
 The `autoplay` section of `config/settings.json` sets `firstLevel`, `lastLevel` and
 `timeLimitSeconds`. By default (`hidePlayer`) the hunter cannot see the parked player, so it

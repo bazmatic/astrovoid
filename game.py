@@ -31,6 +31,8 @@ from rendering.level_complete_menu import LevelCompleteMenu
 from rendering.profile_selection_menu import ProfileSelectionMenu
 from rendering.controls_menu import ControlsMenu
 from rendering.level_select_menu import LevelSelectMenu
+from rendering.fun_menu import FunMenu
+from rendering.duel_view import draw_duel
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
@@ -48,11 +50,27 @@ from entities.hunter_ship import HunterShip
 from hunter.controller import HunterController
 from hunter.fire_control import find_firing_solution
 from hunter.perception import HunterPerception
+from hunter.senses import Senses
+from hunter.neural.controller import NeuralController
+from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
+from hunter.duel import build_duel
+from hunter.duel_enemies import DuelEnemies
+from hunter.rules_pilot import RulesClient
+from maze.config import MazeComplexity
 import logging
 
+
+
+def _hunter_hotkey_enabled() -> bool:
+    """Whether the H test key may call in the hunter: set ASTROVOID_HUNTER_HOTKEY to 1 (off by default)."""
+    return os.environ.get('ASTROVOID_HUNTER_HOTKEY', '').strip().lower() not in ('', '0', 'false', 'no')
+
+
+DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel returns to the FUN list
+DUEL_MAZE_LEVEL = 13          # the level number the duel's maze is generated as (its look and seed)
 
 class Game:
     """Main game class managing state and game loop."""
@@ -92,6 +110,7 @@ class Game:
         self.hunter = None
         self.hunter_controller = None
         self.hunter_perception = None
+        self.hunter_senses = None
         self.hunter_worker = None
         self.jev_beacon_level = False
         
@@ -164,6 +183,10 @@ class Game:
         self.main_menu = MainMenu(screen)
         self.controls_menu = ControlsMenu(screen)
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
+        self.fun_menu = FunMenu(screen)
+        self.duel = None                 # the pilot fight in progress (STATE_DUEL)
+        self.duel_worker = None
+        self.duel_banner_until = None
         self.level_complete_menu = LevelCompleteMenu(screen)
         self.quit_confirmation_menu = QuitConfirmationMenu(screen)
         self.splash_screen: Optional[SplashScreenState] = None
@@ -180,11 +203,6 @@ class Game:
         self.autoplay = AutoplayDirector(
             settings.firstLevel, settings.lastLevel, settings.timeLimitSeconds,
             no_kill_seconds=settings.noKillSeconds)
-        if not (config.SETTINGS.game.recordPilotDecisions
-                and config.SETTINGS.game.hunterPilot == 'jev'):
-            logging.getLogger(__name__).warning(
-                'Autoplay is running without recording Jev decisions: set game.hunterPilot '
-                'to "jev" and game.recordPilotDecisions to true to collect training data')
         self._begin_autoplay_level()
 
     def _begin_autoplay_level(self) -> None:
@@ -202,6 +220,8 @@ class Game:
 
     def _hunter_sees_player(self) -> bool:
         """Whether the hunter may perceive the player: not when autoplay hides the parked one."""
+        if self.ship is not None and self.ship.observer:
+            return False
         return not (self.autoplay is not None and config.SETTINGS.autoplay.hidePlayer)
 
     def _autoplay_level_over(self) -> bool:
@@ -290,6 +310,7 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        self.ship.observer = config.observer_mode_enabled()
         # Explicitly reset velocity and previous position to prevent visual jumps
         self.ship.vx = 0.0
         self.ship.vy = 0.0
@@ -393,6 +414,7 @@ class Game:
         self.hunter = None
         self.hunter_controller = None
         self.hunter_perception = None
+        self.hunter_senses = None
 
     def _summon_hunter(self, near) -> None:
         """Bring the hunter in beside a collected Jev beacon, replacing one that has died."""
@@ -402,12 +424,29 @@ class Game:
             logging.getLogger(__name__).warning('Hunter not summoned: %s', exc)
             return
         self._close_hunter()
-        settings = hunter_settings_for(config.SETTINGS.game.hunterPilot)
+        mode = config.SETTINGS.game.hunterPilot
+        settings = hunter_settings_for(mode)
         self.hunter = HunterShip(pos, settings)
         self.hunter_perception = HunterPerception(settings)
+        if mode == 'neural':
+            self.hunter_senses = Senses(settings)
+            self.hunter_controller = NeuralController(
+                load_neural_policy(), config.SETTINGS.game.neuralDecisionFrames)
+            return
         if self.hunter_worker is None:
             self.hunter_worker = PilotWorker()
         self.hunter_controller = HunterController(self.hunter_worker, settings)
+
+    def _hunter_entities(self):
+        return [enemy for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
+                                    self.split_bosses, self.mother_bosses, self.babies, self.eggs,
+                                    self.anemones) for enemy in group]
+
+    def _neural_senses(self, last_controls, now):
+        return self.hunter_senses.observe(
+            self.hunter, self.maze, self._hunter_entities(), self.projectiles,
+            [c for c in self.powerup_crystals if not isinstance(c, JevBeacon)],
+            self.ship if self._hunter_sees_player() else None, last_controls, now)
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -425,13 +464,14 @@ class Game:
         def observe(now, generation):
             return self.hunter_perception.observe(
                 self.hunter, self.maze, self.ship if self._hunter_sees_player() else None,
-                [enemy for group in (self.enemies, self.replay_enemies, self.flockers,
-                 self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones)
-                 for enemy in group], self.projectiles,
+                self._hunter_entities(), self.projectiles,
                 self.hunter_controller.action, now, generation,
                 # A Jev beacon is the player's to collect, not the hunter's
                 powerups=[c for c in self.powerup_crystals if not isinstance(c, JevBeacon)])
-        action = self.hunter_controller.tick(observe)
+        if getattr(self.hunter_controller, 'kind', None) == 'neural':
+            action = self.hunter_controller.tick(self._neural_senses)
+        else:
+            action = self.hunter_controller.tick(observe)
         if self.hunter_controller.status != 'active':
             self.hunter.cancel_burst()
         # Fire control is only consulted while the pilot is engaging something.
@@ -444,6 +484,91 @@ class Game:
         if shots:
             self.projectiles.extend(shots)
         self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
+
+    def _hotkey_summon_hunter(self) -> None:
+        """Test key (ASTROVOID_HUNTER_HOTKEY): call the hunter in now.
+
+        A Jev beacon still lying in the level is the hunter waiting to be called, so it is collected as the
+        player would, rather than a second hunter being added. With none left, the hunter appears beside the
+        ship, replacing any that is flying.
+        """
+        beacon = next((c for c in self.powerup_crystals if isinstance(c, JevBeacon) and c.active), None)
+        if beacon is not None:
+            beacon.die()
+            self.sound_manager.play_powerup_activation()
+            self._summon_hunter(beacon.get_pos())
+        else:
+            self._summon_hunter((self.ship.x, self.ship.y))
+
+    def start_fun_entry(self, key: str) -> None:
+        """Start the FUN-list entry with this key."""
+        if key == 'pilot_duel':
+            self.start_duel()
+
+    def _make_duel_worker(self):
+        """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""
+        return PilotWorker(client_factory=RulesClient)
+
+    def start_duel(self) -> None:
+        """Pilot fight: the rules pilot's hunter against the neural pilot's, in a dense maze, player watching."""
+        policy = load_neural_policy()
+        if policy is None:
+            self.fun_menu.notice = 'Vibes unavailable: no neural policy found'
+            self.state = config.STATE_FUN
+            return
+        game_settings = config.SETTINGS.game
+        try:
+            complexity = MazeComplexity[str(game_settings.duelMazeComplexity).upper()]
+        except KeyError:
+            self.fun_menu.notice = f'Duel unavailable: unknown maze complexity {game_settings.duelMazeComplexity!r}'
+            self.state = config.STATE_FUN
+            return
+        self._close_hunter()
+        random.seed(level_config.get_level_seed(DUEL_MAZE_LEVEL))
+        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize)
+        self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
+        self.ship = Ship(self.maze.start_pos)    # the hidden spectator: only here so spawns keep clear of it
+        self.projectiles = []
+        worker = self._make_duel_worker()
+        try:
+            self.duel = build_duel(self.maze, self.ship, worker, policy, game_settings.duelHealth,
+                                   game_settings.duelTimeoutSeconds, game_settings.neuralDecisionFrames)
+        except ValueError as exc:
+            worker.close()
+            self.fun_menu.notice = f'Duel unavailable: {exc}'
+            self.state = config.STATE_FUN
+            return
+        random.seed()                            # the maze was built from a fixed seed; the enemies are random
+        enemies = DuelEnemies(self.maze, self.sound_manager)
+        enemies.spawn([side.hunter.get_pos() for side in self.duel.sides])
+        self.duel.enemies = enemies
+        self.duel_worker = worker
+        self.duel_banner_until = None
+        self.state = config.STATE_DUEL
+
+    def _update_duel(self, dt: float) -> None:
+        if self.duel is None:
+            return
+        self.duel.update(dt)
+        if self.duel.result is not None:
+            if self.duel_banner_until is None:
+                self.duel_banner_until = time.monotonic() + DUEL_BANNER_SECONDS
+            elif time.monotonic() >= self.duel_banner_until:
+                self.end_duel()
+
+    def end_duel(self) -> None:
+        """Leave the duel for the FUN list, closing its controllers and worker; the normal game is left clean."""
+        if self.duel is not None:
+            self.duel.close()
+            self.duel = None
+        if self.duel_worker is not None:
+            self.duel_worker.close()
+            self.duel_worker.join(2.0)
+            self.duel_worker = None
+        self.duel_banner_until = None
+        self.projectiles = []
+        self.fun_menu.refresh()
+        self.state = config.STATE_FUN
 
     def _stop_dead_hunter(self) -> None:
         if self.hunter is not None and not self.hunter.active:
@@ -474,6 +599,8 @@ class Game:
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_h and self.state == config.STATE_PLAYING and _hunter_hotkey_enabled():
+                    self._hotkey_summon_hunter()
                 # Handle splash screen input
                 if self.state == config.STATE_SPLASH and self.splash_screen:
                     self.splash_screen.handle_event(event)
@@ -484,6 +611,12 @@ class Game:
     
     def update(self, dt: float) -> None:
         """Update game state."""
+        if self.state == config.STATE_DUEL:
+            self._update_duel(dt)
+            return
+        if self.state == config.STATE_FUN:
+            self.fun_menu.update(dt)
+            return
         hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
                           and not self.exit_explosion_active and not self.game_frozen
                           and not self.game_over_active)
@@ -725,7 +858,7 @@ class Game:
                 self.scoring.record_wall_collision()
         
         # Only update enemies after player has made their first move
-        player_pos = (self.ship.x, self.ship.y) if self.ship else None
+        player_pos = (self.ship.x, self.ship.y) if self.ship and not self.ship.observer else None
         if self.player_has_moved:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
@@ -956,6 +1089,11 @@ class Game:
             self.level_select_menu.draw()
         elif self.state == config.STATE_CONTROLS:
             self.controls_menu.draw()
+        elif self.state == config.STATE_FUN:
+            self.fun_menu.draw()
+        elif self.state == config.STATE_DUEL:
+            if self.duel is not None:
+                draw_duel(self.screen, self.duel)
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
@@ -1084,7 +1222,7 @@ class Game:
             projectile.draw(self.screen)
         
         # Draw ship (hide during exit explosion)
-        if not self.exit_explosion_active:
+        if not self.exit_explosion_active and not self.ship.observer:
             self.ship.draw(self.screen)
         
         # Draw UI (hide during exit explosion)
@@ -1259,6 +1397,8 @@ class Game:
 
 
         finally:
+            if self.duel is not None:
+                self.end_duel()
             self._close_hunter()
             if self.hunter_worker is not None:
                 self.hunter_worker.close()

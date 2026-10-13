@@ -185,7 +185,7 @@ def test_rules_defaults_are_the_global_defaults_plus_the_adopted_switches():
     from hunter.rule_params import RULES
     assert RULES == replace(DEFAULT, investigate_memory=True, wall_follow_cruise=2.0,
                             wall_lookahead_cells=2.5, turn_rate_multiplier=2.0, hunt_first=True)
-    assert DEFAULT.investigate_memory is False   # Jev and the student are unchanged
+    assert DEFAULT.investigate_memory is False   # Jev is unchanged
     assert DEFAULT.wall_follow_cruise == 0.6 and DEFAULT.wall_lookahead_cells == 0.75
 
 

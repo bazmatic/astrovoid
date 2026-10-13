@@ -6,11 +6,17 @@ import numpy as np
 # produce an extreme rate.
 RATE_FLOOR_SECONDS = 45.0
 
+# Points lost per unit of wall collision quotient per minute (one unit is a hit that takes the hunter's full top
+# speed). Set from the student's own collisions (a typical hit takes about 0.33), so a typical hit costs about
+# what the old 3.4 per hit did.
+QUOTIENT_WEIGHT = 10.0
+
 
 @dataclass(frozen=True)
 class Weights:
     # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
-    wall: float = 3.4
+    wall: float = 3.4          # per wall hit: only the rules-pilot lab uses it; the score uses `quotient`
+    quotient: float = QUOTIENT_WEIGHT
     hit: float = 3.5
     idle: float = 77.0
 
@@ -25,13 +31,14 @@ def components(result):
     return {'kill_pct_per_min': 100.0 * result.kills / total / minutes if total else 0.0,
             'kills_per_min': result.kills / minutes,
             'wall_hits_per_min': result.wall_hits / minutes,
+            'wall_quotient_per_min': result.wall_impulse / minutes,
             'hits_taken_per_min': result.hits_taken / minutes,
             'idle_fraction': idle}
 
 
 def score(result, weights=Weights()):
     c = components(result)
-    return (c['kill_pct_per_min'] - weights.wall * c['wall_hits_per_min']
+    return (c['kill_pct_per_min'] - weights.quotient * c['wall_quotient_per_min']
             - weights.hit * c['hits_taken_per_min'] - weights.idle * c['idle_fraction'])
 
 

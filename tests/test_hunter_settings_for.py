@@ -7,8 +7,8 @@ from hunter.settings_for import hunter_settings_for
 from tests.test_hunter_powerups import game, playing   # a real Game with a level running
 
 
-@pytest.mark.parametrize('mode', ['jev', 'student', 'auto'])
-def test_jev_and_the_student_keep_the_default_hunter(mode):
+@pytest.mark.parametrize('mode', ['jev'])
+def test_jev_keeps_the_default_hunter(mode):
     assert hunter_settings_for(mode) == HunterSettings()
 
 
@@ -36,7 +36,7 @@ def test_an_unknown_mode_gets_the_default_hunter():
     assert hunter_settings_for('turbo') == HunterSettings()
 
 
-@pytest.mark.parametrize('mode,turn', [('rules', 2.0), ('jev', 0.5), ('student', 0.5)])
+@pytest.mark.parametrize('mode,turn', [('rules', 2.0), ('jev', 0.5)])
 def test_the_game_builds_the_hunter_for_the_pilot_that_flies_it(game, monkeypatch, mode, turn):
     monkeypatch.setattr(SETTINGS.game, 'hunterPilot', mode)
     playing(game)
@@ -47,3 +47,10 @@ def test_the_game_builds_the_hunter_for_the_pilot_that_flies_it(game, monkeypatc
     assert game.hunter_perception.settings.turn_rate_multiplier == turn
     assert game.hunter_controller.settings.turn_rate_multiplier == turn
     assert hunter.current_rotation_speed == pytest.approx(hunter.base_rotation_speed * turn)
+
+
+def test_the_neural_pilot_gets_its_own_turn_rate_and_nothing_else_changes():
+    from dataclasses import replace
+    neural = hunter_settings_for('neural')
+    assert neural.turn_rate_multiplier == SETTINGS.game.neuralTurnRate
+    assert replace(neural, turn_rate_multiplier=HunterSettings().turn_rate_multiplier) == HunterSettings()

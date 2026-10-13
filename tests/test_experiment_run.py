@@ -33,7 +33,7 @@ def test_episode_list_is_levels_times_seeds_in_a_fixed_order():
 def test_evaluate_runs_each_episode_in_order(monkeypatch):
     calls = []
 
-    def fake_episode(level, seed, params, horizon, hide_player=True):
+    def fake_episode(level, seed, params, horizon, hide_player=True, student=None):
         calls.append((level, seed, horizon))
         return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, 'horizon')
     monkeypatch.setattr(run, '_episode', fake_episode)
@@ -43,7 +43,7 @@ def test_evaluate_runs_each_episode_in_order(monkeypatch):
 
 
 def test_a_failing_episode_names_itself(monkeypatch):
-    def boom(level, seed, params, horizon, hide_player=True):
+    def boom(level, seed, params, horizon, hide_player=True, student=None):
         if level == 21:
             raise RuntimeError('kaboom')
         return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, 'horizon')
@@ -99,7 +99,7 @@ def test_load_params_reads_a_json_file_and_rejects_bad_ones(tmp_path):
 
 
 def test_main_prints_a_summary_and_writes_results(monkeypatch, tmp_path, capsys):
-    def fake_episode(level, seed, params, horizon, hide_player=True):
+    def fake_episode(level, seed, params, horizon, hide_player=True, student=None):
         return EpisodeResult(level, seed, 5, 10.0, 2, 1, 0, 0.0, 'horizon')
     monkeypatch.setattr(run, '_episode', fake_episode)
     out = tmp_path / 'out.jsonl'
@@ -118,7 +118,7 @@ def test_a_real_parallel_evaluation_matches_a_serial_one():
 def test_evaluate_passes_the_player_scenario_to_each_episode(monkeypatch):
     seen = []
 
-    def fake_episode(level, seed, params, horizon, hide_player=True):
+    def fake_episode(level, seed, params, horizon, hide_player=True, student=None):
         seen.append(hide_player)
         return EpisodeResult(level, seed, 5, 10.0, 1, 0, 0, 0.0, 'horizon', 0)
     monkeypatch.setattr(run, '_episode', fake_episode)

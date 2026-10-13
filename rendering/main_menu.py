@@ -35,7 +35,7 @@ class MainMenu:
         self.menu_title: Optional[NeonText] = None
         self.menu_title_image: Optional[pygame.Surface] = None
         self.menu_title_rect: Optional[pygame.Rect] = None
-        self.menu_options = ["START GAME", "LEVELS", "SELECT PROFILE", "CONTROLS", "QUIT"]
+        self.menu_options = ["START GAME", "LEVELS", "FUN", "SELECT PROFILE", "CONTROLS", "QUIT"]
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self.menu_pulse_phase = 0.0

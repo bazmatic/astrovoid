@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -379,11 +380,23 @@ class GameSettings:
     criticalWarningThreshold: int
     hunterLevelInterval: int
     hunterFirstLevel: int
-    # Which pilot flies the hunter: "jev", "student" (the trained imitation), "rules" (the
-    # question criteria as plain code) or "auto" (Jev when it is available, the student otherwise).
+    # Which pilot flies the hunter: "jev", "rules" (the question criteria as plain code) or "neural"
+    # (a network that flies with the basic controls only).
     hunterPilot: str = "jev"
-    # Log Jev's decisions under .astrovoid-local/decisions/ as training data.
-    recordPilotDecisions: bool = False
+    # The neural pilot decides every this many frames and holds its controls between, and its hunter
+    # turns at this share of the player's rate.
+    neuralDecisionFrames: int = 6
+    neuralTurnRate: float = 1.0
+    # Skips the drag physics of squid and jellyfish tentacles (they only look different: nothing reads them).
+    # The lab turns it on for training and evaluation, where nobody watches.
+    lowGraphics: bool = False
+    # The pilot duel (FUN menu): hits each hunter survives, and the game seconds before it is called a draw.
+    duelHealth: int = 5
+    duelTimeoutSeconds: float = 120.0
+    # The duel's maze: a complexity name (EMPTY, SIMPLE, NORMAL, COMPLEX or EXTREME) and its cells per side.
+    # COMPLEX at 26 is how real level 13 is built.
+    duelMazeComplexity: str = "COMPLEX"
+    duelMazeGridSize: int = 26
 
 
 @dataclass
@@ -616,6 +629,8 @@ STATES_DEFAULTS = {
     "profileSelection": "profile_selection",
     "controls": "controls",
     "levelSelect": "level_select",
+    "fun": "fun",
+    "duel": "duel",
     "playing": "playing",
     "levelComplete": "level_complete",
     "quitConfirm": "quit_confirm"
@@ -860,6 +875,8 @@ STATE_MENU = STATES_DEFAULTS["menu"]
 STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
 STATE_CONTROLS = STATES_DEFAULTS["controls"]
 STATE_LEVEL_SELECT = STATES_DEFAULTS["levelSelect"]
+STATE_FUN = STATES_DEFAULTS["fun"]
+STATE_DUEL = STATES_DEFAULTS["duel"]
 STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
 STATE_QUIT_CONFIRM = STATES_DEFAULTS["quitConfirm"]
@@ -896,3 +913,8 @@ FONT_SIZE_HINT = SETTINGS.ui.fonts.hint
 HUNTER_LEVEL_INTERVAL = SETTINGS.game.hunterLevelInterval
 # No hunter flies before this level
 HUNTER_FIRST_LEVEL = SETTINGS.game.hunterFirstLevel
+
+
+def observer_mode_enabled() -> bool:
+    """Testing switch: ASTROVOID_OBSERVER=1 makes the player an invulnerable, invisible observer (off by default)."""
+    return os.environ.get('ASTROVOID_OBSERVER', '').strip().lower() not in ('', '0', 'false', 'no')

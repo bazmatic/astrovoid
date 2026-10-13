@@ -1,0 +1,191 @@
+"""The neural pilot's senses: a cheap fixed-length vector built straight from the game objects.
+
+Only raw geometry (bearings, distances, relative velocities, wall distances along rays) and the hunter's
+own motion. None of the rules pilot's solved quantities (lead angles, burn headings, safe speeds).
+"""
+import math
+import weakref
+import numpy as np
+
+RAYS = 16
+MAX_ENEMIES, MAX_BULLETS, MAX_POWERUPS, MAX_MEMORY = 6, 4, 2, 2
+MEMORY_TTL = 10.0          # seconds an out-of-sight enemy is remembered
+UPGRADE_CAP = 6.0
+
+_RAY_ANGLES = np.arange(RAYS) * (2 * math.pi / RAYS)
+_RAY_COS, _RAY_SIN = np.cos(_RAY_ANGLES), np.sin(_RAY_ANGLES)
+
+
+def _names():
+    names = ['fwd_speed', 'side_speed', 'speed', 'heading_sin', 'heading_cos', 'health', 'cooldown',
+             'burst', 'upgrade', 'enemies_present']
+    names += [f'ray_{i}' for i in range(RAYS)]
+    for group, count in (('enemy', MAX_ENEMIES), ('bullet', MAX_BULLETS)):
+        for i in range(count):
+            names += [f'{group}{i}_{part}' for part in ('present', 'sin', 'cos', 'dist', 'relfwd', 'relside')]
+    for i in range(MAX_POWERUPS):
+        names += [f'powerup{i}_{part}' for part in ('present', 'sin', 'cos', 'dist')]
+    names += [f'player_{part}' for part in ('present', 'sin', 'cos', 'dist', 'relfwd', 'relside')]
+    for i in range(MAX_MEMORY):
+        names += [f'memory{i}_{part}' for part in ('present', 'sin', 'cos', 'dist', 'age')]
+    names += ['last_turn_left', 'last_turn_none', 'last_turn_right', 'last_thrust', 'last_fire']
+    return tuple(names)
+
+
+FEATURE_NAMES = _names()
+SENSE_SIZE = len(FEATURE_NAMES)
+_INDEX = {name: i for i, name in enumerate(FEATURE_NAMES)}
+
+
+def ray_distances(origin, heading_degrees, wall_starts, wall_ends, reach):
+    """Distance to the nearest wall along each of 16 rays, ray 0 along the nose, capped at `reach`."""
+    if len(wall_starts) == 0:
+        return np.full(RAYS, float(reach))
+    h = math.radians(heading_degrees)
+    ch, sh = math.cos(h), math.sin(h)
+    dx = _RAY_COS * ch - _RAY_SIN * sh
+    dy = _RAY_SIN * ch + _RAY_COS * sh
+    ex = wall_ends[:, 0] - wall_starts[:, 0]
+    ey = wall_ends[:, 1] - wall_starts[:, 1]
+    ax = wall_starts[:, 0] - origin[0]
+    ay = wall_starts[:, 1] - origin[1]
+    denom = dx[:, None] * ey[None, :] - dy[:, None] * ex[None, :]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t = (ax[None, :] * ey[None, :] - ay[None, :] * ex[None, :]) / denom
+        u = (ax[None, :] * dy[:, None] - ay[None, :] * dx[:, None]) / denom
+    hit = (np.abs(denom) > 1e-9) & (t >= 0) & (u >= 0) & (u <= 1)
+    t = np.where(hit, t, np.inf)
+    return np.minimum(t.min(axis=1), float(reach))
+
+
+def blocked(origin, targets, wall_starts, wall_ends):
+    """Whether a wall lies on the straight line from `origin` to each row of `targets`."""
+    targets = np.asarray(targets, dtype=float).reshape(-1, 2)
+    if len(targets) == 0 or len(wall_starts) == 0:
+        return np.zeros(len(targets), dtype=bool)
+    dx = targets[:, 0] - origin[0]
+    dy = targets[:, 1] - origin[1]
+    ex = wall_ends[:, 0] - wall_starts[:, 0]
+    ey = wall_ends[:, 1] - wall_starts[:, 1]
+    ax = wall_starts[:, 0] - origin[0]
+    ay = wall_starts[:, 1] - origin[1]
+    denom = dx[:, None] * ey[None, :] - dy[:, None] * ex[None, :]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t = (ax[None, :] * ey[None, :] - ay[None, :] * ex[None, :]) / denom
+        u = (ax[None, :] * dy[:, None] - ay[None, :] * dx[:, None]) / denom
+    hit = (np.abs(denom) > 1e-9) & (t > 0) & (t < 1) & (u >= 0) & (u <= 1)
+    return hit.any(axis=1)
+
+
+class Senses:
+    def __init__(self, settings):
+        self.settings = settings
+        self._memory = weakref.WeakKeyDictionary()    # enemy -> (x, y, seen_at)
+
+    def reset(self):
+        self._memory = weakref.WeakKeyDictionary()
+
+    def observe(self, hunter, maze, enemies, projectiles, powerups, player, last_controls, now):
+        out = np.zeros(SENSE_SIZE, dtype=np.float32)
+        origin = (hunter.x, hunter.y)
+        reach = self.settings.sensor_range(maze)
+        vmax = max(hunter.max_speed, 1e-6)
+        h = math.radians(hunter.angle)
+        ch, sh = math.cos(h), math.sin(h)
+
+        walls = [w for w in maze.spatial_grid.get_nearby_walls(origin, reach) if w.active]
+        starts = np.array([w.start for w in walls], dtype=float).reshape(-1, 2)
+        ends = np.array([w.end for w in walls], dtype=float).reshape(-1, 2)
+
+        fwd = hunter.vx * ch + hunter.vy * sh
+        side = -hunter.vx * sh + hunter.vy * ch
+        out[_INDEX['fwd_speed']] = fwd / vmax
+        out[_INDEX['side_speed']] = side / vmax
+        out[_INDEX['speed']] = math.hypot(hunter.vx, hunter.vy) / vmax
+        out[_INDEX['heading_sin']] = sh
+        out[_INDEX['heading_cos']] = ch
+        out[_INDEX['health']] = hunter.health / max(self.settings.health, 1)
+        out[_INDEX['cooldown']] = min(1.0, hunter.fire_remaining / max(hunter.fire_interval, 1e-6))
+        out[_INDEX['burst']] = hunter.burst_remaining / max(self.settings.burst_size, 1)
+        out[_INDEX['upgrade']] = min(1.0, hunter.gun_upgrade_level / UPGRADE_CAP)
+        out[_INDEX['enemies_present']] = 1.0 if any(e.active for e in enemies) else 0.0
+
+        rays = ray_distances(origin, hunter.angle, starts, ends, reach) / reach
+        out[_INDEX['ray_0']:_INDEX['ray_0'] + RAYS] = rays
+
+        def candidates(entities, limit):
+            """The nearest `limit` active entities within reach and in line of sight."""
+            near = []
+            for e in entities:
+                if not e.active:
+                    continue
+                d = math.hypot(e.x - origin[0], e.y - origin[1])
+                if d <= reach:
+                    near.append((d, e))
+            near.sort(key=lambda item: item[0])
+            near = near[:limit + 3]                                  # a few spare for the ones that are hidden
+            if not near:
+                return []
+            hidden = blocked(origin, [(e.x, e.y) for _, e in near], starts, ends)
+            return [item for item, hid in zip(near, hidden) if not hid][:limit]
+
+        def contact(prefix, d, e, with_velocity=True):
+            dx, dy = e.x - origin[0], e.y - origin[1]
+            rel = math.atan2(dy, dx) - h
+            out[_INDEX[f'{prefix}_present']] = 1.0
+            out[_INDEX[f'{prefix}_sin']] = math.sin(rel)
+            out[_INDEX[f'{prefix}_cos']] = math.cos(rel)
+            out[_INDEX[f'{prefix}_dist']] = d / reach
+            if with_velocity:
+                rvx, rvy = e.vx - hunter.vx, e.vy - hunter.vy
+                out[_INDEX[f'{prefix}_relfwd']] = (rvx * ch + rvy * sh) / vmax
+                out[_INDEX[f'{prefix}_relside']] = (-rvx * sh + rvy * ch) / vmax
+
+        seen = candidates(enemies, MAX_ENEMIES)
+        for i, (d, e) in enumerate(seen):
+            contact(f'enemy{i}', d, e)
+            self._memory[e] = (e.x, e.y, now)
+        for i, (d, b) in enumerate(candidates([p for p in projectiles if p.is_enemy], MAX_BULLETS)):
+            contact(f'bullet{i}', d, b)
+        for i, (d, c) in enumerate(candidates(powerups, MAX_POWERUPS)):
+            contact(f'powerup{i}', d, c, with_velocity=False)
+        if player is not None and player.active:
+            d = math.hypot(player.x - origin[0], player.y - origin[1])
+            if d <= reach and not blocked(origin, [(player.x, player.y)], starts, ends)[0]:
+                contact('player', d, player)
+
+        self._remember(out, origin, h, reach, starts, ends, now, {id(e) for _, e in seen})
+        turn, thrust, fire = last_controls
+        out[_INDEX[('last_turn_left', 'last_turn_none', 'last_turn_right')[turn]]] = 1.0
+        out[_INDEX['last_thrust']] = 1.0 if thrust else 0.0
+        out[_INDEX['last_fire']] = 1.0 if fire else 0.0
+        return out
+
+    def _remember(self, out, origin, h, reach, starts, ends, now, seen_ids):
+        """Fill the memory slots with the nearest enemies seen lately but not in sight now."""
+        entries = []
+        for enemy, (x, y, seen_at) in list(self._memory.items()):
+            if not enemy.active or now - seen_at > MEMORY_TTL:
+                del self._memory[enemy]
+                continue
+            if id(enemy) in seen_ids:
+                continue
+            entries.append((math.hypot(x - origin[0], y - origin[1]), enemy, x, y, seen_at))
+        if not entries:
+            return
+        in_view = ~blocked(origin, [(x, y) for _, _, x, y, _ in entries], starts, ends)
+        kept = []
+        for (d, enemy, x, y, seen_at), visible in zip(entries, in_view):
+            # Its last position is in plain view and the enemy is not there: the memory is stale.
+            if visible and d <= reach:
+                del self._memory[enemy]
+            else:
+                kept.append((d, x, y, seen_at))
+        kept.sort(key=lambda item: item[0])
+        for i, (d, x, y, seen_at) in enumerate(kept[:MAX_MEMORY]):
+            rel = math.atan2(y - origin[1], x - origin[0]) - h
+            out[_INDEX[f'memory{i}_present']] = 1.0
+            out[_INDEX[f'memory{i}_sin']] = math.sin(rel)
+            out[_INDEX[f'memory{i}_cos']] = math.cos(rel)
+            out[_INDEX[f'memory{i}_dist']] = min(1.0, d / reach)
+            out[_INDEX[f'memory{i}_age']] = (now - seen_at) / MEMORY_TTL

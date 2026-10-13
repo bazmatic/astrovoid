@@ -1,5 +1,6 @@
 """Runs one hunter episode headlessly on the real game, faster than real time."""
 import asyncio
+import math
 import os
 import random
 import tempfile
@@ -31,6 +32,7 @@ class EpisodeResult:
     idle_seconds: float
     end: str  # 'cleared' or 'horizon'
     enemies_spawned: int = 0  # enemies that appeared during the episode (spawners, eggs)
+    wall_impulse: float = 0.0  # speed the walls took from the hunter, summed over collision frames, in top speeds
 
 
 class EventCounter:
@@ -40,8 +42,11 @@ class EventCounter:
         self.kills = 0
         self.spawned = 0
         self.wall_hits = 0
+        self.wall_impulse = 0.0
         self.hits_taken = 0
         self.idle_seconds = 0.0
+        self.powerups = 0          # crystals the hunter collected
+        self.cleared = False       # every enemy is dead: nothing is left to kill, so waiting is not idling
         self._alive = None
         self._in_wall = False
         self._last_hit = None
@@ -67,9 +72,16 @@ class EventCounter:
         # Holding the objects keeps their ids from being reused by new enemies.
         self._alive = current
 
-    def wall(self, hit):
+    def wall(self, hit, impulse=0.0):
+        """A wall collision check: `hit` if the hunter touched a wall, `impulse` the speed that took from it.
+
+        A new contact is one hit; every frame of contact adds its impulse, so a hard crash costs a lot, a glancing
+        scrape little, and pushing into a wall adds up while it lasts.
+        """
         if hit and not self._in_wall:
             self.wall_hits += 1
+        if hit:
+            self.wall_impulse += impulse
         self._in_wall = bool(hit)
 
     def hit_taken(self, now):
@@ -80,7 +92,7 @@ class EventCounter:
 
     def tick(self, now):
         """Time passes: seconds beyond IDLE_AFTER_SECONDS since the last kill are idle."""
-        if self._last_tick is not None and now - self._last_kill > IDLE_AFTER_SECONDS:
+        if self._last_tick is not None and not self.cleared and now - self._last_kill > IDLE_AFTER_SECONDS:
             self.idle_seconds += now - self._last_tick
         self._last_tick = now
 
@@ -155,11 +167,26 @@ def reset():
     _game = None
 
 
+def _random_cell_centre(game, level, seed):
+    """The centre of an open maze cell picked from (level, seed), without touching the global random stream."""
+    maze = game.maze
+    cells = [(col, row) for row in range(maze.grid_height) for col in range(maze.grid_width)
+             if not maze.grid[row][col]]
+    col, row = random.Random(f'start-{level}-{seed}').choice(cells)
+    return maze.position_calculator.grid_center_to_screen(col, row)
+
+
+def _loose_crystals(game):
+    """The powerup crystals still lying in the maze (not the Jev beacon)."""
+    from entities.jev_beacon import JevBeacon
+    return [c for c in game.powerup_crystals if c.active and not isinstance(c, JevBeacon)]
+
+
 def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
 
-_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
+_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_neural_senses')
 
 
 def _clear_overrides(game):
@@ -168,9 +195,18 @@ def _clear_overrides(game):
         game.__dict__.pop(name, None)
 
 
-def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None):
+def load_student_policy(student):
+    from experiments.student import load_policy
+    return load_policy(student)
+
+
+def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
+                student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
+    `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `after_clear` keeps flying that many more seconds once the last enemy is dead (less if no crystal is left to
+    collect); the result still reports the time of the last kill.
     `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
     """
     global _game
@@ -194,9 +230,29 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     if hide_player:
         game._hunter_sees_player = lambda: False
     game.hunter_worker = SyncWorker(params, clock)
-    game._summon_hunter((game.ship.x, game.ship.y))
+    if student is not None and load_student_policy(student) is None:
+        raise ValueError(f'student weights unusable: {student.weights}')
+    # The lab builds its own pilot below; the game's neural setting must not leak into a rules episode.
+    configured = config.SETTINGS.game.hunterPilot
+    if configured == 'neural':
+        config.SETTINGS.game.hunterPilot = 'rules'
+    try:
+        game._summon_hunter(_random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y))
+    finally:
+        config.SETTINGS.game.hunterPilot = configured
     hunter, controller = game.hunter, game.hunter_controller
-    controller.clock = clock
+    if student is None:
+        controller.clock = clock
+    else:
+        # A student flies through the game's own neural path: replace whatever controller the
+        # configured pilot built with a NeuralController on the student's weights.
+        from experiments.student import load_policy
+        from hunter.neural.controller import NeuralController
+        import numpy as np
+        controller = NeuralController(
+            load_policy(student), student.decision_frames, greedy=student.greedy,
+            rng=None if student.greedy else np.random.default_rng(student.sample_seed))
+        game.hunter_controller = controller
     # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
     # with a real-clock controller) must not replace it, and no new beacon may drop.
     game._summon_hunter = lambda near: None
@@ -204,8 +260,14 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
     settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
                        sensor_range_fraction=params.sensor_range_fraction,
-                       turn_rate_multiplier=params.turn_rate_multiplier)
-    hunter.settings = controller.settings = settings
+                       turn_rate_multiplier=(params.turn_rate_multiplier if student is None
+                                             else student.turn_rate))
+    hunter.settings = settings
+    if student is None:
+        controller.settings = settings
+    else:
+        from hunter.senses import Senses
+        game.hunter_senses = Senses(settings)
     # The perception reads its own copy of the settings (how far the hunter sees).
     game.hunter_perception.settings = settings
     # The ship fixes its turn rate when it is built, so set it on the ship too.
@@ -216,8 +278,9 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
     original_wall = hunter.check_wall_collision
 
     def counting_wall(*args, **kwargs):
+        vx, vy = hunter.vx, hunter.vy
         hit = original_wall(*args, **kwargs)
-        counter.wall(hit)
+        counter.wall(hit, math.hypot(hunter.vx - vx, hunter.vy - vy) / max(hunter.max_speed, 1e-6))
         return hit
     hunter.check_wall_collision = counting_wall
 
@@ -228,26 +291,74 @@ def run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tra
         return original_damage()
     hunter.take_damage = counting_damage
 
+    original_collect = hunter.collect_powerup
+
+    def counting_collect():
+        counter.powerups += 1
+        return original_collect()
+    hunter.collect_powerup = counting_collect
+
+    if recorder is not None:
+        original_step = hunter.step
+
+        def recording_step(dt, action, solution=None):
+            before = hunter.angle
+            shots = original_step(dt, action, solution)
+            recorder.add_frame(rotation=((hunter.angle - before + 180.0) % 360.0) - 180.0,
+                               engine=bool(hunter.pilot_thrusting), trigger=bool(action.fire or shots))
+            return shots
+        hunter.step = recording_step
+        recorder.begin(game, hunter, settings)
+
     alive = _active_enemies(game)
     start_enemies = len(alive)
     counter.observe(alive)
     end = 'horizon'
     elapsed = 0.0
-    for _ in range(int(horizon * FPS)):
+    cleared_at = None
+    for frame in range(int((horizon + after_clear) * FPS)):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
+        if recorder is not None:
+            recorder.before_frame(game, hunter)
+        if labeller is not None:
+            labeller.before_frame(game, hunter, frame)
         game.update(1.0)
+        if recorder is not None:
+            recorder.after_frame()
         if game.hunter is not hunter or game.hunter_controller is not controller:
             raise RuntimeError('hunter was replaced during the episode')
         alive = _active_enemies(game)
         counter.observe(alive)
         counter.tick(elapsed)
+        if recorder is not None and hasattr(recorder, 'counted'):
+            recorder.counted(counter, elapsed)
         if trace is not None:
             trace(elapsed, game, hunter)
         if start_enemies and not alive:
-            end = 'cleared'
+            if cleared_at is None:
+                cleared_at = elapsed
+                counter.cleared = True
+                end = 'cleared'
+            if (elapsed - cleared_at >= after_clear or not _loose_crystals(game)):
+                break
+        elif cleared_at is None and elapsed >= horizon:
             break
     game._close_hunter()
     _clear_overrides(game)
-    return EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
-                         counter.hits_taken, counter.idle_seconds, end, counter.spawned)
+    result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None else cleared_at, counter.kills, counter.wall_hits,
+                           counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse)
+    if on_result is not None:
+        on_result(result)
+    return result
+
+
+def run_episode(*args, low_graphics=True, **kwargs):
+    """One episode (see _run_episode). Tentacle physics is off unless asked for: nothing in the game reads it."""
+    import config
+    previous = config.SETTINGS.game.lowGraphics
+    config.SETTINGS.game.lowGraphics = low_graphics
+    try:
+        return _run_episode(*args, **kwargs)
+    finally:
+        config.SETTINGS.game.lowGraphics = previous

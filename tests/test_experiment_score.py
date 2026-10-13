@@ -8,7 +8,7 @@ from experiments.score import (RATE_FLOOR_SECONDS, Weights, components, improves
 
 def result(**kw):
     base = dict(level=13, seed=0, enemies_at_start=10, enemies_spawned=0, elapsed=60.0, kills=6, wall_hits=3,
-                hits_taken=2, idle_seconds=6.0, end='horizon')
+                hits_taken=2, idle_seconds=6.0, end='horizon', wall_impulse=1.5)
     base.update(kw)
     return EpisodeResult(**base)
 
@@ -18,14 +18,21 @@ def test_components_are_per_minute_rates_and_a_fraction():
     assert c['kills_per_min'] == pytest.approx(6.0)
     assert c['kill_pct_per_min'] == pytest.approx(60.0)   # 6 of 10 enemies in one minute
     assert c['wall_hits_per_min'] == pytest.approx(3.0)
+    assert c['wall_quotient_per_min'] == pytest.approx(1.5)      # the default fixture absorbed 1.5 units of impact
     assert c['hits_taken_per_min'] == pytest.approx(2.0)
     assert c['idle_fraction'] == pytest.approx(0.1)
     assert 'died' not in c
 
 
 def test_score_combines_the_components_with_the_weights():
-    w = Weights(wall=1.0, hit=2.0, idle=10.0)
-    assert score(result(), w) == pytest.approx(60.0 - 3.0 - 4.0 - 1.0)
+    w = Weights(quotient=2.0, hit=2.0, idle=10.0)
+    assert score(result(), w) == pytest.approx(60.0 - 3.0 - 4.0 - 1.0)      # 2.0 x 1.5 for the wall term
+
+
+def test_a_scrape_costs_less_than_a_crash_even_when_there_are_more_of_them():
+    scrapes = result(wall_hits=6, wall_impulse=0.6)
+    crash = result(wall_hits=1, wall_impulse=1.8)
+    assert score(scrapes) > score(crash)
 
 
 def test_the_rate_floor_is_forty_five_seconds():

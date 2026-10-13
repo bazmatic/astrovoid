@@ -2,7 +2,6 @@
 import json
 import math
 import os
-import sys
 from dataclasses import replace
 from hunter.model import ACTIONS, PilotDecision
 from hunter.pilot_sensors import pilot_state
@@ -320,29 +319,15 @@ def _create_jev_client():
 
 
 def create_client():
-    """The pilot client for this level: Jev, the trained student, or Jev with recording."""
+    """The pilot client for this level: Jev, or the rules pilot. Other modes (the neural pilot) use none."""
     from config import SETTINGS
-    from hunter.student.client import load_student_client
     mode = SETTINGS.game.hunterPilot
-    if mode not in ('jev', 'student', 'auto', 'rules'):
-        raise PilotUnavailable('invalid_configuration')
     if mode == 'rules':
         from hunter.rules_pilot import RulesClient
         return RulesClient()
-    if mode == 'student':
-        return load_student_client()
-    try:
-        client = _create_jev_client()
-    except PilotUnavailable:
-        if mode == 'auto':
-            return load_student_client()
-        raise
-    # Frozen builds have no useful project directory to log into.
-    if SETTINGS.game.recordPilotDecisions and not getattr(sys, 'frozen', False):
-        from hunter.student.recorder import record_to_disk
-        client = record_to_disk(
-            client, model=os.environ.get('TYPESAFE_DEFAULT_MODEL', '').strip() or 'jev-latest')
-    return client
+    if mode != 'jev':
+        raise PilotUnavailable('invalid_configuration')
+    return _create_jev_client()
 
 
 class JevPilot:

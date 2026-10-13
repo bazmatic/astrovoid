@@ -336,7 +336,13 @@
     "hunterLevelInterval": 1,
     "hunterFirstLevel": 4,
     "hunterPilot": "jev",
-    "recordPilotDecisions": false
+    "neuralDecisionFrames": 6,
+    "neuralTurnRate": 1.0,
+    "lowGraphics": false,
+    "duelHealth": 5,
+    "duelTimeoutSeconds": 120.0,
+    "duelMazeComplexity": "COMPLEX",
+    "duelMazeGridSize": 26
   },
   "autoplay": {
     "firstLevel": 13,

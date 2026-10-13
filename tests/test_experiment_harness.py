@@ -60,6 +60,57 @@ def test_the_hunter_cannot_die_and_the_episode_runs_on_after_hits(monkeypatch):
     assert not hasattr(result, 'died')
 
 
+def _clear_enemies_after(monkeypatch, frames):
+    from game import Game
+    original = Game.update
+    state = {'frames': 0}
+
+    def clear(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == frames:
+            for enemy in list(self.entity_manager.get_all_active_enemies()):
+                enemy.active = False
+    monkeypatch.setattr(Game, 'update', clear)
+
+
+def test_the_extra_phase_ends_at_once_when_no_crystal_is_left(monkeypatch):
+    _clear_enemies_after(monkeypatch, 10)
+    frames = []
+    result = run_episode(13, 0, horizon=5.0, after_clear=2.0, trace=lambda t, g, h: frames.append(t))
+    assert result.end == 'cleared' and frames[-1] - result.elapsed < 0.1
+
+
+def test_the_extra_phase_waits_for_a_crystal_up_to_after_clear(monkeypatch):
+    from entities.powerup_crystal import PowerupCrystal
+    from game import Game
+    original = Game.update
+    state = {'frames': 0}
+
+    def clear_and_drop(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == 10:
+            for enemy in list(self.entity_manager.get_all_active_enemies()):
+                enemy.active = False
+            far = PowerupCrystal((-5000.0, -5000.0))     # never reached
+            self.powerup_crystals.append(far)
+    monkeypatch.setattr(Game, 'update', clear_and_drop)
+    frames = []
+    result = run_episode(13, 0, horizon=5.0, after_clear=2.0, trace=lambda t, g, h: frames.append(t))
+    assert result.end == 'cleared' and result.elapsed < 1.0
+    assert 2.0 <= frames[-1] - result.elapsed + 0.05 < 2.2
+
+
+def test_waiting_after_the_last_kill_is_not_idling():
+    counter = harness.EventCounter()
+    counter.observe(make_enemies(1))
+    counter.tick(1.0)
+    counter.cleared = True
+    counter.tick(100.0)
+    assert counter.idle_seconds == 0.0
+
+
 def test_a_cleared_level_ends_the_episode_as_cleared(monkeypatch):
     from game import Game
     original = Game.update
@@ -83,6 +134,23 @@ def test_counting_helpers_count_events_not_frames():
     for hit in (False, True, True, True, False, True):
         counter.wall(hit)
     assert counter.wall_hits == 2
+
+
+def test_the_counter_adds_up_the_impulse_of_every_collision_frame():
+    from experiments.harness import EventCounter
+    counter = EventCounter()
+    counter.wall(True, 0.5)
+    counter.wall(True, 0.25)          # still in contact: one hit, more impulse
+    counter.wall(False)
+    counter.wall(True, 1.0)
+    assert counter.wall_hits == 2 and counter.wall_impulse == pytest.approx(1.75)
+
+
+def test_an_episode_reports_the_impulse_walls_took_from_the_hunter():
+    from experiments.harness import run_episode
+    result = run_episode(20, 0, horizon=40.0, student=None)
+    assert result.wall_hits >= 1                  # this level and seed touch a wall
+    assert result.wall_impulse > 0
 
 
 def make_enemies(n):
@@ -290,3 +358,26 @@ def test_the_player_is_hidden_from_the_hunter_by_default_and_can_be_shown(monkey
     seen.clear()
     run_episode(13, 0, horizon=1.0, hide_player=False)
     assert seen and all(player is not None for player in seen)
+
+
+def _start_position(level, seed, **kwargs):
+    from experiments.harness import run_episode
+    seen = []
+    run_episode(level, seed, horizon=0.1, trace=lambda t, game, hunter: seen.append((hunter.x, hunter.y)), **kwargs)
+    return seen[0]
+
+
+def test_a_random_start_puts_the_hunter_somewhere_new_for_each_seed_and_the_same_place_for_the_same_seed():
+    default = _start_position(14, 1)
+    starts = {_start_position(14, seed, random_start=True) for seed in range(6)}
+    assert len(starts) >= 4                                   # six seeds, mostly different places
+    assert default not in starts or len(starts) > 1
+    assert _start_position(14, 3, random_start=True) == _start_position(14, 3, random_start=True)
+
+
+def test_a_random_start_is_inside_the_maze_and_leaves_the_default_untouched():
+    import config
+    for seed in range(4):
+        x, y = _start_position(20, seed, random_start=True)
+        assert 0 <= x <= config.SCREEN_WIDTH and 0 <= y <= config.SCREEN_HEIGHT
+    assert _start_position(20, 0) == _start_position(20, 0, random_start=False)
