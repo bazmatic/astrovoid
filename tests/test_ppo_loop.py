@@ -156,3 +156,17 @@ def test_the_pool_returns_results_in_job_order_and_reuses_its_workers():
     assert [(e['level'], e['seed']) for e in second] == [(l, s) for l, s, _ in jobs]
     assert {e['pid'] for e in first + second} <= {e['pid'] for e in first} | {e['pid'] for e in second}
     assert len({e['pid'] for e in first + second}) <= 2          # two workers, the same two both times
+
+
+def test_progress_lines_are_flushed_so_a_redirected_log_shows_them(monkeypatch):
+    import io
+    import sys
+
+    class Spy(io.StringIO):
+        flushes = 0
+
+        def flush(self):
+            Spy.flushes += 1
+    monkeypatch.setattr(sys, 'stdout', Spy())
+    ppo.log_line('iteration=0')
+    assert Spy.flushes >= 1

@@ -240,8 +240,12 @@ def make_gate(workers, seeds, decision_frames, turn_rate):
     return gate
 
 
+def log_line(*parts):
+    print(*parts, flush=True)         # a log redirected to a file is otherwise block-buffered
+
+
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, check_every=5, check_seeds=6, lr=1e-4,
-             seed=0, decision_frames=6, turn_rate=1.0, rollout=None, gate=None, log=print, shaping=None):
+             seed=0, decision_frames=6, turn_rate=1.0, rollout=None, gate=None, log=log_line, shaping=None):
     import torch
     from experiments.score import mean_components
     policy = NeuralPolicy.load(start)                  # raises InvalidPolicy: never train from nothing
