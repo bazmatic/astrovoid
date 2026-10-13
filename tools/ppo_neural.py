@@ -284,6 +284,10 @@ def main(argv=None):
                         help='multiplies the wall-collision penalty in the training reward (the score is unchanged)')
     parser.add_argument('--fixed-start', action='store_true',
                         help='start the hunter beside the player on every episode instead of at a random open cell')
+    parser.add_argument('--still-speed', type=float, default=0.15,
+                        help='below this share of top speed counts as near-motionless')
+    parser.add_argument('--turn-change-penalty', type=float, default=0.0,
+                        help='points lost each time a turn starts or reverses')
     parser.add_argument('--horizon', type=float, default=DEFAULT_HORIZON,
                         help='seconds of game time per training episode')
     parser.add_argument('--still-penalty', type=float, default=0.0,
@@ -296,7 +300,9 @@ def main(argv=None):
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
                                'still_penalty': args.still_penalty, 'horizon': args.horizon,
-                               'random_start': not args.fixed_start})
+                               'random_start': not args.fixed_start,
+                               'still_speed': args.still_speed,
+                               'turn_change_penalty': args.turn_change_penalty})
     print('done | last checkpoint:', result['last'])
 
 

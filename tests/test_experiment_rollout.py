@@ -123,3 +123,27 @@ def test_a_random_start_rollout_begins_from_a_different_view_of_the_maze(spec):
     here = rollout.fly_rollout(14, 300, spec, horizon=3.0)
     there = rollout.fly_rollout(14, 300, spec, horizon=3.0, random_start=True)
     assert len(there['senses']) >= 25 and not np.array_equal(here['senses'][0], there['senses'][0])
+
+
+def _rewards_for_turns(turns, penalty):
+    recorder = rollout.RolloutRecorder(6, turn_change_penalty=penalty)
+    recorder._start_enemies = 1
+    for turn in turns:
+        recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
+        recorder.controls.append((turn, 0, 0))
+        recorder._events.append([0, 0, 0, 0.0, 0.0])
+    return recorder.arrays()[2]
+
+
+def test_starting_a_turn_or_reversing_one_costs_the_penalty_but_holding_or_stopping_does_not():
+    # none, start left, hold left, reverse to right, hold right, stop, start right again
+    rewards = _rewards_for_turns([1, 0, 0, 2, 2, 1, 2], 0.5)
+    assert rewards.tolist() == pytest.approx([0.0, -0.5, 0.0, -0.5, 0.0, 0.0, -0.5])
+
+
+def test_a_turn_on_the_very_first_decision_counts_as_starting_to_turn():
+    assert _rewards_for_turns([0, 0], 0.5).tolist() == pytest.approx([-0.5, 0.0])
+
+
+def test_no_turn_penalty_by_default():
+    assert not _rewards_for_turns([0, 2, 0, 2], 0.0).any()

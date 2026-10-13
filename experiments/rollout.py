@@ -12,12 +12,14 @@ KILL_REWARD_TOTAL = 100.0       # shared across every enemy that existed in the 
 class RolloutRecorder:
     """Per decision step: the senses, the controls the policy chose, and the events that followed."""
 
-    def __init__(self, decision_frames, wall_scale=1.0, hit_scale=1.0, still_penalty=0.0, still_speed=0.15):
+    def __init__(self, decision_frames, wall_scale=1.0, hit_scale=1.0, still_penalty=0.0, still_speed=0.15,
+                 turn_change_penalty=0.0):
         self.decision_frames = decision_frames
         self.wall_scale = wall_scale      # shaping: multiplies the wall-hit penalty in the reward only
         self.hit_scale = hit_scale        # likewise for the enemy-hit penalty
         self.still_penalty = still_penalty    # shaping: points lost per second spent slower than still_speed
         self.still_speed = still_speed        # as a fraction of the hunter's top speed
+        self.turn_change_penalty = turn_change_penalty    # points lost each time a turn starts or reverses
         self.senses, self.controls = [], []
         self._events = []                 # per step: kills, wall impulse, enemy hits, idle seconds, near-still seconds
         self._pending = False
@@ -71,14 +73,20 @@ class RolloutRecorder:
         rewards = (KILL_REWARD_TOTAL / total * events[:, 0] - weights.quotient * self.wall_scale * events[:, 1]
                    - weights.hit * self.hit_scale * events[:, 2] - weights.idle / 60.0 * events[:, 3]
                    - self.still_penalty * events[:, 4])
-        return (np.asarray(self.senses[:n], dtype=np.float32).reshape(n, SENSE_SIZE),
-                np.asarray(self.controls[:n], dtype=np.int8).reshape(n, 3),
+        controls = np.asarray(self.controls[:n], dtype=np.int8).reshape(n, 3)
+        # Turn control: 0 left, 1 none, 2 right. A turn starts (from none) or reverses when it differs from the
+        # previous decision's and is not 'none'; holding a turn, or stopping one, is free.
+        previous = np.concatenate([[1], controls[:-1, 0]]) if n else controls[:, 0]
+        changes = (controls[:, 0] != 1) & (controls[:, 0] != previous)
+        rewards = rewards - self.turn_change_penalty * changes
+        return (np.asarray(self.senses[:n], dtype=np.float32).reshape(n, SENSE_SIZE), controls,
                 rewards.astype(np.float32))
 
 
 def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
-                still_penalty=0.0, still_speed=0.15, random_start=False):
-    recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed)
+                still_penalty=0.0, still_speed=0.15, random_start=False, turn_change_penalty=0.0):
+    recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed,
+                               turn_change_penalty)
     result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder, random_start=random_start)
     senses, controls, rewards = recorder.arrays()
     return {'senses': senses, 'controls': controls, 'rewards': rewards, 'result': result}
