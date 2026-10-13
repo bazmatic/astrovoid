@@ -151,11 +151,26 @@ def test_close_closes_both_controllers(arena):
     assert all(c.closed for c in arena.scripted)
 
 
-def test_the_spawns_are_far_apart_and_clear_of_walls(maze):
+def test_the_spawns_are_far_apart_but_within_sight_of_each_other(maze):
     from entities.ship import Ship
-    player = Ship(maze.start_pos)
-    a, b = duel_spawns(maze, player)
-    assert math.dist(a, b) > 0.5 * math.hypot(config.SCREEN_WIDTH, config.SCREEN_HEIGHT) * 0.6
+    sight = 700.0
+    a, b = duel_spawns(maze, Ship(maze.start_pos), sight)
+    assert 0.5 * sight < math.dist(a, b) <= sight
+
+
+def test_in_a_dense_maze_the_spawns_still_have_a_clear_line_of_sight():
+    import random
+    from entities.ship import Ship
+    from hunter.visibility import local_segments, visible_point
+    pygame.init()
+    pygame.display.set_mode((320, 240))
+    random.seed(27)
+    dense = Maze(27, complexity=MazeComplexity.EXTREME, grid_size=32)
+    sight = 700.0
+    a, b = duel_spawns(dense, Ship(dense.start_pos), sight)
+    walls = local_segments(a, [(w.start, w.end) for w in dense.walls if w.active], sight)
+    assert visible_point(a, b, walls, sight) and math.dist(a, b) <= sight
+    assert math.dist(a, b) > 0.4 * sight                    # and not simply side by side
 
 
 def test_build_duel_makes_a_destructible_rules_hunter_and_a_distinct_neural_one(maze):

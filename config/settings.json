@@ -340,7 +340,9 @@
     "neuralTurnRate": 1.0,
     "lowGraphics": false,
     "duelHealth": 5,
-    "duelTimeoutSeconds": 120.0
+    "duelTimeoutSeconds": 120.0,
+    "duelMazeComplexity": "EXTREME",
+    "duelMazeGridSize": 32
   },
   "autoplay": {
     "firstLevel": 13,

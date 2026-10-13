@@ -423,7 +423,7 @@ To try a pilot without hunting for a Jev beacon, start the game with `ASTROVOID_
 calls the hunter in beside your ship (replacing one that is flying). The key does nothing without the variable.
 
 The **FUN** item on the main menu holds experimental levels. The first is **Pilot fight: Rules vs Vibes**: the rules
-pilot's hunter (green) and the neural pilot's hunter (magenta) fight in an empty maze while you watch, each shown the
+pilot's hunter (green) and the neural pilot's hunter (magenta) fight in a dense maze (the same EXTREME complexity as the late levels) while you watch, each shown the
 other as its enemy. It uses whatever policy is in `assets/neural/hunter.npz`; each hunter takes `game.duelHealth` hits (5),
 and a fight not settled within `game.duelTimeoutSeconds` (120) is a draw. Escape leaves it. It does not touch your
 profile.

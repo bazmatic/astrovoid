@@ -5,7 +5,7 @@ Status: implemented on branch feat/pilot-duel.
 ## Goal
 
 A new main-menu item, **FUN**, holds experimental levels. It starts with one: **Pilot fight: Rules vs Vibes**, an
-empty maze in which the rules pilot and the neural pilot, each flying a hunter, treat each other as the enemy and fight
+dense (EXTREME complexity, as in the late levels) maze in which the rules pilot and the neural pilot, each flying a hunter, treat each other as the enemy and fight
 until one is destroyed. The player watches; they do not fly.
 
 "Vibes" is the neural pilot. The name appears only in the menu.
@@ -15,7 +15,7 @@ until one is destroyed. The player watches; they do not fly.
 1. Main menu: START GAME, LEVELS, **FUN**, SELECT PROFILE, CONTROLS, QUIT.
 2. FUN opens a list of experimental levels (one entry for now: "Pilot fight: Rules vs Vibes"). Up and down move,
    confirm starts, cancel goes back to the main menu. Keyboard and controller, like the level select.
-3. The duel: an empty maze, two hunters starting far apart, the rules hunter and the neural hunter in distinguishable
+3. The duel: a dense maze, two hunters starting as far apart as they can be while still seeing each other, the rules hunter and the neural hunter in distinguishable
    colours with a small name tag. The player's ship is hidden and takes no part. A health pip row for each hunter.
 4. The level ends when one hunter is destroyed. A banner names the winner ("Rules wins", "Vibes wins"), then the game
    returns to the FUN list. If neither is destroyed within 120 seconds, or both are destroyed in the same frame, the banner says
@@ -34,8 +34,9 @@ until one is destroyed. The player watches; they do not fly.
   fired by one hunter damages the other (and never the one that fired it). Projectile damage and the damage-immunity
   window follow the existing hunter rules. Outside the duel nothing changes: hunters stay indestructible and their
   shots stay friendly.
-- **Start positions.** The two farthest-apart safe cells of the maze, the rules hunter on one and the neural hunter on
-  the other, facing each other.
+- **Start positions.** The farthest-apart pair of safe cells that have a clear line of sight within the pilots' sensor
+  range (a pilot only fights what it can see, and a rocky maze can hide the far corner), facing each other.
+- **The maze.** `game.duelMazeComplexity` (EXTREME) at `game.duelMazeGridSize` (32), built as level 27, with no enemies.
 - **Missing neural weights.** If the weights file is missing or invalid, the duel does not start. The screen shows
   "Vibes unavailable" with no winner and returns to the FUN list; it does not crash.
 - **Isolation.** The duel lives in its own module and state. The single-hunter game loop, the Jev beacon and the normal

@@ -69,7 +69,7 @@ def _hunter_hotkey_enabled() -> bool:
 
 
 DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel returns to the FUN list
-DUEL_GRID_SIZE = 14           # the duel maze's cells per side
+DUEL_MAZE_LEVEL = 27          # the level number the duel's maze is generated as (its look and seed)
 
 class Game:
     """Main game class managing state and game loop."""
@@ -506,20 +506,26 @@ class Game:
         return PilotWorker(client_factory=RulesClient)
 
     def start_duel(self) -> None:
-        """Pilot fight: the rules pilot's hunter against the neural pilot's, in an empty maze, player watching."""
+        """Pilot fight: the rules pilot's hunter against the neural pilot's, in a dense maze, player watching."""
         policy = load_neural_policy()
         if policy is None:
             self.fun_menu.notice = 'Vibes unavailable: no neural policy found'
             self.state = config.STATE_FUN
             return
+        game_settings = config.SETTINGS.game
+        try:
+            complexity = MazeComplexity[str(game_settings.duelMazeComplexity).upper()]
+        except KeyError:
+            self.fun_menu.notice = f'Duel unavailable: unknown maze complexity {game_settings.duelMazeComplexity!r}'
+            self.state = config.STATE_FUN
+            return
         self._close_hunter()
-        random.seed(0)
-        self.maze = Maze(1, complexity=MazeComplexity.EMPTY, grid_size=DUEL_GRID_SIZE)
+        random.seed(level_config.get_level_seed(DUEL_MAZE_LEVEL))
+        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize)
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
         self.ship = Ship(self.maze.start_pos)    # the hidden spectator: only here so spawns keep clear of it
         self.projectiles = []
         worker = self._make_duel_worker()
-        game_settings = config.SETTINGS.game
         try:
             self.duel = build_duel(self.maze, self.ship, worker, policy, game_settings.duelHealth,
                                    game_settings.duelTimeoutSeconds, game_settings.neuralDecisionFrames)

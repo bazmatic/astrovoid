@@ -392,6 +392,10 @@ class GameSettings:
     # The pilot duel (FUN menu): hits each hunter survives, and the game seconds before it is called a draw.
     duelHealth: int = 5
     duelTimeoutSeconds: float = 120.0
+    # The duel's maze: a complexity name (EMPTY, SIMPLE, NORMAL, COMPLEX or EXTREME) and its cells per side.
+    # EXTREME at 32 is how the densest real levels (20 to 27) are built.
+    duelMazeComplexity: str = "EXTREME"
+    duelMazeGridSize: int = 32
 
 
 @dataclass

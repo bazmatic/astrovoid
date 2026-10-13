@@ -110,3 +110,21 @@ def test_the_banner_names_the_winner_or_the_draw():
     assert banner_text(DuelResult('vibes', 'destroyed')) == 'VIBES WINS'
     assert banner_text(DuelResult(None, 'draw')) == 'DRAW'
     assert banner_text(DuelResult(None, 'timeout')) == 'DRAW: TIME UP'
+
+
+def test_the_duel_maze_is_the_extreme_one_not_an_empty_box(game, policy_file):
+    assert SETTINGS.game.duelMazeComplexity == 'EXTREME' and SETTINGS.game.duelMazeGridSize == 32
+    to_fun(game)
+    key(game, pygame.K_RETURN)
+    assert len(game.duel.maze.walls) > 250                     # an empty arena has only its outer wall
+    for side in game.duel.sides:                                # and both hunters still start in the clear
+        assert not side.hunter.check_wall_collision(game.duel.maze.walls, game.duel.maze.spatial_grid)
+    game.end_duel()
+
+
+def test_an_unknown_maze_complexity_leaves_you_in_the_list_with_a_notice(game, policy_file, monkeypatch):
+    monkeypatch.setattr(SETTINGS.game, 'duelMazeComplexity', 'bogus')
+    to_fun(game)
+    key(game, pygame.K_RETURN)
+    assert game.state == config.STATE_FUN and game.duel is None
+    assert 'unavailable' in game.fun_menu.notice.lower()

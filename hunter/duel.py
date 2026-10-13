@@ -1,4 +1,5 @@
 """A duel between two pilots' hunters in an empty maze. The rules only: no drawing, no menus."""
+import math
 import time
 from dataclasses import dataclass, replace
 from typing import Optional
@@ -11,7 +12,8 @@ from hunter.neural.controller import NeuralController
 from hunter.perception import HunterPerception
 from hunter.senses import Senses
 from hunter.settings_for import hunter_settings_for
-from hunter.spawn import nearest_hunter_spawn
+from hunter.spawn import nearest_hunter_spawn, resolve_hunter_spawn
+from hunter.visibility import local_segments, visible_point
 from utils.math_utils import get_angle_to_point
 
 # The Vibes hunter's look: the rules hunter keeps the standard green, so the two are told apart at a glance.
@@ -116,20 +118,35 @@ class DuelArena:
             side.controller.close()
 
 
-def duel_spawns(maze, player):
-    """Two safe cells as far apart as the maze allows: the safe cells nearest its opposite corners."""
+def duel_spawns(maze, player, sight):
+    """Two safe cells as far apart as they can be and still see each other: pilots only fight what they can see.
+
+    The first is the safe cell nearest the top-left corner. The second is the farthest safe cell with a clear line of
+    sight to it and within `sight` pixels (a rocky maze can hide the opposite corner).
+    """
     first = nearest_hunter_spawn((0, 0), maze, player)
-    second = nearest_hunter_spawn((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), maze, player)
-    if first == second:
-        raise ValueError('the maze has no room for two hunters')
-    return first, second
+    walls = local_segments(first, [(w.start, w.end) for w in maze.walls if w.active], sight)
+    cells = [(col, row) for row in range(maze.grid_height) for col in range(maze.grid_width)
+             if not maze.grid[row][col]]
+    centre = maze.position_calculator.grid_center_to_screen
+    for cell in sorted(cells, key=lambda c: -math.dist(first, centre(*c))):
+        if math.dist(first, centre(*cell)) > 0.9 * sight or not visible_point(first, centre(*cell), walls, sight):
+            continue
+        try:
+            second = resolve_hunter_spawn({'spawn_cell': list(cell)}, maze, player)
+        except ValueError:
+            continue
+        if math.dist(first, second) <= sight and visible_point(first, second, walls, sight):
+            return first, second
+    raise ValueError('the maze has no two clear spots that can see each other')
 
 
 def build_duel(maze, player, rules_worker, policy, health, timeout_seconds, decision_frames):
     """The rules pilot's hunter against the neural pilot's, facing each other from opposite corners."""
-    rules_at, vibes_at = duel_spawns(maze, player)
     rules_settings = replace(hunter_settings_for('rules'), indestructible=False, health=health)
     vibes_settings = replace(hunter_settings_for('neural'), indestructible=False, health=health)
+    sight = min(rules_settings.sensor_range(maze), vibes_settings.sensor_range(maze))
+    rules_at, vibes_at = duel_spawns(maze, player, sight)
     rules, vibes = HunterShip(rules_at, rules_settings), HunterShip(vibes_at, vibes_settings)
     for name, value in VIBES_COLORS.items():
         setattr(vibes, name, value)                  # on this ship only: the class, and normal hunters, keep their look
