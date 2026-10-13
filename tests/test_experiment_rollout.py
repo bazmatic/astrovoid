@@ -88,7 +88,7 @@ def test_a_hit_scale_multiplies_only_the_enemy_hit_penalty(spec):
 
 
 class _Counter:
-    kills = wall_impulse = hits_taken = spawned = 0
+    kills = wall_impulse = hits_taken = spawned = powerups = 0
     idle_seconds = 0.0
 
 
@@ -119,6 +119,27 @@ def test_moving_hunters_and_the_default_pay_no_still_penalty():
     assert _fly_frames(rollout.RolloutRecorder(6), [0.0] * 6)[0] == 0.0
 
 
+def test_speed_below_top_speed_costs_the_graded_speed_penalty_per_second():
+    recorder = rollout.RolloutRecorder(6, speed_penalty=3.0)
+    rewards = _fly_frames(recorder, [10.0, 10.0, 5.0, 5.0, 0.0, 0.0])      # shortfalls 0, 0, .5, .5, 1, 1
+    assert rewards[0] == pytest.approx(-3.0 * 3.0 / 60.0)
+
+
+def test_no_speed_penalty_at_top_speed_or_by_default():
+    assert _fly_frames(rollout.RolloutRecorder(6, speed_penalty=3.0), [10.0] * 6)[0] == 0.0
+    assert _fly_frames(rollout.RolloutRecorder(6), [0.0] * 6)[0] == 0.0
+
+
+def test_collected_powerups_pay_the_powerup_reward():
+    recorder = rollout.RolloutRecorder(6, powerup_reward=5.0)
+    recorder._start_enemies = 1
+    recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
+    recorder.controls.append((1, 0, 0))
+    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2])
+    assert recorder.arrays()[2][0] == pytest.approx(10.0)
+    assert rollout.RolloutRecorder(6).arrays()[2].size == 0
+
+
 def test_a_random_start_rollout_begins_from_a_different_view_of_the_maze(spec):
     here = rollout.fly_rollout(14, 300, spec, horizon=3.0)
     there = rollout.fly_rollout(14, 300, spec, horizon=3.0, random_start=True)
@@ -131,7 +152,7 @@ def _rewards_for_turns(turns, penalty):
     for turn in turns:
         recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
         recorder.controls.append((turn, 0, 0))
-        recorder._events.append([0, 0, 0, 0.0, 0.0])
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0])
     return recorder.arrays()[2]
 
 

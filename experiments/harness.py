@@ -45,6 +45,8 @@ class EventCounter:
         self.wall_impulse = 0.0
         self.hits_taken = 0
         self.idle_seconds = 0.0
+        self.powerups = 0          # crystals the hunter collected
+        self.cleared = False       # every enemy is dead: nothing is left to kill, so waiting is not idling
         self._alive = None
         self._in_wall = False
         self._last_hit = None
@@ -90,7 +92,7 @@ class EventCounter:
 
     def tick(self, now):
         """Time passes: seconds beyond IDLE_AFTER_SECONDS since the last kill are idle."""
-        if self._last_tick is not None and now - self._last_kill > IDLE_AFTER_SECONDS:
+        if self._last_tick is not None and not self.cleared and now - self._last_kill > IDLE_AFTER_SECONDS:
             self.idle_seconds += now - self._last_tick
         self._last_tick = now
 
@@ -174,6 +176,12 @@ def _random_cell_centre(game, level, seed):
     return maze.position_calculator.grid_center_to_screen(col, row)
 
 
+def _loose_crystals(game):
+    """The powerup crystals still lying in the maze (not the Jev beacon)."""
+    from entities.jev_beacon import JevBeacon
+    return [c for c in game.powerup_crystals if c.active and not isinstance(c, JevBeacon)]
+
+
 def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
@@ -193,10 +201,12 @@ def load_student_policy(student):
 
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
-                student=None, recorder=None, labeller=None, on_result=None, random_start=False):
+                student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `after_clear` keeps flying that many more seconds once the last enemy is dead (less if no crystal is left to
+    collect); the result still reports the time of the last kill.
     `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
     """
     global _game
@@ -281,6 +291,13 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         return original_damage()
     hunter.take_damage = counting_damage
 
+    original_collect = hunter.collect_powerup
+
+    def counting_collect():
+        counter.powerups += 1
+        return original_collect()
+    hunter.collect_powerup = counting_collect
+
     if recorder is not None:
         original_step = hunter.step
 
@@ -298,7 +315,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     counter.observe(alive)
     end = 'horizon'
     elapsed = 0.0
-    for frame in range(int(horizon * FPS)):
+    cleared_at = None
+    for frame in range(int((horizon + after_clear) * FPS)):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
         if recorder is not None:
@@ -318,11 +336,17 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         if trace is not None:
             trace(elapsed, game, hunter)
         if start_enemies and not alive:
-            end = 'cleared'
+            if cleared_at is None:
+                cleared_at = elapsed
+                counter.cleared = True
+                end = 'cleared'
+            if (elapsed - cleared_at >= after_clear or not _loose_crystals(game)):
+                break
+        elif cleared_at is None and elapsed >= horizon:
             break
     game._close_hunter()
     _clear_overrides(game)
-    result = EpisodeResult(level, seed, start_enemies, elapsed, counter.kills, counter.wall_hits,
+    result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None else cleared_at, counter.kills, counter.wall_hits,
                            counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse)
     if on_result is not None:
         on_result(result)

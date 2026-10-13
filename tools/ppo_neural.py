@@ -292,6 +292,12 @@ def main(argv=None):
                         help='seconds of game time per training episode')
     parser.add_argument('--still-penalty', type=float, default=0.0,
                         help='points lost per second spent near-motionless in the training reward')
+    parser.add_argument('--speed-penalty', type=float, default=0.0,
+                        help='points lost per second at standstill, scaling down linearly to zero at top speed')
+    parser.add_argument('--powerup-reward', type=float, default=0.0,
+                        help='points gained per powerup crystal the hunter collects in the training reward')
+    parser.add_argument('--after-clear', type=float, default=0.0,
+                        help='seconds an episode keeps going after the last enemy dies (less if no crystal is left)')
     parser.add_argument('--hit-scale', type=float, default=1.0,
                         help='multiplies the enemy-hit penalty in the training reward (the score is unchanged)')
     args = parser.parse_args(argv)
@@ -302,7 +308,9 @@ def main(argv=None):
                                'still_penalty': args.still_penalty, 'horizon': args.horizon,
                                'random_start': not args.fixed_start,
                                'still_speed': args.still_speed,
-                               'turn_change_penalty': args.turn_change_penalty})
+                               'turn_change_penalty': args.turn_change_penalty,
+                               'speed_penalty': args.speed_penalty,
+                               'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear})
     print('done | last checkpoint:', result['last'])
 
 

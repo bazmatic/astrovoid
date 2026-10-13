@@ -60,6 +60,57 @@ def test_the_hunter_cannot_die_and_the_episode_runs_on_after_hits(monkeypatch):
     assert not hasattr(result, 'died')
 
 
+def _clear_enemies_after(monkeypatch, frames):
+    from game import Game
+    original = Game.update
+    state = {'frames': 0}
+
+    def clear(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == frames:
+            for enemy in list(self.entity_manager.get_all_active_enemies()):
+                enemy.active = False
+    monkeypatch.setattr(Game, 'update', clear)
+
+
+def test_the_extra_phase_ends_at_once_when_no_crystal_is_left(monkeypatch):
+    _clear_enemies_after(monkeypatch, 10)
+    frames = []
+    result = run_episode(13, 0, horizon=5.0, after_clear=2.0, trace=lambda t, g, h: frames.append(t))
+    assert result.end == 'cleared' and frames[-1] - result.elapsed < 0.1
+
+
+def test_the_extra_phase_waits_for_a_crystal_up_to_after_clear(monkeypatch):
+    from entities.powerup_crystal import PowerupCrystal
+    from game import Game
+    original = Game.update
+    state = {'frames': 0}
+
+    def clear_and_drop(self, dt):
+        original(self, dt)
+        state['frames'] += 1
+        if state['frames'] == 10:
+            for enemy in list(self.entity_manager.get_all_active_enemies()):
+                enemy.active = False
+            far = PowerupCrystal((-5000.0, -5000.0))     # never reached
+            self.powerup_crystals.append(far)
+    monkeypatch.setattr(Game, 'update', clear_and_drop)
+    frames = []
+    result = run_episode(13, 0, horizon=5.0, after_clear=2.0, trace=lambda t, g, h: frames.append(t))
+    assert result.end == 'cleared' and result.elapsed < 1.0
+    assert 2.0 <= frames[-1] - result.elapsed + 0.05 < 2.2
+
+
+def test_waiting_after_the_last_kill_is_not_idling():
+    counter = harness.EventCounter()
+    counter.observe(make_enemies(1))
+    counter.tick(1.0)
+    counter.cleared = True
+    counter.tick(100.0)
+    assert counter.idle_seconds == 0.0
+
+
 def test_a_cleared_level_ends_the_episode_as_cleared(monkeypatch):
     from game import Game
     original = Game.update
