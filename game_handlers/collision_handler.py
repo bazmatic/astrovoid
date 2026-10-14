@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from entities.baby import Baby
     from entities.egg import Egg
     from entities.anemone import Anemone
+    from entities.rules_hunter import RulesHunter
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -90,7 +91,8 @@ class CollisionHandler:
         eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal'],
         anemones: Optional[List['Anemone']] = None,
-        jev_beacon_allowed: bool = False
+        jev_beacon_allowed: bool = False,
+        rules_hunters: Optional[List['RulesHunter']] = None
     ) -> bool:
         """Handle collisions between a projectile and enemies.
         
@@ -106,6 +108,7 @@ class CollisionHandler:
             powerup_crystals: List to add spawned crystals to.
             anemones: List of anemone enemies (optional).
             jev_beacon_allowed: Whether a kill may drop a Jev beacon.
+            rules_hunters: List of Rules hunters (optional).
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -250,6 +253,16 @@ class CollisionHandler:
                     
                     return True  # Projectile destroyed
         
+        # Check projectile-Rules hunter collision: it takes hits like a boss and leaves no crystal
+        for rules_hunter in rules_hunters or ():
+            if rules_hunter.active and projectile.active:
+                if projectile.check_circle_collision(rules_hunter.get_pos(), rules_hunter.radius):
+                    if rules_hunter.take_damage():
+                        rules_hunter.die()
+                        self.sound_manager.play_enemy_destroy()
+                        self._record_projectile_kill(projectile, rules_hunter)
+                    return True  # Projectile destroyed
+
         # Check projectile-baby collision
         for baby in babies:
             if baby.active and projectile.active:

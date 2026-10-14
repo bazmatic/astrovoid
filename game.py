@@ -50,7 +50,8 @@ from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
-from hunter.surroundings import GameSurroundings
+from hunter.surroundings import GameSurroundings, ProtagonistSurroundings
+from entities.rules_hunter import RulesHunter
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
@@ -267,6 +268,7 @@ class Game:
     def start_level(self) -> None:
         """Start a new level."""
         self._close_hunter()
+        self._close_rules_hunters()
         self.collision_handler.last_player_kill = None
         self.replaying = self.level < self.profile_manager.get_active_level()
         self.level_result = None
@@ -337,7 +339,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + 5,  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
         # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
@@ -362,6 +364,7 @@ class Game:
             self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
             anemone_keep_clear=(self.maze.start_pos, anemone_reach)
         )
+        self._spawn_rules_hunters(spawn_positions)
         # Anemones show their reach from the start, before the first update works it out
         for anemone in self.anemones:
             anemone.reach_px = anemone.reach(self.maze)
@@ -478,6 +481,63 @@ class Game:
         """Start the FUN-list entry with this key."""
         if key == 'pilot_duel':
             self.start_duel()
+
+    # How a Rules hunter's pilot worker is made. None: a threaded one answering on the real clock. The lab sets an
+    # instance attribute to give a synchronous worker on its own clock.
+    _rules_worker_factory = None
+
+    @property
+    def rules_hunters(self):
+        """The level's Rules hunters (the entity manager's list)."""
+        return self.entity_manager.rules_hunters
+
+    def protagonist(self):
+        """Whom the Rules hunters hunt: the player's ship. (The lab replaces this with the hunter.)"""
+        return self.ship
+
+    def _make_rules_worker(self):
+        if self._rules_worker_factory is not None:
+            return self._rules_worker_factory()
+        return PilotWorker(client_factory=RulesClient)
+
+    def _spawn_rules_hunters(self, spawn_positions):
+        """Place the level's Rules hunters on open ground: as far from the player as the maze allows, clear of every
+        other enemy. A level with no such room skips them (and says so) and stays playable."""
+        count = level_config.get_level_rules_hunter_count(self.level)
+        if not count or self.ship is None:
+            return
+        taken = list(self.entity_manager.get_all_enemy_positions())
+        start = (self.ship.x, self.ship.y)
+        clear = 2.0 * config.SHIP_SIZE * 2
+        candidates = sorted(
+            (p for p in spawn_positions
+             if all(math.hypot(p[0] - x, p[1] - y) > clear for x, y in taken)),
+            key=lambda p: -math.hypot(p[0] - start[0], p[1] - start[1]))
+        for pos in candidates[:count]:
+            self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
+        if len(self.rules_hunters) < count:
+            logging.getLogger(__name__).warning(
+                'Level %d: room for %d of %d Rules hunters', self.level, len(self.rules_hunters), count)
+
+    def _fly_rules_hunters(self, dt):
+        """Each Rules hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
+        for rules_hunter in self.rules_hunters:
+            if not rules_hunter.active:
+                continue
+            self.projectiles.extend(rules_hunter.fly(dt))
+            if self.ship is not None and self.ship.active and not self.ship.is_shield_active():
+                if self.ship.check_circle_collision(rules_hunter.get_pos(), rules_hunter.radius, rules_hunter):
+                    self.scoring.record_enemy_collision()
+
+    def _close_rules_hunters(self):
+        """Stop every Rules hunter's pilot and worker (a level ends, restarts, or the game closes)."""
+        for rules_hunter in self.rules_hunters:
+            rules_hunter.close()
+
+    def draw_rules_hunters(self, screen):
+        for rules_hunter in self.rules_hunters:
+            if rules_hunter.active:
+                rules_hunter.draw(screen)
 
     def _make_duel_worker(self):
         """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""
@@ -861,6 +921,7 @@ class Game:
             self.enemy_updater.update_eggs(
                 self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
             )
+            self._fly_rules_hunters(dt)
             self.entity_manager.update_dying(dt)
         
         if self.player_has_moved:
@@ -898,7 +959,7 @@ class Game:
             # Friendly projectile-enemy collisions share normal destruction effects.
             if self.collision_handler.handle_projectile_enemy_collisions(
                 projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
-                jev_beacon_allowed=self._jev_beacon_drop_allowed()
+                jev_beacon_allowed=self._jev_beacon_drop_allowed(), rules_hunters=self.rules_hunters
             ):
                 continue  # Projectile destroyed, skip adding to active list
             
@@ -1169,6 +1230,8 @@ class Game:
         for mother_boss in self.mother_bosses:
             if mother_boss.active:
                 mother_boss.draw(self.screen)
+
+        self.draw_rules_hunters(self.screen)
         
         # Draw Baby enemies
         for baby in self.babies:
@@ -1377,6 +1440,7 @@ class Game:
             if self.duel is not None:
                 self.end_duel()
             self._close_hunter()
+            self._close_rules_hunters()
             if self.hunter_worker is not None:
                 self.hunter_worker.close()
                 self.hunter_worker.join(2.0)
