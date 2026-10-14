@@ -36,3 +36,31 @@ class GameSurroundings:
 
     def friend(self):
         return self._game.ship if self._game._hunter_sees_player() else None
+
+
+class ProtagonistSurroundings:
+    """What a Rules hunter perceives: its protagonist and that protagonist's shots, and nothing else.
+
+    The protagonist is whoever the game names (`Game.protagonist()`): the player's ship in play, the hunter in the
+    lab. No other enemy, no pickup and no friend is shown, so the enemy never hunts or fires at anything else.
+    """
+
+    def __init__(self, game):
+        self._game = game
+
+    @property
+    def maze(self):
+        return self._game.maze
+
+    def enemies(self):
+        target = self._game.protagonist()
+        return [target] if target is not None and target.active else []
+
+    def threats(self):
+        return [p for p in self._game.projectiles if not p.is_enemy]
+
+    def pickups(self):
+        return []
+
+    def friend(self):
+        return None
