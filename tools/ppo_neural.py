@@ -260,6 +260,9 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
                          score=summary['score'], kills_per_min=summary['kills_per_min'],
                          wall_quotient_per_min=summary['wall_quotient_per_min'],
                          hits_taken_per_min=summary['hits_taken_per_min'],
+                         speed_fraction=float(np.mean([e.get('speed_fraction', 0.0) for e in flown])),
+                         powerups_per_episode=float(np.mean([e.get('powerups', 0) for e in flown])),
+                         upgraded_fraction=float(np.mean([e.get('upgraded_fraction', 0.0) for e in flown])),
                          rollout_s=t1 - t0, update_s=time.perf_counter() - t1)
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
@@ -296,6 +299,10 @@ def main(argv=None):
                         help='points lost per second at standstill, scaling down linearly to zero at top speed')
     parser.add_argument('--powerup-reward', type=float, default=0.0,
                         help='points gained per powerup crystal the hunter collects in the training reward')
+    parser.add_argument('--upgrade-bonus', type=float, default=0.0,
+                        help='points gained per second the hunter\'s guns are upgraded in the training reward')
+    parser.add_argument('--decoy-player', action='store_true',
+                        help='leave the parked player as a target for enemies (by default they chase only the hunter)')
     parser.add_argument('--after-clear', type=float, default=0.0,
                         help='seconds an episode keeps going after the last enemy dies (less if no crystal is left)')
     parser.add_argument('--hit-scale', type=float, default=1.0,
@@ -310,7 +317,8 @@ def main(argv=None):
                                'still_speed': args.still_speed,
                                'turn_change_penalty': args.turn_change_penalty,
                                'speed_penalty': args.speed_penalty,
-                               'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear})
+                               'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
+                               'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player})
     print('done | last checkpoint:', result['last'])
 
 

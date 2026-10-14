@@ -135,9 +135,25 @@ def test_collected_powerups_pay_the_powerup_reward():
     recorder._start_enemies = 1
     recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
     recorder.controls.append((1, 0, 0))
-    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2])
+    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2, 0.0])
     assert recorder.arrays()[2][0] == pytest.approx(10.0)
     assert rollout.RolloutRecorder(6).arrays()[2].size == 0
+
+
+def test_each_second_with_upgraded_guns_pays_the_upgrade_bonus():
+    from types import SimpleNamespace
+    recorder = rollout.RolloutRecorder(6, upgrade_bonus=6.0)
+    recorder._start_enemies = 1
+    for frame in range(6):
+        hunter = SimpleNamespace(vx=5.0, vy=0.0, max_speed=10.0, gun_upgrade_level=1 if frame < 3 else 0)
+        recorder.before_frame(SimpleNamespace(hunter_controller=SimpleNamespace(frames=frame, last_controls=(1, 0, 0))),
+                              hunter)
+        recorder.counted(_Counter(), frame / 60.0)
+        if frame == 0:
+            recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
+        recorder.after_frame()
+    assert recorder.arrays()[2][0] == pytest.approx(6.0 * 3 / 60.0)
+    assert recorder.upgraded_frames == 3
 
 
 def test_a_random_start_rollout_begins_from_a_different_view_of_the_maze(spec):
@@ -152,7 +168,7 @@ def _rewards_for_turns(turns, penalty):
     for turn in turns:
         recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
         recorder.controls.append((turn, 0, 0))
-        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0])
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
     return recorder.arrays()[2]
 
 

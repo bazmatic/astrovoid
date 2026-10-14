@@ -201,10 +201,13 @@ def load_student_policy(student):
 
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
-                student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0):
+                student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
+                 pursue_hunter=False):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `pursue_hunter` makes enemies chase the hunter alone: the parked player is no target (and, as with `hide_player`,
+    the hunter does not see it). Without it the parked ship is a decoy for whichever enemies are nearer to it.
     `after_clear` keeps flying that many more seconds once the last enemy is dead (less if no crystal is left to
     collect); the result still reports the time of the last kill.
     `trace`, if given, is called each frame with (seconds, game, hunter) for diagnostics.
@@ -227,8 +230,10 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     game.scoring.calculate_current_potential_score = lambda *a, **k: {
         'potential_score': 1000, 'score_percentage': 1.0}
     game.maze.check_exit_reached = lambda *a, **k: False
-    if hide_player:
+    if hide_player or pursue_hunter:
         game._hunter_sees_player = lambda: False
+    if pursue_hunter:
+        game.ship.observer = True
     game.hunter_worker = SyncWorker(params, clock)
     if student is not None and load_student_policy(student) is None:
         raise ValueError(f'student weights unusable: {student.weights}')

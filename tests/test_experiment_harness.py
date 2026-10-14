@@ -102,6 +102,17 @@ def test_the_extra_phase_waits_for_a_crystal_up_to_after_clear(monkeypatch):
     assert 2.0 <= frames[-1] - result.elapsed + 0.05 < 2.2
 
 
+def test_with_pursue_hunter_every_enemy_targets_the_hunter_not_the_parked_player():
+    from game_handlers.combat_targets import nearest_friendly
+    seen = []
+
+    def trace(t, game, hunter):
+        for enemy in game.entity_manager.get_all_active_enemies():
+            seen.append(nearest_friendly(enemy, game.ship, game.hunter) is game.hunter)
+    run_episode(13, 0, horizon=3.0, pursue_hunter=True, trace=trace)
+    assert seen and all(seen)
+
+
 def test_waiting_after_the_last_kill_is_not_idling():
     counter = harness.EventCounter()
     counter.observe(make_enemies(1))
@@ -148,7 +159,7 @@ def test_the_counter_adds_up_the_impulse_of_every_collision_frame():
 
 def test_an_episode_reports_the_impulse_walls_took_from_the_hunter():
     from experiments.harness import run_episode
-    result = run_episode(20, 0, horizon=40.0, student=None)
+    result = run_episode(20, 2, horizon=40.0, student=None)
     assert result.wall_hits >= 1                  # this level and seed touch a wall
     assert result.wall_impulse > 0
 

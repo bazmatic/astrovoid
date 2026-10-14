@@ -58,6 +58,7 @@ from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_b
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
 from hunter.duel_enemies import DuelEnemies
+from game_handlers.combat_targets import nearest_friendly_pos
 from hunter.rules_pilot import RulesClient
 from maze.config import MazeComplexity
 import logging
@@ -1124,8 +1125,9 @@ class Game:
     def _update_powerup_crystals(self, dt: float) -> None:
         """Update powerup crystals and collect any the ship or the hunter touches.
         
-        The player has first claim on a crystal both touch. A collected crystal
-        stays in the list until its burst has played.
+        The player has first claim on a crystal both touch. A crystal is drawn to
+        whichever of the two is nearer (an observer is no one's target). A collected
+        crystal stays in the list until its burst has played.
         
         Args:
             dt: Delta time since last update.
@@ -1134,7 +1136,11 @@ class Game:
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
         for crystal in self.powerup_crystals:
             if crystal.active:
-                crystal.update(dt, player_pos)
+                if isinstance(crystal, JevBeacon):
+                    crystal.update(dt, player_pos)
+                else:
+                    # A crystal is drawn to whichever of the player and the hunter is nearer.
+                    crystal.update(dt, nearest_friendly_pos(crystal, self.ship, self.hunter))
                 if isinstance(crystal, JevBeacon):
                     if crystal.check_circle_collision((self.ship.x, self.ship.y), self.ship.radius):
                         self.sound_manager.play_powerup_activation()
