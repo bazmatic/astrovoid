@@ -209,10 +209,10 @@ class TestRealGame:
         return game
 
     def test_scheduled_level_has_an_anemone_that_updates_and_draws(self, game):
-        game.level = 25  # Past the level files, so the schedule decides
+        game.level = 26  # Past the level files, so the schedule decides
         game.start_level()
         game.state = config.STATE_PLAYING
-        assert len(game.anemones) == level_rules.get_anemone_count(25) > 0
+        assert len(game.anemones) == level_rules.get_anemone_count(26) > 0
         assert game.anemones is game.entity_manager.anemones
         game.player_has_moved = True
         for _ in range(5):

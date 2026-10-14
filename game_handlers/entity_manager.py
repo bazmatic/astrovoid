@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from entities.baby import Baby
     from entities.egg import Egg
     from entities.anemone import Anemone
+    from entities.rules_hunter import RulesHunter
 
 
 class EntityManager:
@@ -31,6 +32,7 @@ class EntityManager:
         self.babies: List['Baby'] = []
         self.eggs: List['Egg'] = []
         self.anemones: List['Anemone'] = []
+        self.rules_hunters: List['RulesHunter'] = []
     
     def clear_all(self) -> None:
         """Clear all enemy lists."""
@@ -43,6 +45,7 @@ class EntityManager:
         self.babies.clear()
         self.eggs.clear()
         self.anemones.clear()
+        self.rules_hunters.clear()
     
     def get_all_enemy_positions(self) -> List[Tuple[float, float]]:
         """Get positions of all enemies for spawn position calculation.
@@ -60,6 +63,7 @@ class EntityManager:
         positions.extend([baby.get_pos() for baby in self.babies])
         positions.extend([egg.get_pos() for egg in self.eggs])
         positions.extend([anemone.get_pos() for anemone in self.anemones])
+        positions.extend([rh.get_pos() for rh in self.rules_hunters])
         return positions
     
     def get_all_active_enemies(self) -> Iterator:
@@ -95,6 +99,9 @@ class EntityManager:
         for anemone in self.anemones:
             if anemone.active:
                 yield anemone
+        for rules_hunter in self.rules_hunters:
+            if rules_hunter.active:
+                yield rules_hunter
     
     def get_all_enemies(self) -> Iterator:
         """Get iterator over every enemy, active or not.
@@ -103,7 +110,8 @@ class EntityManager:
             Enemy instances from all lists.
         """
         for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
-                      self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones):
+                      self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones,
+                      self.rules_hunters):
             yield from group
     
     def update_dying(self, dt: float) -> None:

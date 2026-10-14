@@ -144,6 +144,14 @@ def get_level_mother_boss_count(level: int) -> int:
     return get_mother_boss_count(level)
 
 
+def get_level_rules_hunter_count(level: int) -> int:
+    """Rules hunters on a level: the level file's `rules_hunter` count, else none."""
+    config = load_level_config(level)
+    if config and 'enemies' in config and 'rules_hunter' in config['enemies']:
+        return int(config['enemies']['rules_hunter'])
+    return 0
+
+
 def get_level_egg_count(level: int) -> int:
     """Get egg count for a level.
     
@@ -208,8 +216,9 @@ def get_maze_grid_size(level: int) -> int:
 
 
 def is_boss_level(level: int) -> bool:
-    """A boss level is any level with a split boss or a mother boss on it."""
-    return get_level_split_boss_count(level) + get_level_mother_boss_count(level) > 0
+    """A boss level is any level with a split boss, a mother boss or a Rules hunter on it."""
+    return (get_level_split_boss_count(level) + get_level_mother_boss_count(level)
+            + get_level_rules_hunter_count(level)) > 0
 
 
 def get_level_hunter_config(level: int):
