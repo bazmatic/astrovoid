@@ -71,7 +71,7 @@ def test_the_trial_matches_what_the_ship_really_does_when_the_teacher_flies():
         def before_frame(self, game, hunter):
             super().before_frame(game, hunter)
             if self._count % self.decision_frames == 0:
-                controller = game.hunter_controller
+                controller = game.hunter_flight.controller
                 self._started_with = controller.action
                 self._expected = shadow.trial_controls(game, hunter, controller.action, self.decision_frames)
                 self._controller = controller

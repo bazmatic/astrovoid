@@ -1,17 +1,12 @@
 """A duel between two pilots' hunters in an empty maze. The rules only: no drawing, no menus."""
 import math
 import random
-import time
 from dataclasses import dataclass, replace
 from typing import Optional
 
 import config
 from entities.hunter_ship import HunterShip
-from hunter.controller import HunterController
-from hunter.fire_control import find_firing_solution
-from hunter.neural.controller import NeuralController
-from hunter.perception import HunterPerception
-from hunter.senses import Senses
+from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn
 from hunter.visibility import local_segments, visible_point
@@ -32,25 +27,52 @@ class DuelResult:
 class Combatant:
     name: str
     hunter: HunterShip
-    controller: object
-    perception: object = None
+    pilot: object                # a WorkerPilot or NeuralPilot (see hunter.flight)
+    flight: HunterFlight = None  # built by the arena
+
+
+class DuelSurroundings:
+    """One side's surroundings in a duel (see hunter.surroundings): the opponent and any enemies to fight,
+    only the opponent's and the enemies' bullets as threats, nothing to pick up and no friend."""
+
+    def __init__(self, arena, side):
+        self._arena, self._side = arena, side
+
+    @property
+    def maze(self):
+        return self._arena.maze
+
+    def enemies(self):
+        enemies = self._arena.enemies
+        return [self._arena._other(self._side).hunter] + (enemies.active() if enemies is not None else [])
+
+    def threats(self):
+        # Only the opponent's bullets (and the enemies') are a danger to this pilot, not its own
+        enemies = self._arena.enemies
+        return self._arena.shots[self._arena._other(self._side).name] + (
+            enemies.bullets if enemies is not None else [])
+
+    def pickups(self):
+        return []
+
+    def friend(self):
+        return None
 
 
 class DuelArena:
     """Two hunters, each shown the other as an enemy, until one is destroyed or the time runs out."""
 
-    def __init__(self, maze, combatants, timeout_seconds, clock=time.monotonic, enemies=None):
+    def __init__(self, maze, combatants, timeout_seconds, enemies=None):
         if len(combatants) != 2:
             raise ValueError('a duel needs exactly two combatants')
-        self.maze, self.sides, self.clock = maze, list(combatants), clock
+        self.maze, self.sides = maze, list(combatants)
         self.enemies = enemies                      # a DuelEnemies, or None for a pure duel
         self.timeout_seconds = timeout_seconds
         self.elapsed = 0.0
         self.result = None
         self.shots = {side.name: [] for side in self.sides}
         for side in self.sides:
-            neural = getattr(side.controller, 'kind', None) == 'neural'
-            side.perception = Senses(side.hunter.settings) if neural else HunterPerception(side.hunter.settings)
+            side.flight = HunterFlight(side.hunter, side.pilot, DuelSurroundings(self, side))
 
     def _other(self, side):
         return self.sides[1] if side is self.sides[0] else self.sides[0]
@@ -60,9 +82,8 @@ class DuelArena:
         if self.result is not None:
             return
         self.elapsed += dt / config.FPS
-        now = self.clock()
         for side in self.sides:
-            self._fly(side, dt, now)
+            self._fly(side, dt)
         if self.enemies is not None:
             self.enemies.update(dt, [side.hunter for side in self.sides])
         first, second = self.sides
@@ -71,29 +92,11 @@ class DuelArena:
         self._move_shots(dt)
         self._judge()
 
-    def _fly(self, side, dt, now):
-        hunter, other = side.hunter, self._other(side)
-        if not hunter.active:
-            side.controller.close()
-            return
-        foes = [other.hunter] + (self.enemies.active() if self.enemies is not None else [])
-        # Only the opponent's bullets (and the enemies') are a danger to this pilot, not its own
-        threats = self.shots[other.name] + (self.enemies.bullets if self.enemies is not None else [])
-        if getattr(side.controller, 'kind', None) == 'neural':
-            action = side.controller.tick(lambda last_controls, t: side.perception.observe(
-                hunter, self.maze, foes, threats, [], None, last_controls, t))
-        else:
-            action = side.controller.tick(lambda t, generation: side.perception.observe(
-                hunter, self.maze, None, foes, threats, side.controller.action, t, generation))
-        solution = None
-        if action.track or action.fire or hunter.burst_remaining:
-            solution = find_firing_solution(hunter, foes, self.maze, hunter.settings)
-        shots = hunter.step(dt, action, solution)
-        if shots:
-            for shot in shots:
-                shot.is_enemy = True                 # the pilots read a bullet's allegiance from this flag
-            self.shots[side.name].extend(shots)
-        hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
+    def _fly(self, side, dt):
+        shots = side.flight.fly(dt)
+        for shot in shots:
+            shot.is_enemy = True                     # the pilots read a bullet's allegiance from this flag
+        self.shots[side.name].extend(shots)
 
     def _move_shots(self, dt):
         for side in self.sides:
@@ -125,7 +128,7 @@ class DuelArena:
 
     def close(self):
         for side in self.sides:
-            side.controller.close()
+            side.flight.close()
 
 
 def duel_spawns(maze, player, sight, rng=None):
@@ -172,6 +175,6 @@ def build_duel(maze, player, rules_worker, policy, health, timeout_seconds, deci
     rules.angle = get_angle_to_point(rules_at, vibes_at)
     vibes.angle = get_angle_to_point(vibes_at, rules_at)
     return DuelArena(maze, [
-        Combatant('rules', rules, HunterController(rules_worker, rules_settings)),
-        Combatant('vibes', vibes, NeuralController(policy, decision_frames)),
+        Combatant('rules', rules, WorkerPilot(rules_worker)),
+        Combatant('vibes', vibes, NeuralPilot(policy, decision_frames)),
     ], timeout_seconds)

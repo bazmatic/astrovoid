@@ -14,6 +14,7 @@ from entities.command_recorder import CommandRecorder
 from entities.enemy import Enemy
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
+from hunter.surroundings import GameSurroundings
 from hunter.model import PilotResult, PilotDecision, ACTIONS
 from entities.jev_beacon import JevBeacon
 from tests.test_hunter_controller import Worker
@@ -36,8 +37,9 @@ def game(monkeypatch, tmp_path):
     g.enemy_updater = EnemyUpdater()
     g.collision_handler = CollisionHandler(g.sound_manager,g.scoring,g.command_recorder)
     g.star_indicator = Mock()
-    g.hunter = g.hunter_controller = g.hunter_perception = None
+    g.hunter_flight = None
     g.hunter_worker = None
+    g.hunter_surroundings = GameSurroundings(g)
     monkeypatch.setattr(level_config,'get_maze_complexity',lambda _:MazeComplexity.EMPTY)
     monkeypatch.setattr(level_config,'get_maze_grid_size',lambda _:10)
     monkeypatch.setattr(level_config,'get_level_seed',lambda _:1)
@@ -107,13 +109,13 @@ def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
     game._update_hunter(1)
     assert game.hunter.vx > 0
     assert any(p.source == 'hunter' for p in game.projectiles)
-    old = game.hunter
+    old, old_flight = game.hunter, game.hunter_flight
     game.start_level()
     assert game.hunter is None
     summon(game)
     assert game.hunter is not old
     assert game.hunter.health == 3
-    assert not game.hunter_perception.contacts
+    assert game.hunter_flight is not old_flight      # a new flight: nothing remembered from the last one
 
 
 def test_real_update_pauses_requests_and_keeps_dead_hunter_dead(game):
@@ -131,10 +133,10 @@ def test_real_update_pauses_requests_and_keeps_dead_hunter_dead(game):
     game.player_has_moved = True
     game.update(1)
     assert len(game.hunter_worker.sent) == 1
-    generation = game.hunter_controller.generation
+    generation = game.hunter_flight.controller.generation
     game.state = config.STATE_QUIT_CONFIRM
     game.update(1)
-    assert game.hunter_controller.generation != generation
+    assert game.hunter_flight.controller.generation != generation
     assert not game.hunter_worker.busy
     game.state = config.STATE_PLAYING
     game.update(1)
@@ -143,4 +145,4 @@ def test_real_update_pauses_requests_and_keeps_dead_hunter_dead(game):
     dead.active = False
     game.update(1)
     assert game.hunter is dead
-    assert game.hunter_controller.closed
+    assert game.hunter_flight.controller.closed

@@ -24,8 +24,13 @@ SETTINGS = replace(HunterSettings(), indestructible=False, health=3)
 class ScriptedRules:
     """Stands in for HunterController: asks for an observation each tick, then flies the given action."""
 
+    status = 'active'
+
     def __init__(self, action=NEUTRAL):
         self.action, self.seen, self.closed = action, [], False
+
+    def controller(self, settings):
+        return self                               # its own pilot
 
     def tick(self, observe, running=True):
         self.seen.append(json.loads(observe(0.0, 0).state_json))
@@ -37,9 +42,13 @@ class ScriptedRules:
 
 class ScriptedNeural:
     kind = 'neural'
+    status = 'active'
 
     def __init__(self, action=NEUTRAL):
         self.action, self.seen, self.closed = action, [], False
+
+    def controller(self, settings):
+        return self
 
     def tick(self, senses_factory, running=True):
         self.seen.append(senses_factory((1, 0, 0), 0.0))
@@ -146,6 +155,17 @@ def test_bullets_stop_at_walls_and_do_not_survive_their_lifetime(arena):
     assert far not in arena.shots['rules']
 
 
+def test_a_burst_is_dropped_once_a_pilot_is_not_active_as_in_the_game(arena):
+    rules, _ = arena.scripted
+    rules.status = 'coasting'
+    hunter, opponent = arena.sides[0].hunter, arena.sides[1].hunter
+    opponent.x, opponent.y = cell(arena.maze, 4, 3)                                        # within a bullet's reach
+    hunter.angle = math.degrees(math.atan2(opponent.y - hunter.y, opponent.x - hunter.x))   # opponent in its sights
+    hunter.burst_remaining, hunter.fire_remaining = 3, 0.0
+    arena.update(1.0)
+    assert hunter.burst_remaining == 0 and arena.shots['rules'] == []
+
+
 def test_close_closes_both_controllers(arena):
     arena.close()
     assert all(c.closed for c in arena.scripted)
@@ -180,7 +200,7 @@ def test_build_duel_makes_a_destructible_rules_hunter_and_a_distinct_neural_one(
                       timeout_seconds=120.0, decision_frames=6)
     rules, vibes = duel.sides
     assert (rules.name, vibes.name) == ('rules', 'vibes')
-    assert isinstance(rules.controller, HunterController) and isinstance(vibes.controller, NeuralController)
+    assert isinstance(rules.flight.controller, HunterController) and isinstance(vibes.flight.controller, NeuralController)
     assert rules.hunter.health == vibes.hunter.health == 5
     assert not rules.hunter.settings.indestructible and not vibes.hunter.settings.indestructible
     assert rules.hunter.settings.turn_rate_multiplier == hunter_settings_for('rules').turn_rate_multiplier

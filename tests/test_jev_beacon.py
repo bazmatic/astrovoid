@@ -71,8 +71,7 @@ def test_collecting_the_beacon_summons_the_hunter_beside_it(game):
     assert game.hunter is not None and game.hunter.active
     reach = math.hypot(game.maze.cell_size_x, game.maze.cell_size_y)
     assert 0 < math.dist(game.hunter.get_pos(), (game.ship.x, game.ship.y)) <= reach
-    assert game.hunter_controller is not None and game.hunter_perception is not None
-    # It is not a gun crystal
+        # It is not a gun crystal
     assert game.ship.gun_upgrade_level == 0
 
 

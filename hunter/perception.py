@@ -39,6 +39,12 @@ class HunterPerception:
                 'heading': getattr(entity,'angle',None), 'radius': entity.radius,
                 'distance': math.hypot(dx,dy), 'bearing': math.degrees(math.atan2(dy,dx)) % 360}
 
+    def perceive(self, hunter, surroundings, previous_action, now, generation):
+        """The observation of `surroundings` (see hunter.surroundings) as they are now."""
+        return self.observe(hunter, surroundings.maze, surroundings.friend(), surroundings.enemies(),
+                            surroundings.threats(), previous_action, now, generation,
+                            powerups=surroundings.pickups())
+
     def observe(self, hunter, maze, player, enemies, projectiles, previous_action, now, generation,
                 powerups=()):
         origin = hunter.get_pos()

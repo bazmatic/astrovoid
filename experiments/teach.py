@@ -29,11 +29,7 @@ class StepRecorder:
 
     def before_frame(self, game, hunter):
         if self._count % self.decision_frames == 0:
-            enemies = game._hunter_entities()
-            sense = self._senses_obj.observe(
-                hunter, game.maze, enemies, game.projectiles,
-                [c for c in game.powerup_crystals if type(c).__name__ != 'JevBeacon'],
-                game.ship if game._hunter_sees_player() else None, self._last, self._count / 60.0)
+            sense = self._senses_obj.perceive(hunter, game.hunter_surroundings, self._last, self._count / 60.0)
             self.senses.append(sense)
 
     def add_frame(self, rotation, engine, trigger):

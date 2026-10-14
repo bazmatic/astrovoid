@@ -21,10 +21,10 @@ class DaggerLabeller:
         self._pending = None
 
     def before_frame(self, game, hunter, frame):
-        controller = game.hunter_controller
+        controller = game.hunter_flight.controller
         if self.teacher is None:
             self.teacher = ShadowTeacher(self.params, hunter.settings)
-            self._spy_on_the_senses(game)
+            game.hunter_flight.on_observed(self._observed)
         self.teacher.decide(game, hunter, frame / 60.0, frame)
         self._pending = None
         if controller.frames % self.decision_frames == 0:
@@ -32,18 +32,12 @@ class DaggerLabeller:
             if self.beta > 0 and self.rng.random() < self.beta:
                 controller.override = to_action(self._pending)
 
-    def _spy_on_the_senses(self, game):
-        """Record the senses the controller builds for this step, paired with the teacher's label."""
-        original = game._neural_senses
-
-        def spy(last_controls, now):
-            sense = original(last_controls, now)
-            if self._pending is not None:
-                self.senses.append(sense)
-                self.labels.append(self._pending)
-                self._pending = None
-            return sense
-        game._neural_senses = spy
+    def _observed(self, sense):
+        """Record the senses the student is shown for this step, paired with the teacher's label."""
+        if self._pending is not None:
+            self.senses.append(sense)
+            self.labels.append(self._pending)
+            self._pending = None
 
     def arrays(self):
         n = len(self.labels)

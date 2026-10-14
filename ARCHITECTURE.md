@@ -92,6 +92,22 @@ The entity system provides a foundation for all game objects:
   - Provides spawn positions for enemies
   - Converts grid to wall segments for collision detection
 
+### Hunter System (`hunter/`)
+
+The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms).
+
+- **`flight.py`**: `HunterFlight` - one hunter in play with its pilot, from its summons until it is closed
+  - Built from the hunter's ship, a pilot (`WorkerPilot` for Jev or the rules pilot, `NeuralPilot` for the neural one) and its surroundings
+  - `fly(dt)` flies one frame and returns the shots fired; `pause()` holds it still; `close()` ends it
+  - Picks the observer the pilot reads, consults fire control, drops a burst no live decision backs, and settles the ship against the walls
+  - The ship's settings are the flight's, fixed for its life
+  - `on_observed(fn)` lets the lab record what the pilot is shown
+- **`surroundings.py`**: what the hunter may perceive at the moment it looks (maze, enemies, threats, pickups, the visible friend)
+  - `GameSurroundings` answers for a level; `DuelSurroundings` (in `duel.py`) for each side of a duel
+- **`duel.py`**: `DuelArena` - two hunter flights fighting each other
+
+`Game`, `DuelArena` and the experiments harness each hold a `HunterFlight` rather than wiring the ship, pilot and observers themselves.
+
 ### Scoring System (`scoring/`)
 
 - **`system.py`**: `ScoringSystem` - Tracks game metrics
