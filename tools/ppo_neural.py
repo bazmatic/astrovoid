@@ -283,7 +283,10 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
             history.append(stats)
-            log(' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items()))
+            line = ' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items())
+            log(line)
+            with open(out_dir / 'train.log', 'a') as record:     # the dashboard reads the newest run's train.log
+                record.write(line + '\n')
     finally:
         if pooled is not None:
             pooled.close()
