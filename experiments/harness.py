@@ -9,10 +9,13 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import Mock
 
+from entities.hunter_ship import HunterShip
+from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.jev_pilot import JevPilot
 from hunter.model import HunterSettings, PilotResult
 from hunter.rule_params import DEFAULT
 from hunter.rules_pilot import RulesClient
+from hunter.spawn import nearest_hunter_spawn
 
 FPS = 60
 IDLE_AFTER_SECONDS = 20.0
@@ -186,7 +189,7 @@ def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
 
-_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_neural_senses')
+_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
 
 
 def _clear_overrides(game):
@@ -234,49 +237,33 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         game._hunter_sees_player = lambda: False
     if pursue_hunter:
         game.ship.observer = True
+    # The lab's pilot answers synchronously on the episode clock. The game holds the same worker, so it never
+    # warms up a real one of its own.
     game.hunter_worker = SyncWorker(params, clock)
-    if student is not None and load_student_policy(student) is None:
-        raise ValueError(f'student weights unusable: {student.weights}')
-    # The lab builds its own pilot below; the game's neural setting must not leak into a rules episode.
-    configured = config.SETTINGS.game.hunterPilot
-    if configured == 'neural':
-        config.SETTINGS.game.hunterPilot = 'rules'
-    try:
-        game._summon_hunter(_random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y))
-    finally:
-        config.SETTINGS.game.hunterPilot = configured
-    hunter, controller = game.hunter, game.hunter_controller
     if student is None:
-        controller.clock = clock
+        pilot = WorkerPilot(game.hunter_worker, clock)
     else:
-        # A student flies through the game's own neural path: replace whatever controller the
-        # configured pilot built with a NeuralController on the student's weights.
+        if load_student_policy(student) is None:
+            raise ValueError(f'student weights unusable: {student.weights}')
         from experiments.student import load_policy
-        from hunter.neural.controller import NeuralController
         import numpy as np
-        controller = NeuralController(
-            load_policy(student), student.decision_frames, greedy=student.greedy,
-            rng=None if student.greedy else np.random.default_rng(student.sample_seed))
-        game.hunter_controller = controller
-    # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
-    # with a real-clock controller) must not replace it, and no new beacon may drop.
-    game._summon_hunter = lambda near: None
-    game._jev_beacon_drop_allowed = lambda: False
+        pilot = NeuralPilot(load_policy(student), student.decision_frames, greedy=student.greedy,
+                            rng=None if student.greedy else np.random.default_rng(student.sample_seed))
     # The hunter stays indestructible, as in the game; hits are counted, not suffered.
     settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
                        sensor_range_fraction=params.sensor_range_fraction,
                        turn_rate_multiplier=(params.turn_rate_multiplier if student is None
                                              else student.turn_rate))
-    hunter.settings = settings
-    if student is None:
-        controller.settings = settings
-    else:
-        from hunter.senses import Senses
-        game.hunter_senses = Senses(settings)
-    # The perception reads its own copy of the settings (how far the hunter sees).
-    game.hunter_perception.settings = settings
-    # The ship fixes its turn rate when it is built, so set it on the ship too.
-    hunter.rotation_speed_multiplier = settings.turn_rate_multiplier
+    near = _random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y)
+    game._close_hunter()
+    flight = HunterFlight(HunterShip(nearest_hunter_spawn(near, game.maze, game.ship), settings),
+                          pilot, game.hunter_surroundings)
+    game.hunter_flight = flight
+    hunter = flight.ship
+    # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
+    # with a real-clock controller) must not replace it, and no new beacon may drop.
+    game._summon_hunter = lambda near: None
+    game._jev_beacon_drop_allowed = lambda: False
 
     counter = EventCounter()
 
@@ -331,7 +318,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         game.update(1.0)
         if recorder is not None:
             recorder.after_frame()
-        if game.hunter is not hunter or game.hunter_controller is not controller:
+        if game.hunter_flight is not flight:
             raise RuntimeError('hunter was replaced during the episode')
         alive = _active_enemies(game)
         counter.observe(alive)

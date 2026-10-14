@@ -71,7 +71,7 @@ def test_starting_the_pilot_fight_builds_a_duel_and_leaves_the_normal_hunter_alo
     key(game, pygame.K_RETURN)
     assert game.state == config.STATE_DUEL and game.duel is not None
     assert [s.name for s in game.duel.sides] == ['rules', 'vibes']
-    assert game.hunter is None and game.hunter_controller is None and game.hunter_worker is None
+    assert game.hunter_flight is None and game.hunter_worker is None
     assert not game.duel.maze.exit.active                          # no exit portal drawn: nobody is flying out
     for _ in range(3):
         game.update(1.0)

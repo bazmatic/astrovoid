@@ -37,17 +37,14 @@ class RolloutRecorder:
     # --- called by the harness ---
     def begin(self, game, hunter, settings):
         self._start_enemies = len(list(game.entity_manager.get_all_active_enemies()))
-        original = game._neural_senses
+        game.hunter_flight.on_observed(self._observed)
 
-        def spy(last_controls, now):
-            sense = original(last_controls, now)
-            if self._pending:
-                self.senses.append(sense)
-            return sense
-        game._neural_senses = spy
+    def _observed(self, sense):
+        if self._pending:
+            self.senses.append(sense)
 
     def before_frame(self, game, hunter):
-        self._controller = game.hunter_controller
+        self._controller = game.hunter_flight.controller
         if self._controller.frames % self.decision_frames == 0:
             self._pending = True
             self._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])

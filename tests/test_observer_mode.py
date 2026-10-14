@@ -52,8 +52,8 @@ def _crystal_game(monkeypatch, ship_at, hunter_at, observer=False):
     from entities.powerup_crystal import PowerupCrystal
     g = game_module.Game.__new__(game_module.Game)
     g.ship = SimpleNamespace(x=ship_at[0], y=ship_at[1], radius=8, active=True, observer=observer)
-    g.hunter = SimpleNamespace(x=hunter_at[0], y=hunter_at[1], radius=8, active=True,
-                               get_pos=lambda: hunter_at)
+    g.hunter_flight = SimpleNamespace(ship=SimpleNamespace(x=hunter_at[0], y=hunter_at[1], radius=8, active=True,
+                                                           get_pos=lambda: hunter_at))
     g.ship.get_pos = lambda: ship_at
     g.powerup_crystals = [PowerupCrystal((0.0, 0.0))]
     g.collision_handler = Mock()

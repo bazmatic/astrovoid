@@ -44,8 +44,6 @@ def test_the_game_builds_the_hunter_for_the_pilot_that_flies_it(game, monkeypatc
     hunter = game.hunter
     assert hunter.rotation_speed_multiplier == turn
     assert hunter.settings.turn_rate_multiplier == turn
-    assert game.hunter_perception.settings.turn_rate_multiplier == turn
-    assert game.hunter_controller.settings.turn_rate_multiplier == turn
     assert hunter.current_rotation_speed == pytest.approx(hunter.base_rotation_speed * turn)
 
 

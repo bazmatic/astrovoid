@@ -32,9 +32,9 @@ def test_the_game_builds_a_neural_controller_for_the_neural_pilot(game, monkeypa
     monkeypatch.setattr(loader, 'DEFAULT_PATH', str(good))
     playing(game)
     game._summon_hunter((game.ship.x, game.ship.y))
-    assert isinstance(game.hunter_controller, NeuralController)
+    assert isinstance(game.hunter_flight.controller, NeuralController)
     assert game.hunter.rotation_speed_multiplier == SETTINGS.game.neuralTurnRate
-    assert game.hunter_controller.unavailable is False
+    assert game.hunter_flight.controller.unavailable is False
 
 
 def test_a_missing_policy_leaves_the_hunter_unavailable_and_still(game, monkeypatch, tmp_path):
@@ -46,7 +46,7 @@ def test_a_missing_policy_leaves_the_hunter_unavailable_and_still(game, monkeypa
     x, y = game.hunter.x, game.hunter.y
     for _ in range(30):
         game._update_hunter(1.0)
-    assert game.hunter_controller.status == 'unavailable'
+    assert game.hunter_flight.status == 'unavailable'
     assert (game.hunter.x, game.hunter.y) == (x, y)
 
 

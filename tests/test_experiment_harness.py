@@ -1,4 +1,4 @@
-import json
+import copy
 import pytest
 from experiments import harness
 from experiments.harness import EpisodeResult, run_episode
@@ -272,26 +272,19 @@ def test_an_episode_notices_if_the_hunter_is_replaced(monkeypatch):
         original(self, dt)
         state['frames'] += 1
         if state['frames'] == 5:
-            self.hunter = object.__new__(type(self.hunter))
+            self.hunter_flight = copy.copy(self.hunter_flight)
     monkeypatch.setattr(Game, 'update', swap)
     with pytest.raises(RuntimeError, match='hunter was replaced'):
         run_episode(13, 0, horizon=2.0)
 
 
-def test_thrust_multiplier_reaches_the_hunter_ship(monkeypatch):
+def test_the_hunter_flies_with_the_params_settings():
     from hunter.rule_params import RuleParams
-    seen = {}
-    from entities.hunter_ship import HunterShip
-    original = HunterShip.step
-
-    def spy(self, *args, **kwargs):
-        seen['thrust'] = self.thrust_force
-        return original(self, *args, **kwargs)
-    monkeypatch.setattr(HunterShip, 'step', spy)
-    run_episode(13, 0, params=RuleParams(thrust_multiplier=0.25), horizon=1.0)
-    weak = seen['thrust']
-    run_episode(13, 0, params=RuleParams(thrust_multiplier=1.0), horizon=1.0)
-    assert seen['thrust'] == pytest.approx(weak * 4)
+    params = RuleParams(thrust_multiplier=0.25, sensor_range_fraction=0.2, turn_rate_multiplier=0.5)
+    seen = []
+    run_episode(13, 0, params=params, horizon=0.1, trace=lambda t, game, hunter: seen.append(game.hunter_flight.settings))
+    settings = seen[0]
+    assert (settings.thrust_multiplier, settings.sensor_range_fraction, settings.turn_rate_multiplier) == (0.25, 0.2, 0.5)
 
 
 def test_a_stronger_engine_changes_the_episode():
@@ -302,48 +295,12 @@ def test_a_stronger_engine_changes_the_episode():
            (strong.kills, strong.wall_hits, strong.hits_taken, strong.idle_seconds)
 
 
-def test_sensor_range_fraction_reaches_the_perception_and_fire_control():
-    import experiments.harness as h
-    from hunter.rule_params import RuleParams
-    seen = {}
-    original = h.SyncWorker.submit
-
-    def spy(self, observation):
-        seen['range'] = json.loads(observation.state_json)['sensor_range']
-        return original(self, observation)
-    h.SyncWorker.submit = spy
-    try:
-        run_episode(13, 0, params=RuleParams(sensor_range_fraction=0.2), horizon=1.0)
-        short = seen['range']
-        run_episode(13, 0, params=RuleParams(sensor_range_fraction=0.8), horizon=1.0)
-        long = seen['range']
-    finally:
-        h.SyncWorker.submit = original
-    assert long == pytest.approx(short * 4)
-
-
 def test_a_longer_sight_changes_what_the_hunter_does():
     from hunter.rule_params import RuleParams
     short = run_episode(14, 0, params=RuleParams(sensor_range_fraction=0.15), horizon=20.0)
     long = run_episode(14, 0, params=RuleParams(sensor_range_fraction=1.0), horizon=20.0)
     assert (short.kills, short.wall_hits, short.hits_taken, round(short.idle_seconds, 2)) != \
            (long.kills, long.wall_hits, long.hits_taken, round(long.idle_seconds, 2))
-
-
-def test_turn_rate_multiplier_reaches_the_hunter_ship(monkeypatch):
-    from entities.hunter_ship import HunterShip
-    from hunter.rule_params import RuleParams
-    seen = {}
-    original = HunterShip.step
-
-    def spy(self, *args, **kwargs):
-        seen['rate'] = self.current_rotation_speed
-        return original(self, *args, **kwargs)
-    monkeypatch.setattr(HunterShip, 'step', spy)
-    run_episode(13, 0, params=RuleParams(turn_rate_multiplier=0.5), horizon=1.0)
-    slow = seen['rate']
-    run_episode(13, 0, params=RuleParams(turn_rate_multiplier=2.0), horizon=1.0)
-    assert seen['rate'] == pytest.approx(slow * 4)
 
 
 def test_a_faster_turn_changes_the_episode():

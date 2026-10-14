@@ -47,11 +47,7 @@ from utils.math_utils import get_angle_to_point
 
 
 from entities.hunter_ship import HunterShip
-from hunter.controller import HunterController
-from hunter.fire_control import find_firing_solution
-from hunter.perception import HunterPerception
-from hunter.senses import Senses
-from hunter.neural.controller import NeuralController
+from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.surroundings import GameSurroundings
@@ -109,10 +105,7 @@ class Game:
         self.profile_manager = ProfileManager()
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
-        self.hunter = None
-        self.hunter_controller = None
-        self.hunter_perception = None
-        self.hunter_senses = None
+        self.hunter_flight: Optional[HunterFlight] = None
         self.hunter_worker = None
         self.hunter_surroundings = GameSurroundings(self)
         self.jev_beacon_level = False
@@ -411,13 +404,15 @@ class Game:
                 pass
         
     
+    @property
+    def hunter(self) -> Optional[HunterShip]:
+        """The hunter's ship while a hunter flight is in play, else None."""
+        return self.hunter_flight.ship if self.hunter_flight is not None else None
+
     def _close_hunter(self) -> None:
-        if self.hunter_controller is not None:
-            self.hunter_controller.close()
-        self.hunter = None
-        self.hunter_controller = None
-        self.hunter_perception = None
-        self.hunter_senses = None
+        if self.hunter_flight is not None:
+            self.hunter_flight.close()
+        self.hunter_flight = None
 
     def _summon_hunter(self, near) -> None:
         """Bring the hunter in beside a collected Jev beacon, replacing one that has died."""
@@ -428,53 +423,25 @@ class Game:
             return
         self._close_hunter()
         mode = config.SETTINGS.game.hunterPilot
-        settings = hunter_settings_for(mode)
-        self.hunter = HunterShip(pos, settings)
-        self.hunter_perception = HunterPerception(settings)
         if mode == 'neural':
-            self.hunter_senses = Senses(settings)
-            self.hunter_controller = NeuralController(
-                load_neural_policy(), config.SETTINGS.game.neuralDecisionFrames)
-            return
-        if self.hunter_worker is None:
-            self.hunter_worker = PilotWorker()
-        self.hunter_controller = HunterController(self.hunter_worker, settings)
-
-    def _neural_senses(self, last_controls, now):
-        return self.hunter_senses.perceive(self.hunter, self.hunter_surroundings, last_controls, now)
+            pilot = NeuralPilot(load_neural_policy(), config.SETTINGS.game.neuralDecisionFrames)
+        else:
+            if self.hunter_worker is None:
+                self.hunter_worker = PilotWorker()
+            pilot = WorkerPilot(self.hunter_worker)
+        self.hunter_flight = HunterFlight(HunterShip(pos, hunter_settings_for(mode)), pilot, self.hunter_surroundings)
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
         return self.jev_beacon_level and (self.hunter is None or not self.hunter.active)
 
     def _update_hunter(self, dt) -> None:
-        if self.hunter is None or self.hunter_controller is None:
-            return
-        if not self.hunter.active:
-            self.hunter_controller.close()
+        if self.hunter_flight is None:
             return
         if not self.player_has_moved:
-            self.hunter_controller.tick(None, running=False)
+            self.hunter_flight.pause()
             return
-        def observe(now, generation):
-            return self.hunter_perception.perceive(
-                self.hunter, self.hunter_surroundings, self.hunter_controller.action, now, generation)
-        if getattr(self.hunter_controller, 'kind', None) == 'neural':
-            action = self.hunter_controller.tick(self._neural_senses)
-        else:
-            action = self.hunter_controller.tick(observe)
-        if self.hunter_controller.status != 'active':
-            self.hunter.cancel_burst()
-        # Fire control is only consulted while the pilot is engaging something.
-        solution = None
-        if action.track or action.fire or self.hunter.burst_remaining:
-            solution = find_firing_solution(
-                self.hunter, [e for e in self.hunter_surroundings.enemies() if e.active],
-                self.maze, self.hunter.settings)
-        shots = self.hunter.step(dt, action, solution)
-        if shots:
-            self.projectiles.extend(shots)
-        self.hunter.check_wall_collision(self.maze.walls, self.maze.spatial_grid)
+        self.projectiles.extend(self.hunter_flight.fly(dt))
 
     def _hotkey_summon_hunter(self) -> None:
         """Test key (ASTROVOID_HUNTER_HOTKEY): call the hunter in now.
@@ -563,7 +530,7 @@ class Game:
 
     def _stop_dead_hunter(self) -> None:
         if self.hunter is not None and not self.hunter.active:
-            self.hunter_controller.close()
+            self.hunter_flight.close()
 
     def handle_events(self) -> None:
         """Handle pygame events."""
@@ -611,11 +578,8 @@ class Game:
         hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
                           and not self.exit_explosion_active and not self.game_frozen
                           and not self.game_over_active)
-        if self.hunter_controller is not None and not hunter_running:
-            self.hunter_controller.tick(None, running=False)
-            if self.hunter is not None:
-                self.hunter.pilot_thrusting = False
-                self.hunter.cancel_burst()
+        if self.hunter_flight is not None and not hunter_running:
+            self.hunter_flight.pause()
         # Update splash screen
         if self.state == config.STATE_SPLASH:
             if self.splash_screen:

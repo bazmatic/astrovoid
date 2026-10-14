@@ -80,7 +80,7 @@ def test_the_rules_episode_stays_the_rules_pilot_whatever_the_game_setting(monke
     from hunter.controller import HunterController
     seen = []
     monkeypatch.setattr(SETTINGS.game, 'hunterPilot', 'neural')
-    run_episode(13, 0, horizon=1.0, trace=lambda t, game, hunter: seen.append(game.hunter_controller))
+    run_episode(13, 0, horizon=1.0, trace=lambda t, game, hunter: seen.append(game.hunter_flight.controller))
     assert seen and all(isinstance(c, HunterController) for c in seen)
 
 
