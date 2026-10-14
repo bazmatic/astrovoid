@@ -634,6 +634,7 @@ STATES_DEFAULTS = {
     "controls": "controls",
     "levelSelect": "level_select",
     "fun": "fun",
+    "editor": "editor",
     "duel": "duel",
     "playing": "playing",
     "levelComplete": "level_complete",
@@ -880,6 +881,7 @@ STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
 STATE_CONTROLS = STATES_DEFAULTS["controls"]
 STATE_LEVEL_SELECT = STATES_DEFAULTS["levelSelect"]
 STATE_FUN = STATES_DEFAULTS["fun"]
+STATE_EDITOR = STATES_DEFAULTS["editor"]
 STATE_DUEL = STATES_DEFAULTS["duel"]
 STATE_PLAYING = STATES_DEFAULTS["playing"]
 STATE_LEVEL_COMPLETE = STATES_DEFAULTS["levelComplete"]
@@ -917,6 +919,11 @@ FONT_SIZE_HINT = SETTINGS.ui.fonts.hint
 HUNTER_LEVEL_INTERVAL = SETTINGS.game.hunterLevelInterval
 # No hunter flies before this level
 HUNTER_FIRST_LEVEL = SETTINGS.game.hunterFirstLevel
+
+
+def editor_enabled() -> bool:
+    """Whether the level editor is switched on (environment variable ASTROVOID_EDITOR, any non-empty value)."""
+    return bool(os.environ.get('ASTROVOID_EDITOR'))
 
 
 def observer_mode_enabled() -> bool:

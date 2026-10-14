@@ -32,6 +32,7 @@ from rendering.profile_selection_menu import ProfileSelectionMenu
 from rendering.controls_menu import ControlsMenu
 from rendering.level_select_menu import LevelSelectMenu
 from rendering.fun_menu import FunMenu
+from rendering.level_editor import LevelEditor
 from rendering.duel_view import draw_duel
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
@@ -181,6 +182,7 @@ class Game:
         self.controls_menu = ControlsMenu(screen)
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
         self.fun_menu = FunMenu(screen)
+        self.level_editor = LevelEditor(self, screen)
         self.duel = None                 # the pilot fight in progress (STATE_DUEL)
         self.duel_worker = None
         self.duel_banner_until = None
@@ -660,6 +662,9 @@ class Game:
         if self.state == config.STATE_FUN:
             self.fun_menu.update(dt)
             return
+        if self.state == config.STATE_EDITOR:
+            self.level_editor.update(dt)
+            return
         hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
                           and not self.exit_explosion_active and not self.game_frozen
                           and not self.game_over_active)
@@ -1132,6 +1137,8 @@ class Game:
             self.controls_menu.draw()
         elif self.state == config.STATE_FUN:
             self.fun_menu.draw()
+        elif self.state == config.STATE_EDITOR:
+            self.level_editor.draw()
         elif self.state == config.STATE_DUEL:
             if self.duel is not None:
                 draw_duel(self.screen, self.duel)
