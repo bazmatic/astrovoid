@@ -9,6 +9,8 @@ import numpy as np
 
 RAYS = 16
 MAX_ENEMIES, MAX_BULLETS, MAX_POWERUPS, MAX_MEMORY = 6, 4, 2, 2
+MAX_POWERUP_MEMORY = 2
+POWERUP_MEMORY_TTL = 90.0   # seconds a crystal seen and then lost from view is remembered (they do not expire)
 MEMORY_TTL = 10.0          # seconds an out-of-sight enemy is remembered
 UPGRADE_CAP = 6.0
 
@@ -29,6 +31,11 @@ def _names():
     for i in range(MAX_MEMORY):
         names += [f'memory{i}_{part}' for part in ('present', 'sin', 'cos', 'dist', 'age')]
     names += ['last_turn_left', 'last_turn_none', 'last_turn_right', 'last_thrust', 'last_fire']
+    # Added after the first trained pilots: kept at the end so their layout stays a prefix of this one.
+    for i in range(MAX_POWERUP_MEMORY):
+        names += [f'powerup_memory{i}_{part}' for part in ('present', 'sin', 'cos', 'dist', 'age')]
+    names += [f'crystal_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
+    names += ['hit_present', 'hit_fwd', 'hit_side']
     return tuple(names)
 
 
@@ -81,9 +88,11 @@ class Senses:
     def __init__(self, settings):
         self.settings = settings
         self._memory = weakref.WeakKeyDictionary()    # enemy -> (x, y, seen_at)
+        self._crystal_memory = {}    # id -> (crystal, x, y, seen_at); held strongly so an id is not reused
 
     def reset(self):
         self._memory = weakref.WeakKeyDictionary()
+        self._crystal_memory = {}
 
     def observe(self, hunter, maze, enemies, projectiles, powerups, player, last_controls, now):
         out = np.zeros(SENSE_SIZE, dtype=np.float32)
@@ -147,19 +156,61 @@ class Senses:
             self._memory[e] = (e.x, e.y, now)
         for i, (d, b) in enumerate(candidates([p for p in projectiles if p.is_enemy], MAX_BULLETS)):
             contact(f'bullet{i}', d, b)
-        for i, (d, c) in enumerate(candidates(powerups, MAX_POWERUPS)):
+        crystals_seen = candidates(powerups, MAX_POWERUPS)
+        for i, (d, c) in enumerate(crystals_seen):
             contact(f'powerup{i}', d, c, with_velocity=False)
+            self._crystal_memory[id(c)] = (c, c.x, c.y, now)
         if player is not None and player.active:
             d = math.hypot(player.x - origin[0], player.y - origin[1])
             if d <= reach and not blocked(origin, [(player.x, player.y)], starts, ends)[0]:
                 contact('player', d, player)
 
         self._remember(out, origin, h, reach, starts, ends, now, {id(e) for _, e in seen})
+        self._remember_crystals(out, origin, h, reach, now, {id(c) for _, c in crystals_seen})
+        # A collision with a bullet or a ship since the last decision: the strongest push, in the hunter's frame as a
+        # share of top speed. Walls are not counted: the rays already tell it how close they are.
+        take_hit = getattr(hunter, 'take_hit', None)
+        hit = take_hit() if take_hit is not None else None
+        if hit is not None:
+            out[_INDEX['hit_present']] = 1.0
+            out[_INDEX['hit_fwd']] = max(-1.0, min(1.0, (hit[0] * ch + hit[1] * sh) / vmax))
+            out[_INDEX['hit_side']] = max(-1.0, min(1.0, (-hit[0] * sh + hit[1] * ch) / vmax))
+        # The compass points at the nearest uncollected crystal wherever it is, through walls: straight-line
+        # bearing and distance (in maze widths), the way the game's own pickups can be found without being seen.
+        loose = [c for c in powerups if c.active]
+        if loose:
+            nearest = min(loose, key=lambda c: (c.x - origin[0]) ** 2 + (c.y - origin[1]) ** 2)
+            rel = math.atan2(nearest.y - origin[1], nearest.x - origin[0]) - h
+            out[_INDEX['crystal_compass_present']] = 1.0
+            out[_INDEX['crystal_compass_sin']] = math.sin(rel)
+            out[_INDEX['crystal_compass_cos']] = math.cos(rel)
+            out[_INDEX['crystal_compass_dist']] = min(
+                1.0, math.hypot(nearest.x - origin[0], nearest.y - origin[1]) / max(maze.grid_width * maze.cell_size_x, 1.0))
         turn, thrust, fire = last_controls
         out[_INDEX[('last_turn_left', 'last_turn_none', 'last_turn_right')[turn]]] = 1.0
         out[_INDEX['last_thrust']] = 1.0 if thrust else 0.0
         out[_INDEX['last_fire']] = 1.0 if fire else 0.0
         return out
+
+    def _remember_crystals(self, out, origin, h, reach, now, seen_ids):
+        """Fill the powerup memory slots with the nearest crystals seen lately but not in the two sight slots now.
+
+        A crystal does not move or expire, so a memory only ends when it is collected or grows too old.
+        """
+        kept = []
+        for key, (crystal, x, y, seen_at) in list(self._crystal_memory.items()):
+            if not crystal.active or now - seen_at > POWERUP_MEMORY_TTL:
+                del self._crystal_memory[key]
+            elif key not in seen_ids:
+                kept.append((math.hypot(x - origin[0], y - origin[1]), x, y, seen_at))
+        kept.sort(key=lambda item: item[0])
+        for i, (d, x, y, seen_at) in enumerate(kept[:MAX_POWERUP_MEMORY]):
+            rel = math.atan2(y - origin[1], x - origin[0]) - h
+            out[_INDEX[f'powerup_memory{i}_present']] = 1.0
+            out[_INDEX[f'powerup_memory{i}_sin']] = math.sin(rel)
+            out[_INDEX[f'powerup_memory{i}_cos']] = math.cos(rel)
+            out[_INDEX[f'powerup_memory{i}_dist']] = min(1.0, d / reach)
+            out[_INDEX[f'powerup_memory{i}_age']] = (now - seen_at) / POWERUP_MEMORY_TTL
 
     def _remember(self, out, origin, h, reach, starts, ends, now, seen_ids):
         """Fill the memory slots with the nearest enemies seen lately but not in sight now."""

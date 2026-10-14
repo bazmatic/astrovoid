@@ -144,6 +144,88 @@ def test_a_powerup_in_sight_is_sensed():
     assert value(v, 'powerup0_present') == 1.0 and value(v, 'powerup0_dist') > 0
 
 
+def test_a_crystal_seen_and_then_lost_from_view_is_remembered_until_collected():
+    ship = HunterShip((500, 500))
+    senses = Senses(HunterSettings())
+    crystal = SimpleNamespace(x=560.0, y=500.0, vx=0.0, vy=0.0, active=True)
+    sense(ship, world(), powerups=[crystal], senses=senses, now=1.0)
+    gone = sense(ship, world(), powerups=[], senses=senses, now=11.0)     # out of the list: not in view
+    assert value(gone, 'powerup0_present') == 0.0
+    assert value(gone, 'powerup_memory0_present') == 1.0
+    assert value(gone, 'powerup_memory0_dist') > 0 and value(gone, 'powerup_memory0_age') == pytest.approx(10.0 / 90.0)
+    crystal.active = False
+    assert value(sense(ship, world(), powerups=[], senses=senses, now=12.0), 'powerup_memory0_present') == 0.0
+
+
+def test_a_crystal_in_sight_is_not_also_in_memory_and_old_memories_expire():
+    ship = HunterShip((500, 500))
+    senses = Senses(HunterSettings())
+    crystal = SimpleNamespace(x=560.0, y=500.0, vx=0.0, vy=0.0, active=True)
+    seen = sense(ship, world(), powerups=[crystal], senses=senses, now=1.0)
+    assert value(seen, 'powerup0_present') == 1.0 and value(seen, 'powerup_memory0_present') == 0.0
+    late = sense(ship, world(), powerups=[], senses=senses, now=1.0 + 91.0)
+    assert value(late, 'powerup_memory0_present') == 0.0
+
+
+def test_the_compass_points_at_the_nearest_crystal_even_behind_a_wall():
+    ship = HunterShip((500, 500))
+    ship.angle = 0.0
+    wall = WallSegment((530, 400), (530, 600), 3)
+    near = SimpleNamespace(x=560.0, y=500.0, vx=0.0, vy=0.0, active=True)         # behind the wall
+    far = SimpleNamespace(x=500.0, y=900.0, vx=0.0, vy=0.0, active=True)
+    v = sense(ship, world([wall]), powerups=[far, near])
+    assert value(v, 'powerup0_present') == 1.0 and abs(value(v, 'powerup0_cos')) < 1e-6   # sight sees only the one due south
+    assert value(v, 'crystal_compass_present') == 1.0
+    assert value(v, 'crystal_compass_cos') == pytest.approx(1.0, abs=1e-4)        # straight ahead, to the near one
+    assert 0.0 < value(v, 'crystal_compass_dist') < 1.0
+
+
+def test_the_compass_is_empty_when_no_crystal_is_left():
+    ship = HunterShip((500, 500))
+    gone = SimpleNamespace(x=560.0, y=500.0, vx=0.0, vy=0.0, active=False)
+    assert value(sense(ship, world(), powerups=[gone]), 'crystal_compass_present') == 0.0
+    assert value(sense(ship, world()), 'crystal_compass_present') == 0.0
+
+
+def test_a_hit_is_sensed_once_with_its_force_in_the_hunters_frame():
+    ship = HunterShip((500, 500))
+    ship.angle = 0.0
+    ship.register_hit(-4.0, 0.0)                 # shoved backwards by half of top speed
+    senses = Senses(HunterSettings())
+    v = sense(ship, world(), senses=senses)
+    assert value(v, 'hit_present') == 1.0
+    assert value(v, 'hit_fwd') == pytest.approx(-4.0 / ship.max_speed) and value(v, 'hit_side') == pytest.approx(0.0, abs=1e-6)
+    assert value(sense(ship, world(), senses=senses), 'hit_present') == 0.0        # read once, then cleared
+
+
+def test_with_several_hits_at_once_only_the_strongest_is_sensed():
+    ship = HunterShip((500, 500))
+    ship.angle = 0.0
+    ship.register_hit(1.0, 0.0)
+    ship.register_hit(0.0, 3.0)                  # the strongest: a sideways shove
+    ship.register_hit(-0.5, 0.5)
+    v = sense(ship, world())
+    assert value(v, 'hit_fwd') == pytest.approx(0.0, abs=1e-6)
+    assert value(v, 'hit_side') == pytest.approx(3.0 / ship.max_speed)
+
+
+def test_a_hit_is_clipped_to_top_speed_and_follows_the_heading():
+    ship = HunterShip((500, 500))
+    ship.angle = 90.0                             # facing south
+    ship.register_hit(0.0, 50.0)                  # shoved south, far beyond top speed
+    v = sense(ship, world())
+    assert value(v, 'hit_fwd') == 1.0
+
+
+def test_a_bullet_collision_registers_a_hit_on_the_hunter():
+    from utils.math_utils import apply_circle_collision_physics
+    ship = HunterShip((500, 500))
+    bullet = SimpleNamespace(x=490.0, y=500.0, vx=6.0, vy=0.0, radius=3, mass=None)
+    apply_circle_collision_physics(ship, bullet, 0.3)
+    hit = ship.take_hit()
+    assert hit is not None and hit[0] > 0 and ship.take_hit() is None
+
+
 def test_own_motion_is_in_the_hunters_frame():
     ship = HunterShip((500, 500))
     ship.angle = 90.0
