@@ -266,6 +266,20 @@ On every level, no enemy starts within 300 pixels of your ship.
 
 The level file format and the pacing rules are described in [levels/README.md](levels/README.md).
 
+### Level editor
+
+Run with `ASTROVOID_EDITOR=1` (for example `ASTROVOID_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit and the Jev beacon. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
+
+| Key | Action |
+|---|---|
+| Arrows | Move the cursor (hold to repeat) |
+| Tab, Shift+Tab (or `[` `]`) | Next or previous palette item |
+| Space | Place the selected item |
+| Delete, Backspace | Remove what is under the cursor |
+| S | Save |
+| X | Revert to the generated level (asks first) |
+| Esc | Back to the level list (asks first if there are unsaved edits) |
+
 ### Replaying and personal bests
 
 **LEVELS** on the main menu opens a grid of unlocked levels, with best stars and
