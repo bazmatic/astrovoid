@@ -40,6 +40,9 @@ def load_level_config(level: int) -> Optional[Dict]:
         return None
 
 
+_warned_layouts = set()
+
+
 def get_level_layout(level: int) -> Optional[Layout]:
     """The level file's hand-made layout, or None if it has none or it cannot be played (that is logged)."""
     data = load_level_config(level)
@@ -48,7 +51,9 @@ def get_level_layout(level: int) -> Optional[Layout]:
     try:
         return parse_layout(data['layout'], get_maze_grid_size(level))
     except (LayoutError, TypeError, ValueError, KeyError) as exc:
-        logging.getLogger(__name__).warning('Level %d: ignoring its layout: %s', level, exc)
+        if (level, str(exc)) not in _warned_layouts:       # every count reads the layout: say it once
+            _warned_layouts.add((level, str(exc)))
+            logging.getLogger(__name__).warning('Level %d: ignoring its layout: %s', level, exc)
         return None
 
 

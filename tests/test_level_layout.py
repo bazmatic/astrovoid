@@ -95,6 +95,7 @@ def test_the_beacon_comes_from_the_layout(monkeypatch):
 
 
 def test_an_invalid_layout_is_ignored_with_a_warning(monkeypatch, caplog):
+    monkeypatch.setattr(level_config, '_warned_layouts', set())      # warned once per process otherwise
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: file_with(data(start=[0, 0])))
     assert level_config.get_level_layout(3) is None
     assert 'layout' in caplog.text.lower()

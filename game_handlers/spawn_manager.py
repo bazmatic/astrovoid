@@ -39,6 +39,39 @@ class SpawnConfig:
     post_create_hook: Optional[Callable[[object], None]] = None
 
 
+def make_enemy(kind, pos, level, command_recorder):
+    """One enemy of a type at a position, and the entity manager list it belongs in: (list attribute, entity).
+
+    Rules hunters are not made here: they need a pilot worker and a view of the game, which Game provides.
+    """
+    from entities.enemy import Enemy
+    from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flighthouse_enemy import FlighthouseEnemy
+    from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
+    from entities.egg import Egg
+    from entities.anemone import Anemone
+    if kind in ('static', 'patrol', 'aggressive'):
+        return 'enemies', Enemy(pos, kind, level)
+    if kind == 'flocker':
+        return 'flockers', FlockerEnemyShip(pos)
+    if kind == 'flighthouse':
+        return 'flighthouses', FlighthouseEnemy(pos, level)
+    if kind == 'egg':
+        return 'eggs', Egg(pos)
+    if kind == 'anemone':
+        return 'anemones', Anemone(pos)
+    recorded = {'replay': ('replay_enemies', ReplayEnemyShip), 'split_boss': ('split_bosses', SplitBoss),
+                'mother_boss': ('mother_bosses', MotherBoss)}
+    if kind in recorded:
+        attr, cls = recorded[kind]
+        entity = cls(pos, command_recorder)
+        entity.current_replay_index = 0
+        return attr, entity
+    raise ValueError(f'cannot make an enemy of type {kind!r}')
+
+
 class SpawnManager:
     """Manages enemy spawning for levels."""
     
@@ -209,6 +242,23 @@ class SpawnManager:
             used_positions.extend(newly_used)
             available_positions = self._update_available_positions(used_positions, spawn_positions)
     
+    def spawn_from_layout(self, layout, maze, level, command_recorder):
+        """Create the enemies a layout places, each at the centre of its cell, and no others.
+
+        Returns the pixel positions of its Rules hunters, which the game makes and flies itself.
+        """
+        self._anemone_keep_clear = None
+        self.entity_manager.clear_all()
+        rules_hunters = []
+        for kind, cell in layout.enemies:
+            pos = maze.position_calculator.grid_center_to_screen(*cell)
+            if kind == 'rules_hunter':
+                rules_hunters.append(pos)
+                continue
+            attr, entity = make_enemy(kind, pos, level, command_recorder)
+            getattr(self.entity_manager, attr).append(entity)
+        return rules_hunters
+
     def _create_spawn_configs(
         self,
         enemy_counts: 'EnemyCounts',

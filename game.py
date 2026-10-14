@@ -304,7 +304,8 @@ class Game:
         maze_grid_size = level_config.get_maze_grid_size(self.level)
         
         # Generate maze
-        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size)
+        layout = level_config.get_level_layout(self.level)
+        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout)
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
@@ -338,7 +339,7 @@ class Game:
         enemy_counts.anemone = level_config.get_level_anemone_count(self.level)
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
-        spawn_positions = self.maze.get_valid_spawn_positions(
+        spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
             enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
@@ -360,11 +361,15 @@ class Game:
 
         # No anemone starts with the player already inside its pull
         anemone_reach = config.ANEMONE_REACH_CELLS * (self.maze.cell_size_x + self.maze.cell_size_y) / 2
-        self.spawn_manager.spawn_all_enemies(
-            self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
-            anemone_keep_clear=(self.maze.start_pos, anemone_reach)
-        )
-        self._spawn_rules_hunters(spawn_positions)
+        if layout is None:
+            self.spawn_manager.spawn_all_enemies(
+                self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
+                anemone_keep_clear=(self.maze.start_pos, anemone_reach)
+            )
+            self._spawn_rules_hunters(spawn_positions)
+        else:
+            self._spawn_rules_hunters_at(
+                self.spawn_manager.spawn_from_layout(layout, self.maze, self.level, self.command_recorder))
         # Anemones show their reach from the start, before the first update works it out
         for anemone in self.anemones:
             anemone.reach_px = anemone.reach(self.maze)
@@ -513,11 +518,15 @@ class Game:
             (p for p in spawn_positions
              if all(math.hypot(p[0] - x, p[1] - y) > clear for x, y in taken)),
             key=lambda p: -math.hypot(p[0] - start[0], p[1] - start[1]))
-        for pos in candidates[:count]:
-            self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
+        self._spawn_rules_hunters_at(candidates[:count])
         if len(self.rules_hunters) < count:
             logging.getLogger(__name__).warning(
                 'Level %d: room for %d of %d Rules hunters', self.level, len(self.rules_hunters), count)
+
+    def _spawn_rules_hunters_at(self, positions):
+        """Make a Rules hunter at each position, each with its own pilot worker."""
+        for pos in positions:
+            self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
 
     def _fly_rules_hunters(self, dt):
         """Each Rules hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
