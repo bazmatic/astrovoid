@@ -255,7 +255,7 @@ The maze is built from solid blocks of rock. A block has walls only where it fac
 
 **From level 25** the game is endless:
 
-- **Level 25 is a boss level**: the **Rules hunter**, the Rules pilot's hunter ship flown as an enemy, in a dense 26-cell maze with three anemones and no escorts. It hunts only you, takes 12 hits, and leaves no crystal. The exit stays locked until every enemy is dead, ammo is infinite and no Jev beacon appears. The every-sixth-level boss rotation from level 30 is unchanged.
+- **Level 25 is a boss level**: the **Rules hunter**, the Rules pilot's hunter ship flown as an enemy, in a dense 26-cell maze with nothing else in it: no escorts, no anemones. It hunts only you, takes 12 hits, and leaves no crystal. The exit stays locked until every enemy is dead, ammo is infinite and no Jev beacon appears. The every-sixth-level boss rotation from level 30 is unchanged.
 - The enemy count starts at 25 and rises by one every two levels, stopping at 36. The maze stays at 32 cells across.
 - Every sixth level (30, 36, 42, ...) is a boss level: Split Bosses, then a Mother Boss, then both, building up to three bosses on a level.
 - Enemy speed and damage grow 5% a level after level 4 and stop at 2.5 times. Enemy fire range stops at 600 pixels.

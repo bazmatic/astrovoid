@@ -50,5 +50,5 @@ def test_the_level_25_file_matches_the_design():
     data = json.load(open('levels/25.json'))
     assert data['maze'] == {'complexity': 'complex', 'grid_size': 26}
     enemies = {name: count for name, count in data['enemies'].items() if count}
-    assert enemies == {'anemone': 3, 'rules_hunter': 1}
+    assert enemies == {'rules_hunter': 1}
     assert 'hunter' not in data
