@@ -25,6 +25,10 @@ class Layout:
     enemies: Tuple[Tuple[str, Cell], ...] = ()
     beacon: Optional[Cell] = None
 
+    def __post_init__(self):
+        # One order for the enemies (by row, column, type), so two layouts of the same level are equal
+        object.__setattr__(self, 'enemies', tuple(sorted(self.enemies, key=lambda e: (e[1][1], e[1][0], e[0]))))
+
     def grid(self):
         """The maze grid, indexed [row][col]: 1 for a wall (the border and `walls`), 0 for open."""
         n = self.grid_size
@@ -95,5 +99,4 @@ def parse_layout(data, grid_size):
         beacon = _cell(beacon, grid_size, 'beacon')
         if beacon in walls:
             raise LayoutError('the beacon is on a wall')
-    enemies.sort(key=lambda e: (e[1][1], e[1][0], e[0]))      # one canonical order, so a round trip is equal
     return Layout(grid_size, walls, start, exit_, tuple(enemies), beacon)
