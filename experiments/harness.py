@@ -36,6 +36,8 @@ class EpisodeResult:
     end: str  # 'cleared', 'horizon' or (a mortal hunter) 'died'
     enemies_spawned: int = 0  # enemies that appeared during the episode (spawners, eggs)
     wall_impulse: float = 0.0  # speed the walls took from the hunter, summed over collision frames, in top speeds
+    rules_hunters: int = 0  # Rules hunters on the level
+    rules_beaten: bool = False  # every one of them was destroyed
 
 
 class EventCounter:
@@ -48,6 +50,7 @@ class EventCounter:
         self.wall_impulse = 0.0
         self.hits_taken = 0
         self.idle_seconds = 0.0
+        self.rules_beaten = False  # every Rules hunter was destroyed
         self.powerups = 0          # crystals the hunter collected
         self.died = False          # the (mortal) hunter was destroyed
         self.cleared = False       # every enemy is dead: nothing is left to kill, so waiting is not idling
@@ -190,7 +193,8 @@ def _active_enemies(game):
     return list(game.entity_manager.get_all_active_enemies())
 
 
-_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player')
+_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_rules_worker_factory',
+               'protagonist')
 
 
 def _clear_overrides(game):
@@ -228,6 +232,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     clock = lambda: now[0]
 
     game.level, game.state = level, config.STATE_PLAYING
+    # A Rules hunter's pilot answers synchronously on the episode clock, like the hunter's own
+    game._rules_worker_factory = lambda: SyncWorker(params, clock)
     game.start_level()
     random.seed(seed)
     game.player_has_moved = True
@@ -267,6 +273,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
                           pilot, game.hunter_surroundings)
     game.hunter_flight = flight
     hunter = flight.ship
+    # In the lab a Rules hunter hunts the hunter, not the parked player
+    game.protagonist = lambda: hunter
     # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
     # with a real-clock controller) must not replace it, and no new beacon may drop.
     game._summon_hunter = lambda near: None
@@ -315,6 +323,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     end = 'horizon'
     elapsed = 0.0
     cleared_at = None
+    rules_total = len(game.rules_hunters)
     for frame in range(int((horizon + after_clear) * FPS)):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
@@ -332,6 +341,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         counter.tick(elapsed)
         if health > 0 and not hunter.active:
             counter.died = True
+        if rules_total and not counter.rules_beaten and not any(r.active for r in game.rules_hunters):
+            counter.rules_beaten = True
         if recorder is not None and hasattr(recorder, 'counted'):
             recorder.counted(counter, elapsed)
         if trace is not None:
@@ -349,9 +360,11 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         elif cleared_at is None and elapsed >= horizon:
             break
     game._close_hunter()
+    game._close_rules_hunters()
     _clear_overrides(game)
     result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None or counter.died else cleared_at, counter.kills, counter.wall_hits,
-                           counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse)
+                           counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse,
+                           rules_hunters=rules_total, rules_beaten=counter.rules_beaten)
     if on_result is not None:
         on_result(result)
     return result

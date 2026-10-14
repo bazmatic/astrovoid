@@ -91,6 +91,7 @@ class _Counter:
     kills = wall_impulse = hits_taken = spawned = powerups = 0
     died = False
     idle_seconds = 0.0
+    rules_beaten = False
 
 
 def _fly_frames(recorder, speeds, max_speed=10.0):
@@ -136,7 +137,7 @@ def test_collected_powerups_pay_the_powerup_reward():
     recorder._start_enemies = 1
     recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
     recorder.controls.append((1, 0, 0))
-    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2, 0.0, 0])
+    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2, 0.0, 0, 0])
     assert recorder.arrays()[2][0] == pytest.approx(10.0)
     assert rollout.RolloutRecorder(6).arrays()[2].size == 0
 
@@ -164,7 +165,7 @@ def _death_rewards(died_at, penalty, steps=4):
     for step in range(steps):
         recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
         recorder.controls.append((1, 0, 0))
-        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0])
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0, 0])
         counter = _Counter()
         counter.died = died_at is not None and step >= died_at
         recorder.counted(counter, step / 10.0)
@@ -196,7 +197,7 @@ def _rewards_for_turns(turns, penalty, reversal=0.0):
     for turn in turns:
         recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
         recorder.controls.append((turn, 0, 0))
-        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0])
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0, 0])
     return recorder.arrays()[2]
 
 
