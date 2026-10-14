@@ -7,9 +7,9 @@
   "enemies": {
     "static": 0,
     "patrol": 0,
-    "aggressive": 2,
+    "aggressive": 0,
     "replay": 0,
-    "flocker": 2,
+    "flocker": 0,
     "flighthouse": 0,
     "egg": 0,
     "anemone": 3,
