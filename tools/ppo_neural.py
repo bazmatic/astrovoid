@@ -148,15 +148,26 @@ TRAIN_SEEDS = 100             # seeds 300-399
 DEFAULT_HORIZON = 90.0        # seconds of game time per training episode unless the shaping says otherwise
 
 
-def make_jobs(iteration, count, weights, decision_frames, turn_rate):
+RULES_LEVEL = 25          # the level with a Rules hunter on it (levels/25.json)
+
+
+def make_jobs(iteration, count, weights, decision_frames, turn_rate, rules_share=0.0):
+    """One job per episode: the training levels in turn, with `rules_share` of the episodes (spread evenly through
+    the batch) flown on the Rules hunter's level and the other levels never including it."""
     from experiments.run import TUNE_LEVELS
     from experiments.student import StudentSpec
+    others = tuple(level for level in TUNE_LEVELS if level != RULES_LEVEL)
     jobs = []
     for i in range(count):
         n = iteration * count + i
         spec = StudentSpec(weights=str(weights), decision_frames=decision_frames, turn_rate=turn_rate,
                            greedy=False, sample_seed=n)
-        jobs.append((TUNE_LEVELS[n % len(TUNE_LEVELS)], 300 + n % TRAIN_SEEDS, spec))
+        if rules_share > 0.0:
+            rules_episode = int((n + 1) * rules_share + 1e-9) > int(n * rules_share + 1e-9)
+            level = RULES_LEVEL if rules_episode else others[n % len(others)]
+        else:
+            level = TUNE_LEVELS[n % len(TUNE_LEVELS)]
+        jobs.append((level, 300 + n % TRAIN_SEEDS, spec))
     return jobs
 
 
@@ -229,7 +240,7 @@ def log_line(*parts):
 
 
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=0, decision_frames=6,
-             turn_rate=1.0, rollout=None, log=log_line, shaping=None):
+             turn_rate=1.0, rollout=None, log=log_line, shaping=None, rules_share=0.0):
     """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint."""
     import torch
     from experiments.score import mean_components
@@ -249,7 +260,7 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
     history = []
     try:
         for iteration in range(iterations):
-            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate)
+            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, rules_share)
             t0 = time.perf_counter()
             flown = rollout(jobs, workers)
             t1 = time.perf_counter()
@@ -265,6 +276,10 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
                          powerups_per_episode=float(np.mean([e.get('powerups', 0) for e in flown])),
                          upgraded_fraction=float(np.mean([e.get('upgraded_fraction', 0.0) for e in flown])),
                          rollout_s=t1 - t0, update_s=time.perf_counter() - t1)
+            arena = [e for e in flown if e.get('rules_arena')]
+            stats.update(rules_episodes=len(arena),
+                         rules_beaten=float(np.mean([1.0 if e.get('rules_beaten') else 0.0 for e in arena]))
+                         if arena else 0.0)
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
             history.append(stats)
@@ -292,7 +307,8 @@ def reward_summary(args):
             ('Crawling under the still speed', '-', args.still_penalty, f'points per second below {args.still_speed:.0%} of top speed'),
             ('Starting or reversing a turn', '-', args.turn_change_penalty, 'points each'),
             ('Reversing a turn directly', '-', args.reversal_penalty, 'extra points each, left to right or back'),
-            ('Death', '-', args.death_penalty, f'points when the hunter is destroyed (it survives {args.health} hits)')]
+            ('Death', '-', args.death_penalty, f'points when the hunter is destroyed (it survives {args.health} hits)'),
+            ('Rules hunter destroyed', '+', args.rules_bounty, 'points, on top of its share of the kill reward')]
     return [{'name': n, 'sign': s, 'value': round(v, 4), 'unit': u} for n, s, v, u in rows if v]
 
 
@@ -310,7 +326,8 @@ def write_run_config(args):
         'rewards': reward_summary(args),
         'episode': {'horizon_seconds': args.horizon, 'after_clear_seconds': args.after_clear,
                     'episodes_per_iteration': args.episodes, 'learning_rate': args.lr,
-                    'health': args.health, 'wall_energy': _wall_energy() if args.health else 0},
+                    'health': args.health, 'wall_energy': _wall_energy() if args.health else 0,
+                    'rules_share': args.rules_share},
         'start': str(args.start)}, indent=1))
 
 
@@ -352,6 +369,10 @@ def main(argv=None):
                         help='seconds an episode keeps going after the last enemy dies (less if no crystal is left)')
     parser.add_argument('--hit-scale', type=float, default=1.0,
                         help='multiplies the enemy-hit penalty in the training reward (the score is unchanged)')
+    parser.add_argument('--rules-share', type=float, default=0.25,
+                        help='share of episodes flown on the Rules hunter level (25); 0 keeps the old level cycle')
+    parser.add_argument('--rules-bounty', type=float, default=50.0,
+                        help='points gained for destroying the Rules hunter in the training reward')
     args = parser.parse_args(argv)
     write_run_config(args)
     from experiments import run
@@ -366,7 +387,9 @@ def main(argv=None):
                                'health': args.health, 'death_penalty': args.death_penalty,
                                'speed_penalty': args.speed_penalty,
                                'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
-                               'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player})
+                               'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player,
+                               'rules_bounty': args.rules_bounty},
+                      rules_share=args.rules_share)
     print('done | last checkpoint:', result['last'])
 
 
