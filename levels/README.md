@@ -1,6 +1,6 @@
 # Level files
 
-Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels from 25 have no file and come from the formulas in `level_rules.py`.
+Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels from 25 have no file, except level 25 (the Rules hunter boss), and come from the formulas in `level_rules.py`.
 
 A file can exist for any level, and can state as much or as little as it likes. Whatever it leaves out comes from the formulas.
 
@@ -13,7 +13,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
   "enemies": {
     "static": 2, "patrol": 1, "aggressive": 2, "replay": 1,
     "flocker": 0, "flighthouse": 0, "egg": 0, "anemone": 2,
-    "split_boss": 0, "mother_boss": 0
+    "split_boss": 0, "mother_boss": 0, "rules_hunter": 0
   },
   "hunter": false
 }
@@ -23,11 +23,12 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
 - **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
 - **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
+- **rules_hunter**: Rules hunters on the level (the Rules pilot's hunter ship as an enemy, hostile only to the player). A level with one is a boss level. Level 25 has one.
 - **hunter**: leave it out for the normal rule. `false` means no Jev beacon, so no hunter. `{"spawn_cell": [col, row]}` places the beacon at that cell.
 
 ## Boss levels
 
-A level with at least one `split_boss` or `mother_boss` is a boss level, whatever its number:
+A level with at least one `split_boss`, `mother_boss` or `rules_hunter` is a boss level, whatever its number:
 
 - the exit is locked until every enemy on the level is dead, including the ships a boss leaves behind and anything that hatches;
 - ammo is infinite, so the level can always be finished;

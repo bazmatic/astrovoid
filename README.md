@@ -228,6 +228,7 @@ The maze is built from solid blocks of rock. A block has walls only where it fac
 - **Baby**: Small, fast versions of Replay enemies that spawn when Eggs hatch
 - **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 8 hits to destroy.
 - **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 20 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
+- **Rules hunter**: The Rules pilot's hunter ship, flown as an enemy (`entities/rules_hunter.py`). It sees only its target (you, or in training the neural hunter) and fires only at it. Requires 12 hits.
 
 ### Level Progression
 
@@ -254,6 +255,7 @@ The maze is built from solid blocks of rock. A block has walls only where it fac
 
 **From level 25** the game is endless:
 
+- **Level 25 is a boss level**: the **Rules hunter**, the Rules pilot's hunter ship flown as an enemy, in a dense 26-cell maze with two aggressive enemies and two flocker swarms. It hunts only you, takes 12 hits, and leaves no crystal. The exit stays locked until every enemy is dead, ammo is infinite and no Jev beacon appears. The every-sixth-level boss rotation from level 30 is unchanged.
 - The enemy count starts at 25 and rises by one every two levels, stopping at 36. The maze stays at 32 cells across.
 - Every sixth level (30, 36, 42, ...) is a boss level: Split Bosses, then a Mother Boss, then both, building up to three bosses on a level.
 - Enemy speed and damage grow 5% a level after level 4 and stop at 2.5 times. Enemy fire range stops at 600 pixels.

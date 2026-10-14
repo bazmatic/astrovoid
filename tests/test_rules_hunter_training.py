@@ -3,9 +3,17 @@ import numpy as np
 import pytest
 
 import level_config
-from experiments import rollout
+from experiments import harness, rollout
 from experiments.harness import run_episode
 from hunter.senses import SENSE_SIZE
+
+
+@pytest.fixture(scope='module', autouse=True)
+def fresh_lab_game():
+    """The lab keeps one Game per process; an earlier test may have shut pygame down under it."""
+    harness.reset()
+    yield
+    harness.reset()
 
 
 @pytest.fixture(autouse=True)
@@ -44,7 +52,6 @@ def test_an_episode_it_survives_is_not_rules_beaten():
 
 def test_the_lab_overrides_do_not_outlive_the_episode():
     run_episode(13, 0, horizon=1.0, pursue_hunter=True)
-    from experiments import harness
     game = harness._game
     assert '_rules_worker_factory' not in game.__dict__ and 'protagonist' not in game.__dict__
 
