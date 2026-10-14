@@ -14,6 +14,7 @@ from entities.command_recorder import CommandRecorder
 from entities.enemy import Enemy
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
+from hunter.surroundings import GameSurroundings
 from hunter.model import PilotResult, PilotDecision, ACTIONS
 from entities.jev_beacon import JevBeacon
 from tests.test_hunter_controller import Worker
@@ -38,6 +39,7 @@ def game(monkeypatch, tmp_path):
     g.star_indicator = Mock()
     g.hunter = g.hunter_controller = g.hunter_perception = None
     g.hunter_worker = None
+    g.hunter_surroundings = GameSurroundings(g)
     monkeypatch.setattr(level_config,'get_maze_complexity',lambda _:MazeComplexity.EMPTY)
     monkeypatch.setattr(level_config,'get_maze_grid_size',lambda _:10)
     monkeypatch.setattr(level_config,'get_level_seed',lambda _:1)

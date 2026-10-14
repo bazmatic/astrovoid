@@ -63,10 +63,7 @@ class ShadowTeacher:
     def decide(self, game, hunter, now, frame):
         if frame % TEACHER_INTERVAL_FRAMES:
             return self.action
-        observation = self.perception.observe(
-            hunter, game.maze, game.ship if game._hunter_sees_player() else None,
-            game._hunter_entities(), game.projectiles, self.action, now, self.generation,
-            powerups=[c for c in game.powerup_crystals if type(c).__name__ != 'JevBeacon'])
+        observation = self.perception.perceive(hunter, game.hunter_surroundings, self.action, now, self.generation)
         self.action = asyncio.run(self.pilot.decide(observation)).action
         return self.action
 

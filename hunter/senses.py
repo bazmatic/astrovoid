@@ -94,6 +94,11 @@ class Senses:
         self._memory = weakref.WeakKeyDictionary()
         self._crystal_memory = {}
 
+    def perceive(self, hunter, surroundings, last_controls, now):
+        """The senses of `surroundings` (see hunter.surroundings) as they are now."""
+        return self.observe(hunter, surroundings.maze, surroundings.enemies(), surroundings.threats(),
+                            surroundings.pickups(), surroundings.friend(), last_controls, now)
+
     def observe(self, hunter, maze, enemies, projectiles, powerups, player, last_controls, now):
         out = np.zeros(SENSE_SIZE, dtype=np.float32)
         origin = (hunter.x, hunter.y)

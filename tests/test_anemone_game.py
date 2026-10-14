@@ -290,23 +290,4 @@ class TestRealGameWiring:
         assert anemone.is_stunned
 
     def test_the_hunter_is_shown_anemones(self, game):
-        class Observed(Exception):
-            """Stops the update once the hunter has been handed what it can see."""
-
-        def tick(observe, **kwargs):
-            observe(0.0, 0)
-            raise Observed
-
-        seen = []
-        game.hunter = Mock(active=True)
-        game.hunter_controller = Mock()
-        game.hunter_controller.tick.side_effect = tick
-        game.hunter_perception = Mock()
-        game.hunter_perception.observe.side_effect = lambda hunter, maze, player, enemies, *rest, **more: seen.extend(enemies)
-        game.player_has_moved = True
-        try:
-            with pytest.raises(Observed):
-                game._update_hunter(1.0)
-        finally:
-            game.hunter = game.hunter_controller = game.hunter_perception = None
-        assert game.anemones[0] in seen
+        assert game.anemones[0] in game.hunter_surroundings.enemies()

@@ -34,6 +34,35 @@ class Combatant:
     hunter: HunterShip
     controller: object
     perception: object = None
+    surroundings: object = None
+
+
+class DuelSurroundings:
+    """One side's surroundings in a duel (see hunter.surroundings): the opponent and any enemies to fight,
+    only the opponent's and the enemies' bullets as threats, nothing to pick up and no friend."""
+
+    def __init__(self, arena, side):
+        self._arena, self._side = arena, side
+
+    @property
+    def maze(self):
+        return self._arena.maze
+
+    def enemies(self):
+        enemies = self._arena.enemies
+        return [self._arena._other(self._side).hunter] + (enemies.active() if enemies is not None else [])
+
+    def threats(self):
+        # Only the opponent's bullets (and the enemies') are a danger to this pilot, not its own
+        enemies = self._arena.enemies
+        return self._arena.shots[self._arena._other(self._side).name] + (
+            enemies.bullets if enemies is not None else [])
+
+    def pickups(self):
+        return []
+
+    def friend(self):
+        return None
 
 
 class DuelArena:
@@ -51,6 +80,7 @@ class DuelArena:
         for side in self.sides:
             neural = getattr(side.controller, 'kind', None) == 'neural'
             side.perception = Senses(side.hunter.settings) if neural else HunterPerception(side.hunter.settings)
+            side.surroundings = DuelSurroundings(self, side)
 
     def _other(self, side):
         return self.sides[1] if side is self.sides[0] else self.sides[0]
@@ -72,22 +102,20 @@ class DuelArena:
         self._judge()
 
     def _fly(self, side, dt, now):
-        hunter, other = side.hunter, self._other(side)
+        hunter, surroundings = side.hunter, side.surroundings
         if not hunter.active:
             side.controller.close()
             return
-        foes = [other.hunter] + (self.enemies.active() if self.enemies is not None else [])
-        # Only the opponent's bullets (and the enemies') are a danger to this pilot, not its own
-        threats = self.shots[other.name] + (self.enemies.bullets if self.enemies is not None else [])
         if getattr(side.controller, 'kind', None) == 'neural':
-            action = side.controller.tick(lambda last_controls, t: side.perception.observe(
-                hunter, self.maze, foes, threats, [], None, last_controls, t))
+            action = side.controller.tick(lambda last_controls, t: side.perception.perceive(
+                hunter, surroundings, last_controls, t))
         else:
-            action = side.controller.tick(lambda t, generation: side.perception.observe(
-                hunter, self.maze, None, foes, threats, side.controller.action, t, generation))
+            action = side.controller.tick(lambda t, generation: side.perception.perceive(
+                hunter, surroundings, side.controller.action, t, generation))
         solution = None
         if action.track or action.fire or hunter.burst_remaining:
-            solution = find_firing_solution(hunter, foes, self.maze, hunter.settings)
+            solution = find_firing_solution(
+                hunter, [e for e in surroundings.enemies() if e.active], self.maze, hunter.settings)
         shots = hunter.step(dt, action, solution)
         if shots:
             for shot in shots:
