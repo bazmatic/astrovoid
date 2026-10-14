@@ -6,10 +6,12 @@ default seed and enemy counts. Levels without config files use default behavior.
 
 import config
 import json
+import logging
 import os
 from typing import Optional, Dict
 import level_rules
 from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts, get_split_boss_count
+from level_layout import Layout, LayoutError, parse_layout
 from maze.config import MazeComplexity
 
 
@@ -38,6 +40,18 @@ def load_level_config(level: int) -> Optional[Dict]:
         return None
 
 
+def get_level_layout(level: int) -> Optional[Layout]:
+    """The level file's hand-made layout, or None if it has none or it cannot be played (that is logged)."""
+    data = load_level_config(level)
+    if not data or 'layout' not in data:
+        return None
+    try:
+        return parse_layout(data['layout'], get_maze_grid_size(level))
+    except (LayoutError, TypeError, ValueError, KeyError) as exc:
+        logging.getLogger(__name__).warning('Level %d: ignoring its layout: %s', level, exc)
+        return None
+
+
 def get_level_seed(level: int) -> int:
     """Get random seed for a level.
     
@@ -63,6 +77,13 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         EnemyCounts dataclass with config overrides applied, or None if no config exists.
         Unspecified enemy counts use defaults from level_rules.
     """
+    layout = get_level_layout(level)
+    if layout is not None:
+        counts = layout.counts()
+        return EnemyCounts(total=counts['static'] + counts['patrol'] + counts['aggressive'],
+                           static=counts['static'], patrol=counts['patrol'], aggressive=counts['aggressive'],
+                           replay=counts['replay'], flocker=counts['flocker'], flighthouse=counts['flighthouse'],
+                           egg=counts['egg'], anemone=counts['anemone'])
     config = load_level_config(level)
     if not config or 'enemies' not in config:
         return None
@@ -107,6 +128,9 @@ def get_level_anemone_count(level: int) -> int:
         The number the level's config asks for, taken as given. Otherwise the
         number from level_rules, held to what the level's maze has room for.
     """
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['anemone']
     config = load_level_config(level)
     if config and 'anemone' in config.get('enemies', {}):
         return max(0, int(config['enemies']['anemone']))
@@ -122,6 +146,9 @@ def get_level_split_boss_count(level: int) -> int:
     Returns:
         Split boss count from config if present, otherwise default from level_rules.
     """
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['split_boss']
     config = load_level_config(level)
     if config and 'enemies' in config and 'split_boss' in config['enemies']:
         return int(config['enemies']['split_boss'])
@@ -137,6 +164,9 @@ def get_level_mother_boss_count(level: int) -> int:
     Returns:
         Mother boss count from config if present, otherwise default from level_rules.
     """
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['mother_boss']
     from level_rules import get_mother_boss_count
     config = load_level_config(level)
     if config and 'enemies' in config and 'mother_boss' in config['enemies']:
@@ -146,6 +176,9 @@ def get_level_mother_boss_count(level: int) -> int:
 
 def get_level_rules_hunter_count(level: int) -> int:
     """Rules hunters on a level: the level file's `rules_hunter` count, else none."""
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['rules_hunter']
     config = load_level_config(level)
     if config and 'enemies' in config and 'rules_hunter' in config['enemies']:
         return int(config['enemies']['rules_hunter'])
@@ -161,6 +194,9 @@ def get_level_egg_count(level: int) -> int:
     Returns:
         Egg count from config if present, otherwise default from level_rules.
     """
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['egg']
     config = load_level_config(level)
     if config and 'enemies' in config and 'egg' in config['enemies']:
         return int(config['enemies']['egg'])
@@ -223,6 +259,9 @@ def is_boss_level(level: int) -> bool:
 
 def get_level_hunter_config(level: int):
     """Return the level file's hunter entry: a spawn override, False for no hunter, or None if absent."""
+    layout = get_level_layout(level)
+    if layout is not None:
+        return {'spawn_cell': list(layout.beacon)} if layout.beacon is not None else False
     data = load_level_config(level)
     return data.get('hunter') if data else None
 

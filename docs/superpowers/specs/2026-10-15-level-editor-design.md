@@ -31,15 +31,16 @@ A level file gains one optional key:
   "walls":   [[col, row], ...],
   "start":   [col, row],
   "exit":    [col, row],
-  "enemies": [{"type": "flocker", "cell": [col, row]}, ...]
+  "enemies": [{"type": "flocker", "cell": [col, row]}, ...],
+  "beacon":  [col, row]
 }
 ```
 
 - `walls` are the interior rock cells. The border ring is always walls and is not listed.
 - `type` is one of `static`, `patrol`, `aggressive`, `replay`, `flocker`, `flighthouse`, `egg`, `anemone`,
   `split_boss`, `mother_boss`, `rules_hunter`.
-- The Jev beacon uses the existing `hunter` key (`{"spawn_cell": [col, row]}`, or `false` for none), which already
-  exists.
+- The Jev beacon is `layout.beacon` (`null` for none). While a layout exists it takes the place of the `hunter` key,
+  which is left untouched.
 - `maze.grid_size` still sets the grid (square, as now). `seed`, `maze.complexity` and `enemies` are left alone by
   the editor.
 
@@ -101,7 +102,8 @@ what is edited is what plays today. (Any Rules hunter worker created is closed a
 
 - **Save** writes the file with `layout` added or replaced and every other key kept as it was. A file that does not
   exist yet (levels without one) is created with `seed` and `maze.grid_size` from the level as it generated. A short
-  "saved" flash confirms it.
+  "saved" flash confirms it. A file the editor creates also carries `"created_by_editor": true`; that marker is how
+  revert knows to delete it.
 - **Revert** (`X`) removes the `layout` key. If the file contained nothing else the generator needs (it was created by
   the editor), the file is deleted so the level falls back to its formulas. The editor then reloads the level in its
   generated form. It asks first, and says what will be lost.
