@@ -72,6 +72,9 @@ class HunterSettings:
     contact_ttl: float = 10.0
     health: int = 3
     indestructible: bool = True
+    # Energy a wall takes from a mortal hunter per full-speed impact (in proportion to the speed it takes: a scrape
+    # costs almost nothing). Energy is then fractional.
+    wall_energy: float = 0.0
     fire_interval: float = 0.250
     burst_size: int = 3
     burst_spacing: float = 0.050

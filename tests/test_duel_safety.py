@@ -50,4 +50,7 @@ def test_the_normal_hunters_stay_indestructible(game, policy_file):
     key(game, pygame.K_RETURN)
     key(game, pygame.K_ESCAPE)
     assert HunterSettings().indestructible and hunter_settings_for('rules').indestructible
-    assert hunter_settings_for('neural').indestructible
+    # The neural hunter is mortal by design (game.neuralHunterHealth); a duel must not change that
+    import config
+    neural = hunter_settings_for('neural')
+    assert not neural.indestructible and neural.health == config.SETTINGS.game.neuralHunterHealth

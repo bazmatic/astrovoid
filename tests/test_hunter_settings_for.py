@@ -51,4 +51,13 @@ def test_the_neural_pilot_gets_its_own_turn_rate_and_nothing_else_changes():
     from dataclasses import replace
     neural = hunter_settings_for('neural')
     assert neural.turn_rate_multiplier == SETTINGS.game.neuralTurnRate
-    assert replace(neural, turn_rate_multiplier=HunterSettings().turn_rate_multiplier) == HunterSettings()
+    # Its hunter can also be destroyed (test below); everything else is the shared default.
+    assert replace(neural, turn_rate_multiplier=HunterSettings().turn_rate_multiplier,
+                   indestructible=True, health=HunterSettings().health,
+                   wall_energy=HunterSettings().wall_energy) == HunterSettings()
+
+
+def test_the_neural_hunter_can_be_destroyed_and_the_others_cannot():
+    neural = hunter_settings_for('neural')
+    assert not neural.indestructible and neural.health == SETTINGS.game.neuralHunterHealth > 0
+    assert hunter_settings_for('jev').indestructible and hunter_settings_for('rules').indestructible

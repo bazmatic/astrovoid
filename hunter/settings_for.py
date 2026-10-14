@@ -14,7 +14,9 @@ def hunter_settings_for(mode):
     """
     if mode == 'neural':
         import config
-        return replace(HunterSettings(), turn_rate_multiplier=config.SETTINGS.game.neuralTurnRate)
+        return replace(HunterSettings(), turn_rate_multiplier=config.SETTINGS.game.neuralTurnRate,
+                       indestructible=False, health=config.SETTINGS.game.neuralHunterHealth,
+                       wall_energy=config.SETTINGS.game.neuralWallEnergy)
     if mode == 'rules':
         return replace(HunterSettings(), thrust_multiplier=RULES.thrust_multiplier,
                        sensor_range_fraction=RULES.sensor_range_fraction,

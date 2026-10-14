@@ -261,6 +261,7 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
                          wall_quotient_per_min=summary['wall_quotient_per_min'],
                          hits_taken_per_min=summary['hits_taken_per_min'],
                          speed_fraction=float(np.mean([e.get('speed_fraction', 0.0) for e in flown])),
+                         deaths_per_episode=float(np.mean([1.0 if e.get('died') else 0.0 for e in flown])),
                          powerups_per_episode=float(np.mean([e.get('powerups', 0) for e in flown])),
                          upgraded_fraction=float(np.mean([e.get('upgraded_fraction', 0.0) for e in flown])),
                          rollout_s=t1 - t0, update_s=time.perf_counter() - t1)
@@ -273,6 +274,44 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             pooled.close()
     (out_dir / 'iter_start.npz').unlink(missing_ok=True)
     return {'last': current if history else None, 'history': history}
+
+
+def reward_summary(args):
+    """The reward terms a run trains on, as plain numbers for the dashboard: (name, sign, value, unit) rows."""
+    from experiments.harness import IDLE_AFTER_SECONDS
+    from experiments.rollout import KILL_REWARD_TOTAL
+    from experiments.score import Weights
+    w = Weights()
+    rows = [('Kills', '+', KILL_REWARD_TOTAL, 'points shared across all the enemies in an episode'),
+            ('Powerup collected', '+', args.powerup_reward, 'points each'),
+            ('Gun upgraded', '+', args.upgrade_bonus, 'points per second'),
+            ('Wall impact', '-', w.quotient * args.wall_scale, 'points per full-speed hit (scales with the speed lost)'),
+            ('Enemy hit', '-', w.hit * args.hit_scale, 'points each'),
+            ('Idle', '-', w.idle / 60.0, f'points per second beyond {IDLE_AFTER_SECONDS:.0f} s without a kill, until the field is clear'),
+            ('Flying below top speed', '-', args.speed_penalty, 'points per second at a standstill, in proportion to the shortfall'),
+            ('Crawling under the still speed', '-', args.still_penalty, f'points per second below {args.still_speed:.0%} of top speed'),
+            ('Starting or reversing a turn', '-', args.turn_change_penalty, 'points each'),
+            ('Reversing a turn directly', '-', args.reversal_penalty, 'extra points each, left to right or back'),
+            ('Death', '-', args.death_penalty, f'points when the hunter is destroyed (it survives {args.health} hits)')]
+    return [{'name': n, 'sign': s, 'value': round(v, 4), 'unit': u} for n, s, v, u in rows if v]
+
+
+def _wall_energy():
+    import config
+    return config.SETTINGS.game.neuralWallEnergy
+
+
+def write_run_config(args):
+    """Record what this run trains on beside its log, so the dashboard can list it."""
+    import json
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / 'config.json').write_text(json.dumps({
+        'rewards': reward_summary(args),
+        'episode': {'horizon_seconds': args.horizon, 'after_clear_seconds': args.after_clear,
+                    'episodes_per_iteration': args.episodes, 'learning_rate': args.lr,
+                    'health': args.health, 'wall_energy': _wall_energy() if args.health else 0},
+        'start': str(args.start)}, indent=1))
 
 
 def main(argv=None):
@@ -291,6 +330,12 @@ def main(argv=None):
                         help='below this share of top speed counts as near-motionless')
     parser.add_argument('--turn-change-penalty', type=float, default=0.0,
                         help='points lost each time a turn starts or reverses')
+    parser.add_argument('--health', type=int, default=0,
+                        help='hits the hunter survives before it is destroyed and the episode ends (0: indestructible)')
+    parser.add_argument('--death-penalty', type=float, default=0.0,
+                        help='points lost when the hunter is destroyed (needs --health)')
+    parser.add_argument('--reversal-penalty', type=float, default=0.0,
+                        help='extra points lost each time the turn flips straight from left to right or back')
     parser.add_argument('--horizon', type=float, default=DEFAULT_HORIZON,
                         help='seconds of game time per training episode')
     parser.add_argument('--still-penalty', type=float, default=0.0,
@@ -308,6 +353,7 @@ def main(argv=None):
     parser.add_argument('--hit-scale', type=float, default=1.0,
                         help='multiplies the enemy-hit penalty in the training reward (the score is unchanged)')
     args = parser.parse_args(argv)
+    write_run_config(args)
     from experiments import run
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
@@ -316,6 +362,8 @@ def main(argv=None):
                                'random_start': not args.fixed_start,
                                'still_speed': args.still_speed,
                                'turn_change_penalty': args.turn_change_penalty,
+                               'reversal_penalty': args.reversal_penalty,
+                               'health': args.health, 'death_penalty': args.death_penalty,
                                'speed_penalty': args.speed_penalty,
                                'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
                                'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player})

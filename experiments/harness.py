@@ -33,7 +33,7 @@ class EpisodeResult:
     wall_hits: int
     hits_taken: int
     idle_seconds: float
-    end: str  # 'cleared' or 'horizon'
+    end: str  # 'cleared', 'horizon' or (a mortal hunter) 'died'
     enemies_spawned: int = 0  # enemies that appeared during the episode (spawners, eggs)
     wall_impulse: float = 0.0  # speed the walls took from the hunter, summed over collision frames, in top speeds
 
@@ -49,6 +49,7 @@ class EventCounter:
         self.hits_taken = 0
         self.idle_seconds = 0.0
         self.powerups = 0          # crystals the hunter collected
+        self.died = False          # the (mortal) hunter was destroyed
         self.cleared = False       # every enemy is dead: nothing is left to kill, so waiting is not idling
         self._alive = None
         self._in_wall = False
@@ -205,10 +206,12 @@ def load_student_policy(student):
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
-                 pursue_hunter=False):
+                 pursue_hunter=False, health=0):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `health` above zero makes the hunter mortal: it survives that many hits, and the episode ends 'died' when it
+    is destroyed (0 keeps it indestructible: hits are counted, not suffered).
     `pursue_hunter` makes enemies chase the hunter alone: the parked player is no target (and, as with `hide_player`,
     the hunter does not see it). Without it the parked ship is a decoy for whichever enemies are nearer to it.
     `after_clear` keeps flying that many more seconds once the last enemy is dead (less if no crystal is left to
@@ -249,11 +252,15 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         import numpy as np
         pilot = NeuralPilot(load_policy(student), student.decision_frames, greedy=student.greedy,
                             rng=None if student.greedy else np.random.default_rng(student.sample_seed))
-    # The hunter stays indestructible, as in the game; hits are counted, not suffered.
+    # Unless `health` says otherwise the hunter stays indestructible: hits are counted, not suffered.
     settings = replace(HunterSettings(), thrust_multiplier=params.thrust_multiplier,
                        sensor_range_fraction=params.sensor_range_fraction,
                        turn_rate_multiplier=(params.turn_rate_multiplier if student is None
                                              else student.turn_rate))
+    if health > 0:
+        import config
+        settings = replace(settings, indestructible=False, health=health,
+                           wall_energy=config.SETTINGS.game.neuralWallEnergy)
     near = _random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y)
     game._close_hunter()
     flight = HunterFlight(HunterShip(nearest_hunter_spawn(near, game.maze, game.ship), settings),
@@ -323,10 +330,15 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         alive = _active_enemies(game)
         counter.observe(alive)
         counter.tick(elapsed)
+        if health > 0 and not hunter.active:
+            counter.died = True
         if recorder is not None and hasattr(recorder, 'counted'):
             recorder.counted(counter, elapsed)
         if trace is not None:
             trace(elapsed, game, hunter)
+        if counter.died:
+            end = 'died'
+            break
         if start_enemies and not alive:
             if cleared_at is None:
                 cleared_at = elapsed
@@ -338,7 +350,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
             break
     game._close_hunter()
     _clear_overrides(game)
-    result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None else cleared_at, counter.kills, counter.wall_hits,
+    result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None or counter.died else cleared_at, counter.kills, counter.wall_hits,
                            counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse)
     if on_result is not None:
         on_result(result)

@@ -165,8 +165,9 @@ def duel_spawns(maze, player, sight, rng=None):
 
 def build_duel(maze, player, rules_worker, policy, health, timeout_seconds, decision_frames):
     """The rules pilot's hunter against the neural pilot's, facing each other from opposite corners."""
-    rules_settings = replace(hunter_settings_for('rules'), indestructible=False, health=health)
-    vibes_settings = replace(hunter_settings_for('neural'), indestructible=False, health=health)
+    # Walls cost neither hunter energy here: only the neural pilot's hunter pays for them in a normal level
+    rules_settings = replace(hunter_settings_for('rules'), indestructible=False, health=health, wall_energy=0.0)
+    vibes_settings = replace(hunter_settings_for('neural'), indestructible=False, health=health, wall_energy=0.0)
     sight = min(rules_settings.sensor_range(maze), vibes_settings.sensor_range(maze))
     rules_at, vibes_at = duel_spawns(maze, player, sight)
     rules, vibes = HunterShip(rules_at, rules_settings), HunterShip(vibes_at, vibes_settings)

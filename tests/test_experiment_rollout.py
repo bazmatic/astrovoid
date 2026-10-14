@@ -89,6 +89,7 @@ def test_a_hit_scale_multiplies_only_the_enemy_hit_penalty(spec):
 
 class _Counter:
     kills = wall_impulse = hits_taken = spawned = powerups = 0
+    died = False
     idle_seconds = 0.0
 
 
@@ -135,7 +136,7 @@ def test_collected_powerups_pay_the_powerup_reward():
     recorder._start_enemies = 1
     recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
     recorder.controls.append((1, 0, 0))
-    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2, 0.0])
+    recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 2, 0.0, 0])
     assert recorder.arrays()[2][0] == pytest.approx(10.0)
     assert rollout.RolloutRecorder(6).arrays()[2].size == 0
 
@@ -156,19 +157,46 @@ def test_each_second_with_upgraded_guns_pays_the_upgrade_bonus():
     assert recorder.upgraded_frames == 3
 
 
+def _death_rewards(died_at, penalty, steps=4):
+    from types import SimpleNamespace
+    recorder = rollout.RolloutRecorder(6, death_penalty=penalty)
+    recorder._start_enemies = 1
+    for step in range(steps):
+        recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
+        recorder.controls.append((1, 0, 0))
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0])
+        counter = _Counter()
+        counter.died = died_at is not None and step >= died_at
+        recorder.counted(counter, step / 10.0)
+    return recorder.arrays()[2]
+
+
+def test_dying_costs_the_death_penalty_once_in_the_step_it_happens():
+    assert _death_rewards(2, 200.0).tolist() == pytest.approx([0.0, 0.0, -200.0, 0.0])
+
+
+def test_no_death_no_penalty_and_none_by_default():
+    assert not _death_rewards(None, 200.0).any()
+    assert not _death_rewards(2, 0.0).any()
+
+
+def test_a_rollout_reports_whether_the_hunter_died(spec):
+    assert rollout.fly_rollout(14, 300, spec, horizon=4.0)['died'] is False
+
+
 def test_a_random_start_rollout_begins_from_a_different_view_of_the_maze(spec):
     here = rollout.fly_rollout(14, 300, spec, horizon=3.0)
     there = rollout.fly_rollout(14, 300, spec, horizon=3.0, random_start=True)
     assert len(there['senses']) >= 25 and not np.array_equal(here['senses'][0], there['senses'][0])
 
 
-def _rewards_for_turns(turns, penalty):
-    recorder = rollout.RolloutRecorder(6, turn_change_penalty=penalty)
+def _rewards_for_turns(turns, penalty, reversal=0.0):
+    recorder = rollout.RolloutRecorder(6, turn_change_penalty=penalty, reversal_penalty=reversal)
     recorder._start_enemies = 1
     for turn in turns:
         recorder.senses.append(np.zeros(SENSE_SIZE, np.float32))
         recorder.controls.append((turn, 0, 0))
-        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0])
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0])
     return recorder.arrays()[2]
 
 
@@ -180,6 +208,16 @@ def test_starting_a_turn_or_reversing_one_costs_the_penalty_but_holding_or_stopp
 
 def test_a_turn_on_the_very_first_decision_counts_as_starting_to_turn():
     assert _rewards_for_turns([0, 0], 0.5).tolist() == pytest.approx([-0.5, 0.0])
+
+
+def test_a_direct_reversal_pays_the_reversal_penalty_on_top_but_a_pause_between_does_not():
+    # start left, hold, flip to right (reversal), hold, pause, start left again (no reversal), flip to right
+    rewards = _rewards_for_turns([0, 0, 2, 2, 1, 0, 2], 0.5, reversal=2.0)
+    assert rewards.tolist() == pytest.approx([-0.5, 0.0, -2.5, 0.0, 0.0, -0.5, -2.5])
+
+
+def test_no_reversal_penalty_by_default():
+    assert _rewards_for_turns([0, 2, 0, 2], 0.5).tolist() == pytest.approx([-0.5, -0.5, -0.5, -0.5])
 
 
 def test_no_turn_penalty_by_default():

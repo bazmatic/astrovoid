@@ -185,6 +185,38 @@ class UIElementRenderer:
             return low_color
     
     @staticmethod
+    def draw_energy_gauge(
+        screen: pygame.Surface,
+        center_x: int,
+        y: int,
+        energy: float,
+        value_text: str,
+        label: str = "HUNTER",
+        width: int = 150,
+    ) -> pygame.Rect:
+        """A small horizontal gauge: a label above, a bar that drains as `energy` (0.0 to 1.0) falls, and a reading.
+
+        It belongs in the HUD, away from the ship it describes: nothing is drawn beside the hunter itself.
+        Returns the bar's rectangle.
+        """
+        energy = max(0.0, min(1.0, energy))
+        label_image = get_font(18).render(label, True, (150, 160, 195))
+        screen.blit(label_image, label_image.get_rect(midbottom=(center_x, y - 4)))
+        bar = pygame.Rect(0, 0, width, 10)
+        bar.midtop = (center_x, y)
+        pygame.draw.rect(screen, (40, 44, 70), bar)
+        color = UIElementRenderer._calculate_percentage_color(
+            energy, high_color=(120, 255, 90), medium_color=(255, 190, 70), low_color=(255, 90, 90))
+        fill = bar.copy()
+        fill.width = int(round(bar.width * energy))
+        if fill.width:
+            pygame.draw.rect(screen, color, fill)
+        pygame.draw.rect(screen, (90, 96, 130), bar, 1)
+        reading = get_font(18).render(value_text, True, (235, 242, 255))
+        screen.blit(reading, reading.get_rect(midtop=(center_x, bar.bottom + 3)))
+        return bar
+
+    @staticmethod
     def draw_circular_gauge(
         screen: pygame.Surface,
         center_x: int,

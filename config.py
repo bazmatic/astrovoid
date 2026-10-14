@@ -387,6 +387,10 @@ class GameSettings:
     # turns at this share of the player's rate.
     neuralDecisionFrames: int = 6
     neuralTurnRate: float = 1.0
+    # The neural pilot's hunter can be destroyed: the hits it survives. The other pilots' hunters are indestructible.
+    neuralHunterHealth: int = 10
+    # Energy a wall takes from the neural pilot's hunter per full-speed impact (less for a gentler one).
+    neuralWallEnergy: float = 4.0
     # Skips the drag physics of squid and jellyfish tentacles (they only look different: nothing reads them).
     # The lab turns it on for training and evaluation, where nobody watches.
     lowGraphics: bool = False

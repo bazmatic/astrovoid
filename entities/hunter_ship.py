@@ -3,7 +3,6 @@ import math
 import pygame
 import config
 from entities.rotating_thruster_ship import RotatingThrusterShip
-from entities.tentacle_chain import drag_chain
 from entities.projectile import Projectile
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown, shots_per_volley
 from hunter.model import HunterSettings
@@ -13,34 +12,20 @@ class HunterShip(RotatingThrusterShip):
     # Green marks an ally: the player is blue, enemies are red, orange and purple.
     COLOR = (120, 255, 90)
     FILL = (25, 110, 40)
-    NOSE_COLOR = (215, 255, 200)  # Pale head and belly, so the front reads at a glance
-    COCKPIT_COLOR = (15, 60, 30)  # The eyes' pupils
-    ENGINE_COLOR = (170, 95, 20)  # Amber mark at the tail root, engine off
+    NOSE_COLOR = (215, 255, 200)  # Pale tip, so the front reads at a glance
+    COCKPIT_COLOR = (15, 60, 30)
+    ENGINE_COLOR = (170, 95, 20)  # Amber mark in the tail notch, engine off
     ENGINE_LIT_COLOR = (255, 200, 80)  # ... and engine on
-    # A fish seen from above, in multiples of the radius: x along the heading, y across it. The head is blunt and
-    # the body tapers to a narrow tail root, from which a chain of segments trails: it is towed like a rope, so it
-    # lags behind a turn and whips back, and a pilot that flips left and right makes the tail wave.
-    FISH_NOSE_X = 1.6
-    FISH_TAIL_ROOT_X = -0.9
-    FISH_WIDTH = 0.66
-    FISH_WIDEST_X = 0.45
-    EYE_X = 0.95
-    EYE_HALF_SPAN = 0.36
-    ENGINE_X = -0.62
-    TAIL_SEGMENTS = 6
-    TAIL_SEGMENT = 0.38           # length of one tail segment
-    TAIL_STIFFNESS_BASE = 0.30
-    TAIL_STIFFNESS_TIP = 0.08
-    TAIL_HALF_WIDTH_ROOT = 0.30
-    TAIL_HALF_WIDTH_TIP = 0.14
-    TAIL_FIN_SPAN = 0.95
-    # The old arrowhead, which the Jev beacon pickup still draws as its icon (entities/jev_beacon.py)
+    # An arrowhead, in multiples of the radius: x along the heading, y across it.
+    # A long nose, swept-back wings and a notched tail give it only one way to point.
+    BURN_ALIGNMENT_DEGREES = 5.0  # How close to a course's burn heading the nose must be to thrust
+    LOOSE_BURN_ALIGNMENT_DEGREES = 20.0  # The same for a burn made while the nose is not the navigator's
     NOSE_X = 1.4
     WING_X = -0.9
     WING_HALF_SPAN = 0.85
     NOTCH_X = -0.35
-    BURN_ALIGNMENT_DEGREES = 5.0  # How close to a course's burn heading the nose must be to thrust
-    LOOSE_BURN_ALIGNMENT_DEGREES = 20.0  # The same for a burn made while the nose is not the navigator's
+    COCKPIT_X = 0.5
+    ENGINE_X = -0.5
 
     def __init__(self, start_pos, settings=HunterSettings()):
         super().__init__(start_pos, config.SHIP_SIZE)
@@ -53,8 +38,6 @@ class HunterShip(RotatingThrusterShip):
         self.gun_upgrade_level = 0  # Powerups in effect: they upgrade the guns as the player's do
         self.upgrade_remaining = 0.0  # Seconds until the powerups wear off
         self._hit = None  # strongest collision push since the senses last read it
-        self._tail = None  # the tail chain's points, root first, in world space
-        self._swim_phase = 0.0  # drives the tail's gentle swimming wave
         self.immunity_remaining = 0.0
         self.pilot_thrusting = False
         self.thrust_frames = 0  # Frames of thrust ever applied
@@ -178,7 +161,6 @@ class HunterShip(RotatingThrusterShip):
             self.fire_remaining = (self.settings.burst_spacing if self.burst_remaining
                                    else self.fire_interval)
         super().update(dt)
-        self._drag_tail(dt)
         return shots
 
     def register_hit(self, dvx, dvy):
@@ -189,6 +171,19 @@ class HunterShip(RotatingThrusterShip):
     def take_hit(self):
         """The strongest hit since the last call as (dvx, dvy), or None; reading it clears it."""
         hit, self._hit = self._hit, None
+        return hit
+
+    def check_wall_collision(self, walls, spatial_grid=None):
+        """A mortal hunter loses energy to a wall in proportion to the speed the wall takes from it."""
+        vx, vy = self.vx, self.vy
+        hit = super().check_wall_collision(walls, spatial_grid)
+        if hit and self.active:
+            dvx, dvy = self.vx - vx, self.vy - vy
+            self.register_hit(dvx, dvy)           # the pilot feels it, as it feels a bullet
+            if not self.settings.indestructible and self.settings.wall_energy > 0:
+                impulse = math.hypot(dvx, dvy) / max(self.max_speed, 1e-6)
+                self.health -= self.settings.wall_energy * impulse
+                self.active = self.health > 0
         return hit
 
     def take_damage(self):
@@ -207,85 +202,21 @@ class HunterShip(RotatingThrusterShip):
                 self.y + (x * sin_heading + y * cos_heading) * self.radius)
 
     def outline(self):
-        """The body as a polygon, nose first: down one side to the tail root and back up the other."""
-        xs = [self.FISH_NOSE_X - (self.FISH_NOSE_X - self.FISH_TAIL_ROOT_X) * i / 11 for i in range(12)]
-        side = [(x, self._half_width(x)) for x in xs]
-        return [self._place(x, y) for x, y in side] + [self._place(x, -y) for x, y in reversed(side[1:-1])]
+        """Corners of the arrowhead: nose, right wing tip, tail notch, left wing tip."""
+        return [self._place(self.NOSE_X, 0.0),
+                self._place(self.WING_X, self.WING_HALF_SPAN),
+                self._place(self.NOTCH_X, 0.0),
+                self._place(self.WING_X, -self.WING_HALF_SPAN)]
 
-    def _half_width(self, x):
-        """How far the body reaches to each side of the spine at x."""
-        if x >= self.FISH_WIDEST_X:
-            reach = self.FISH_NOSE_X - self.FISH_WIDEST_X
-            return self.FISH_WIDTH * math.sqrt(max(0.0, 1.0 - ((x - self.FISH_WIDEST_X) / reach) ** 2))
-        run = (x - self.FISH_TAIL_ROOT_X) / (self.FISH_WIDEST_X - self.FISH_TAIL_ROOT_X)
-        return self.TAIL_HALF_WIDTH_ROOT + (self.FISH_WIDTH - self.TAIL_HALF_WIDTH_ROOT) * max(0.0, run) ** 0.8
+    def cockpit(self):
+        """Where the cockpit sits, forward of centre."""
+        return self._place(self.COCKPIT_X, 0.0)
 
-    def eyes(self):
-        """Where the two eyes sit, either side of the head."""
-        return [self._place(self.EYE_X, self.EYE_HALF_SPAN), self._place(self.EYE_X, -self.EYE_HALF_SPAN)]
-
-    def _front_part(self, back_x, shrink=1.0):
-        """The body ahead of back_x, narrowed by `shrink`: a lighter patch laid over the body."""
-        xs = [self.FISH_NOSE_X - (self.FISH_NOSE_X - back_x) * i / 7 for i in range(8)]
-        side = [(x, self._half_width(x) * shrink) for x in xs]
-        return [self._place(x, y) for x, y in side] + [self._place(x, -y) for x, y in reversed(side[1:-1])]
-
-    def _drag_tail(self, dt=1.0, snap=False):
-        """Tow the tail behind the body. It swims in a gentle wave that grows with speed."""
-        speed = math.hypot(self.vx, self.vy)
-        self._swim_phase += dt * (0.22 + 0.05 * speed)
-        swing = 0.45 + 0.5 * min(1.0, speed / max(self.max_speed, 1e-6))
-        behind = math.radians(self.angle) + math.pi
-        phase = self._swim_phase
-        anchor = self._place(self.FISH_TAIL_ROOT_X, 0.0)
-        if self._tail is None:
-            self._tail = [anchor] * (self.TAIL_SEGMENTS + 1)
-            snap = True
-        elif math.hypot(self._tail[0][0] - anchor[0], self._tail[0][1] - anchor[1]) > self.radius * 3:
-            snap = True               # a jump (a respawn): do not stretch the tail across the screen
-
-        def rest_angle(i, t):
-            return behind + math.sin(phase - i * 0.9) * swing * t
-
-        drag_chain(self._tail, anchor, self.TAIL_SEGMENT * self.radius, rest_angle,
-                   self.TAIL_STIFFNESS_BASE, self.TAIL_STIFFNESS_TIP, snap)
-
-    def _tail_pieces(self):
-        """The tail as one quad per segment, tapering along the chain (robust where the chain bends sharply)."""
-        edges = []
-        last = len(self._tail) - 1
-        for i, (x, y) in enumerate(self._tail):
-            before = self._tail[max(i - 1, 0)]
-            after = self._tail[min(i + 1, last)]
-            dx, dy = after[0] - before[0], after[1] - before[1]
-            length = math.hypot(dx, dy) or 1.0
-            nx, ny = -dy / length, dx / length
-            half = (self.TAIL_HALF_WIDTH_ROOT + (self.TAIL_HALF_WIDTH_TIP - self.TAIL_HALF_WIDTH_ROOT) * i / last) * self.radius
-            edges.append(((x + nx * half, y + ny * half), (x - nx * half, y - ny * half)))
-        return [[edges[i][0], edges[i + 1][0], edges[i + 1][1], edges[i][1]] for i in range(last)]
-
-    def _tail_fin(self):
-        """The forked fin at the end of the tail: two lobes with a notch between them."""
-        (x1, y1), (x2, y2) = self._tail[-2], self._tail[-1]
-        dx, dy = x2 - x1, y2 - y1
-        length = math.hypot(dx, dy) or 1.0
-        ux, uy = dx / length, dy / length
-        nx, ny = -uy, ux
-        span = self.TAIL_FIN_SPAN * self.radius
-        reach = self.TAIL_SEGMENT * self.radius * 1.3
-        return [(x2 - ux * reach * 0.15, y2 - uy * reach * 0.15),
-                (x2 + ux * reach + nx * span, y2 + uy * reach + ny * span),
-                (x2 + ux * reach * 0.45, y2 + uy * reach * 0.45),
-                (x2 + ux * reach - nx * span, y2 + uy * reach - ny * span)]
-
-    def _side_fins(self):
-        """Two small pectoral fins swept back from the sides of the body."""
-        fins = []
-        for sign in (1, -1):
-            fins.append([self._place(0.35, sign * self._half_width(0.35) * 0.9),
-                         self._place(-0.15, sign * (self._half_width(-0.15) + 0.55)),
-                         self._place(-0.35, sign * self._half_width(-0.35) * 0.9)])
-        return fins
+    def _nose_section(self, back_x):
+        """The part of the arrowhead ahead of back_x: a triangle ending at the nose."""
+        half_width = self.WING_HALF_SPAN * (self.NOSE_X - back_x) / (self.NOSE_X - self.WING_X)
+        return [self._place(self.NOSE_X, 0.0), self._place(back_x, half_width),
+                self._place(back_x, -half_width)]
 
     def draw(self, screen):
         if not self.active:
@@ -293,33 +224,21 @@ class HunterShip(RotatingThrusterShip):
         color = self.COLOR
         if self.immunity_remaining and int(self.immunity_remaining * 20) % 2:
             color = (235, 255, 230)
-        if self._tail is None:
-            self._drag_tail(snap=True)
-        # The engine's flame goes first, so the fish is drawn over it
-        self.draw_thrust_plume(
-            screen, config.THRUST_PLUME_LENGTH * 0.6 if self.pilot_thrusting else 0.0)
-        middle = tuple((a + b) // 2 for a, b in zip(self.FILL, self.COLOR))
-        # The tail is a mid green and its fin the body's own, so it reads against the dark maze
-        for piece in self._tail_pieces():
-            pygame.draw.polygon(screen, middle, piece)
-            pygame.draw.polygon(screen, middle, piece, 1)    # closes the hairline gaps between pieces
-        fin = self._tail_fin()
-        pygame.draw.polygon(screen, self.COLOR, fin)
-        pygame.draw.lines(screen, color, True, fin, 1)
-        for side_fin in self._side_fins():
-            pygame.draw.polygon(screen, middle, side_fin)
-            pygame.draw.lines(screen, color, True, side_fin, 1)
         outline = self.outline()
-        # Dark at the tail root, brightening in two steps to a pale head
+        # Dark at the tail, brightening in two steps to a pale nose
         pygame.draw.polygon(screen, self.FILL, outline)
-        pygame.draw.polygon(screen, middle, self._front_part(-0.35))
-        pygame.draw.polygon(screen, self.NOSE_COLOR, self._front_part(0.55, 0.6))
+        middle = tuple((a + b) // 2 for a, b in zip(self.FILL, self.COLOR))
+        pygame.draw.polygon(screen, middle, self._nose_section(-0.2))
+        pygame.draw.polygon(screen, self.NOSE_COLOR, self._nose_section(0.45))
         pygame.draw.lines(screen, color, True, outline, 1)
-        for eye in self.eyes():
-            pygame.draw.circle(screen, (255, 255, 255), (round(eye[0]), round(eye[1])), max(1, round(self.radius * 0.2)))
-            pygame.draw.circle(screen, self.COCKPIT_COLOR, (round(eye[0]), round(eye[1])), max(1, round(self.radius * 0.1)))
-        # The engine glows where the tail joins the body, and marks the back even when it is off
+        cockpit = self.cockpit()
+        pygame.draw.circle(screen, self.COCKPIT_COLOR, (round(cockpit[0]), round(cockpit[1])), 1)
+        # The engine sits in the tail notch and marks the back even when it is off
         engine = self._place(self.ENGINE_X, 0.0)
         pygame.draw.circle(
             screen, self.ENGINE_LIT_COLOR if self.pilot_thrusting else self.ENGINE_COLOR,
             (round(engine[0]), round(engine[1])), max(2, round(self.radius * 0.22)))
+        # The hunter's gentle thrust rarely reaches plume-length speeds, so hold
+        # the cone open while the pilot's engine is on.
+        self.draw_thrust_plume(
+            screen, config.THRUST_PLUME_LENGTH * 0.6 if self.pilot_thrusting else 0.0)

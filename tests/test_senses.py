@@ -226,6 +226,16 @@ def test_a_bullet_collision_registers_a_hit_on_the_hunter():
     assert hit is not None and hit[0] > 0 and ship.take_hit() is None
 
 
+def test_the_energy_sense_falls_as_a_mortal_hunter_is_hurt():
+    from dataclasses import replace
+    settings = replace(HunterSettings(), indestructible=False, health=10)
+    ship = HunterShip((500, 500), settings)
+    senses = Senses(settings)
+    assert value(sense(ship, world(), senses=senses), 'health') == 1.0
+    ship.health = 4
+    assert value(sense(ship, world(), senses=senses), 'health') == pytest.approx(0.4)
+
+
 def test_own_motion_is_in_the_hunters_frame():
     ship = HunterShip((500, 500))
     ship.angle = 90.0

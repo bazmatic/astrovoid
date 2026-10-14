@@ -23,7 +23,7 @@ from input import InputHandler
 from scoring.system import ScoringSystem
 from profiles import ProfileManager, LevelResult
 from rendering import Renderer
-from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators
+from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators, UIElementRenderer
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon, render_hint_row
 from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
@@ -430,6 +430,22 @@ class Game:
                 self.hunter_worker = PilotWorker()
             pilot = WorkerPilot(self.hunter_worker)
         self.hunter_flight = HunterFlight(HunterShip(pos, hunter_settings_for(mode)), pilot, self.hunter_surroundings)
+
+    def _hunter_energy_reading(self):
+        """(energy, most energy) of the hunter flying now, or None when there is none (or it has been destroyed)."""
+        if self.hunter is None or not self.hunter.active:
+            return None
+        return self.hunter.health, self.hunter.settings.health
+
+    def _draw_hunter_energy(self) -> None:
+        """The hunter's energy gauge, in the HUD below the player's gauges (never beside the ship)."""
+        reading = self._hunter_energy_reading()
+        if reading is None:
+            return
+        energy, most = reading
+        y = min(780, config.SCREEN_HEIGHT - 70)
+        UIElementRenderer.draw_energy_gauge(
+            self.screen, config.UI_ZONE_WIDTH // 2, y, energy / max(most, 1), f"{math.ceil(energy)}/{most}")
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -1204,6 +1220,7 @@ class Game:
                 level_score=potential['final_score'],
                 progress_score=self.scoring.get_total_score()
             )
+            self._draw_hunter_energy()
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
         # GameIndicators is kept for potential future use but currently doesn't draw anything

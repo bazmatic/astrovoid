@@ -338,6 +338,8 @@
     "hunterPilot": "jev",
     "neuralDecisionFrames": 6,
     "neuralTurnRate": 1.0,
+    "neuralHunterHealth": 10,
+    "neuralWallEnergy": 4.0,
     "lowGraphics": false,
     "duelHealth": 5,
     "duelTimeoutSeconds": 120.0,
