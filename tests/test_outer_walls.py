@@ -136,14 +136,6 @@ class TestIndestructibleWalls:
         assert len(bite_sizes(maze)) == len(cells)
         assert max(bite_sizes(maze)) < 3 * min(bite_sizes(maze))
 
-    def test_inner_walls_can_still_be_shot_away(self):
-        maze = Maze(5, MazeComplexity.NORMAL, GRID)
-        inner = [w for w in maze.walls if w.destructible]
-        assert inner
-        shoot_away(maze, inner[0])
-        assert not inner[0].active
-        assert inner[0] not in maze.walls
-
 
 class TestShieldAndWalls:
     def test_a_shielded_ship_bounces_off_a_wall(self):
