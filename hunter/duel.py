@@ -134,32 +134,34 @@ class DuelArena:
 def duel_spawns(maze, player, sight, rng=None):
     """Two random safe cells that can see each other: pilots only fight what they can see.
 
-    The first is a random safe cell. The second is a random safe cell within `sight` pixels, at least a quarter of
-    that away, with a clear line of sight to the first (rocks in the maze can hide most of it). `rng` is a
-    `random.Random`; by default a fresh one, so every duel starts somewhere new.
+    The first is a random safe cell. The second is a random safe cell within `sight` pixels with a clear line of
+    sight to the first (rocks in the maze can hide most of it), as far away as it can manage: at least 0.6 of `sight`
+    if the maze has such a pair, else 0.4, else a quarter. `rng` is a `random.Random`; by default a fresh one, so
+    every duel starts somewhere new.
     """
     rng = rng or random.Random()
     cells = [(col, row) for row in range(maze.grid_height) for col in range(maze.grid_width)
              if not maze.grid[row][col]]
     centre = maze.position_calculator.grid_center_to_screen
-    rng.shuffle(cells)
-    for cell in cells:
-        try:
-            first = resolve_hunter_spawn({'spawn_cell': list(cell)}, maze, player)
-        except ValueError:
-            continue
-        walls = local_segments(first, [(w.start, w.end) for w in maze.walls if w.active], sight)
-        candidates = [c for c in cells if c != cell
-                      and 0.25 * sight <= math.dist(first, centre(*c)) <= 0.9 * sight
-                      and visible_point(first, centre(*c), walls, sight)]
-        rng.shuffle(candidates)
-        for other in candidates:
+    for nearest in (0.6, 0.4, 0.25):
+        rng.shuffle(cells)
+        for cell in cells:
             try:
-                second = resolve_hunter_spawn({'spawn_cell': list(other)}, maze, player)
+                first = resolve_hunter_spawn({'spawn_cell': list(cell)}, maze, player)
             except ValueError:
                 continue
-            if 0.25 * sight <= math.dist(first, second) <= sight and visible_point(first, second, walls, sight):
-                return first, second
+            walls = local_segments(first, [(w.start, w.end) for w in maze.walls if w.active], sight)
+            candidates = [c for c in cells if c != cell
+                          and nearest * sight <= math.dist(first, centre(*c)) <= 0.9 * sight
+                          and visible_point(first, centre(*c), walls, sight)]
+            rng.shuffle(candidates)
+            for other in candidates:
+                try:
+                    second = resolve_hunter_spawn({'spawn_cell': list(other)}, maze, player)
+                except ValueError:
+                    continue
+                if nearest * sight <= math.dist(first, second) <= sight and visible_point(first, second, walls, sight):
+                    return first, second
     raise ValueError('the maze has no two clear spots that can see each other')
 
 

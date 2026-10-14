@@ -178,6 +178,15 @@ def test_the_spawns_are_far_apart_but_within_sight_of_each_other(maze):
     assert 0.5 * sight < math.dist(a, b) <= sight
 
 
+def test_the_spawns_are_never_close_in_an_ordinary_maze(maze):
+    import random
+    from entities.ship import Ship
+    sight = 700.0
+    for seed in range(25):
+        a, b = duel_spawns(maze, Ship(maze.start_pos), sight, random.Random(seed))
+        assert math.dist(a, b) >= 0.6 * sight
+
+
 def test_in_a_dense_maze_the_spawns_still_have_a_clear_line_of_sight():
     import random
     from entities.ship import Ship
