@@ -37,6 +37,14 @@ def test_coasting_keeps_momentum_and_separated_hits_kill():
     assert ship.step(1, ACTIONS['none_thrust_fire']) is None
 
 
+def test_a_destroyed_hunter_plays_its_death_rather_than_vanishing():
+    ship = HunterShip((200,200), HunterSettings(indestructible=False, health=1))
+    assert ship.take_damage()
+    assert ship.is_dying
+    ship.update_death(ship.DEATH_DURATION)
+    assert not ship.is_dying
+
+
 def test_default_hunter_is_indestructible():
     ship = HunterShip((200,200))
     for _ in range(10):

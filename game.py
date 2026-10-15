@@ -464,6 +464,8 @@ class Game:
     def _update_hunter(self, dt) -> None:
         if self.hunter_flight is None:
             return
+        if self.hunter.is_dying:
+            self.hunter.update_death(dt)
         if not self.player_has_moved:
             self.hunter_flight.pause()
             return
@@ -1264,6 +1266,8 @@ class Game:
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)
+        elif self.hunter is not None and self.hunter.is_dying:
+            self.hunter.draw_death(self.screen)
 
         # Draw powerup crystals
         for crystal in self.powerup_crystals:
