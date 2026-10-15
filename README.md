@@ -107,7 +107,7 @@ Set these in the environment when launching, for example `NO_POWER_DRAIN=1 ./run
 
 - `NO_POWER_DRAIN=1`: the power gauge stays full, so a level never fails and has no time limit. The score awarded on finishing a level is still calculated normally.
 - `START_LEVEL=5`: start at the given level.
-- `WINDOWED=1`: run in a window instead of fullscreen.
+- `WINDOWED=1`: run in a window instead of fullscreen. The window shrinks to fit the screen (keeping its shape) when the configured size is too big; `WINDOW_SIZE=1352x878` sets an exact size instead.
 - `ASTROVOID_OBSERVER=1`: the player becomes an invulnerable, invisible observer. Enemy shots, contacts and wall hits cost nothing (the ship still stops at walls), the ship is not drawn, enemies and the hunter do not see or target it, and power never drains. The ship still flies and fires. Combine it with `ASTROVOID_HUNTER_HOTKEY=1` and `game.hunterPilot` to watch a pilot fly.
 
 ## Building Distributables
