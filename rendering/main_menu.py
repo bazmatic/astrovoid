@@ -36,6 +36,8 @@ class MainMenu:
         self.menu_title_image: Optional[pygame.Surface] = None
         self.menu_title_rect: Optional[pygame.Rect] = None
         self.menu_options = ["START GAME", "LEVELS", "FUN", "SELECT PROFILE", "CONTROLS", "QUIT"]
+        if config.editor_enabled():
+            self.menu_options.insert(self.menu_options.index("QUIT"), "EDITOR")
         self.menu_buttons: list[Button] = []
         self.menu_selected_index = 0
         self.menu_pulse_phase = 0.0

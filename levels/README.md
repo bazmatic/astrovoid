@@ -25,6 +25,19 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
 - **rules_hunter**: Rules hunters on the level (the Rules pilot's hunter ship as an enemy, hostile only to the player). A level with one is a boss level. Level 25 has one.
 - **hunter**: leave it out for the normal rule. `false` means no Jev beacon, so no hunter. `{"spawn_cell": [col, row]}` places the beacon at that cell.
+- **layout**: an exact, hand-made level, written by the level editor (see the main README). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
+
+```json
+"layout": {
+  "walls":   [[3, 3], [4, 3]],
+  "start":   [1, 1],
+  "exit":    [7, 7],
+  "enemies": [{"type": "flocker", "cell": [2, 6]}],
+  "beacon":  [3, 5]
+}
+```
+
+  Cells are `[col, row]`; the border ring is always wall. Types: static, patrol, aggressive, replay, flocker, flighthouse, egg, anemone, split_boss, mother_boss, rules_hunter. The editor does not check that the exit can be reached. A file the editor creates for a level that had none carries `"created_by_editor": true`, so reverting deletes it again.
 
 ## Boss levels
 
@@ -49,6 +62,8 @@ The hunter is summoned by collecting a Jev beacon. Without a `hunter` entry: no 
 - bosses appear only on levels 6, 12, 18 and 24;
 - ordinary mazes never shrink and stop at 32;
 - anemones fit the maze.
+
+A saved layout on levels 1 to 24 must still satisfy these rules.
 
 ## Levels without a file
 

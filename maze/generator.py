@@ -219,13 +219,14 @@ class RecursiveBacktrackingGenerator:
 class Maze:
     """Procedurally generated maze."""
     
-    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0):
+    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0, layout=None):
         """Generate a maze for the given level.
         
         Args:
             level: Current level number (1-based).
             complexity: Optional maze complexity level. If None, calculated from level.
             grid_size: Grid size (width/height in cells). Always provided by level_config.get_maze_grid_size().
+            layout: A level_layout.Layout to build the maze from instead of generating one (optional).
         """
         self.level = level
         
@@ -249,22 +250,27 @@ class Maze:
         self.offset_x = self.position_calculator.offset_x
         self.offset_y = self.position_calculator.offset_y
         
-        # Generate maze grid
-        generator = RecursiveBacktrackingGenerator(gen_config, self.grid_width, self.grid_height, level)
-        self.grid = generator.generate()
-        
-        # Select random opposite corners for start and exit
-        corner_combinations = [
-            ((1, 1), (self.grid_width - 2, self.grid_height - 2)),  # TL -> BR
-            ((self.grid_width - 2, 1), (1, self.grid_height - 2)),  # TR -> BL
-            ((1, self.grid_height - 2), (self.grid_width - 2, 1)),  # BL -> TR
-            ((self.grid_width - 2, self.grid_height - 2), (1, 1)),  # BR -> TL
-        ]
-        start_grid, exit_grid = random.choice(corner_combinations)
-        
-        # Clear areas around selected corners to ensure they're accessible
-        generator.clear_corner_area(self.grid, start_grid)
-        generator.clear_corner_area(self.grid, exit_grid)
+        if layout is None:
+            # Generate maze grid
+            generator = RecursiveBacktrackingGenerator(gen_config, self.grid_width, self.grid_height, level)
+            self.grid = generator.generate()
+
+            # Select random opposite corners for start and exit
+            corner_combinations = [
+                ((1, 1), (self.grid_width - 2, self.grid_height - 2)),  # TL -> BR
+                ((self.grid_width - 2, 1), (1, self.grid_height - 2)),  # TR -> BL
+                ((1, self.grid_height - 2), (self.grid_width - 2, 1)),  # BL -> TR
+                ((self.grid_width - 2, self.grid_height - 2), (1, 1)),  # BR -> TL
+            ]
+            start_grid, exit_grid = random.choice(corner_combinations)
+
+            # Clear areas around selected corners to ensure they're accessible
+            generator.clear_corner_area(self.grid, start_grid)
+            generator.clear_corner_area(self.grid, exit_grid)
+        else:
+            # A hand-made layout: its walls, its start and its exit
+            self.grid = layout.grid()
+            start_grid, exit_grid = layout.start, layout.exit
         
         # Convert grid to blocks and their wall segments
         self.converter = GridToWallsConverter(self.position_calculator)
@@ -280,7 +286,10 @@ class Maze:
         self.rebuild_walls()
         
         # Set start position
-        self.start_pos = self.position_calculator.get_start_position(start_grid)
+        if layout is None:
+            self.start_pos = self.position_calculator.get_start_position(start_grid)
+        else:
+            self.start_pos = self.position_calculator.grid_center_to_screen(*start_grid)
         
         # Create exit object
         exit_pos = self.position_calculator.grid_center_to_screen(exit_grid[0], exit_grid[1])

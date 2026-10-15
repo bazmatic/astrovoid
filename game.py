@@ -32,6 +32,7 @@ from rendering.profile_selection_menu import ProfileSelectionMenu
 from rendering.controls_menu import ControlsMenu
 from rendering.level_select_menu import LevelSelectMenu
 from rendering.fun_menu import FunMenu
+from rendering.level_editor import LevelEditor
 from rendering.duel_view import draw_duel
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
@@ -181,6 +182,7 @@ class Game:
         self.controls_menu = ControlsMenu(screen)
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
         self.fun_menu = FunMenu(screen)
+        self.level_editor = LevelEditor(self, screen)
         self.duel = None                 # the pilot fight in progress (STATE_DUEL)
         self.duel_worker = None
         self.duel_banner_until = None
@@ -304,7 +306,8 @@ class Game:
         maze_grid_size = level_config.get_maze_grid_size(self.level)
         
         # Generate maze
-        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size)
+        layout = level_config.get_level_layout(self.level)
+        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout)
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
@@ -338,7 +341,7 @@ class Game:
         enemy_counts.anemone = level_config.get_level_anemone_count(self.level)
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
-        spawn_positions = self.maze.get_valid_spawn_positions(
+        spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
             enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
@@ -347,7 +350,11 @@ class Game:
         if self.jev_beacon_level and self.hunter_worker is None:
             self.hunter_worker = PilotWorker()
         beacon_pos = None
-        if level_config.level_has_hunter(self.level):
+        if layout is not None:
+            # A layout's beacon lies exactly where its author put it
+            if layout.beacon is not None:
+                beacon_pos = self.maze.position_calculator.grid_center_to_screen(*layout.beacon)
+        elif level_config.level_has_hunter(self.level):
             placed = level_config.get_level_hunter_config(self.level)
             if placed is not None:
                 try:
@@ -360,11 +367,15 @@ class Game:
 
         # No anemone starts with the player already inside its pull
         anemone_reach = config.ANEMONE_REACH_CELLS * (self.maze.cell_size_x + self.maze.cell_size_y) / 2
-        self.spawn_manager.spawn_all_enemies(
-            self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
-            anemone_keep_clear=(self.maze.start_pos, anemone_reach)
-        )
-        self._spawn_rules_hunters(spawn_positions)
+        if layout is None:
+            self.spawn_manager.spawn_all_enemies(
+                self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
+                anemone_keep_clear=(self.maze.start_pos, anemone_reach)
+            )
+            self._spawn_rules_hunters(spawn_positions)
+        else:
+            self._spawn_rules_hunters_at(
+                self.spawn_manager.spawn_from_layout(layout, self.maze, self.level, self.command_recorder))
         # Anemones show their reach from the start, before the first update works it out
         for anemone in self.anemones:
             anemone.reach_px = anemone.reach(self.maze)
@@ -513,11 +524,15 @@ class Game:
             (p for p in spawn_positions
              if all(math.hypot(p[0] - x, p[1] - y) > clear for x, y in taken)),
             key=lambda p: -math.hypot(p[0] - start[0], p[1] - start[1]))
-        for pos in candidates[:count]:
-            self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
+        self._spawn_rules_hunters_at(candidates[:count])
         if len(self.rules_hunters) < count:
             logging.getLogger(__name__).warning(
                 'Level %d: room for %d of %d Rules hunters', self.level, len(self.rules_hunters), count)
+
+    def _spawn_rules_hunters_at(self, positions):
+        """Make a Rules hunter at each position, each with its own pilot worker."""
+        for pos in positions:
+            self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
 
     def _fly_rules_hunters(self, dt):
         """Each Rules hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
@@ -650,6 +665,9 @@ class Game:
             return
         if self.state == config.STATE_FUN:
             self.fun_menu.update(dt)
+            return
+        if self.state == config.STATE_EDITOR:
+            self.level_editor.update(dt)
             return
         hunter_running = (self.state == config.STATE_PLAYING and self.player_has_moved
                           and not self.exit_explosion_active and not self.game_frozen
@@ -1123,6 +1141,8 @@ class Game:
             self.controls_menu.draw()
         elif self.state == config.STATE_FUN:
             self.fun_menu.draw()
+        elif self.state == config.STATE_EDITOR:
+            self.level_editor.draw()
         elif self.state == config.STATE_DUEL:
             if self.duel is not None:
                 draw_duel(self.screen, self.duel)

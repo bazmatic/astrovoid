@@ -39,6 +39,42 @@ class SpawnConfig:
     post_create_hook: Optional[Callable[[object], None]] = None
 
 
+# The entity manager list each enemy type lives in
+ENEMY_LISTS = {'static': 'enemies', 'patrol': 'enemies', 'aggressive': 'enemies', 'replay': 'replay_enemies',
+               'flocker': 'flockers', 'flighthouse': 'flighthouses', 'split_boss': 'split_bosses',
+               'mother_boss': 'mother_bosses', 'egg': 'eggs', 'anemone': 'anemones'}
+# Types that replay the player's recorded commands
+RECORDED = ('replay', 'split_boss', 'mother_boss')
+
+
+def make_enemy(kind, pos, level, command_recorder):
+    """One enemy of a type at a position, and the entity manager list it belongs in: (list attribute, entity).
+
+    Every spawn path makes its enemies here. Rules hunters are not made here: they need a pilot worker and a view
+    of the game, which Game provides.
+    """
+    from entities.enemy import Enemy
+    from entities.replay_enemy_ship import ReplayEnemyShip
+    from entities.flocker_enemy_ship import FlockerEnemyShip
+    from entities.flighthouse_enemy import FlighthouseEnemy
+    from entities.split_boss import SplitBoss
+    from entities.mother_boss import MotherBoss
+    from entities.egg import Egg
+    from entities.anemone import Anemone
+    if kind not in ENEMY_LISTS:
+        raise ValueError(f'cannot make an enemy of type {kind!r}')
+    if kind in ('static', 'patrol', 'aggressive'):
+        entity = Enemy(pos, kind, level)
+    elif kind in RECORDED:
+        entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss}[kind](
+            pos, command_recorder)
+        entity.current_replay_index = 0
+    else:
+        entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
+                  'egg': lambda: Egg(pos), 'anemone': lambda: Anemone(pos)}[kind]()
+    return ENEMY_LISTS[kind], entity
+
+
 class SpawnManager:
     """Manages enemy spawning for levels."""
     
@@ -209,6 +245,23 @@ class SpawnManager:
             used_positions.extend(newly_used)
             available_positions = self._update_available_positions(used_positions, spawn_positions)
     
+    def spawn_from_layout(self, layout, maze, level, command_recorder):
+        """Create the enemies a layout places, each at the centre of its cell, and no others.
+
+        Returns the pixel positions of its Rules hunters, which the game makes and flies itself.
+        """
+        self._anemone_keep_clear = None
+        self.entity_manager.clear_all()
+        rules_hunters = []
+        for kind, cell in layout.enemies:
+            pos = maze.position_calculator.grid_center_to_screen(*cell)
+            if kind == 'rules_hunter':
+                rules_hunters.append(pos)
+                continue
+            attr, entity = make_enemy(kind, pos, level, command_recorder)
+            getattr(self.entity_manager, attr).append(entity)
+        return rules_hunters
+
     def _create_spawn_configs(
         self,
         enemy_counts: 'EnemyCounts',
@@ -226,94 +279,13 @@ class SpawnManager:
         Returns:
             List of SpawnConfig objects.
         """
-        from entities.replay_enemy_ship import ReplayEnemyShip
-        from entities.flocker_enemy_ship import FlockerEnemyShip
-        from entities.flighthouse_enemy import FlighthouseEnemy
-        from entities.split_boss import SplitBoss
-        from entities.mother_boss import MotherBoss
-        from entities.egg import Egg
-        from entities.anemone import Anemone
-        
-        def set_replay_index(entity):
-            """Post-create hook to set replay index."""
-            entity.current_replay_index = 0
-        
-        configs = []
-        
-        # Replay enemies
-        if enemy_counts.replay > 0:
-            configs.append(SpawnConfig(
-                count=enemy_counts.replay,
-                entity_list_attr="replay_enemies",
-                factory_func=lambda pos, cr: ReplayEnemyShip(pos, cr),
-                requires_command_recorder=True,
-                post_create_hook=set_replay_index
-            ))
-        
-        # Flocker enemies
-        if enemy_counts.flocker > 0:
-            configs.append(SpawnConfig(
-                count=enemy_counts.flocker,
-                entity_list_attr="flockers",
-                factory_func=lambda pos, cr: FlockerEnemyShip(pos),
-                requires_command_recorder=False,
-                post_create_hook=None
-            ))
-
-        # Flighthouse enemies
-        if enemy_counts.flighthouse > 0:
-            # Capture level in closure
-            flighthouse_level = level
-            configs.append(SpawnConfig(
-                count=enemy_counts.flighthouse,
-                entity_list_attr="flighthouses",
-                factory_func=lambda pos, cr: FlighthouseEnemy(pos, flighthouse_level),
-                requires_command_recorder=False,
-                post_create_hook=None
-            ))
-        
-        # SplitBoss enemies
-        if split_boss_count > 0:
-            configs.append(SpawnConfig(
-                count=split_boss_count,
-                entity_list_attr="split_bosses",
-                factory_func=lambda pos, cr: SplitBoss(pos, cr),
-                requires_command_recorder=True,
-                post_create_hook=set_replay_index
-            ))
-        
-        # Mother Boss enemies
-        if mother_boss_count > 0:
-            configs.append(SpawnConfig(
-                count=mother_boss_count,
-                entity_list_attr="mother_bosses",
-                factory_func=lambda pos, cr: MotherBoss(pos, cr),
-                requires_command_recorder=True,
-                post_create_hook=set_replay_index
-            ))
-        
-        # Egg enemies
-        if enemy_counts.egg > 0:
-            configs.append(SpawnConfig(
-                count=enemy_counts.egg,
-                entity_list_attr="eggs",
-                factory_func=lambda pos, cr: Egg(pos),
-                requires_command_recorder=False,
-                post_create_hook=None
-            ))
-        
-        # Anemone enemies
-        if enemy_counts.anemone > 0:
-            configs.append(SpawnConfig(
-                count=enemy_counts.anemone,
-                entity_list_attr="anemones",
-                factory_func=lambda pos, cr: Anemone(pos),
-                requires_command_recorder=False,
-                post_create_hook=None
-            ))
-        
-        
-        return configs
+        counts = (('replay', enemy_counts.replay), ('flocker', enemy_counts.flocker),
+                  ('flighthouse', enemy_counts.flighthouse), ('split_boss', split_boss_count),
+                  ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone))
+        return [SpawnConfig(count=count, entity_list_attr=ENEMY_LISTS[kind],
+                            factory_func=lambda pos, cr, kind=kind: make_enemy(kind, pos, level, cr)[1],
+                            requires_command_recorder=kind in RECORDED, post_create_hook=None)
+                for kind, count in counts if count > 0]
     
     def _create_enemies_from_counts(
         self,
@@ -357,7 +329,7 @@ class SpawnManager:
             
             for i in range(spawn_count):
                 pos = remaining_positions[i]
-                enemies.append(Enemy(pos, enemy_type, level))
+                enemies.append(make_enemy(enemy_type, pos, level, None)[1])
                 used_positions.append(pos)
         
         return enemies

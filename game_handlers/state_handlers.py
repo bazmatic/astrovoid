@@ -72,6 +72,9 @@ class MenuStateHandler(StateHandler):
             elif selected_option == "FUN":
                 game.fun_menu.refresh()
                 game.state = config.STATE_FUN
+            elif selected_option == "EDITOR":
+                game.level_editor.open_picker()
+                game.state = config.STATE_EDITOR
             elif selected_option == "SELECT PROFILE":
                 game.profile_selection_menu.refresh_profiles()
                 game.state = config.STATE_PROFILE_SELECTION
@@ -100,6 +103,9 @@ class MenuStateHandler(StateHandler):
                 elif selected_option == "FUN":
                     game.fun_menu.refresh()
                     game.state = config.STATE_FUN
+                elif selected_option == "EDITOR":
+                    game.level_editor.open_picker()
+                    game.state = config.STATE_EDITOR
                 elif selected_option == "SELECT PROFILE":
                     game.profile_selection_menu.refresh_profiles()
                     game.state = config.STATE_PROFILE_SELECTION
@@ -609,6 +615,16 @@ class DuelStateHandler(StateHandler):
         return False
 
 
+class EditorStateHandler(StateHandler):
+    """The level editor: the editor itself reads the keys."""
+
+    def handle_keyboard(self, event, game):
+        return game.level_editor.handle_key(event)
+
+    def handle_controller(self, event, game):
+        return False
+
+
 class StateHandlerRegistry:
     """Registry for state handlers."""
     
@@ -620,6 +636,7 @@ class StateHandlerRegistry:
             config.STATE_CONTROLS: ControlsStateHandler(),
             config.STATE_LEVEL_SELECT: LevelSelectStateHandler(),
             config.STATE_FUN: FunStateHandler(),
+            config.STATE_EDITOR: EditorStateHandler(),
             config.STATE_DUEL: DuelStateHandler(),
             config.STATE_PLAYING: PlayingStateHandler(),
             config.STATE_QUIT_CONFIRM: QuitConfirmStateHandler(),
