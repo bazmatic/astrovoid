@@ -350,7 +350,11 @@ class Game:
         if self.jev_beacon_level and self.hunter_worker is None:
             self.hunter_worker = PilotWorker()
         beacon_pos = None
-        if level_config.level_has_hunter(self.level):
+        if layout is not None:
+            # A layout's beacon lies exactly where its author put it
+            if layout.beacon is not None:
+                beacon_pos = self.maze.position_calculator.grid_center_to_screen(*layout.beacon)
+        elif level_config.level_has_hunter(self.level):
             placed = level_config.get_level_hunter_config(self.level)
             if placed is not None:
                 try:

@@ -104,3 +104,15 @@ def test_a_broken_layout_falls_back_to_the_generated_level(game, monkeypatch, ca
     assert game.maze.grid != parse_layout(LAYOUT, 9).grid()
     assert sum(e.type == 'static' for e in game.enemies) == 5               # the file's own `static: 5`
     assert 'ignoring its layout' in caplog.text
+
+
+def test_the_beacon_lies_exactly_where_the_layout_puts_it_even_where_automatic_placement_would_refuse(
+        played, monkeypatch):
+    # The automatic placement refuses spots near walls or the player (on fine grids, cells beside the start);
+    # a layout's beacon is where its author put it, so it must not go through that check
+    def refuse(*args, **kwargs):
+        raise ValueError('too close')
+    monkeypatch.setitem(type(played).start_level.__globals__, 'resolve_hunter_spawn', refuse)
+    played.start_level()
+    beacons = [c for c in played.powerup_crystals if isinstance(c, JevBeacon)]
+    assert [played.maze.position_calculator.screen_to_grid(*b.get_pos()) for b in beacons] == [(3, 5)]

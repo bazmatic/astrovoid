@@ -153,9 +153,12 @@ def test_every_screen_and_palette_item_draws(editor):
     editor.update(1.0)
     editor.draw()
     open_level(editor)
-    for index in range(len(PALETTE)):
-        editor.model.palette_index = index
-        editor.model.place()
+    model = editor.model
+    free = [(col, row) for row in range(1, model.grid_size - 1) for col in range(1, model.grid_size - 1)
+            if model.contents((col, row)) is None]
+    for index, item in enumerate(PALETTE):
+        model.cursor, model.palette_index = free[index * 2], index
+        assert model.place(), item                                # every item lands, so every sprite is drawn
         editor.update(1.0)
         editor.draw()
     editor.model.dirty = True
@@ -178,3 +181,13 @@ def test_holding_an_arrow_repeats_and_releasing_stops(editor, monkeypatch):
     for _ in range(10):
         editor.update(0.05 * config.FPS)
     assert editor.model.cursor == stopped
+
+
+def test_drawing_does_not_read_the_level_file_every_frame(editor, monkeypatch):
+    open_level(editor)
+    reads = []
+    monkeypatch.setattr(editor, '_saved_layout_exists', lambda: reads.append(1) or False)
+    for _ in range(5):
+        editor.update(1.0)
+        editor.draw()
+    assert reads == []

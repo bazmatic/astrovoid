@@ -20,7 +20,7 @@ import pygame
 import sys
 import os
 import config
-from utils.window_size import parse_window_size
+from utils.window_size import fit_window_size, parse_window_size
 
 # Import Game - handle both development and PyInstaller
 # In PyInstaller, we need to work around the game.py vs game/ package naming conflict
@@ -136,6 +136,15 @@ def check_hardware_acceleration() -> None:
         pass
 
 
+def desktop_size():
+    """The main display's size, or None if pygame cannot tell."""
+    try:
+        sizes = pygame.display.get_desktop_sizes()
+    except pygame.error:
+        return None
+    return sizes[0] if sizes else None
+
+
 def main():
     """Initialize and run the game."""
     pygame.init()
@@ -167,8 +176,10 @@ def main():
     # Enable double buffering for smoother rendering and reduced flicker
     # Hardware acceleration is enabled by default in SDL2 (pygame 2.5+)
     if windowed:
-        # WINDOW_SIZE=1352x878 sizes the window (and so the whole game world) to fit a laptop
-        size = parse_window_size(os.getenv('WINDOW_SIZE')) or (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+        # WINDOW_SIZE=1352x878 sizes the window (and so the whole game world); without it the configured size is
+        # shrunk to fit the desktop, so the whole game shows on a laptop
+        size = (parse_window_size(os.getenv('WINDOW_SIZE'))
+                or fit_window_size((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), desktop_size()))
         screen = pygame.display.set_mode(size, pygame.DOUBLEBUF)
     else:
         screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.DOUBLEBUF)

@@ -14,8 +14,15 @@ def level_path(level):
 def _write(path, data):
     text = json.dumps(data, indent=2)
     text = re.sub(r'\[\s*(-?\d+),\s*(-?\d+)\s*\]', r'[\1, \2]', text)     # a cell on one line
-    with open(path, 'w') as handle:
-        handle.write(text + '\n')
+    # Write beside the file, then swap it in: a failed write never leaves the level file half-written
+    temporary = f'{path}.saving'
+    try:
+        with open(temporary, 'w') as handle:
+            handle.write(text + '\n')
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.remove(temporary)
 
 
 def _read(path):

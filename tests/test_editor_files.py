@@ -101,3 +101,39 @@ def test_playing_the_loaded_layout_gives_the_same_level(game, monkeypatch, tmp_p
     calc = game.maze.position_calculator
     cell = lambda pos: calc.screen_to_grid(*pos)
     assert sorted(map(cell, after[1])) == sorted(map(cell, before[1]))
+
+
+def test_enemies_sharing_a_cell_are_all_kept_on_the_nearest_free_cells():
+    from editor.generated import spread_out
+    open_cells = {(col, row) for col in range(1, 8) for row in range(1, 8)} - {(3, 3)}
+    placed = spread_out([('flocker', (4, 4))] * 3 + [('egg', (1, 2))], open_cells, taken={(1, 1), (7, 7)})
+    cells = [cell for _, cell in placed]
+    assert len(placed) == 4 and len(set(cells)) == 4
+    assert (4, 4) in cells and (1, 2) in cells
+    assert all(max(abs(col - 4), abs(row - 4)) == 1 for col, row in cells if (col, row) not in ((4, 4), (1, 2)))
+
+
+def test_a_generated_level_with_crowded_enemies_keeps_every_one(game, monkeypatch):  # noqa: F811
+    real_level_config(monkeypatch)
+    monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
+        'seed': 5, 'maze': {'complexity': 'normal', 'grid_size': 12},
+        'enemies': {'static': 0, 'patrol': 0, 'aggressive': 0, 'flocker': 14}} if level == 3 else None)
+    layout = generated_layout(game, 3)
+    made = len(list(game.entity_manager.get_all_enemies()))
+    assert made == 14 and len(layout.enemies) == made
+    assert layout == parse_layout(layout.to_json(), 12)                      # distinct, open cells
+
+
+def test_a_failed_write_leaves_the_old_file_whole(tmp_path, monkeypatch):
+    import editor.files as level_files
+    path = tmp_path / '3.json'
+    original = json.dumps({'seed': 7, 'enemies': {'static': 2}})
+    path.write_text(original)
+
+    def disk_full(source, destination):
+        raise OSError('disk full')
+    monkeypatch.setattr(level_files.os, 'replace', disk_full)
+    with pytest.raises(OSError):
+        save_layout(str(path), LAYOUT, DEFAULTS)
+    assert path.read_text() == original
+    assert list(tmp_path.iterdir()) == [path]                               # no half-written file left behind

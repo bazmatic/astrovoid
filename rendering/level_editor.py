@@ -107,6 +107,7 @@ class LevelEditor:
         self._preview = None
         self._preview_key = None
         self._palette_font = None
+        self._saved = False          # whether the level file holds a layout; read when it can change
         self._clear_held()
 
     def _scaled(self, value):
@@ -155,6 +156,7 @@ class LevelEditor:
             layout = generated_layout(self.game, level)
             self.defaults['maze']['grid_size'] = layout.grid_size
         self.model = EditorModel(level, layout)
+        self._saved = self._saved_layout_exists()
         self.mode = 'edit'
         self.confirm = None
         self._preview = self._preview_key = None
@@ -197,6 +199,7 @@ class LevelEditor:
             self._say(f'Could not save: {exc}')
             return
         self.model.dirty = False
+        self._saved = True
         self.with_layout.add(self.model.level)
         self._say(f'Saved level {self.model.level}')
 
@@ -405,7 +408,7 @@ class LevelEditor:
         header = self._header_font.render(f'LEVEL {self.model.level}', True, (215, 225, 255))
         self.screen.blit(header, (16, 16))
         status, colour = (('Unsaved changes', (255, 170, 120)) if self.model.dirty
-                          else ('Saved' if self._saved_layout_exists() else 'Generated level', TEXT_LABEL))
+                          else ('Saved' if self._saved else 'Generated level', TEXT_LABEL))
         status_text = font.render(status, True, colour)
         self.screen.blit(status_text, (16, 16 + header.get_height()))
         top = 16 + header.get_height() + status_text.get_height() + self._scaled(20)

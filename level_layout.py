@@ -56,11 +56,10 @@ class Layout:
 
 
 def _cell(value, size, what):
-    try:
-        col, row = value
-        col, row = int(col), int(row)
-    except (TypeError, ValueError):
-        raise LayoutError(f'{what} must be a [col, row] pair, not {value!r}')
+    whole = lambda v: isinstance(v, int) and not isinstance(v, bool)
+    if not (isinstance(value, (list, tuple)) and len(value) == 2 and all(whole(v) for v in value)):
+        raise LayoutError(f'{what} must be a [col, row] pair of whole numbers, not {value!r}')
+    col, row = value
     if not (1 <= col <= size - 2 and 1 <= row <= size - 2):
         raise LayoutError(f'{what} {col},{row} is not inside the grid (cells 1 to {size - 2})')
     return (col, row)
