@@ -51,6 +51,10 @@ def test_a_layout_without_a_beacon_has_none():
     {'enemies': [{'type': 'static'}]},                            # no cell
     {'beacon': [3, 3]},                                           # on a wall
     {'walls': [[3]]},                                             # not a pair
+    {'start': [1.5, 1]},                                          # not whole numbers
+    {'exit': [1e309, 7]},                                         # far too big (JSON has no limit)
+    {'start': [True, 1]},                                         # not a number at all
+    {'walls': [['3', 3]]},
 ])
 def test_a_mistaken_layout_is_rejected(changes):
     with pytest.raises(LayoutError):
