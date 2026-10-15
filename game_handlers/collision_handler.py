@@ -92,7 +92,8 @@ class CollisionHandler:
         powerup_crystals: List['PowerupCrystal'],
         anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
-        rules_hunters: Optional[List['RulesHunter']] = None
+        rules_hunters: Optional[List['RulesHunter']] = None,
+        maze: Optional['Maze'] = None
     ) -> bool:
         """Handle collisions between a projectile and enemies.
         
@@ -225,7 +226,7 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed, maze
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -247,7 +248,7 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed
+                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed, maze
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -305,7 +306,8 @@ class CollisionHandler:
         boss_velocity: Tuple[float, float],
         replay_enemies: List['ReplayEnemyShip'],
         powerup_crystals: List['PowerupCrystal'],
-        jev_beacon_allowed: bool = False
+        jev_beacon_allowed: bool = False,
+        maze: Optional['Maze'] = None
     ) -> None:
         """Spawn two ReplayEnemyShip instances when SplitBoss is destroyed.
         
@@ -314,6 +316,7 @@ class CollisionHandler:
             boss_velocity: Velocity of the SplitBoss at destruction.
             replay_enemies: List to add spawned enemies to.
             powerup_crystals: List to add spawned crystal to.
+            maze: When given, children only appear in open space, never inside a block.
         """
         from entities.baby import Baby
         
@@ -324,8 +327,10 @@ class CollisionHandler:
                 config.SPLIT_BOSS_SPAWN_OFFSET_RANGE * 0.5,
                 config.SPLIT_BOSS_SPAWN_OFFSET_RANGE
             )
-            spawn_x = boss_pos[0] + math.cos(angle_offset) * distance_offset
-            spawn_y = boss_pos[1] + math.sin(angle_offset) * distance_offset
+            spawn_pos = (boss_pos[0] + math.cos(angle_offset) * distance_offset,
+                         boss_pos[1] + math.sin(angle_offset) * distance_offset)
+            if maze is not None and not maze.is_open(spawn_pos, config.BABY_SIZE):
+                spawn_pos = maze.open_spot_near(boss_pos, config.BABY_SIZE, config.SPLIT_BOSS_SPAWN_OFFSET_RANGE)
             
             # Split velocity: one leftward, one rightward
             split_angle = math.atan2(boss_velocity[1], boss_velocity[0])
@@ -340,7 +345,7 @@ class CollisionHandler:
             spawn_velocity_y = math.sin(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
             
             # Create new ReplayEnemyShip
-            spawned_baby = Baby((spawn_x, spawn_y), self.command_recorder)
+            spawned_baby = Baby(spawn_pos, self.command_recorder)
             spawned_baby.vx = spawn_velocity_x
             spawned_baby.vy = spawn_velocity_y
             spawned_baby.current_replay_index = 0

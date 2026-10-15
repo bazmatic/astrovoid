@@ -4,10 +4,12 @@ This module implements a Mother Boss enemy that is larger than SplitBoss
 and continuously lays Egg enemies.
 """
 
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, TYPE_CHECKING
 import config
 from entities.split_boss import SplitBoss
 from entities.command_recorder import CommandRecorder
+if TYPE_CHECKING:
+    from maze.generator import Maze
 
 
 class MotherBoss(SplitBoss):
@@ -67,11 +69,12 @@ class MotherBoss(SplitBoss):
         """
         return self.egg_lay_cooldown <= 0
     
-    def lay_egg(self, eggs: List['Egg']) -> bool:
+    def lay_egg(self, eggs: List['Egg'], maze: Optional['Maze'] = None) -> bool:
         """Lay an egg at the Mother Boss's position.
         
         Args:
             eggs: List to add the spawned egg to.
+            maze: When given, the egg is only laid where it has room to grow without touching a wall.
             
         Returns:
             True if egg was laid, False if cooldown not ready.
@@ -86,10 +89,12 @@ class MotherBoss(SplitBoss):
         import math
         offset_angle = random.uniform(0, 2 * math.pi)
         offset_distance = random.uniform(0, self.radius * 0.5)
-        egg_x = self.x + math.cos(offset_angle) * offset_distance
-        egg_y = self.y + math.sin(offset_angle) * offset_distance
+        egg_pos = (self.x + math.cos(offset_angle) * offset_distance,
+                   self.y + math.sin(offset_angle) * offset_distance)
+        if maze is not None and not maze.is_open(egg_pos, config.EGG_MAX_SIZE):
+            egg_pos = maze.open_spot_near(self.get_pos(), config.EGG_MAX_SIZE, self.radius)
         
-        egg = Egg((egg_x, egg_y))
+        egg = Egg(egg_pos)
         eggs.append(egg)
         
         # Reset cooldown

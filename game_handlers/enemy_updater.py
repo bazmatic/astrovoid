@@ -360,7 +360,7 @@ class EnemyUpdater:
             
             # Check if egg should pop
             if egg.should_pop():
-                egg.pop(command_recorder, babies)
+                egg.pop(command_recorder, babies, maze)
                 continue
             
             # Check egg-wall collision (eggs are stationary, but check for consistency)
@@ -403,7 +403,7 @@ class EnemyUpdater:
             mother_boss.update(dt, target_pos)
             
             # Try to lay an egg
-            mother_boss.lay_egg(eggs)
+            mother_boss.lay_egg(eggs, maze)
             
             # Check Mother Boss-wall collision
             mother_boss.check_wall_collision(maze.walls, maze.spatial_grid)

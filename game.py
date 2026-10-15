@@ -366,7 +366,7 @@ class Game:
         if layout is None:
             self.spawn_manager.spawn_all_enemies(
                 self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
-                anemone_keep_clear=(self.maze.start_pos, anemone_reach)
+                anemone_keep_clear=(self.maze.start_pos, anemone_reach), maze=self.maze
             )
             self._spawn_rules_hunters(spawn_positions)
         else:
@@ -975,7 +975,8 @@ class Game:
             # Friendly projectile-enemy collisions share normal destruction effects.
             if self.collision_handler.handle_projectile_enemy_collisions(
                 projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
-                jev_beacon_allowed=self._jev_beacon_drop_allowed(), rules_hunters=self.rules_hunters
+                jev_beacon_allowed=self._jev_beacon_drop_allowed(), rules_hunters=self.rules_hunters,
+                maze=self.maze
             ):
                 continue  # Projectile destroyed, skip adding to active list
             

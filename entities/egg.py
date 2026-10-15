@@ -25,6 +25,7 @@ from rendering import visual_effects
 if TYPE_CHECKING:
     from entities.baby import Baby
     from entities.command_recorder import CommandRecorder
+    from maze.generator import Maze
 
 
 @dataclass
@@ -263,12 +264,13 @@ class Egg(GameEntity, Collidable, Drawable):
         """
         return self.current_radius >= self.max_radius and not self.has_popped
     
-    def pop(self, command_recorder: 'CommandRecorder', babies: List['Baby']) -> None:
+    def pop(self, command_recorder: 'CommandRecorder', babies: List['Baby'], maze: Optional['Maze'] = None) -> None:
         """Pop the egg and spawn Baby enemies.
         
         Args:
             command_recorder: CommandRecorder instance for spawning Baby enemies.
             babies: List to add spawned Baby enemies to.
+            maze: When given, babies only hatch into open space, never inside a block.
         """
         if self.has_popped:
             return
@@ -282,12 +284,14 @@ class Egg(GameEntity, Collidable, Drawable):
                 config.EGG_SPAWN_OFFSET_RANGE * 0.5,
                 config.EGG_SPAWN_OFFSET_RANGE
             )
-            spawn_x = self.x + math.cos(angle_offset) * distance_offset
-            spawn_y = self.y + math.sin(angle_offset) * distance_offset
+            spawn_pos = (self.x + math.cos(angle_offset) * distance_offset,
+                         self.y + math.sin(angle_offset) * distance_offset)
+            if maze is not None and not maze.is_open(spawn_pos, config.BABY_SIZE):
+                spawn_pos = maze.open_spot_near(self.get_pos(), config.BABY_SIZE, config.EGG_SPAWN_OFFSET_RANGE)
             
             # Create new Baby enemy
             from entities.baby import Baby
-            spawned_baby = Baby((spawn_x, spawn_y), command_recorder)
+            spawned_baby = Baby(spawn_pos, command_recorder)
             spawned_baby.current_replay_index = 0
             babies.append(spawned_baby)
         

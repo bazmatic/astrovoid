@@ -90,7 +90,7 @@ class DuelEnemies:
             return self.collisions.handle_projectile_enemy_collisions(
                 shot, manager.enemies, manager.replay_enemies, manager.flockers, manager.flighthouses,
                 manager.split_bosses, manager.mother_bosses, manager.babies, manager.eggs, [],
-                anemones=manager.anemones, jev_beacon_allowed=False)
+                anemones=manager.anemones, jev_beacon_allowed=False, maze=self.maze)
         finally:
             shot.is_enemy = was_enemy
 

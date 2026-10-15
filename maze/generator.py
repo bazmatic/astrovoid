@@ -454,25 +454,38 @@ class Maze:
             if too_close:
                 continue
             
-            # Check if position is inside a block
-            cell = (int((x - self.offset_x) // self.cell_size_x), int((y - self.offset_y) // self.cell_size_y))
-            if cell in self.blocks:
-                continue
-            
-            # Check if position is in a wall
-            in_wall = False
-            for wall in self.walls:
-                if wall.active:
-                    segment = wall.get_segment()
-                    if circle_line_collision(pos, 15, segment[0], segment[1]):
-                        in_wall = True
-                        break
-            if in_wall:
+            if not self.is_open(pos, 15):
                 continue
             
             positions.append(pos)
         
         return positions
+    
+    def is_open(self, pos: Tuple[float, float], radius: float) -> bool:
+        """Whether a circle of this radius at pos sits in open space: centre inside the maze and outside every block, touching no wall."""
+        cell = (int((pos[0] - self.offset_x) // self.cell_size_x), int((pos[1] - self.offset_y) // self.cell_size_y))
+        if not (0 <= cell[0] < self.grid_width and 0 <= cell[1] < self.grid_height) or cell in self.blocks:
+            return False
+        for wall in self.spatial_grid.get_nearby_walls(pos, radius):
+            if wall.active:
+                segment = wall.get_segment()
+                if circle_line_collision(pos, radius, segment[0], segment[1]):
+                    return False
+        return True
+    
+    def open_spot_near(self, origin: Tuple[float, float], radius: float,
+                       max_offset: float, min_offset: float = 0.0, attempts: int = 20) -> Tuple[float, float]:
+        """A random open position between min_offset and max_offset from origin, for something appearing there.
+        
+        Falls back to origin itself when no open spot turns up, so nothing is placed inside a block.
+        """
+        for _ in range(attempts):
+            angle = random.uniform(0, 2 * math.pi)
+            offset = random.uniform(min_offset, max_offset)
+            pos = (origin[0] + math.cos(angle) * offset, origin[1] + math.sin(angle) * offset)
+            if self.is_open(pos, radius):
+                return pos
+        return origin
     
     def update(self, dt: float) -> None:
         """Advance the rock knocked loose by shots."""

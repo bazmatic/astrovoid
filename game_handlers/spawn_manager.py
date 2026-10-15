@@ -31,12 +31,15 @@ class SpawnConfig:
         factory_func: Factory function that takes (pos, command_recorder) and returns entity.
         requires_command_recorder: Whether command_recorder is needed for factory.
         post_create_hook: Optional function to call after entity creation (entity) -> None.
+        radius: How far the entity reaches at its largest; positions with that much room
+            from the walls are used first.
     """
     count: int
     entity_list_attr: str
     factory_func: Callable[[Tuple[float, float], Optional['CommandRecorder']], object]
     requires_command_recorder: bool = False
     post_create_hook: Optional[Callable[[object], None]] = None
+    radius: float = 0.0
 
 
 def make_enemy(kind, pos, level, command_recorder):
@@ -83,6 +86,7 @@ class SpawnManager:
         """
         self.entity_manager = entity_manager
         self._anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None
+        self._maze = None
     
     def _update_available_positions(
         self,
@@ -164,6 +168,11 @@ class SpawnManager:
         if spawn_count <= 0:
             return []
 
+        if self._maze is not None and config.radius > 0:
+            # Positions with room for the whole body first; the rest only if those run out
+            available_positions = sorted(available_positions,
+                                         key=lambda pos: not self._maze.is_open(pos, config.radius))
+
         if config.entity_list_attr == "flockers":
             return self._select_flocker_positions(available_positions, spawn_count)
 
@@ -202,7 +211,8 @@ class SpawnManager:
         enemy_counts: 'EnemyCounts',
         split_boss_count: int,
         mother_boss_count: int,
-        anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None
+        anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None,
+        maze=None
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -215,8 +225,10 @@ class SpawnManager:
             mother_boss_count: Number of Mother Boss enemies to spawn.
             anemone_keep_clear: Optional (position, distance); no anemone is placed
                 within that distance of the position (the player's start and its reach).
+            maze: When given, big enemies are placed where they do not touch a wall.
         """
         self._anemone_keep_clear = anemone_keep_clear
+        self._maze = maze
         
         # Clear existing enemies
         self.entity_manager.clear_all()
@@ -329,7 +341,8 @@ class SpawnManager:
                 entity_list_attr="split_bosses",
                 factory_func=lambda pos, cr: SplitBoss(pos, cr),
                 requires_command_recorder=True,
-                post_create_hook=set_replay_index
+                post_create_hook=set_replay_index,
+                radius=game_config.REPLAY_ENEMY_SIZE * game_config.SPLIT_BOSS_SIZE_MULTIPLIER
             ))
         
         # Mother Boss enemies
@@ -339,7 +352,8 @@ class SpawnManager:
                 entity_list_attr="mother_bosses",
                 factory_func=lambda pos, cr: MotherBoss(pos, cr),
                 requires_command_recorder=True,
-                post_create_hook=set_replay_index
+                post_create_hook=set_replay_index,
+                radius=game_config.REPLAY_ENEMY_SIZE * game_config.MOTHER_BOSS_SIZE_MULTIPLIER
             ))
         
         # Egg enemies
@@ -349,7 +363,8 @@ class SpawnManager:
                 entity_list_attr="eggs",
                 factory_func=lambda pos, cr: Egg(pos),
                 requires_command_recorder=False,
-                post_create_hook=None
+                post_create_hook=None,
+                radius=game_config.EGG_MAX_SIZE
             ))
         
         # Anemone enemies
