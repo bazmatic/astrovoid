@@ -27,6 +27,7 @@ class HunterShip(RotatingThrusterShip):
     NOTCH_X = -0.35
     COCKPIT_X = 0.5
     ENGINE_X = -0.5
+    DEATH_DURATION = 48.0  # Frames (0.8 seconds at 60 FPS)
 
     def __init__(self, start_pos, settings=HunterSettings()):
         super().__init__(start_pos, config.SHIP_SIZE)
@@ -184,7 +185,8 @@ class HunterShip(RotatingThrusterShip):
             if not self.settings.indestructible and self.settings.wall_energy > 0:
                 impulse = math.hypot(dvx, dvy) / max(self.max_speed, 1e-6)
                 self.health -= self.settings.wall_energy * impulse
-                self.active = self.health > 0
+                if self.health <= 0:
+                    self.die()
         return hit
 
     def take_damage(self):
@@ -192,8 +194,16 @@ class HunterShip(RotatingThrusterShip):
             return False
         self.health -= 1
         self.immunity_remaining = self.settings.damage_immunity
-        self.active = self.health > 0
+        if self.health <= 0:
+            self.die()
         return not self.active
+
+    def draw_death(self, screen):
+        """An expanding ring where it was destroyed."""
+        progress = self.death_progress
+        radius = round(self.radius * (1.5 + 4.0 * progress))
+        pygame.draw.circle(screen, self.COLOR, (round(self.x), round(self.y)), radius,
+                           max(1, round(3 * (1.0 - progress))))
 
     def _place(self, x, y):
         """Convert a point in the ship's own frame (radius units) to the screen."""

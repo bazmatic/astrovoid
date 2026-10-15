@@ -44,6 +44,8 @@ def game(monkeypatch, tmp_path):
     monkeypatch.setattr(level_config,'get_maze_grid_size',lambda _:10)
     monkeypatch.setattr(level_config,'get_level_seed',lambda _:1)
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[4,4]})
+    # These tests drive the pilot worker, which only the Jev and rules pilots use
+    monkeypatch.setattr(config.SETTINGS.game,'hunterPilot','jev')
     yield g
     g._close_hunter()
     pygame.quit()

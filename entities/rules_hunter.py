@@ -27,7 +27,6 @@ class RulesHunter(HunterShip):
     ENGINE_COLOR = (170, 60, 20)
     ENGINE_LIT_COLOR = (255, 150, 80)
     SHOT_SOURCE = 'enemy'
-    DEATH_DURATION = 0.8
     BAR_WIDTH = 40
     BAR_HEIGHT = 4
 
@@ -74,13 +73,6 @@ class RulesHunter(HunterShip):
         if fill.width:
             pygame.draw.rect(screen, self.COLOR, fill)
         pygame.draw.rect(screen, (150, 70, 70), bar, 1)
-
-    def draw_death(self, screen):
-        """An expanding ring where it was destroyed."""
-        progress = self.death_progress
-        radius = round(self.radius * (1.5 + 4.0 * progress))
-        pygame.draw.circle(screen, self.COLOR, (round(self.x), round(self.y)), radius,
-                           max(1, round(3 * (1.0 - progress))))
 
     def __deepcopy__(self, memo):
         """A copy for a death portrait: the ship as it was, without its pilot, worker or view of the game."""

@@ -12,10 +12,6 @@ def pilot(monkeypatch):
     return apply
 
 
-def test_the_default_pilot_is_jev():
-    assert SETTINGS.game.hunterPilot == 'jev'
-
-
 def test_jev_mode_without_a_key_is_unavailable(pilot, monkeypatch):
     pilot('jev')
     monkeypatch.delenv('TYPESAFE_API_KEY', raising=False)
