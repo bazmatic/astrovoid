@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from entities.baby import Baby
     from entities.egg import Egg
     from entities.anemone import Anemone
-    from entities.rules_hunter import RulesHunter
+    from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
     from entities.projectile import Projectile
     from maze.generator import Maze
@@ -92,7 +92,7 @@ class CollisionHandler:
         powerup_crystals: List['PowerupCrystal'],
         anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
-        rules_hunters: Optional[List['RulesHunter']] = None,
+        enemy_hunters: Optional[List['EnemyHunter']] = None,
         maze: Optional['Maze'] = None
     ) -> bool:
         """Handle collisions between a projectile and enemies.
@@ -109,7 +109,7 @@ class CollisionHandler:
             powerup_crystals: List to add spawned crystals to.
             anemones: List of anemone enemies (optional).
             jev_beacon_allowed: Whether a kill may drop a Jev beacon.
-            rules_hunters: List of Rules hunters (optional).
+            enemy_hunters: List of enemy hunters, Rules and Neural (optional).
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -254,14 +254,14 @@ class CollisionHandler:
                     
                     return True  # Projectile destroyed
         
-        # Check projectile-Rules hunter collision: it takes hits like a boss and leaves no crystal
-        for rules_hunter in rules_hunters or ():
-            if rules_hunter.active and projectile.active:
-                if projectile.check_circle_collision(rules_hunter.get_pos(), rules_hunter.radius):
-                    if rules_hunter.take_damage():
-                        rules_hunter.die()
+        # Check projectile-enemy hunter collision: it takes hits like a boss and leaves no crystal
+        for hunter in enemy_hunters or ():
+            if hunter.active and projectile.active:
+                if projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
+                    if hunter.take_damage():
+                        hunter.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, rules_hunter)
+                        self._record_projectile_kill(projectile, hunter)
                     return True  # Projectile destroyed
 
         # Check projectile-baby collision

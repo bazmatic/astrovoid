@@ -229,6 +229,7 @@ The maze is built from solid blocks of rock. A block has walls only where it fac
 - **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 8 hits to destroy.
 - **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 20 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
 - **Rules hunter**: The Rules pilot's hunter ship, flown as an enemy (`entities/rules_hunter.py`). It sees only its target (you, or in training the neural hunter) and fires only at it. Requires 12 hits.
+- **Neural hunter**: The same as the Rules hunter, but flown by the neural pilot, in magenta (`entities/neural_hunter.py`). Placed by a level file or the level editor.
 
 ### Level Progression
 

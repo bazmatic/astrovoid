@@ -4,7 +4,7 @@ from level_layout import Layout
 
 _LISTS = {'enemies': None, 'replay_enemies': 'replay', 'flockers': 'flocker', 'flighthouses': 'flighthouse',
           'split_bosses': 'split_boss', 'mother_bosses': 'mother_boss', 'eggs': 'egg', 'anemones': 'anemone',
-          'rules_hunters': 'rules_hunter'}
+          'rules_hunters': 'rules_hunter', 'neural_hunters': 'neural_hunter'}
 
 
 def generated_layout(game, level):
@@ -25,7 +25,7 @@ def generated_layout(game, level):
                   if not maze.grid[row][col]}
     taken = {start, exit_} | ({beacon} if beacon is not None else set())
     layout = Layout(maze.grid_width, walls, start, exit_, tuple(spread_out(enemies, open_cells, taken)), beacon)
-    game._close_rules_hunters()                          # any Rules hunter's pilot thread is not needed here
+    game._close_enemy_hunters()                          # any enemy hunter's pilot (and thread) is not needed here
     return layout
 
 

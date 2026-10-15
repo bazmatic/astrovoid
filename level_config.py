@@ -190,6 +190,17 @@ def get_level_rules_hunter_count(level: int) -> int:
     return 0
 
 
+def get_level_neural_hunter_count(level: int) -> int:
+    """Neural hunters on a level: the level file's `neural_hunter` count, else none."""
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['neural_hunter']
+    config = load_level_config(level)
+    if config and 'enemies' in config and 'neural_hunter' in config['enemies']:
+        return int(config['enemies']['neural_hunter'])
+    return 0
+
+
 def get_level_egg_count(level: int) -> int:
     """Get egg count for a level.
     
@@ -257,9 +268,9 @@ def get_maze_grid_size(level: int) -> int:
 
 
 def is_boss_level(level: int) -> bool:
-    """A boss level is any level with a split boss, a mother boss or a Rules hunter on it."""
+    """A boss level is any level with a split boss, a mother boss, or a Rules or Neural hunter on it."""
     return (get_level_split_boss_count(level) + get_level_mother_boss_count(level)
-            + get_level_rules_hunter_count(level)) > 0
+            + get_level_rules_hunter_count(level) + get_level_neural_hunter_count(level)) > 0
 
 
 def get_level_hunter_config(level: int):

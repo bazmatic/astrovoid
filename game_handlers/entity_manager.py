@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from entities.egg import Egg
     from entities.anemone import Anemone
     from entities.rules_hunter import RulesHunter
+    from entities.neural_hunter import NeuralHunter
 
 
 class EntityManager:
@@ -33,6 +34,7 @@ class EntityManager:
         self.eggs: List['Egg'] = []
         self.anemones: List['Anemone'] = []
         self.rules_hunters: List['RulesHunter'] = []
+        self.neural_hunters: List['NeuralHunter'] = []
     
     def clear_all(self) -> None:
         """Clear all enemy lists."""
@@ -46,6 +48,7 @@ class EntityManager:
         self.eggs.clear()
         self.anemones.clear()
         self.rules_hunters.clear()
+        self.neural_hunters.clear()
     
     def get_all_enemy_positions(self) -> List[Tuple[float, float]]:
         """Get positions of all enemies for spawn position calculation.
@@ -64,6 +67,7 @@ class EntityManager:
         positions.extend([egg.get_pos() for egg in self.eggs])
         positions.extend([anemone.get_pos() for anemone in self.anemones])
         positions.extend([rh.get_pos() for rh in self.rules_hunters])
+        positions.extend([nh.get_pos() for nh in self.neural_hunters])
         return positions
     
     def get_all_active_enemies(self) -> Iterator:
@@ -99,9 +103,9 @@ class EntityManager:
         for anemone in self.anemones:
             if anemone.active:
                 yield anemone
-        for rules_hunter in self.rules_hunters:
-            if rules_hunter.active:
-                yield rules_hunter
+        for hunter in (*self.rules_hunters, *self.neural_hunters):
+            if hunter.active:
+                yield hunter
     
     def get_all_enemies(self) -> Iterator:
         """Get iterator over every enemy, active or not.
@@ -111,7 +115,7 @@ class EntityManager:
         """
         for group in (self.enemies, self.replay_enemies, self.flockers, self.flighthouses,
                       self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones,
-                      self.rules_hunters):
+                      self.rules_hunters, self.neural_hunters):
             yield from group
     
     def update_dying(self, dt: float) -> None:

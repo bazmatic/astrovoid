@@ -9,7 +9,9 @@ from typing import FrozenSet, Optional, Tuple
 Cell = Tuple[int, int]
 
 ENEMY_TYPES = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone',
-               'split_boss', 'mother_boss', 'rules_hunter')
+               'split_boss', 'mother_boss', 'rules_hunter', 'neural_hunter')
+# Enemies flown by a pilot, which the game makes itself (they need a pilot and a view of the game)
+HUNTER_KINDS = ('rules_hunter', 'neural_hunter')
 
 
 class LayoutError(ValueError):

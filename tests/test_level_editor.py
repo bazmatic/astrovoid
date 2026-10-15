@@ -191,3 +191,8 @@ def test_drawing_does_not_read_the_level_file_every_frame(editor, monkeypatch):
         editor.update(1.0)
         editor.draw()
     assert reads == []
+
+
+def test_the_palette_offers_the_neural_hunter():
+    from rendering.level_editor import LABELS
+    assert 'neural_hunter' in PALETTE and LABELS['neural_hunter'] == 'Neural hunter'

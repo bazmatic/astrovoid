@@ -260,19 +260,20 @@ class SpawnManager:
     def spawn_from_layout(self, layout, maze, level, command_recorder):
         """Create the enemies a layout places, each at the centre of its cell, and no others.
 
-        Returns the pixel positions of its Rules hunters, which the game makes and flies itself.
+        Returns (kind, pixel position) for each of its enemy hunters, which the game makes and flies itself.
         """
+        from level_layout import HUNTER_KINDS
         self._anemone_keep_clear = None
         self.entity_manager.clear_all()
-        rules_hunters = []
+        hunters = []
         for kind, cell in layout.enemies:
             pos = maze.position_calculator.grid_center_to_screen(*cell)
-            if kind == 'rules_hunter':
-                rules_hunters.append(pos)
+            if kind in HUNTER_KINDS:
+                hunters.append((kind, pos))
                 continue
             attr, entity = make_enemy(kind, pos, level, command_recorder)
             getattr(self.entity_manager, attr).append(entity)
-        return rules_hunters
+        return hunters
 
     def _create_spawn_configs(
         self,

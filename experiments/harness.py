@@ -360,7 +360,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         elif cleared_at is None and elapsed >= horizon:
             break
     game._close_hunter()
-    game._close_rules_hunters()
+    game._close_enemy_hunters()
     _clear_overrides(game)
     result = EpisodeResult(level, seed, start_enemies, elapsed if cleared_at is None or counter.died else cleared_at, counter.kills, counter.wall_hits,
                            counter.hits_taken, counter.idle_seconds, end, counter.spawned, counter.wall_impulse,
