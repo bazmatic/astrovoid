@@ -43,7 +43,7 @@ class Projectile(GameEntity, Collidable, Drawable):
         glow_color: Optional[Tuple[int, int, int]] = None,
         glow_radius_multiplier: float = 1.0,
         glow_intensity: float = 0.0,
-        *, source: Optional[str] = None
+        *, source: Optional[str] = None, strength: float = 1.0
     ):
         """Initialize projectile at position with given angle.
         
@@ -56,6 +56,7 @@ class Projectile(GameEntity, Collidable, Drawable):
             enhanced_speed_multiplier: Additional speed multiplier for post-level-3 powerups (default: 1.0).
             dynamic_color: Optional dynamic color for enhanced projectiles (default: None).
             enhanced_glow_intensity: Glow intensity for enhanced projectiles (default: 0.4).
+            strength: What a hit on the player costs and how hard it pushes, as a share of a full shot.
         """
         # Calculate base size and speed
         base_size = config.PROJECTILE_SIZE * config.UPGRADED_PROJECTILE_SIZE_MULTIPLIER if is_upgraded else config.PROJECTILE_SIZE
@@ -87,6 +88,7 @@ class Projectile(GameEntity, Collidable, Drawable):
         self.glow_color = glow_color
         self.glow_radius_multiplier = glow_radius_multiplier
         self.glow_intensity = glow_intensity
+        self.strength = strength
     
     def update(self, dt: float) -> None:
         """Update projectile position and lifetime.

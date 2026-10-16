@@ -24,7 +24,7 @@ class ScoreCalculator:
         fuel_used: int,
         wall_collisions: int = 0,
         powerups_collected: int = 0,
-        enemy_bullet_hits: int = 0
+        enemy_bullet_hits: float = 0
     ) -> Dict[str, float]:
         """Calculate score based on performance metrics.
         

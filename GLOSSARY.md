@@ -96,6 +96,14 @@ _Code name_: rules_hunter
 An enemy ship flown by the neural pilot.
 _Code name_: neural_hunter
 
+**Boss Viber**:
+A Viber at double the size that takes double the hits.
+_Code name_: boss_viber
+
+**Vibelet**:
+A Viber at half the size that takes half the hits; its shots cost the player half as much.
+_Code name_: vibelet
+
 ### Modes
 
 **Duel**:

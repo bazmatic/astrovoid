@@ -55,7 +55,7 @@ from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.surroundings import GameSurroundings, ProtagonistSurroundings
 from entities.rules_hunter import RulesHunter
-from entities.neural_hunter import NeuralHunter
+from entities.neural_hunter import VIBERS
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
@@ -351,7 +351,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + 5,  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
         # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
@@ -546,7 +546,9 @@ class Game:
         """Place the level's Rules and Neural hunters on open ground: as far from the player as the maze allows,
         clear of every other enemy. A level with no such room skips them (and says so) and stays playable."""
         wanted = [('rules_hunter', level_config.get_level_rules_hunter_count(self.level)),
-                  ('neural_hunter', level_config.get_level_neural_hunter_count(self.level))]
+                  ('neural_hunter', level_config.get_level_neural_hunter_count(self.level)),
+                  ('boss_viber', level_config.get_level_boss_viber_count(self.level)),
+                  ('vibelet', level_config.get_level_vibelet_count(self.level))]
         if not any(count for _, count in wanted) or self.ship is None:
             return
         taken = list(self.entity_manager.get_all_enemy_positions())
@@ -563,8 +565,8 @@ class Game:
                 'Level %d: room for %d of %d enemy hunters', self.level, len(candidates), len(placements))
 
     def _spawn_enemy_hunters_at(self, placements):
-        """Make an enemy hunter of each (kind, position): a Rules hunter with its own pilot worker, or a Neural hunter
-        flown by the neural pilot. Without an installed neural model a Neural hunter is left out (and said so)."""
+        """Make an enemy hunter of each (kind, position): a Rules hunter with its own pilot worker, or a Viber of
+        any size flown by the neural pilot. Without an installed neural model a Viber is left out (and said so)."""
         for kind, pos in placements:
             if kind == 'rules_hunter':
                 self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
@@ -573,7 +575,7 @@ class Game:
             if policy is None:
                 logging.getLogger(__name__).warning('Level %d: no neural model, so no Neural hunter', self.level)
                 continue
-            self.neural_hunters.append(NeuralHunter(pos, policy, ProtagonistSurroundings(self)))
+            self.neural_hunters.append(VIBERS[kind](pos, policy, ProtagonistSurroundings(self)))
 
     def _fly_enemy_hunters(self, dt):
         """Each enemy hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""

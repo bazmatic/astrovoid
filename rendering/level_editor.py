@@ -17,7 +17,7 @@ from editor.generated import generated_layout
 from editor.model import PALETTE, TIMER_STEP, EditorModel
 from entities.command_recorder import CommandRecorder
 from entities.jev_beacon import JevBeacon
-from entities.neural_hunter import NeuralHunter
+from entities.neural_hunter import VIBERS
 from entities.rules_hunter import RulesHunter
 from entities.ship import Ship
 from game_handlers.spawn_manager import make_enemy
@@ -42,7 +42,8 @@ LABELS = {'wall': 'Wall', **{kind: enemy_names.name(kind) for kind in ENEMY_TYPE
 CHIPS = {'wall': (120, 130, 150), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
          'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'egg': (240, 220, 200),
          'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
-         'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90)}
+         'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
+         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90)}
 
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
 CONFIRM_KEYS = (pygame.K_y, pygame.K_RETURN)
@@ -362,8 +363,8 @@ class LevelEditor:
         for kind, cell in layout.enemies:
             if kind == 'rules_hunter':
                 sprites.append((kind, RulesHunter(centre(*cell), _NullWorker(), _NoView())))
-            elif kind == 'neural_hunter':
-                sprites.append((kind, NeuralHunter(centre(*cell), None, _NoView())))      # drawn, never flown
+            elif kind in VIBERS:
+                sprites.append((kind, VIBERS[kind](centre(*cell), None, _NoView())))      # drawn, never flown
             else:
                 sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)[1]))
         ship = Ship(centre(*model.start))

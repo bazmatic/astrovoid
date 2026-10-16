@@ -19,6 +19,8 @@ _LIVE = ('flight', '_worker', 'surroundings')       # what a copy for a death po
 
 class EnemyHunter(HunterShip):
     SHOT_SOURCE = 'enemy'
+    HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
+    SIZE_SCALE = 1.0  # its radius (and so its drawing and collisions) as a share of a normal ship's
     BAR_WIDTH = 40
     BAR_HEIGHT = 4
 
@@ -26,7 +28,8 @@ class EnemyHunter(HunterShip):
         """`pilot` flies it (None: it is only drawn, as in the level editor); `worker` is closed with it."""
         # Hit points, not the hunter's health, are what a hit costs it: the ship itself is indestructible.
         super().__init__(start_pos, replace(settings, indestructible=True))
-        self.hit_points = self.max_hit_points = ENEMY_HUNTER_HIT_POINTS
+        self.radius *= self.SIZE_SCALE
+        self.hit_points = self.max_hit_points = self.HIT_POINTS
         self.surroundings = surroundings
         self._worker = worker
         self.flight = HunterFlight(self, pilot, surroundings) if pilot is not None else None

@@ -17,6 +17,7 @@ class HunterShip(RotatingThrusterShip):
     ENGINE_COLOR = (170, 95, 20)  # Amber mark in the tail notch, engine off
     ENGINE_LIT_COLOR = (255, 200, 80)  # ... and engine on
     SHOT_SOURCE = 'hunter'  # whose shots these are; an enemy hunter fires 'enemy' shots
+    SHOT_STRENGTH = 1.0  # what its shots cost the player, as a share of a full shot
     # An arrowhead, in multiples of the radius: x along the heading, y across it.
     # A long nose, swept-back wings and a notched tail give it only one way to point.
     BURN_ALIGNMENT_DEGREES = 5.0  # How close to a course's burn heading the nose must be to thrust
@@ -83,7 +84,7 @@ class HunterShip(RotatingThrusterShip):
             muzzle, angle, is_upgraded=level >= 1,
             enhanced_size_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT,
             enhanced_speed_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT,
-            source=self.SHOT_SOURCE, dynamic_color=self.COLOR) for angle in angles]
+            source=self.SHOT_SOURCE, dynamic_color=self.COLOR, strength=self.SHOT_STRENGTH) for angle in angles]
 
     def cancel_burst(self):
         """Drop the rest of a burst once no live pilot decision backs the trigger."""

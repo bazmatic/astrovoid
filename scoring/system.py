@@ -78,9 +78,9 @@ class ScoringSystem:
         """Record when the ship collects a powerup crystal."""
         self.powerup_crystals_collected += 1
 
-    def record_enemy_bullet_hit(self) -> None:
-        """Record when the ship is hit by an enemy projectile."""
-        self.enemy_bullet_hits += 1
+    def record_enemy_bullet_hit(self, strength: float = 1.0) -> None:
+        """Record when the ship is hit by an enemy projectile; a weaker bullet counts as part of a hit."""
+        self.enemy_bullet_hits += strength
 
     def calculate_level_score(
         self,

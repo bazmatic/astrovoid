@@ -18,11 +18,12 @@ if TYPE_CHECKING:
     from entities.rules_hunter import RulesHunter
     from entities.neural_hunter import NeuralHunter
 
-# Each enemy list and the kind of enemy in it; None means the enemies say their own kind (enemy.type)
+# Each enemy list and the kind of enemy in it; None means the enemies say their own kind (enemy.type),
+# as the Vibers of every size in neural_hunters do
 ENEMY_LISTS: Dict[str, Optional[str]] = {
     'enemies': None, 'replay_enemies': 'replay', 'flockers': 'flocker', 'flighthouses': 'flighthouse',
     'split_bosses': 'split_boss', 'mother_bosses': 'mother_boss', 'babies': 'baby', 'eggs': 'egg',
-    'anemones': 'anemone', 'rules_hunters': 'rules_hunter', 'neural_hunters': 'neural_hunter'}
+    'anemones': 'anemone', 'rules_hunters': 'rules_hunter', 'neural_hunters': None}
 
 
 class EntityManager:

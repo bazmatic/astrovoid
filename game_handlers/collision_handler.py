@@ -378,8 +378,7 @@ class CollisionHandler:
             return False
         
         if projectile.check_circle_collision((ship.x, ship.y), ship.radius):
-            scoring.record_enemy_collision()
-            scoring.record_enemy_bullet_hit()
+            scoring.record_enemy_bullet_hit(projectile.strength)  # a bullet costs the bullet penalty, nothing more
             self.sound_manager.play_bad_hit()
             # Apply physics-based collision (projectile has very small mass)
             # Use proper conservation of momentum for realistic impact
@@ -387,7 +386,11 @@ class CollisionHandler:
             # Projectiles have very small mass compared to ship
             # Use a reduced restitution for projectile impacts (more inelastic)
             projectile_restitution = 0.3  # Projectiles stick/transfer more energy
+            before = ship.vx, ship.vy
             apply_circle_collision_physics(ship, projectile, projectile_restitution)
+            # A weaker bullet pushes the ship less
+            ship.vx = before[0] + (ship.vx - before[0]) * projectile.strength
+            ship.vy = before[1] + (ship.vy - before[1]) * projectile.strength
             return True
         
         return False

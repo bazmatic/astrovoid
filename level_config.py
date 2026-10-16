@@ -224,13 +224,28 @@ def get_level_rules_hunter_count(level: int) -> int:
 
 
 def get_level_neural_hunter_count(level: int) -> int:
-    """Neural hunters on a level: the level file's `neural_hunter` count, else none."""
+    """Neural hunters (Vibers) on a level: the level file's `neural_hunter` count, else none."""
+    return _placed_only_count(level, 'neural_hunter')
+
+
+def get_level_boss_viber_count(level: int) -> int:
+    """Boss Vibers on a level: the level file's `boss_viber` count, else none."""
+    return _placed_only_count(level, 'boss_viber')
+
+
+def get_level_vibelet_count(level: int) -> int:
+    """Vibelets on a level: the level file's `vibelet` count, else none."""
+    return _placed_only_count(level, 'vibelet')
+
+
+def _placed_only_count(level: int, kind: str) -> int:
+    """How many of an enemy only a level file places: its layout's, else its `enemies` count, else none."""
     layout = get_level_layout(level)
     if layout is not None:
-        return layout.counts()['neural_hunter']
+        return layout.counts()[kind]
     config = load_level_config(level)
-    if config and 'enemies' in config and 'neural_hunter' in config['enemies']:
-        return int(config['enemies']['neural_hunter'])
+    if config and 'enemies' in config and kind in config['enemies']:
+        return int(config['enemies'][kind])
     return 0
 
 
