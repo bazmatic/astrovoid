@@ -14,7 +14,7 @@ import enemy_names
 import level_config
 from editor import files
 from editor.generated import generated_layout
-from editor.model import PALETTE, EditorModel
+from editor.model import PALETTE, TIMER_STEP, EditorModel
 from entities.command_recorder import CommandRecorder
 from entities.jev_beacon import JevBeacon
 from entities.neural_hunter import NeuralHunter
@@ -24,6 +24,7 @@ from game_handlers.spawn_manager import make_enemy
 from level_layout import ENEMY_TYPES
 from maze.config import MazeComplexity
 from maze.generator import Maze
+from policies.exit import OpenAfterTime, TypeCleared
 from rendering.fonts import get_font
 from rendering.menu_components import (TEXT_DIM, TEXT_LABEL, AnimatedBackground, build_menu_backdrop, build_panel,
                                        build_panel_glow, menu_scale, render_hint_row, render_pill, render_title)
@@ -148,15 +149,16 @@ class LevelEditor:
 
     # --- editing ---
     def _open_level(self, level):
-        # Read the seed and maze first: generating the level starts it in the game
+        # Read the seed, maze and policies first: generating the level starts it in the game
         layout = level_config.get_level_layout(level)
+        policies = level_config.get_level_exit_policy(level), level_config.get_level_ammo_policy(level)
         self.defaults = {'seed': level_config.get_level_seed(level),
                          'maze': {'complexity': level_config.get_maze_complexity(level).name.lower(),
                                   'grid_size': level_config.get_maze_grid_size(level)}}
         if layout is None:
             layout = generated_layout(self.game, level)
             self.defaults['maze']['grid_size'] = layout.grid_size
-        self.model = EditorModel(level, layout)
+        self.model = EditorModel(level, layout, *policies)
         self._saved = self._saved_layout_exists()
         self.mode = 'edit'
         self.confirm = None
@@ -182,6 +184,23 @@ class LevelEditor:
         if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE):
             model.remove()
             return True
+        if event.key == pygame.K_e:
+            model.cycle_exit_policy()
+            return True
+        if event.key == pygame.K_a:
+            model.cycle_ammo_policy()
+            return True
+        if event.key in (pygame.K_MINUS, pygame.K_EQUALS):
+            if not model.adjust_timer(TIMER_STEP if event.key == pygame.K_EQUALS else -TIMER_STEP):
+                self._say('Timer only' if not isinstance(model.exit_policy, OpenAfterTime) else 'Shortest timer')
+            return True
+        if event.key == pygame.K_t:
+            if not isinstance(model.exit_policy, TypeCleared):
+                self._say('Kill-type exit only')
+            elif not model.toggle_exit_type(model.selected):
+                self._say('Keep at least one type' if model.selected in model.exit_policy.enemy_types
+                          else f"{LABELS[model.selected]} isn't an enemy")
+            return True
         if event.key == pygame.K_s:
             self._save()
             return True
@@ -195,7 +214,9 @@ class LevelEditor:
 
     def _save(self):
         try:
-            files.save_layout(files.level_path(self.model.level), self.model.to_layout(), self.defaults)
+            files.save_layout(files.level_path(self.model.level), self.model.to_layout(), self.defaults,
+                              extra={'exit_policy': self.model.exit_policy.to_json(),
+                                     'ammo_policy': self.model.ammo_policy.to_json()})
         except (OSError, ValueError) as exc:
             self._say(f'Could not save: {exc}')
             return
@@ -284,9 +305,10 @@ class LevelEditor:
         if self.confirm is not None:
             self._draw_confirm()
 
-    def _draw_hints(self, hints):
+    def _draw_hints(self, hints, rows_up=0):
         row = render_hint_row(self.hint_font, hints)
-        place = row.get_rect(midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(16)))
+        bottom = config.SCREEN_HEIGHT - self._scaled(16) - rows_up * (row.get_height() + self._scaled(24))
+        place = row.get_rect(midbottom=(config.SCREEN_WIDTH // 2, bottom))
         backing = pygame.Surface(place.inflate(self._scaled(36), self._scaled(14)).size, pygame.SRCALPHA)
         pygame.draw.rect(backing, (8, 6, 20, 215), backing.get_rect(), border_radius=backing.get_height() // 2)
         self.screen.blit(backing, backing.get_rect(center=place.center))
@@ -373,6 +395,9 @@ class LevelEditor:
         self._draw_palette()
         self._draw_hints([('Arrows', 'move'), ('Tab', 'item'), ('Space', 'place'), ('Del', 'remove'),
                           ('S', 'save'), ('X', 'revert'), ('Esc', 'back')])
+        self._draw_hints([('E', f'Exit: {self.model.exit_policy.label()}'),
+                          ('A', f'Ammo: {self.model.ammo_policy.label()}'), ('- =', 'timer'), ('T', 'kill type')],
+                         rows_up=1)
 
     def _draw_cursor(self, maze):
         calc = maze.position_calculator

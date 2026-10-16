@@ -30,14 +30,16 @@ def _read(path):
         return json.load(handle)
 
 
-def save_layout(path, layout, defaults):
-    """Write `layout` into the level file, keeping every other key. A level with no file gets one made from
-    `defaults` (its seed and maze), marked as the editor's own so that reverting can delete it again."""
+def save_layout(path, layout, defaults, extra=None):
+    """Write `layout` (and `extra`'s keys beside it) into the level file, keeping every other key. A level with
+    no file gets one made from `defaults` (its seed and maze), marked as the editor's own so that reverting can
+    delete it again."""
     if os.path.exists(path):
         data = _read(path)
     else:
         data = {**defaults, CREATED_MARKER: True}
     data['layout'] = layout.to_json()
+    data.update(extra or {})
     _write(path, data)
 
 

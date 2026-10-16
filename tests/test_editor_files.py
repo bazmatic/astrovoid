@@ -137,3 +137,19 @@ def test_a_failed_write_leaves_the_old_file_whole(tmp_path, monkeypatch):
         save_layout(str(path), LAYOUT, DEFAULTS)
     assert path.read_text() == original
     assert list(tmp_path.iterdir()) == [path]                               # no half-written file left behind
+
+
+def test_saving_writes_the_extra_keys_beside_the_layout(tmp_path):
+    path = tmp_path / '3.json'
+    path.write_text(json.dumps({'seed': 7, 'hunter': False}))
+    save_layout(str(path), LAYOUT, DEFAULTS, extra={'exit_policy': {'type': 'all_cleared'}})
+    data = json.loads(path.read_text())
+    assert data['exit_policy'] == {'type': 'all_cleared'} and data['seed'] == 7 and data['hunter'] is False
+
+
+def test_reverting_keeps_the_policies_in_a_file_the_editor_did_not_make(tmp_path):
+    path = tmp_path / '3.json'
+    path.write_text(json.dumps({'seed': 7, 'exit_policy': {'type': 'all_cleared'}}))
+    save_layout(str(path), LAYOUT, DEFAULTS)
+    assert revert_layout(str(path))
+    assert json.loads(path.read_text()) == {'seed': 7, 'exit_policy': {'type': 'all_cleared'}}

@@ -197,3 +197,45 @@ def test_the_palette_offers_the_neural_hunter():
     from rendering.level_editor import LABELS
     assert 'neural_hunter' in PALETTE and LABELS['neural_hunter'] == 'Viber'
     assert LABELS['wall'] == 'Wall' and LABELS['beacon'] == 'Jev beacon'
+
+
+def test_e_and_a_change_the_policies(editor):
+    open_level(editor)
+    exit_before, ammo_before = editor.model.exit_policy, editor.model.ammo_policy
+    editor.handle_key(key(pygame.K_e))
+    editor.handle_key(key(pygame.K_a))
+    assert editor.model.exit_policy != exit_before and editor.model.ammo_policy != ammo_before
+
+
+def test_saving_writes_both_policies(editor):
+    open_level(editor)
+    editor.handle_key(key(pygame.K_e))
+    editor.handle_key(key(pygame.K_a))
+    editor.handle_key(key(pygame.K_s))
+    data = json.loads((editor.tmp / '3.json').read_text())
+    assert data['exit_policy'] == editor.model.exit_policy.to_json()
+    assert data['ammo_policy'] == editor.model.ammo_policy.to_json()
+
+
+def test_a_generated_boss_level_opens_with_its_policies(editor):
+    from policies.ammo import UnlimitedAmmo
+    from policies.exit import AllCleared
+    open_level(editor, 6)
+    assert (editor.model.exit_policy, editor.model.ammo_policy) == (AllCleared(), UnlimitedAmmo())
+
+
+def test_the_policy_keys_and_their_settings(editor):
+    from policies.exit import OpenAfterTime, TypeCleared
+    open_level(editor)
+    editor.handle_key(key(pygame.K_e))                                    # always open -> timer 60s
+    editor.handle_key(key(pygame.K_EQUALS))
+    assert editor.model.exit_policy == OpenAfterTime(70)
+    editor.handle_key(key(pygame.K_MINUS))
+    assert editor.model.exit_policy == OpenAfterTime(60)
+    editor.handle_key(key(pygame.K_t))
+    assert editor.flash                                                   # not a type_cleared exit: said why
+    editor.handle_key(key(pygame.K_e))                                    # -> kill eggs
+    editor.model.palette_index = PALETTE.index('static')
+    editor.handle_key(key(pygame.K_t))
+    assert editor.model.exit_policy == TypeCleared(('egg', 'static'))
+    editor.draw()

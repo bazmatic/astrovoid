@@ -116,3 +116,46 @@ def test_the_model_makes_a_valid_layout_of_what_it_holds():
     layout = m.to_layout()
     assert (2, 2) in layout.walls and ('patrol', (4, 4)) in layout.enemies
     assert parse_layout(layout.to_json(), 9) == layout
+
+
+def test_the_exit_policy_cycles_through_every_policy():
+    from policies.exit import AllCleared, AlwaysOpen, OpenAfterTime, TypeCleared
+    m = model()
+    assert m.exit_policy == AlwaysOpen()
+    seen = []
+    for _ in range(4):
+        m.cycle_exit_policy()
+        seen.append(m.exit_policy)
+    assert seen == [OpenAfterTime(60), TypeCleared(('egg',)), AllCleared(), AlwaysOpen()]
+    assert m.dirty
+
+
+def test_the_ammo_policy_cycles():
+    from policies.ammo import LimitedAmmo, UnlimitedAmmo
+    m = model()
+    assert m.ammo_policy == LimitedAmmo()
+    m.cycle_ammo_policy()
+    assert m.ammo_policy == UnlimitedAmmo() and m.dirty
+    m.cycle_ammo_policy()
+    assert m.ammo_policy == LimitedAmmo()
+
+
+def test_the_timer_moves_in_steps_and_never_below_ten_seconds():
+    from policies.exit import AllCleared, OpenAfterTime
+    m = EditorModel(3, model().to_layout(), exit_policy=OpenAfterTime(60))
+    assert m.adjust_timer(10) and m.exit_policy == OpenAfterTime(70) and m.dirty
+    assert m.adjust_timer(-60) and m.exit_policy == OpenAfterTime(10)
+    assert not m.adjust_timer(-10) and m.exit_policy == OpenAfterTime(10)
+    m = EditorModel(3, model().to_layout(), exit_policy=AllCleared())
+    assert not m.adjust_timer(10) and not m.dirty
+
+
+def test_enemy_kinds_toggle_in_and_out_of_a_type_cleared_exit():
+    from policies.exit import AlwaysOpen, TypeCleared
+    m = EditorModel(3, model().to_layout(), exit_policy=TypeCleared(('egg',)))
+    assert m.toggle_exit_type('baby') and m.exit_policy == TypeCleared(('egg', 'baby')) and m.dirty
+    assert m.toggle_exit_type('egg') and m.exit_policy == TypeCleared(('baby',))
+    assert not m.toggle_exit_type('baby') and m.exit_policy == TypeCleared(('baby',))   # keep at least one
+    assert not m.toggle_exit_type('wall')
+    m = EditorModel(3, model().to_layout(), exit_policy=AlwaysOpen())
+    assert not m.toggle_exit_type('egg') and not m.dirty
