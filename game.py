@@ -21,6 +21,7 @@ from entities.jev_beacon import JevBeacon
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
+from policies.ammo import LimitedAmmo, UnlimitedAmmo
 from profiles import ProfileManager, LevelResult
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators, UIElementRenderer
@@ -328,7 +329,7 @@ class Game:
         self.ship.reset_gun_upgrade()
         # A boss level's exit is locked until every enemy is dead, so shots must not run out
         self.boss_level = level_config.is_boss_level(self.level)
-        self.ship.infinite_ammo = self.boss_level
+        self.ship.ammo_policy = UnlimitedAmmo() if self.boss_level else LimitedAmmo()
         
         # Reset player movement flag - game loop won't start until first move
         self.player_has_moved = False

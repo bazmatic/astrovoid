@@ -3,6 +3,7 @@
 import pytest
 import math
 from entities.ship import Ship
+from policies.ammo import LimitedAmmo, UnlimitedAmmo
 import config
 from utils import normalize_angle, angle_to_radians
 
@@ -200,7 +201,7 @@ def test_ammo_gauge_reads_differently_when_ammo_is_infinite():
     def hud(infinite):
         screen = pygame.Surface((1352, 878))
         ship = Ship((100, 100))
-        ship.infinite_ammo = infinite
+        ship.ammo_policy = UnlimitedAmmo() if infinite else LimitedAmmo()
         ship.draw_ui(screen, pygame.font.Font(None, 24), potential_score=50, level=6, time_seconds=1.0)
         return pygame.image.tostring(screen, 'RGB')
 

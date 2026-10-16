@@ -86,7 +86,7 @@ def test_the_beacon_lies_at_its_cell(played):
 
 
 def test_it_is_a_boss_level_because_a_rules_hunter_is_on_it(played):
-    assert played.boss_level and played.ship.infinite_ammo
+    assert played.boss_level and not played.ship.ammo_policy.charges_for_shots()
 
 
 def test_restarting_does_not_pile_up_enemies(played):

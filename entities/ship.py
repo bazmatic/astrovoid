@@ -13,6 +13,7 @@ from utils.math_utils import hsv_to_rgb
 from entities.rotating_thruster_ship import RotatingThrusterShip
 from entities.projectile import Projectile
 from game_handlers.fire_rate_calculator import shots_per_volley
+from policies.ammo import AmmoPolicy, LimitedAmmo
 from rendering import visual_effects
 from sounds import SoundManager
 
@@ -46,7 +47,7 @@ class Ship(RotatingThrusterShip):
         super().__init__(start_pos, config.SHIP_SIZE)
         self.fuel = 0  # Energy used (for scoring), starts at 0
         self.ammo = config.INITIAL_AMMO
-        self.infinite_ammo = False  # Set on boss levels, where the exit needs the bosses dead
+        self.ammo_policy: AmmoPolicy = LimitedAmmo()  # The level sets its own
         self.damaged = False
         self.damage_timer = 0
         self.glow_phase = 0.0  # For pulsing glow when damaged
@@ -175,8 +176,8 @@ class Ship(RotatingThrusterShip):
             None if out of ammo.
         """
         # Each pull of the trigger costs ammo, a spread no more than a single
-        # shot, and less while a powerup lasts. Boss levels have unlimited ammo
-        if not self.infinite_ammo:
+        # shot, and less while a powerup lasts, unless the level's ammo policy says shots are free
+        if self.ammo_policy.charges_for_shots():
             if self.ammo <= 0:
                 return None
             cost = config.AMMO_CONSUMPTION_PER_SHOT
@@ -669,7 +670,7 @@ class Ship(RotatingThrusterShip):
             )
         
         # Ammo gauge
-        if self.infinite_ammo:
+        if not self.ammo_policy.charges_for_shots():
             ammo_percent = 1.0
             ammo_text = "∞"
             ammo_color = (100, 200, 255)
