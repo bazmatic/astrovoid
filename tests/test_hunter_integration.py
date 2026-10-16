@@ -68,7 +68,6 @@ def test_beacon_lies_on_every_third_level_and_wherever_a_level_places_one(game,m
     monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
     monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',3)
     monkeypatch.setattr(config,'HUNTER_FIRST_LEVEL',1)
-    monkeypatch.setattr(level_config,'is_boss_level',lambda _:False)
     for level in range(1,10):
         game.level = level
         game.start_level()

@@ -1,10 +1,9 @@
 """A generated level, read back as the layout it plays as."""
 from entities.jev_beacon import JevBeacon
+from game_handlers.entity_manager import ENEMY_LISTS
 from level_layout import Layout
 
-_LISTS = {'enemies': None, 'replay_enemies': 'replay', 'flockers': 'flocker', 'flighthouses': 'flighthouse',
-          'split_bosses': 'split_boss', 'mother_bosses': 'mother_boss', 'eggs': 'egg', 'anemones': 'anemone',
-          'rules_hunters': 'rules_hunter', 'neural_hunters': 'neural_hunter'}
+_LISTS = {attr: kind for attr, kind in ENEMY_LISTS.items() if attr != 'babies'}     # babies are never placed
 
 
 def generated_layout(game, level):

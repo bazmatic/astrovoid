@@ -4,7 +4,7 @@ This module provides a unified interface for managing all enemy types,
 eliminating the need to maintain separate lists in the main game class.
 """
 
-from typing import List, Iterator, Tuple, TYPE_CHECKING
+from typing import Dict, List, Iterator, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -17,6 +17,12 @@ if TYPE_CHECKING:
     from entities.anemone import Anemone
     from entities.rules_hunter import RulesHunter
     from entities.neural_hunter import NeuralHunter
+
+# Each enemy list and the kind of enemy in it; None means the enemies say their own kind (enemy.type)
+ENEMY_LISTS: Dict[str, Optional[str]] = {
+    'enemies': None, 'replay_enemies': 'replay', 'flockers': 'flocker', 'flighthouses': 'flighthouse',
+    'split_bosses': 'split_boss', 'mother_bosses': 'mother_boss', 'babies': 'baby', 'eggs': 'egg',
+    'anemones': 'anemone', 'rules_hunters': 'rules_hunter', 'neural_hunters': 'neural_hunter'}
 
 
 class EntityManager:
@@ -117,6 +123,15 @@ class EntityManager:
                       self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.anemones,
                       self.rules_hunters, self.neural_hunters):
             yield from group
+    
+    def active_counts(self) -> Dict[str, int]:
+        """How many enemies of each kind are alive; kinds with none alive are left out."""
+        counts: Dict[str, int] = {}
+        for attr, kind in ENEMY_LISTS.items():
+            for enemy in getattr(self, attr):
+                if enemy.active:
+                    counts[kind or enemy.type] = counts.get(kind or enemy.type, 0) + 1
+        return counts
     
     def update_dying(self, dt: float) -> None:
         """Advance the death animation of every enemy that is dying.

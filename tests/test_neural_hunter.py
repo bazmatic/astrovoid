@@ -84,7 +84,6 @@ def test_a_layout_places_a_neural_hunter_at_its_cell(played):
     neural = [h for h in played.enemy_hunters if isinstance(h, NeuralHunter)]
     assert [calc.screen_to_grid(*h.get_pos()) for h in neural] == [(6, 2)]
     assert neural[0] in list(played.entity_manager.get_all_active_enemies())
-    assert played.boss_level
 
 
 def test_it_hunts_only_the_player(played):
@@ -130,7 +129,7 @@ def test_a_level_file_can_ask_for_neural_hunters_by_count(game, monkeypatch):  #
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 12},
         'enemies': {'static': 1, 'patrol': 0, 'aggressive': 0, 'neural_hunter': 1}} if level == 3 else None)
     monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: random_policy(0))
-    assert level_config.get_level_neural_hunter_count(3) == 1 and level_config.is_boss_level(3)
+    assert level_config.get_level_neural_hunter_count(3) == 1
     game.level = 3
     game.start_level()
     assert sum(isinstance(h, NeuralHunter) for h in game.enemy_hunters) == 1

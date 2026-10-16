@@ -300,12 +300,6 @@ def get_maze_grid_size(level: int) -> int:
 
 
 
-def is_boss_level(level: int) -> bool:
-    """A boss level is any level with a split boss, a mother boss, or a Rules or Neural hunter on it."""
-    return (get_level_split_boss_count(level) + get_level_mother_boss_count(level)
-            + get_level_rules_hunter_count(level) + get_level_neural_hunter_count(level)) > 0
-
-
 def get_level_hunter_config(level: int):
     """Return the level file's hunter entry: a spawn override, False for no hunter, or None if absent."""
     layout = get_level_layout(level)
@@ -319,8 +313,8 @@ def level_has_hunter(level: int) -> bool:
     """Whether a level starts with a Jev beacon, the pickup that summons the hunter.
 
     A level file decides if it says anything: False forbids one, a spawn
-    override places one. Otherwise there is none before HUNTER_FIRST_LEVEL or
-    on a boss level, and one every HUNTER_LEVEL_INTERVAL levels elsewhere.
+    override places one. Otherwise there is none before HUNTER_FIRST_LEVEL,
+    and one every HUNTER_LEVEL_INTERVAL levels from then on.
     """
     if get_level_hunter_config(level) is None:
         interval = config.HUNTER_LEVEL_INTERVAL
@@ -332,9 +326,9 @@ def level_allows_jev_beacon(level: int) -> bool:
     """Whether a Jev beacon may appear on a level at all, placed or dropped by an enemy.
 
     False in a level file forbids it and a spawn override allows it. Otherwise
-    there is none before HUNTER_FIRST_LEVEL or on a boss level.
+    there is none before HUNTER_FIRST_LEVEL.
     """
     hunter = get_level_hunter_config(level)
     if hunter is not None:
         return hunter is not False
-    return level >= config.HUNTER_FIRST_LEVEL and not is_boss_level(level)
+    return level >= config.HUNTER_FIRST_LEVEL

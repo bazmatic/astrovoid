@@ -3,6 +3,9 @@ import json
 from types import SimpleNamespace
 
 import level_config
+import level_rules
+from policies.ammo import UnlimitedAmmo
+from policies.exit import AllCleared
 from game_handlers.entity_manager import EntityManager
 
 
@@ -27,23 +30,21 @@ def test_level_25_has_one_rules_hunter_and_no_other_level_does():
         assert level_config.get_level_rules_hunter_count(level) == 0
 
 
-def test_level_25_is_a_boss_level_without_a_jev_beacon():
-    assert level_config.is_boss_level(25)
-    assert not level_config.level_allows_jev_beacon(25)
-    assert not level_config.level_has_hunter(25)
+def test_level_25_must_be_cleared_with_unlimited_ammo():
+    assert level_config.get_level_exit_policy(25) == AllCleared()
+    assert level_config.get_level_ammo_policy(25) == UnlimitedAmmo()
 
 
 def test_the_boss_rotation_after_level_25_is_unchanged():
-    assert not level_config.is_boss_level(26)
-    assert not level_config.is_boss_level(29)
-    assert level_config.is_boss_level(30) and level_config.is_boss_level(36)
+    assert level_config.get_level_exit_policy(26) == AllCleared()       # its Neural hunter must die
+    assert not level_rules.is_boss_level(29)
+    assert level_rules.is_boss_level(30) and level_rules.is_boss_level(36)
 
 
 def test_a_level_file_can_place_a_rules_hunter_on_any_level(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config',
                         lambda level: {'enemies': {'rules_hunter': 2}} if level == 7 else None)
     assert level_config.get_level_rules_hunter_count(7) == 2
-    assert level_config.is_boss_level(7)
 
 
 def test_the_level_25_file_matches_the_design():

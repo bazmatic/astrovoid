@@ -21,7 +21,7 @@ from entities.jev_beacon import JevBeacon
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
-from policies.ammo import LimitedAmmo, UnlimitedAmmo
+from policies.exit import DEFAULT_EXIT_POLICY, ExitPolicy, ExitState
 from profiles import ProfileManager, LevelResult
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators, UIElementRenderer
@@ -160,7 +160,9 @@ class Game:
         self.exit_explosion_active = False  # Track if exit explosion is playing
         self.exit_explosion_time = 0.0  # Time since explosion started
         self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
-        self.boss_level = False  # On a boss level the exit opens only when every enemy is dead
+        self.exit_policy: ExitPolicy = DEFAULT_EXIT_POLICY
+        self.exit_opened = False  # Once the exit opens it stays open for the rest of the level
+        self.play_seconds = 0.0  # Play time since the first move, which a timer exit counts
         self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
         self.level_complete_quit_confirm = False  # Track quit confirmation on level complete screen
         self.player_has_moved = False  # Track if player has made their first move
@@ -327,9 +329,10 @@ class Game:
         self.ship.shield_active = True
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
-        # A boss level's exit is locked until every enemy is dead, so shots must not run out
-        self.boss_level = level_config.is_boss_level(self.level)
-        self.ship.ammo_policy = UnlimitedAmmo() if self.boss_level else LimitedAmmo()
+        self.exit_policy = level_config.get_level_exit_policy(self.level)
+        self.ship.ammo_policy = level_config.get_level_ammo_policy(self.level)
+        self.exit_opened = False
+        self.play_seconds = 0.0
         
         # Reset player movement flag - game loop won't start until first move
         self.player_has_moved = False
@@ -462,6 +465,10 @@ class Game:
         y = min(780, config.SCREEN_HEIGHT - 70)
         UIElementRenderer.draw_energy_gauge(
             self.screen, config.UI_ZONE_WIDTH // 2, y, energy / max(most, 1), f"{math.ceil(energy)}/{most}")
+
+    def exit_state(self) -> ExitState:
+        """What the exit policy may look at this frame."""
+        return ExitState(self.play_seconds, self.entity_manager.active_counts())
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -763,12 +770,13 @@ class Game:
         
         self.maze.update(dt)
 
-        # The exit stays shut while any egg is alive and, on a boss level, while any enemy at all is
-        exit_locked = (any(egg.active for egg in self.eggs)
-                       or (self.boss_level
-                           and any(enemy.active for enemy in self.entity_manager.get_all_enemies())))
+        if self.player_has_moved and not self.game_frozen:
+            self.play_seconds += dt / config.FPS  # dt counts frames at config.FPS
+        # The level's exit policy opens the exit; nothing that appears afterwards shuts it again
+        if not self.exit_opened and self.exit_policy.is_open(self.exit_state()):
+            self.exit_opened = True
         if self.maze.exit.active:
-            self.maze.exit.set_activated(not exit_locked, self.sound_manager)
+            self.maze.exit.set_activated(self.exit_opened, self.sound_manager)
         
         # Update exit animation and check player proximity
         if self.maze.exit.active:

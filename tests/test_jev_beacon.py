@@ -99,16 +99,15 @@ def test_a_second_beacon_replaces_a_dead_hunter(game):
     assert game.hunter is not dead and game.hunter.active
 
 
-@pytest.mark.parametrize('hunter_entry, level, boss, allowed', [
-    (None, 4, False, True),
-    (None, 3, False, False),  # Before the hunter's first level
-    (None, 6, True, False),  # Boss level
-    (False, 6, False, False),  # The level file forbids a hunter
-    ({'spawn_cell': [1, 1]}, 2, False, True),  # The level file places one
+@pytest.mark.parametrize('hunter_entry, level, allowed', [
+    (None, 4, True),
+    (None, 3, False),  # Before the hunter's first level
+    (None, 6, True),  # Bosses or not
+    (False, 6, False),  # The level file forbids a hunter
+    ({'spawn_cell': [1, 1]}, 2, True),  # The level file places one
 ])
-def test_which_levels_allow_a_beacon(monkeypatch, hunter_entry, level, boss, allowed):
+def test_which_levels_allow_a_beacon(monkeypatch, hunter_entry, level, allowed):
     monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: hunter_entry)
-    monkeypatch.setattr(level_config, 'is_boss_level', lambda _: boss)
     monkeypatch.setattr(config, 'HUNTER_FIRST_LEVEL', 4)
     # Drops do not follow the schedule that places beacons
     monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 5)
@@ -166,7 +165,6 @@ def test_beacon_does_not_look_like_a_gun_crystal():
 
 def test_placed_beacon_lies_a_third_of_the_way_to_the_exit(game, monkeypatch):
     monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: None)
-    monkeypatch.setattr(level_config, 'is_boss_level', lambda _: False)
     game.level = 4
     game.start_level()
     beacon = beacons(game)[0]

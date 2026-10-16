@@ -80,7 +80,6 @@ def test_counts_come_from_the_layout_while_it_exists(monkeypatch):
     assert level_config.get_level_rules_hunter_count(3) == 1
     assert level_config.get_level_split_boss_count(3) == 0
     assert level_config.get_level_egg_count(3) == 0
-    assert level_config.is_boss_level(3)                                  # a Rules hunter is on it
 
 
 def test_without_the_layout_the_files_own_counts_return(monkeypatch):

@@ -37,7 +37,9 @@ def test_every_arc_level_has_a_complete_file(level):
 
 
 def test_bosses_appear_only_on_the_boss_levels():
-    assert [level for level in ARC if level_config.is_boss_level(level)] == BOSS_LEVELS
+    assert [level for level in ARC if level_config.get_level_split_boss_count(level)
+            + level_config.get_level_mother_boss_count(level) + level_config.get_level_rules_hunter_count(level)
+            + level_config.get_level_neural_hunter_count(level)] == BOSS_LEVELS
 
 
 @pytest.mark.parametrize('level, split, mother', [(6, 1, 0), (12, 2, 0), (18, 0, 1), (24, 1, 1)])
@@ -78,9 +80,9 @@ def test_anemones_fit_the_maze(level):
     assert enemies(level)['anemone'] <= anemones_that_fit(level_config.get_maze_grid_size(level))
 
 
-def test_the_hunter_flies_from_level_four_except_on_boss_levels():
+def test_the_hunter_flies_from_level_four():
     without = [level for level in ARC if not level_config.level_has_hunter(level)]
-    assert without == [1, 2, 3] + BOSS_LEVELS
+    assert without == [1, 2, 3]
 
 
 @pytest.fixture

@@ -85,8 +85,8 @@ def test_the_beacon_lies_at_its_cell(played):
     assert [played.maze.position_calculator.screen_to_grid(*b.get_pos()) for b in beacons] == [(3, 5)]
 
 
-def test_it_is_a_boss_level_because_a_rules_hunter_is_on_it(played):
-    assert played.boss_level and not played.ship.ammo_policy.charges_for_shots()
+def test_the_rules_hunter_on_it_is_counted(played):
+    assert level_config.get_level_rules_hunter_count(played.level) == 1
 
 
 def test_restarting_does_not_pile_up_enemies(played):
