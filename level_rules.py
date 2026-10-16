@@ -13,7 +13,7 @@ Architecture:
 """
 
 from dataclasses import dataclass
-from typing import Dict, Tuple
+from typing import Dict, Optional, Tuple
 import math
 import config
 from maze.config import MazeComplexity, MazeComplexityPresets
@@ -94,6 +94,20 @@ def first_level(enemy_type: str) -> int:
 def is_boss_level(level: int) -> bool:
     """Whether a level without a level file is a boss level."""
     return level % config.BOSS_LEVEL_INTERVAL == 0
+
+
+def generated_exit_policy(level: int) -> Optional[Dict]:
+    """The exit policy of a level without a level file, as JSON, or None for the default."""
+    if is_boss_level(level):
+        return {'type': 'all_cleared'}
+    if get_enemy_counts(level).egg > 0:
+        return {'type': 'type_cleared', 'enemy_types': ['egg']}
+    return None
+
+
+def generated_ammo_policy(level: int) -> Optional[Dict]:
+    """The ammo policy of a level without a level file, as JSON, or None for the default."""
+    return {'type': 'unlimited'} if is_boss_level(level) else None
 
 
 def get_boss_counts(level: int) -> Tuple[int, int]:

@@ -13,6 +13,9 @@ import level_rules
 from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts, get_split_boss_count
 from level_layout import Layout, LayoutError, parse_layout
 from maze.config import MazeComplexity
+from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY, AmmoPolicy
+from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, ExitPolicy
+from policies.registry import PolicyError, PolicyRegistry
 
 
 def load_level_config(level: int) -> Optional[Dict]:
@@ -55,6 +58,36 @@ def get_level_layout(level: int) -> Optional[Layout]:
             _warned_layouts.add((level, str(exc)))
             logging.getLogger(__name__).warning('Level %d: ignoring its layout: %s', level, exc)
         return None
+
+
+_warned_policies = set()
+
+
+def _level_policy(level: int, key: str, registry: PolicyRegistry, generated, default):
+    """The policy the level's file names under `key` (or the generation rules give a level without a file)."""
+    data = load_level_config(level)
+    entry = data.get(key) if data is not None else generated(level)
+    if entry is None:
+        return default
+    try:
+        return registry.parse(entry)
+    except PolicyError as exc:
+        if (level, key, str(exc)) not in _warned_policies:   # asked for on every start: say it once
+            _warned_policies.add((level, key, str(exc)))
+            logging.getLogger(__name__).warning('Level %d: ignoring its %s: %s', level, registry.family, exc)
+        return default
+
+
+def get_level_exit_policy(level: int) -> ExitPolicy:
+    """When the level's exit opens."""
+    return _level_policy(level, 'exit_policy', EXIT_POLICIES, level_rules.generated_exit_policy,
+                         DEFAULT_EXIT_POLICY)
+
+
+def get_level_ammo_policy(level: int) -> AmmoPolicy:
+    """Whether the level's ammo runs out."""
+    return _level_policy(level, 'ammo_policy', AMMO_POLICIES, level_rules.generated_ammo_policy,
+                         DEFAULT_AMMO_POLICY)
 
 
 def get_level_seed(level: int) -> int:
