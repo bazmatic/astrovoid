@@ -9,6 +9,7 @@ RULES_HUNTER_HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
 
 
 class RulesHunter(EnemyHunter):
+    type = 'rules_hunter'  # the enemy kind a level file names
     # The enemy colour: red, where the allied hunter is green and the Neural hunter magenta.
     COLOR = (255, 90, 90)
     FILL = (110, 25, 25)

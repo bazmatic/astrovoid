@@ -162,3 +162,12 @@ def test_the_boss_viber_has_a_power_bar_above_it_that_drains_as_it_is_hit():
     for _ in range(12):
         boss.take_damage()
     assert 0 < bar_pixels() < full
+
+
+def test_the_settings_say_which_enemies_carry_a_bar(monkeypatch):
+    from entities.rules_hunter import RulesHunter
+    assert tuple(config.SETTINGS.game.enemyHitPointBars) == ('boss_viber',)
+    monkeypatch.setattr(config.SETTINGS.game, 'enemyHitPointBars', ['vibelet', 'rules_hunter'])
+    shows = {cls.__name__: cls((400.0, 400.0), *((SilentWorker(), None) if cls is RulesHunter else (None, None)))
+             .shows_hit_points() for cls in (NeuralHunter, BossViber, Vibelet, RulesHunter)}
+    assert shows == {'NeuralHunter': False, 'BossViber': False, 'Vibelet': True, 'RulesHunter': True}

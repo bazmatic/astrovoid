@@ -10,6 +10,7 @@ from dataclasses import replace
 
 import pygame
 
+import config
 from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight
 
@@ -21,7 +22,6 @@ class EnemyHunter(HunterShip):
     SHOT_SOURCE = 'enemy'
     HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
     SIZE_SCALE = 1.0  # its radius (and so its drawing and collisions) as a share of a normal ship's
-    SHOWS_HIT_POINTS = False  # only the big ones carry a bar of the hits they have left
     BAR_WIDTH = 40
     BAR_HEIGHT = 4
 
@@ -62,8 +62,12 @@ class EnemyHunter(HunterShip):
         if not self.active:
             return
         super().draw(screen)
-        if self.SHOWS_HIT_POINTS:
+        if self.shows_hit_points():
             self._draw_hit_points(screen)
+
+    def shows_hit_points(self):
+        """Whether it carries a bar of the hits it has left: the settings name the kinds that do."""
+        return self.type in config.SETTINGS.game.enemyHitPointBars
 
     def _draw_hit_points(self, screen):
         """A bar above it, as wide as the ship is big, that drains as it is hit."""

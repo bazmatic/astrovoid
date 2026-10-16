@@ -26,7 +26,6 @@ class BossViber(NeuralHunter):
     """A Viber at double the size that takes double the hits."""
     type = 'boss_viber'
     SIZE_SCALE = 2.0
-    SHOWS_HIT_POINTS = True
     HIT_POINTS = 2 * EnemyHunter.HIT_POINTS
 
 

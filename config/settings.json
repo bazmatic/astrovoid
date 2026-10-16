@@ -344,7 +344,8 @@
     "duelHealth": 5,
     "duelTimeoutSeconds": 120.0,
     "duelMazeComplexity": "COMPLEX",
-    "duelMazeGridSize": 26
+    "duelMazeGridSize": 26,
+    "enemyHitPointBars": ["boss_viber"]
   },
   "autoplay": {
     "firstLevel": 13,

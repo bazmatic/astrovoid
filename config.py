@@ -401,6 +401,8 @@ class GameSettings:
     # COMPLEX at 26 is how real level 13 is built.
     duelMazeComplexity: str = "COMPLEX"
     duelMazeGridSize: int = 26
+    # The enemy ships (by the kind a level file names) that carry a bar above them of the hits they have left.
+    enemyHitPointBars: Tuple[str, ...] = ("boss_viber",)
 
 
 @dataclass
