@@ -8,6 +8,7 @@ import os
 from typing import List, Optional, Tuple
 import config
 from rendering.fonts import get_font
+from rendering.exit_panel import draw_exit_panel
 from entities.ship import Ship
 from maze.generator import Maze
 from entities.enemy import Enemy
@@ -456,13 +457,13 @@ class Game:
             return None
         return self.hunter.health, self.hunter.settings.health
 
-    def _draw_hunter_energy(self) -> None:
-        """The hunter's energy gauge, in the HUD below the player's gauges (never beside the ship)."""
+    def _draw_hunter_energy(self, below: int = 755) -> None:
+        """The hunter's energy gauge, in the HUD below the player's gauges and the EXIT block (never beside the ship)."""
         reading = self._hunter_energy_reading()
         if reading is None:
             return
         energy, most = reading
-        y = min(780, config.SCREEN_HEIGHT - 70)
+        y = min(below + 25, config.SCREEN_HEIGHT - 45)  # room for the label above the bar and the reading below
         UIElementRenderer.draw_energy_gauge(
             self.screen, config.UI_ZONE_WIDTH // 2, y, energy / max(most, 1), f"{math.ceil(energy)}/{most}")
 
@@ -1349,7 +1350,9 @@ class Game:
                 level_score=potential['final_score'],
                 progress_score=self.scoring.get_total_score()
             )
-            self._draw_hunter_energy()
+            exit_panel = draw_exit_panel(
+                self.screen, [] if self.exit_opened else self.exit_policy.describe(self.exit_state()), self.exit_opened)
+            self._draw_hunter_energy(below=exit_panel.bottom)
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
         # GameIndicators is kept for potential future use but currently doesn't draw anything
@@ -1366,7 +1369,7 @@ class Game:
                                                   self.screen.get_height() // 2 + 90))
             else:
                 hint_rect = hint.get_rect(midbottom=(config.UI_ZONE_WIDTH // 2,
-                                                     self.screen.get_height() - 24))
+                                                     self.screen.get_height() - 6))  # under the hunter gauge
             self.screen.blit(hint, hint_rect)
 
     def _draw_game_over_sequence(self) -> None:

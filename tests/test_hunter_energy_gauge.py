@@ -81,3 +81,16 @@ def test_the_gauge_is_drawn_in_the_hud_not_beside_the_ship(game):
     assert drawn
     assert all(x < config.UI_ZONE_WIDTH for x, _ in drawn)                 # inside the left HUD panel
     assert not any(abs(x - game.hunter.x) < 60 and abs(y - game.hunter.y) < 60 for x, y in drawn)
+
+
+def test_the_gauge_sits_below_whatever_is_above_it_in_the_panel(game):
+    from dataclasses import replace
+    from entities.hunter_ship import HunterShip
+    from hunter.model import HunterSettings
+    game.hunter_flight = flying(HunterShip((600.0, 400.0), replace(HunterSettings(), indestructible=False, health=10)))
+    pygame.init()
+    game.screen = pygame.Surface((1352, 878))
+    game.screen.fill((0, 0, 0))
+    game._draw_hunter_energy(below=790)
+    drawn = [y for x in range(200) for y in range(878) if game.screen.get_at((x, y))[:3] != (0, 0, 0)]
+    assert drawn and min(drawn) > 790 and max(drawn) < 878
