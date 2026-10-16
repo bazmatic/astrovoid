@@ -34,3 +34,19 @@ def test_long_text_stays_inside_the_panel(surface):
     assert rect.right <= config.UI_ZONE_WIDTH
     beyond = pygame.Rect(config.UI_ZONE_WIDTH, 0, 1352 - config.UI_ZONE_WIDTH, 878)
     assert pixels(surface, beyond) == {tuple(config.COLOR_BACKGROUND)[:3]}
+
+
+def test_a_long_list_of_kinds_wraps_instead_of_shrinking_out_of_sight(surface):
+    from rendering.fonts import get_font
+    line_height = get_font(20).get_height()
+    rect = draw_exit_panel(surface, ['KILL SQUIDDLER BOSSES, SQUIDLETS, TERMINATORS, CRABS', '9 LEFT'], False)
+    label_height = get_font(16).get_height()
+    # The kinds wrap onto lines of full-size text: at least three lines, none of them shrunk
+    assert rect.height >= label_height + 3 * line_height
+    assert rect.right <= config.UI_ZONE_WIDTH
+
+
+def test_without_room_to_wrap_the_kinds_shrink_onto_one_line(surface):
+    bottom = EXIT_PANEL_TOP + 66
+    rect = draw_exit_panel(surface, ['KILL SQUIDDLER BOSSES, SQUIDLETS', '12 LEFT'], False, bottom=bottom)
+    assert rect.bottom <= bottom and rect.right <= config.UI_ZONE_WIDTH

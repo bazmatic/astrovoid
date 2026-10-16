@@ -64,3 +64,9 @@ def test_the_registry_lists_and_starts_every_policy():
 def test_registering_a_name_twice_is_refused():
     with pytest.raises(ValueError):
         EXIT_POLICIES.register(AllCleared)
+
+
+def test_a_kind_named_twice_counts_once():
+    policy = EXIT_POLICIES.parse({'type': 'type_cleared', 'enemy_types': ['egg', 'egg']})
+    assert policy == TypeCleared(('egg',))
+    assert policy.describe(state(egg=3)) == ['KILL EGGS', '3 LEFT']

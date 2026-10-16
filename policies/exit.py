@@ -131,7 +131,7 @@ class TypeCleared:
         kinds = data.get('enemy_types')
         if not isinstance(kinds, list) or not kinds or not all(kind in enemy_names.KINDS for kind in kinds):
             raise PolicyError(f'"enemy_types" must list enemy kinds from {enemy_names.KINDS}, got {kinds!r}')
-        return cls(tuple(kinds))
+        return cls(tuple(dict.fromkeys(kinds)))  # a kind named twice still counts once
 
     @classmethod
     def starter(cls) -> 'TypeCleared':

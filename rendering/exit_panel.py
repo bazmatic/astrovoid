@@ -1,5 +1,5 @@
 """The EXIT block in the side panel: what the level's exit policy still needs, or OPEN."""
-from typing import Sequence
+from typing import List, Optional, Sequence
 
 import pygame
 
@@ -13,22 +13,48 @@ LINE_GAP = 2
 
 
 def draw_exit_panel(screen: pygame.Surface, lines: Sequence[str], is_open: bool,
-                    top: int = EXIT_PANEL_TOP) -> pygame.Rect:
-    """Draw the block and return the area it covers."""
-    images = [get_font(16).render('EXIT', True, LABEL_COLOR)]
-    if is_open:
-        images.append(get_font(20).render('OPEN', True, config.COLOR_EXIT))
-    else:
-        images.extend(get_font(20).render(line, True, SHUT_COLOR) for line in lines)
-    centre_x = config.UI_ZONE_WIDTH // 2
+                    top: int = EXIT_PANEL_TOP, bottom: Optional[int] = None) -> pygame.Rect:
+    """Draw the block and return the area it covers. Long lists of names wrap when there is room above
+    `bottom`, and otherwise shrink onto one line."""
     widest = config.UI_ZONE_WIDTH - 24
+    label = get_font(16).render('EXIT', True, LABEL_COLOR)
+    font = get_font(20)
+    if is_open:
+        texts, colour = ['OPEN'], config.COLOR_EXIT
+    else:
+        texts, colour = list(lines), SHUT_COLOR
+        wrapped = [part for line in lines for part in _wrap(font, line, widest)]
+        height = label.get_height() + len(wrapped) * (font.get_height() + LINE_GAP)
+        if bottom is None or top + height <= bottom:
+            texts = wrapped
+    images = [label] + [_fit(font.render(text, True, colour), widest) for text in texts]
+    centre_x = config.UI_ZONE_WIDTH // 2
     drawn = pygame.Rect(centre_x, top, 0, 0)
     y = top
     for image in images:
-        if image.get_width() > widest:  # long names shrink to fit, as the score readings do
-            ratio = widest / image.get_width()
-            image = pygame.transform.smoothscale(image, (widest, max(1, round(image.get_height() * ratio))))
         rect = screen.blit(image, image.get_rect(midtop=(centre_x, y)))
         drawn.union_ip(rect)
         y = rect.bottom + LINE_GAP
     return drawn
+
+
+def _fit(image: pygame.Surface, widest: int) -> pygame.Surface:
+    """Shrink a line too wide for the panel, as the score readings do."""
+    if image.get_width() <= widest:
+        return image
+    ratio = widest / image.get_width()
+    return pygame.transform.smoothscale(image, (widest, max(1, round(image.get_height() * ratio))))
+
+
+def _wrap(font: pygame.font.Font, line: str, width: int) -> List[str]:
+    """Break a list of names after its commas so each part fits; a single name too wide is left to shrink."""
+    parts: List[str] = []
+    for name in line.split(', '):
+        joined = f'{parts[-1]} {name}' if parts else name
+        if parts and font.size(joined + ',')[0] <= width:
+            parts[-1] = joined
+        else:
+            parts.append(name)
+        parts[-1] += ','
+    parts[-1] = parts[-1][:-1]
+    return parts

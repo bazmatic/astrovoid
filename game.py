@@ -75,6 +75,9 @@ def _hunter_hotkey_enabled() -> bool:
 DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel returns to the FUN list
 DUEL_MAZE_LEVEL = 13          # the level number the duel's maze is generated as (its look and seed)
 
+HUNTER_GAUGE_HEIGHT = 60  # The hunter's energy gauge under the EXIT block: label, bar and reading
+
+
 class Game:
     """Main game class managing state and game loop."""
     autoplay = None  # An AutoplayDirector when the game runs unattended (AUTOPLAY=1)
@@ -1350,8 +1353,13 @@ class Game:
                 level_score=potential['final_score'],
                 progress_score=self.scoring.get_total_score()
             )
+            # Room above the restart hint, less the hunter's gauge while one flies
+            room = self.screen.get_height() - 6 - self.restart_hints[False].get_height()
+            if self._hunter_energy_reading() is not None:
+                room -= HUNTER_GAUGE_HEIGHT
             exit_panel = draw_exit_panel(
-                self.screen, [] if self.exit_opened else self.exit_policy.describe(self.exit_state()), self.exit_opened)
+                self.screen, [] if self.exit_opened else self.exit_policy.describe(self.exit_state()), self.exit_opened,
+                bottom=room)
             self._draw_hunter_energy(below=exit_panel.bottom)
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
