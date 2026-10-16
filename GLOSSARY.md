@@ -101,7 +101,7 @@ A Viber at double the size that takes double the hits.
 _Code name_: boss_viber
 
 **Vibelet**:
-A Viber at half the size that takes half the hits; its shots cost the player half as much.
+A Viber at half the size that one hit destroys; its shots are almost harmless.
 _Code name_: vibelet
 
 ### Modes

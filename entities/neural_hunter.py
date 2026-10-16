@@ -30,11 +30,11 @@ class BossViber(NeuralHunter):
 
 
 class Vibelet(NeuralHunter):
-    """A Viber at half the size that takes half the hits, and whose shots cost the player half as much."""
+    """A Viber at half the size that one hit destroys, and whose shots are almost harmless."""
     type = 'vibelet'
     SIZE_SCALE = 0.5
-    HIT_POINTS = EnemyHunter.HIT_POINTS // 2
-    SHOT_STRENGTH = 0.5
+    HIT_POINTS = 1
+    SHOT_STRENGTH = 0.1
 
 
 VIBERS = {cls.type: cls for cls in (NeuralHunter, BossViber, Vibelet)}  # each size by the kind a level file names

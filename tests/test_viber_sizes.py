@@ -53,9 +53,9 @@ def test_a_half_strength_bullet_costs_half_and_pushes_half_as_hard():
     assert half_ship.vx == pytest.approx(full_ship.vx / 2) and half_ship.vy == pytest.approx(full_ship.vy / 2)
 
 
-def test_a_vibelet_bullet_costs_two_and_a_half_points():
-    scoring, _ = hit(0.5)
-    assert scoring.enemy_bullet_hits * config.ENEMY_BULLET_PENALTY == 2.5
+def test_a_vibelet_bullet_is_almost_harmless():
+    scoring, _ = hit(Vibelet.SHOT_STRENGTH)
+    assert scoring.enemy_bullet_hits * config.ENEMY_BULLET_PENALTY == pytest.approx(0.5)
 
 
 def test_the_boss_viber_is_double_size_and_takes_double_the_hits():
@@ -65,11 +65,11 @@ def test_the_boss_viber_is_double_size_and_takes_double_the_hits():
     assert all(s.strength == 1.0 for s in boss._shots())
 
 
-def test_the_vibelet_is_half_size_with_half_the_hits_and_half_strength_bullets():
+def test_the_vibelet_is_half_size_dies_to_one_hit_and_its_bullets_are_a_tenth_as_strong():
     vibelet, viber = make(Vibelet), make(NeuralHunter)
     assert vibelet.radius == viber.radius / 2
-    assert [vibelet.take_damage() for _ in range(6)] == [False] * 5 + [True]
-    assert all(s.strength == 0.5 and s.is_enemy for s in vibelet._shots())
+    assert vibelet.take_damage()
+    assert all(s.strength == 0.1 and s.is_enemy for s in vibelet._shots())
     assert all(s.strength == 1.0 for s in viber._shots())
 
 
