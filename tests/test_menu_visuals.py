@@ -300,3 +300,35 @@ class TestControlsScreen:
         menu.update(1.0)
         menu.draw()
         assert is_opaque(screen)
+
+
+@pytest.mark.parametrize('size', [(1352, 878), (1280, 720), (1920, 1080)])
+@pytest.mark.parametrize('editor', [False, True])
+def test_the_main_menu_buttons_fit_between_the_title_and_the_profile_badge(monkeypatch, size, editor):
+    from rendering.main_menu import MainMenu
+    pygame.init()
+    pygame.display.set_mode((320, 240))
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', size[0])
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', size[1])
+    if editor:
+        monkeypatch.setenv('ASTROVOID_EDITOR', '1')
+    else:
+        monkeypatch.delenv('ASTROVOID_EDITOR', raising=False)
+    menu = MainMenu(pygame.Surface(size))
+    menu.set_profile_info('Player1', 30)
+    buttons = [button.get_rect() for button in menu.menu_buttons]
+    assert len(buttons) == (7 if editor else 6)
+    assert buttons[-1].bottom < menu.profile_badge_rect().top
+    assert buttons[0].top > menu.menu_title_rect.bottom
+
+
+def test_six_buttons_stay_where_they_always_were(monkeypatch):
+    from rendering.main_menu import MainMenu
+    pygame.init()
+    pygame.display.set_mode((320, 240))
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', SIZE[0])
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', SIZE[1])
+    monkeypatch.delenv('ASTROVOID_EDITOR', raising=False)
+    menu = MainMenu(pygame.Surface(SIZE))
+    assert [button.position[1] for button in menu.menu_buttons][:2] == [int(SIZE[1] * 0.46),
+                                                                        int(SIZE[1] * 0.46) + menu._scaled(80)]

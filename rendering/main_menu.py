@@ -19,6 +19,7 @@ from utils.resource_path import resource_path
 TITLE_HEIGHT_FRACTION = 0.34
 TITLE_CENTER_Y_FRACTION = 0.23
 TITLE_FLOAT_SPEED = 0.9
+BUTTON_HEIGHT = 64
 
 
 class MainMenu:
@@ -100,22 +101,62 @@ class MainMenu:
         self.menu_buttons = []
         
         # Position buttons in a group beneath the title
-        start_y = int(config.SCREEN_HEIGHT * 0.46)
-        button_spacing = self._scaled(80)
+        title_bottom = (self.menu_title_rect.bottom if self.menu_title_image is not None
+                        else title_center[1] + button_font.get_height())
+        start_y, button_spacing = self._button_column(title_bottom)
         
         for i, option_text in enumerate(self.menu_options):
             button = Button(
                 option_text,
-                (config.SCREEN_WIDTH // 2, start_y + i * button_spacing),
+                (config.SCREEN_WIDTH // 2, round(start_y + i * button_spacing)),
                 button_font,
                 width=self._scaled(440),
-                height=self._scaled(64)
+                height=self._scaled(BUTTON_HEIGHT)
             )
             button.selected = (i == self.menu_selected_index)
             self.menu_buttons.append(button)
         
         self.backdrop = self.backdrop.convert()
     
+    def _button_column(self, title_bottom: int) -> Tuple[int, float]:
+        """Where the first button sits and how far apart they are: the usual place and spacing, moved up and then
+        packed closer only as far as it takes for the last one to clear the profile badge."""
+        start_y, spacing = int(config.SCREEN_HEIGHT * 0.46), self._scaled(80)
+        half = self._scaled(BUTTON_HEIGHT) // 2
+        gaps = len(self.menu_options) - 1
+        last_centre = self._badge_top() - self._scaled(16) - half
+        highest_start = title_bottom + self._scaled(24) + half
+        overflow = start_y + gaps * spacing - last_centre
+        if overflow > 0:
+            start_y = max(highest_start, start_y - overflow)
+            spacing = min(spacing, (last_centre - start_y) / max(1, gaps))
+        return start_y, spacing
+
+    def _badge_top(self) -> int:
+        """The top of the profile badge, which is as tall as its font and padding whatever it says."""
+        return self._badge_bottom() - (self.profile_font.get_height() + 2 * self._scaled(8))
+
+    def _badge_bottom(self) -> int:
+        return config.SCREEN_HEIGHT - self._scaled(56)
+
+    def profile_badge_rect(self) -> pygame.Rect:
+        """Where the profile badge is drawn."""
+        return self._profile_badge().get_rect(midbottom=(config.SCREEN_WIDTH // 2, self._badge_bottom()))
+
+    def _profile_badge(self) -> pygame.Surface:
+        badge_key = (self.profile_name, self.profile_level)
+        if self.profile_badge is None or self._profile_badge_key != badge_key:
+            self.profile_badge = render_pill(
+                self.profile_font,
+                f"{(self.profile_name or '').upper()}   \u00b7   LEVEL {self.profile_level or '-'}",
+                (215, 225, 255),
+                BUTTON_ACCENT_START,
+                (self._scaled(20), self._scaled(8)),
+                max(1, self._scaled(1.5))
+            )
+            self._profile_badge_key = badge_key
+        return self.profile_badge
+
     def navigate_up(self) -> None:
         """Navigate to the previous menu option."""
         if self.menu_selected_index > 0:
@@ -173,21 +214,7 @@ class MainMenu:
         
         # Draw profile badge at the bottom
         if self.profile_name:
-            badge_key = (self.profile_name, self.profile_level)
-            if self.profile_badge is None or self._profile_badge_key != badge_key:
-                self.profile_badge = render_pill(
-                    self.profile_font,
-                    f"{self.profile_name.upper()}   \u00b7   LEVEL {self.profile_level or '-'}",
-                    (215, 225, 255),
-                    BUTTON_ACCENT_START,
-                    (self._scaled(20), self._scaled(8)),
-                    max(1, self._scaled(1.5))
-                )
-                self._profile_badge_key = badge_key
-            badge_rect = self.profile_badge.get_rect(
-                midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(56))
-            )
-            self.screen.blit(self.profile_badge, badge_rect)
+            self.screen.blit(self._profile_badge(), self.profile_badge_rect())
 
     def set_profile_info(self, name: Optional[str], level: Optional[int]) -> None:
         """Update the profile info shown on the menu."""
