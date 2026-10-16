@@ -131,22 +131,13 @@ def test_the_copy_plays_a_death_portrait():
     portrait.draw(pygame.Surface((200, 200)), (100, 100))
 
 
-def test_it_draws_red_with_a_health_bar_that_shrinks():
+def test_it_draws_red():
     pygame.init()
     hunter, _, _ = make()
-
-    def red_pixels():
-        screen = pygame.Surface((300, 300))
-        hunter.x, hunter.y = 150.0, 150.0
-        hunter.draw(screen)
-        return sum(1 for x in range(300) for y in range(300)
-                   if screen.get_at((x, y))[0] > screen.get_at((x, y))[1] + 40)
-
-    full = red_pixels()
-    assert full > 0
-    for _ in range(6):
-        hunter.take_damage()
-    assert red_pixels() < full                          # the bar has lost half its fill
+    screen = pygame.Surface((300, 300))
+    hunter.x, hunter.y = 150.0, 150.0
+    hunter.draw(screen)
+    assert any(screen.get_at((x, y))[0] > screen.get_at((x, y))[1] + 40 for x in range(300) for y in range(300))
 
 
 def test_its_colours_are_not_the_allied_hunters():

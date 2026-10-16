@@ -134,11 +134,31 @@ def test_the_editor_offers_and_draws_them():
         cls((400.0, 400.0), None, None).draw(pygame.Surface((800, 800)))
 
 
-@pytest.mark.parametrize('cls', [NeuralHunter, BossViber, Vibelet])
-def test_no_hit_point_bar_is_drawn_above_a_viber(cls):
+@pytest.mark.parametrize('kind', ['neural_hunter', 'vibelet', 'rules_hunter'])
+def test_no_hit_point_bar_is_drawn_above_an_enemy_hunter(kind):
+    from entities.neural_hunter import VIBERS
+    from entities.rules_hunter import RulesHunter
     pygame.init()
     surface = pygame.Surface((800, 800))
-    viber = cls((400.0, 400.0), None, None)
-    viber.draw(surface)
-    above = range(0, round(400 - viber.radius * 1.6))
+    hunter = (RulesHunter((400.0, 400.0), SilentWorker(), None) if kind == 'rules_hunter'
+              else VIBERS[kind]((400.0, 400.0), None, None))
+    hunter.draw(surface)
+    above = range(0, round(400 - hunter.radius * 1.6))
     assert not any(surface.get_at((x, y))[:3] != (0, 0, 0) for x in range(300, 500) for y in above)
+
+
+def test_the_boss_viber_has_a_power_bar_above_it_that_drains_as_it_is_hit():
+    pygame.init()
+    boss = BossViber((400.0, 400.0), None, None)
+
+    def bar_pixels():
+        surface = pygame.Surface((800, 800))
+        boss.draw(surface)
+        above = range(0, round(400 - boss.radius * 1.6))
+        return sum(1 for x in range(300, 500) for y in above if surface.get_at((x, y))[:3] == BossViber.COLOR)
+
+    full = bar_pixels()
+    assert full > 0
+    for _ in range(12):
+        boss.take_damage()
+    assert 0 < bar_pixels() < full
