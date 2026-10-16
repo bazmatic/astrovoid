@@ -21,6 +21,7 @@ class EnemyHunter(HunterShip):
     SHOT_SOURCE = 'enemy'
     HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
     SIZE_SCALE = 1.0  # its radius (and so its drawing and collisions) as a share of a normal ship's
+    SHOWS_HIT_POINTS = True  # a bar above it of the hits it has left
     BAR_WIDTH = 40
     BAR_HEIGHT = 4
 
@@ -61,6 +62,8 @@ class EnemyHunter(HunterShip):
         if not self.active:
             return
         super().draw(screen)
+        if not self.SHOWS_HIT_POINTS:
+            return
         bar = pygame.Rect(0, 0, self.BAR_WIDTH, self.BAR_HEIGHT)
         bar.midbottom = (round(self.x), round(self.y - self.radius * 2.2))
         pygame.draw.rect(screen, (60, 20, 20), bar)

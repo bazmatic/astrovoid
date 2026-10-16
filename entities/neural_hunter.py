@@ -8,6 +8,7 @@ from hunter.settings_for import hunter_settings_for
 
 class NeuralHunter(EnemyHunter):
     type = 'neural_hunter'  # the enemy kind a level file names
+    SHOWS_HIT_POINTS = False  # no bar above a Viber of any size
     # Magenta: apart from the red Rules hunter and the green allied hunter.
     COLOR = (255, 90, 230)
     FILL = (100, 20, 95)

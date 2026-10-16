@@ -132,3 +132,13 @@ def test_the_editor_offers_and_draws_them():
     pygame.init()
     for cls in (BossViber, Vibelet):
         cls((400.0, 400.0), None, None).draw(pygame.Surface((800, 800)))
+
+
+@pytest.mark.parametrize('cls', [NeuralHunter, BossViber, Vibelet])
+def test_no_hit_point_bar_is_drawn_above_a_viber(cls):
+    pygame.init()
+    surface = pygame.Surface((800, 800))
+    viber = cls((400.0, 400.0), None, None)
+    viber.draw(surface)
+    above = range(0, round(400 - viber.radius * 1.6))
+    assert not any(surface.get_at((x, y))[:3] != (0, 0, 0) for x in range(300, 500) for y in above)
