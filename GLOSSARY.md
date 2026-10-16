@@ -40,6 +40,62 @@ _Avoid_: bullet (when allegiance matters)
 A powerup crystal the hunter may collect.
 _Avoid_: item, loot
 
+### Enemies
+
+The names the player reads. The friendly hunter keeps its own names ("Rules hunter", "Neural hunter"); these are for enemies only.
+
+**Urchin**:
+An enemy that sits still. Shots shove it, and it takes several hits.
+_Code name_: static
+
+**Crab**:
+An enemy that moves back and forth.
+_Code name_: patrol
+
+**Jelly**:
+An enemy that chases the player.
+_Code name_: aggressive
+
+**Squiddler**:
+An enemy that flies the player's own recorded moves.
+_Code name_: replay
+
+**Flocker**:
+An enemy that moves in a flock.
+_Code name_: flocker
+
+**Flighthouse**:
+The flighthouse enemy.
+_Code name_: flighthouse
+
+**Egg**:
+An enemy that hatches into squidlets.
+_Code name_: egg
+
+**Squidlet**:
+An enemy hatched from an egg. Never placed in a level.
+_Code name_: baby
+
+**Anemone**:
+The anemone enemy.
+_Code name_: anemone
+
+**Squiddler Boss**:
+A boss that splits when hit.
+_Code name_: split_boss
+
+**Mother**:
+A boss that lays eggs.
+_Code name_: mother_boss
+
+**Terminator**:
+An enemy ship flown by the rules pilot.
+_Code name_: rules_hunter
+
+**Viber**:
+An enemy ship flown by the neural pilot.
+_Code name_: neural_hunter
+
 ### Modes
 
 **Duel**:

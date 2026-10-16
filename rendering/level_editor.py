@@ -10,6 +10,7 @@ import os
 import pygame
 
 import config
+import enemy_names
 import level_config
 from editor import files
 from editor.generated import generated_layout
@@ -20,6 +21,7 @@ from entities.neural_hunter import NeuralHunter
 from entities.rules_hunter import RulesHunter
 from entities.ship import Ship
 from game_handlers.spawn_manager import make_enemy
+from level_layout import ENEMY_TYPES
 from maze.config import MazeComplexity
 from maze.generator import Maze
 from rendering.fonts import get_font
@@ -32,10 +34,7 @@ REPEAT_INTERVAL = 0.05
 FLASH_SECONDS = 2.0
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 
-LABELS = {'wall': 'Wall', 'static': 'Static', 'patrol': 'Patrol', 'aggressive': 'Aggro', 'replay': 'Replay',
-          'flocker': 'Flocker', 'flighthouse': 'Lighthouse', 'egg': 'Egg', 'anemone': 'Anemone',
-          'split_boss': 'Split boss', 'mother_boss': 'Mother boss', 'rules_hunter': 'Rules hunter',
-          'neural_hunter': 'Neural hunter',
+LABELS = {'wall': 'Wall', **{kind: enemy_names.name(kind) for kind in ENEMY_TYPES},
           'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon'}
 
 # The chip beside each palette entry, in the colours the things have in play
