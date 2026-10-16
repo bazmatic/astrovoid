@@ -262,3 +262,26 @@ def test_a_boss_placed_by_a_level_file_on_any_level_gives_infinite_ammo(game, mo
     start(game, 7)
     game.ship.ammo = 0
     assert game.ship.fire()
+
+
+def test_every_kill_gives_the_player_a_power_bonus(game, monkeypatch):
+    from entities.projectile import Projectile
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=2))
+    start(game, 3)
+    game.player_has_moved = True
+    for enemy in game.enemies:
+        game.projectiles.append(Projectile(enemy.get_pos(), 0.0))
+    game.update(1.0)
+    assert not any(enemy.active for enemy in game.enemies)
+    assert game.ship.gun_upgrade_level == 2
+
+
+def test_a_kill_counts_on_the_games_score(game, monkeypatch):
+    from entities.projectile import Projectile
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=1))
+    game.reset_scoring_to_profile_state()
+    start(game, 3)
+    game.player_has_moved = True
+    game.projectiles.append(Projectile(game.enemies[0].get_pos(), 0.0))
+    game.update(1.0)
+    assert game.scoring.enemies_destroyed == 1

@@ -1004,11 +1004,16 @@ class Game:
                 continue
 
             # Friendly projectile-enemy collisions share normal destruction effects.
-            if self.collision_handler.handle_projectile_enemy_collisions(
+            kills_before = self.collision_handler.player_kills
+            hit = self.collision_handler.handle_projectile_enemy_collisions(
                 projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
                 jev_beacon_allowed=self._jev_beacon_drop_allowed(), enemy_hunters=self.enemy_hunters,
                 maze=self.maze
-            ):
+            )
+            # Every enemy the player kills gives the same power bonus as a powerup crystal
+            for _ in range(self.collision_handler.player_kills - kills_before):
+                self.ship.activate_gun_upgrade()
+            if hit:
                 continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks
@@ -1458,6 +1463,7 @@ class Game:
     def reset_scoring_to_profile_state(self) -> None:
         """Reset scoring state using the explicit START_LEVEL override first, then profile progress, else default."""
         self.scoring = ScoringSystem()
+        self.collision_handler.scoring = self.scoring  # kills and crystals must count on the new one
         profile = self.profile_manager.get_active_profile()
         if profile:
             self.scoring.total_score = profile.total_score
