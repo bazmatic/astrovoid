@@ -6,7 +6,7 @@ star ratings, text, and other interface components.
 
 import pygame
 import math
-from typing import Tuple, List, Optional, Callable
+from typing import Tuple, List, Optional, Callable, Sequence
 import config
 from rendering.fonts import get_font
 from rendering.dial import draw_dial
@@ -394,14 +394,16 @@ class AnimatedStarRating:
 
     MAX_SPARKS = 80
 
-    def __init__(self, score_percentage: float, x: int, y: int,
+    def __init__(self, earned: Sequence[bool], x: int, y: int,
                  star_size: int = config.LEVEL_COMPLETE_STAR_SIZE,
                  star_spacing: int = None, previous_stars: Optional[int] = None):
-        self.score_percentage = min(1.0, max(0.0, score_percentage))
+        self.earned = tuple(bool(flag) for flag in earned)
+        # The earned slots, in the order their stars land
+        self.slots = [i for i, flag in enumerate(self.earned) if flag]
         self.x, self.y = x, y
         self.star_size = star_size
         self.star_spacing = star_spacing if star_spacing is not None else int(star_size * 1.2)
-        self.num_stars = StarIndicator.calculate_star_count(self.score_percentage)
+        self.num_stars = len(self.slots)
         self.previous_stars = previous_stars
         self.elapsed = 0.0
         self.sound_callback = None
@@ -413,9 +415,9 @@ class AnimatedStarRating:
 
     def star_scale(self, index: int) -> float:
         """Current scale of an earned star; zero before its turn."""
-        if index >= self.num_stars:
+        if index not in self.slots:
             return 0.0
-        progress = self.elapsed / config.STAR_APPEAR_DURATION - index
+        progress = self.elapsed / config.STAR_APPEAR_DURATION - self.slots.index(index)
         if progress < 0:
             return 0.0
         if progress >= 1:
@@ -425,8 +427,9 @@ class AnimatedStarRating:
         return 1 + 1.6 * (1 - progress) ** 3 * math.cos(progress * math.tau)
 
     def glow_color(self, index: int) -> Tuple[int, int, int]:
-        """Newly earned record stars breathe between the title's cyan and magenta."""
-        if self.previous_stars is not None and self.previous_stars <= index < self.num_stars:
+        """On a record star count, every earned star breathes between the title's cyan and magenta."""
+        if (self.previous_stars is not None and self.num_stars > self.previous_stars
+                and index in self.slots):
             blend = round((math.sin(self.elapsed * 1.5) + 1) * 7.5) / 15
             return tuple(round(a + (b - a) * blend) for a, b in zip((45, 220, 255), (245, 65, 230)))
         return (255, 185, 45)
@@ -457,10 +460,11 @@ class AnimatedStarRating:
             landing = (self._landed + 1) * config.STAR_APPEAR_DURATION
             if self.elapsed + 1e-9 < landing:
                 break
-            index = self._landed
+            rank = self._landed
+            index = self.slots[rank]
             self._landed += 1
             if self.sound_callback:
-                self.sound_callback(config.STAR_TINKLE_BASE_PITCH + index * config.STAR_TINKLE_PITCH_INCREMENT)
+                self.sound_callback(config.STAR_TINKLE_BASE_PITCH + rank * config.STAR_TINKLE_PITCH_INCREMENT)
             self._burst(index, 12, max(0.0, self.elapsed - landing))
             if self._landed == 5:
                 self._burst(2, 32, max(0.0, self.elapsed - landing), self.star_spacing * 4)

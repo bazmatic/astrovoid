@@ -142,7 +142,7 @@ class TestLevelComplete:
 
     def test_stars_are_moved_into_their_slot(self, screen):
         menu = LevelCompleteMenu(screen)
-        stars = AnimatedStarRating(0.5, 0, 0)
+        stars = AnimatedStarRating((True, True, False, False, False), 0, 0)
         menu.draw(3, True, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None)
         slot = menu.layout(True)['stars']
         assert stars.y == slot.centery
@@ -151,7 +151,7 @@ class TestLevelComplete:
     @pytest.mark.parametrize('succeeded', [True, False])
     def test_draws_and_leaves_the_screen_opaque(self, screen, succeeded):
         menu = LevelCompleteMenu(screen)
-        stars = AnimatedStarRating(0.5, 0, 0) if succeeded else None
+        stars = AnimatedStarRating((True, True, False, False, False), 0, 0) if succeeded else None
         menu.update(1.0)
         menu.draw(3, succeeded, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None)
         assert is_opaque(screen)
@@ -203,7 +203,7 @@ class TestLevelComplete:
 
 class TestStarRating:
     def test_unearned_stars_show_as_empty_outlines(self, screen):
-        stars = AnimatedStarRating(0.3, 200, 200, star_size=40)
+        stars = AnimatedStarRating((True, False, False, False, False), 200, 200, star_size=40)
         assert stars.num_stars == 1
         stars.draw(screen)
         last = pygame.Rect(0, 0, 40, 40)

@@ -49,8 +49,13 @@ class CollisionHandler:
         self.scoring = scoring
         self.command_recorder = command_recorder
         self.last_player_kill = None
+        # This level's kills and crystals by the player and the Jev hunter, for the stars
+        self.level_kills = 0
+        self.level_crystals_collected = 0
     
     def _record_projectile_kill(self, projectile, enemy) -> None:
+        if projectile.source in ('player', 'hunter'):
+            self.level_kills += 1
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
             self.last_player_kill = deepcopy(enemy)
@@ -441,6 +446,7 @@ class CollisionHandler:
         if crystal.check_circle_collision((ship.x, ship.y), ship.radius):
             ship.activate_gun_upgrade()
             scoring.record_powerup_collected()
+            self.level_crystals_collected += 1
             return True
         
         return False
@@ -452,6 +458,7 @@ class CollisionHandler:
         if not crystal.check_circle_collision(hunter.get_pos(), hunter.radius):
             return False
         hunter.collect_powerup()
+        self.level_crystals_collected += 1
         self.sound_manager.play_powerup_activation()
         return True
 

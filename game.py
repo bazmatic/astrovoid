@@ -22,7 +22,9 @@ from entities.jev_beacon import JevBeacon
 from entities.command_recorder import CommandRecorder, CommandType
 from input import InputHandler
 from scoring.system import ScoringSystem
-from policies.exit import DEFAULT_EXIT_POLICY, ExitPolicy, ExitState
+from policies.exit import DEFAULT_EXIT_POLICY, ExitPolicy, ExitState, OpenAfterTime
+from scoring.par import par_seconds, route_cells
+from scoring.stars import StarTally, describe, earned, star_count
 from profiles import ProfileManager, LevelResult
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators, UIElementRenderer
@@ -156,7 +158,9 @@ class Game:
         self.level_complete_time = 0.0
         self.level_score_breakdown = {}
         self.completion_time_seconds = 0.0
-        self.level_score_percentage = 0.0
+        self.base_par_seconds = 0.0  # Par fixed at level start; dropped crystals add to it as they come
+        self.finish_tally: Optional[StarTally] = None  # The star tally frozen when the ship enters the exit
+        self.star_lines: Tuple[str, ...] = ()  # What each star on the level-complete screen was for
         self.total_score_before_level = 0  # Store score before level for replay
         self.replaying = False
         self.level_result: Optional[LevelResult] = None
@@ -280,6 +284,9 @@ class Game:
         self._close_hunter()
         self._close_enemy_hunters()
         self.collision_handler.last_player_kill = None
+        self.collision_handler.level_kills = 0
+        self.collision_handler.level_crystals_collected = 0
+        self.finish_tally = None
         self.replaying = self.level < self.profile_manager.get_active_level()
         self.level_result = None
         # Store total score before starting level (for replay functionality)
@@ -388,6 +395,7 @@ class Game:
         # Anemones show their reach from the start, before the first update works it out
         for anemone in self.anemones:
             anemone.reach_px = anemone.reach(self.maze)
+        self.base_par_seconds = self._base_par_seconds()
         
         # Clear projectiles and crystals
         self.projectiles = []
@@ -469,6 +477,24 @@ class Game:
         y = min(below + 25, config.SCREEN_HEIGHT - 45)  # room for the label above the bar and the reading below
         UIElementRenderer.draw_energy_gauge(
             self.screen, config.UI_ZONE_WIDTH // 2, y, energy / max(most, 1), f"{math.ceil(energy)}/{most}")
+
+    def _base_par_seconds(self) -> float:
+        """Par from the maze route and the enemies on the level now, at its start."""
+        to_grid = self.maze.position_calculator.screen_to_grid
+        start, end = self.maze.start_pos, self.maze.exit.get_pos()
+        cells = route_cells(self.maze.grid, to_grid(*start), to_grid(*end))
+        route_px = cells * self.maze.cell_size if cells is not None else math.dist(start, end)
+        timer = self.exit_policy.seconds if isinstance(self.exit_policy, OpenAfterTime) else None
+        return par_seconds(route_px, self.entity_manager.active_counts(), 0, timer)
+
+    def star_tally(self) -> StarTally:
+        """The stars as they stand: what the player would get by reaching the exit now."""
+        collected = self.collision_handler.level_crystals_collected
+        left = sum(1 for crystal in self.powerup_crystals
+                   if crystal.active and not isinstance(crystal, JevBeacon))
+        par = self.base_par_seconds + config.SETTINGS.game.parSecondsPerCrystal * (collected + left)
+        return StarTally(self.collision_handler.level_kills, sum(self.entity_manager.active_counts().values()),
+                         collected, left, self.play_seconds, par)
 
     def exit_state(self) -> ExitState:
         """What the exit policy may look at this frame."""
@@ -1038,7 +1064,8 @@ class Game:
         # Check exit reached
         if self.autoplay is None and self.maze.check_exit_reached((self.ship.x, self.ship.y), self.ship.radius):
             if not self.exit_explosion_active:
-                # Start exit explosion
+                # Start exit explosion; nothing after this changes the stars
+                self.finish_tally = self.star_tally()
                 self.exit_explosion_active = True
                 self.exit_explosion_time = 0.0
                 self.exit_explosion_pos = self.maze.exit.get_pos()
@@ -1128,15 +1155,14 @@ class Game:
         # Store completion time for display
         self.completion_time_seconds = completion_time
         
-        # Calculate score percentage for star rating
-        max_score = self.scoring.calculate_max_possible_score()
         final_score = self.level_score_breakdown.get('final_score', 0)
-        self.level_score_percentage = min(1.0, max(0.0, final_score / max_score)) if max_score > 0 else 0.0
+        tally = self.finish_tally if self.finish_tally is not None else self.star_tally()
+        star_flags = earned(tally)
+        self.star_lines = describe(tally)
         self.level_result = None
         if success:
             self.level_result = self.profile_manager.record_level_result(
-                self.level, final_score, completion_time,
-                StarIndicator.calculate_star_count(self.level_score_percentage),
+                self.level, final_score, completion_time, star_count(star_flags),
             )
             if not self.replaying:
                 self.profile_manager.update_active_profile_progress(self.level, self.scoring.get_total_score())
@@ -1153,7 +1179,7 @@ class Game:
             star_x = config.SCREEN_WIDTH // 2 - 2 * star_spacing
             star_y = config.SCREEN_HEIGHT // 2 - 50
             self.star_animation = AnimatedStarRating(
-                self.level_score_percentage,
+                star_flags,
                 star_x,
                 star_y,
                 star_size=config.LEVEL_COMPLETE_STAR_SIZE,

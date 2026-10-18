@@ -1,8 +1,10 @@
-"""Reward stars land in order, celebrate records, and leave an opaque frame."""
+"""Reward stars land in their slots in order, celebrate records, and leave an opaque frame."""
 import pygame
 import pytest
 import config
 from rendering.ui_elements import AnimatedStarRating
+
+ALL = (True,) * 5
 
 
 @pytest.fixture
@@ -15,7 +17,7 @@ def screen():
 
 
 def test_stars_drop_then_land_in_order_with_one_rising_sound_each(screen):
-    stars = AnimatedStarRating(1.0, 250, 200)
+    stars = AnimatedStarRating(ALL, 250, 200)
     sounds = []
     stars.set_sound_callback(sounds.append)
     stars.update(config.STAR_APPEAR_DURATION * 60 * 0.1)
@@ -35,11 +37,23 @@ def test_stars_drop_then_land_in_order_with_one_rising_sound_each(screen):
     assert len(sounds) == 5
 
 
-def test_only_newly_gained_stars_get_record_glow_and_sparks_are_capped(screen):
-    stars = AnimatedStarRating(1.0, 250, 200, previous_stars=3)
-    assert stars.glow_color(0) == stars.glow_color(2)
-    assert stars.glow_color(3) != stars.glow_color(2)
-    assert stars.glow_color(4) == stars.glow_color(3)
+def test_missed_stars_leave_their_slot_empty_and_the_rest_land_in_slot_order(screen):
+    stars = AnimatedStarRating((True, False, True, True, False), 250, 200)
+    assert stars.num_stars == 3
+    stars.update(config.STAR_APPEAR_DURATION * 60 * 1.5)
+    assert stars.star_scale(0) == pytest.approx(1.0)
+    assert stars.star_scale(1) == 0.0 and stars.star_scale(2) > 0.0 and stars.star_scale(3) == 0.0
+    stars.update(240)
+    assert stars.star_scale(1) == 0.0 and stars.star_scale(4) == 0.0
+    assert stars.star_scale(3) == pytest.approx(1.0)
+    assert stars.is_complete() and stars.flash == 0
+
+
+def test_a_record_count_makes_every_lit_star_glow_and_sparks_are_capped(screen):
+    stars = AnimatedStarRating(ALL, 250, 200, previous_stars=3)
+    plain = AnimatedStarRating((True, True, True, False, False), 250, 200, previous_stars=3)
+    assert all(stars.glow_color(i) != plain.glow_color(0) for i in range(5))
+    assert plain.glow_color(0) == plain.glow_color(2)
     for _ in range(180):
         stars.update(1)
         assert sum(len(burst.sparks) for burst in stars.bursts) <= 80
@@ -48,7 +62,7 @@ def test_only_newly_gained_stars_get_record_glow_and_sparks_are_capped(screen):
 
 
 def test_large_time_step_finishes_without_stale_sparks_or_duplicate_sound(screen):
-    stars = AnimatedStarRating(0.65, 250, 200)
+    stars = AnimatedStarRating((True, True, True, False, False), 250, 200)
     sounds = []
     stars.set_sound_callback(sounds.append)
     stars.update(240)
