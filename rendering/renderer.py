@@ -53,21 +53,6 @@ class Renderer:
         else:
             self.screen.blit(text_surface, position)
     
-    def draw_star_rating(
-        self,
-        score_percentage: float,
-        x: int,
-        y: int
-    ) -> None:
-        """Draw 5-star rating display.
-        
-        Args:
-            score_percentage: Score as percentage (0.0 to 1.0+).
-            x: X coordinate for first star.
-            y: Y coordinate for stars.
-        """
-        UIElementRenderer.draw_star_rating(self.screen, score_percentage, x, y)
-    
     def draw_progress_bar(
         self,
         x: int,

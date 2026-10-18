@@ -135,6 +135,29 @@ Static methods for score calculation.
 - `calculate_score(elapsed_time: float, enemy_collisions: int, enemies_destroyed: int, shots_fired: int, fuel_used: int) -> Dict`: Calculate score
 - `calculate_score_percentage(score: float, max_score: float) -> float`: Calculate percentage
 
+The score no longer decides a level's stars; see `scoring.stars`.
+
+#### `scoring.stars`
+
+The five stars a level gives, each earned on its own, in this order: finish, half the enemies, every enemy, every
+crystal, par.
+
+- `StarTally(kills, alive, crystals_collected, crystals_left, play_seconds, par_seconds)`: what happened on a level
+  (frozen dataclass). Kills and crystals by the Jev hunter count as the player's.
+- `earned(tally: StarTally) -> Tuple[bool, bool, bool, bool, bool]`: which stars the tally earns
+- `star_count(flags: Sequence[bool]) -> int`: how many are lit (what profiles save)
+- `describe(tally: StarTally) -> Tuple[str, ...]`: the line under each star, e.g. `'9/14 KILLED'`, `'1:42 / PAR 1:43'`
+- `format_clock(seconds: float) -> str`: `m:ss`, rounded down
+
+#### `scoring.par`
+
+- `route_cells(grid, start: Tuple[int, int], end: Tuple[int, int]) -> Optional[int]`: steps on the shortest four-way
+  path between two `(col, row)` cells through open cells, or `None`
+- `par_seconds(route_px: float, enemy_counts: Mapping[str, int], crystals: int, timer_seconds: Optional[float] = None) -> float`:
+  the route at `game.parSpeedShare` of top speed, plus `parSecondsPerEnemy` per enemy (`parSecondsPerSpawningBoss`
+  for a `mother_boss` or `split_boss`), plus `parSecondsPerCrystal` per crystal; at least the timer plus
+  `parTimerMargin` on a timer exit
+
 ### Rendering System
 
 #### `rendering.Renderer`
@@ -145,7 +168,6 @@ Centralized rendering operations.
 
 - `clear() -> None`: Clear screen
 - `draw_text(text: str, position: Tuple, font: pygame.font.Font, color: Tuple, center: bool) -> None`: Draw text
-- `draw_star_rating(score_percentage: float, x: int, y: int) -> None`: Draw 5-star rating
 - `draw_progress_bar(x: int, y: int, width: int, height: int, value: float, max_value: float, fill_color: Tuple, empty_color: Tuple, border_color: Optional[Tuple]) -> None`: Draw progress bar
 
 #### `rendering.ui_elements.UIElementRenderer`
@@ -154,7 +176,28 @@ Static methods for UI element rendering.
 
 **Methods:**
 
-- `draw_star_rating(screen: pygame.Surface, score_percentage: float, x: int, y: int, ...) -> None`: Draw star rating
+- `draw_circular_gauge(screen, center_x, center_y, radius, percentage, center_text, fill_color, ...) -> None`: Draw a HUD dial
+
+#### `rendering.ui_elements.AnimatedStarRating`
+
+The stars landing on the level-complete screen.
+
+- `AnimatedStarRating(earned: Sequence[bool], x: int, y: int, star_size=..., star_spacing=None, previous_stars=None)`:
+  only earned slots get a star, landing in slot order; every lit star glows when the count beats `previous_stars`
+- `update(dt: float)`, `draw(screen)`, `is_complete() -> bool`
+
+#### `rendering.ui_elements.StarIndicator`
+
+Follows the stars during play and chimes on each change.
+
+- `StarIndicator(on_star_lost=None, on_star_gained=None)`
+- `update(flags: Sequence[bool]) -> None`: one callback per star that lit or went out; none on the first update
+- `reset() -> None`, `flags` property
+
+#### `rendering.star_row`
+
+- `draw_star_row(screen, flags: Sequence[bool], pulse: float, center: Tuple[int, int], size: int) -> pygame.Rect`: the
+  five small stars in the side panel; `pulse` (0..1) makes the par star throb
 
 ### Utilities
 
@@ -248,7 +291,6 @@ from rendering import Renderer
 renderer = Renderer(screen)
 renderer.clear()
 renderer.draw_text("Score", (100, 100), font)
-renderer.draw_star_rating(0.85, 200, 100)  # 85% score
 ```
 
 ### Enemy Creation

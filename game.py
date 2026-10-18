@@ -28,7 +28,7 @@ from scoring.par import par_seconds, route_cells
 from scoring.stars import StarTally, describe, earned, star_count
 from profiles import ProfileManager, LevelResult
 from rendering import Renderer
-from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators, UIElementRenderer
+from rendering.ui_elements import AnimatedStarRating, StarIndicator, UIElementRenderer
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon, render_hint_row
 from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
@@ -94,15 +94,6 @@ class Game:
         self.font = get_font(36)
         self.small_font = get_font(24)
         self.renderer = Renderer(screen)
-        
-        # Initialize game indicators component
-        # Positioned below gauges with proper spacing
-        self.game_indicators = GameIndicators(
-            x=20,  # Consistent left margin
-            y_start=200,  # Below gauge section with more space
-            line_spacing=60,  # Much increased spacing to prevent overlap
-            font=self.small_font
-        )
         
         self.state = config.STATE_SPLASH if config.SPLASH_ENABLED else config.STATE_MENU
         # Check for START_LEVEL environment variable
@@ -1399,9 +1390,6 @@ class Game:
             if self.star_indicator.flags:
                 draw_star_row(self.screen, self.star_indicator.flags, self.par_pulse(),
                               (config.UI_ZONE_WIDTH // 2, STAR_ROW_Y), STAR_ROW_SIZE)
-        
-        # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
-        # GameIndicators is kept for potential future use but currently doesn't draw anything
         
         # Draw game over sequence (fade to black and text)
         if self.game_over_active:

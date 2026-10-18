@@ -350,10 +350,14 @@ asterdroids/
 │   └── wall_segment.py    # One face of a wall block
 ├── scoring/               # Scoring system
 │   ├── system.py         # Score tracking
-│   └── calculator.py      # Score calculation
+│   ├── calculator.py      # Score calculation
+│   ├── stars.py          # The five stars, from kills, crystals and par
+│   └── par.py            # Par time from the maze route, the enemies and the crystals
 ├── rendering/             # Rendering system
 │   ├── renderer.py       # Centralized rendering
-│   ├── ui_elements.py    # UI components
+│   ├── ui_elements.py    # UI components, the live star chimes and the level-complete stars
+│   ├── star_row.py       # The stars drawn during play
+│   ├── stars.py          # The faceted star artwork
 │   ├── dial.py           # HUD instrument dials
 │   ├── fonts.py          # The game typeface (Chakra Petch)
 │   ├── controls_menu.py  # Key and button mappings screen

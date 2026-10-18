@@ -121,6 +121,12 @@ The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms
   - Calculates penalties and bonuses
   - Returns score breakdowns
 
+- **`stars.py`**: `StarTally`, `earned`, `describe` - the five stars from what the player did
+  - Finish, half the enemies, every enemy, every crystal, par
+  - Kills and crystals by the Jev hunter count as the player's
+
+- **`par.py`**: `route_cells`, `par_seconds` - par time from the maze route, the enemies at the start and the crystals
+
 ### Rendering System (`rendering/`)
 
 - **`renderer.py`**: `Renderer` - Centralized rendering operations
@@ -129,9 +135,11 @@ The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms
   - Reduces code duplication
 
 - **`ui_elements.py`**: `UIElementRenderer` - UI component rendering
-  - Star rating display
-  - Progress bars
-  - Reusable UI components
+  - HUD dials and the energy gauge
+  - `StarIndicator` (chimes as the live stars change) and `AnimatedStarRating` (the level-complete stars)
+
+- **`star_row.py`**: `draw_star_row` - the five stars you'd get now, drawn above the level number during play
+- **`stars.py`**: `draw_star`, `draw_glow`, `StarBurst` - the faceted star artwork shared by every star
 
 - **`fonts.py`**: `get_font` - the bundled typeface (Chakra Petch, in `assets/fonts`); all text goes through it
 - **`controls_menu.py`**: `ControlsMenu` - key and button mappings, reached from the main menu
@@ -184,7 +192,8 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 1. **Real-time Tracking**: `ScoringSystem` records events (collisions, shots, etc.)
 2. **Potential Score**: `calculate_current_potential_score()` provides real-time feedback
 3. **Final Calculation**: `calculate_level_score()` computes final score on completion
-4. **Score Display**: Star rating shows score percentage (0-100%)
+4. **Stars**: `Game.star_tally()` counts kills, enemies alive, crystals and play time against par (fixed at level
+   start); the tally is frozen when the ship enters the exit and `scoring.stars.earned` turns it into the five stars
 
 ## Design Patterns
 
@@ -250,10 +259,14 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   └── generator.py
 ├── scoring/                 # Scoring system
 │   ├── system.py
-│   └── calculator.py
+│   ├── calculator.py
+│   ├── stars.py
+│   └── par.py
 ├── rendering/               # Rendering system
 │   ├── renderer.py
 │   ├── ui_elements.py
+│   ├── star_row.py
+│   ├── stars.py
 │   ├── dial.py
 │   ├── fonts.py
 │   └── controls_menu.py

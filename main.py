@@ -53,7 +53,7 @@ if getattr(sys, 'frozen', False):
         from scoring.system import ScoringSystem
         from profiles import ProfileManager
         from rendering import Renderer
-        from rendering.ui_elements import AnimatedStarRating, StarIndicator, GameIndicators
+        from rendering.ui_elements import AnimatedStarRating, StarIndicator
         from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon
         from rendering.visual_effects import draw_button_glow
         from rendering.main_menu import MainMenu
