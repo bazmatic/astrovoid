@@ -64,7 +64,7 @@ def test_a_dropped_crystal_adds_to_par(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file())
     start(game, 3)
     game.powerup_crystals.append(PowerupCrystal((300.0, 300.0)))
-    assert game.star_tally().par_seconds == game.base_par_seconds + 3
+    assert game.star_tally().par_seconds == pytest.approx(game.base_par_seconds + config.SETTINGS.game.parSecondsPerCrystal)
     assert game.star_tally().crystals_left == 1
 
 

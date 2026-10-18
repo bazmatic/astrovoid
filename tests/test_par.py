@@ -1,3 +1,5 @@
+import pytest
+
 import config
 from scoring.par import par_seconds, route_cells
 
@@ -22,15 +24,15 @@ def test_no_route_is_none():
 
 def test_par_adds_route_enemies_bosses_and_crystals():
     counts = {'static': 10, 'replay': 2, 'mother_boss': 1, 'egg': 1}
-    assert par_seconds(2400, counts, 3) == 2400 / 240 + 13 * 6 + 30 + 9
+    assert par_seconds(2400, counts, 3) == pytest.approx(2400 / 240 + 13 * 1.2 + 6 + 3 * 0.6)
 
 
 def test_a_timer_exit_sets_a_floor():
-    assert par_seconds(240, {}, 0, timer_seconds=60) == 70
+    assert par_seconds(240, {}, 0, timer_seconds=60) == 62
     assert par_seconds(4800, {}, 0, timer_seconds=5) == 20
 
 
 def test_the_settings_have_the_defaults():
     game = config.SETTINGS.game
     assert (game.parSpeedShare, game.parSecondsPerEnemy, game.parSecondsPerSpawningBoss,
-            game.parSecondsPerCrystal, game.parTimerMargin) == (0.5, 6, 30, 3, 10)
+            game.parSecondsPerCrystal, game.parTimerMargin) == (0.5, 1.2, 6, 0.6, 2)

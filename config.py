@@ -407,10 +407,10 @@ class GameSettings:
     # on the level at its start (a Mother or a Squiddler Boss gets the boss allowance instead) and each crystal
     # dropped. A level whose exit opens on a timer gets at least the timer plus the margin.
     parSpeedShare: float = 0.5
-    parSecondsPerEnemy: float = 6.0
-    parSecondsPerSpawningBoss: float = 30.0
-    parSecondsPerCrystal: float = 3.0
-    parTimerMargin: float = 10.0
+    parSecondsPerEnemy: float = 1.2
+    parSecondsPerSpawningBoss: float = 6.0
+    parSecondsPerCrystal: float = 0.6
+    parTimerMargin: float = 2.0
 
 
 @dataclass

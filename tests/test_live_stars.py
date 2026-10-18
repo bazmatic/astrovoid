@@ -47,15 +47,15 @@ def test_the_game_feeds_the_live_stars_and_chimes_a_kill(game, monkeypatch):
     game.sound_manager.play_star_gained.assert_called()
 
 
-def test_the_par_star_pulses_in_its_last_ten_seconds(game, monkeypatch):
+def test_the_par_star_pulses_in_its_last_five_seconds(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=1))
     start(game, 3)
+    game.base_par_seconds = 60.0
+    game.play_seconds = 54.0
     assert game.par_pulse() == 0.0
-    game.play_seconds = game.base_par_seconds - 5
-    assert 0.0 <= game.par_pulse() <= 1.0
     pulses = set()
     for step in range(20):
-        game.play_seconds = game.base_par_seconds - 9.5 + step * 0.45
+        game.play_seconds = 55.2 + step * 0.24
         pulses.add(round(game.par_pulse(), 2))
     assert len(pulses) > 3
     game.play_seconds = game.base_par_seconds + 1

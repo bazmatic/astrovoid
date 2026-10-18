@@ -310,12 +310,12 @@ A level gives up to five stars, each earned on its own:
 - Enemies that appear during the level (babies, eggs, a boss's children) count too. Kills and crystals by the Jev
   hunter count as yours. The Jev beacon is not a crystal.
 - Par is worked out when the level starts: the shortest route from the start to the exit flown at half top speed,
-  plus 6 s for each enemy on the level (30 s instead for a Mother or a Squiddler Boss, for her and what she spawns),
-  plus 3 s for each crystal as it drops. A level whose exit opens on a timer gets at least the timer plus 10 s. The
+  plus 1.2 s for each enemy on the level (6 s instead for a Mother or a Squiddler Boss, for her and what she spawns),
+  plus 0.6 s for each crystal as it drops. A level whose exit opens on a timer gets at least the timer plus 2 s. The
   clock is play time, from your first move. The numbers are `game.parSpeedShare`, `parSecondsPerEnemy`,
   `parSecondsPerSpawningBoss`, `parSecondsPerCrystal` and `parTimerMargin` in `config/settings.json`.
 - During play, the stars you'd get by reaching the exit now are shown above the level number. A chime plays when one
-  lights or goes out, and the par star pulses for its last 10 seconds.
+  lights or goes out, and the par star pulses for its last 5 seconds.
 - The score is still kept and shown, but no longer decides the stars. Your best star count for each level is
   never lowered.
 

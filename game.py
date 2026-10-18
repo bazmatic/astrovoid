@@ -79,7 +79,7 @@ DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel ret
 DUEL_MAZE_LEVEL = 13          # the level number the duel's maze is generated as (its look and seed)
 
 HUNTER_GAUGE_HEIGHT = 60  # The hunter's energy gauge under the EXIT block: label, bar and reading
-PAR_WARNING_SECONDS = 10.0  # The par star pulses for this long before par runs out
+PAR_WARNING_SECONDS = 5.0  # The par star pulses for this long before par runs out
 
 
 class Game:
@@ -490,7 +490,7 @@ class Game:
                          collected, left, self.play_seconds, par)
 
     def par_pulse(self) -> float:
-        """How brightly the par star throbs: 0 until its last ten seconds, then a pulse, and 0 once par is past."""
+        """How brightly the par star throbs: 0 until its last few seconds, then a pulse, and 0 once par is past."""
         left = self.star_tally().par_seconds - self.play_seconds
         if left < 0 or left > PAR_WARNING_SECONDS:
             return 0.0
