@@ -15,5 +15,39 @@
     "anemone": 0,
     "split_boss": 1,
     "mother_boss": 0
+  },
+  "layout": {
+    "walls": [],
+    "start": [10, 10],
+    "exit": [1, 1],
+    "enemies": [
+      {
+        "type": "replay",
+        "cell": [5, 2]
+      },
+      {
+        "type": "replay",
+        "cell": [3, 3]
+      },
+      {
+        "type": "split_boss",
+        "cell": [2, 7]
+      },
+      {
+        "type": "replay",
+        "cell": [4, 7]
+      },
+      {
+        "type": "replay",
+        "cell": [3, 10]
+      }
+    ],
+    "beacon": null
+  },
+  "exit_policy": {
+    "type": "all_cleared"
+  },
+  "ammo_policy": {
+    "type": "unlimited"
   }
 }

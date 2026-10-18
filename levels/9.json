@@ -15,5 +15,147 @@
     "anemone": 2,
     "split_boss": 0,
     "mother_boss": 0
+  },
+  "layout": {
+    "walls": [
+      [7, 1],
+      [8, 1],
+      [1, 4],
+      [1, 5],
+      [2, 5],
+      [17, 5],
+      [18, 5],
+      [19, 5],
+      [20, 5],
+      [17, 6],
+      [9, 7],
+      [10, 7],
+      [11, 7],
+      [17, 7],
+      [8, 8],
+      [9, 8],
+      [10, 8],
+      [11, 8],
+      [17, 8],
+      [1, 9],
+      [8, 9],
+      [11, 9],
+      [12, 9],
+      [13, 9],
+      [17, 9],
+      [1, 10],
+      [8, 10],
+      [11, 10],
+      [12, 10],
+      [13, 10],
+      [17, 10],
+      [8, 11],
+      [17, 11],
+      [8, 12],
+      [17, 12],
+      [8, 13],
+      [8, 14],
+      [8, 15],
+      [8, 16],
+      [17, 16],
+      [18, 16],
+      [19, 16],
+      [20, 16],
+      [8, 17],
+      [8, 18]
+    ],
+    "start": [1, 20],
+    "exit": [19, 9],
+    "enemies": [
+      {
+        "type": "anemone",
+        "cell": [10, 5]
+      },
+      {
+        "type": "aggressive",
+        "cell": [9, 9]
+      },
+      {
+        "type": "aggressive",
+        "cell": [10, 9]
+      },
+      {
+        "type": "aggressive",
+        "cell": [14, 9]
+      },
+      {
+        "type": "aggressive",
+        "cell": [15, 9]
+      },
+      {
+        "type": "aggressive",
+        "cell": [16, 9]
+      },
+      {
+        "type": "aggressive",
+        "cell": [9, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [10, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [14, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [15, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [16, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [9, 11]
+      },
+      {
+        "type": "aggressive",
+        "cell": [10, 11]
+      },
+      {
+        "type": "static",
+        "cell": [13, 14]
+      },
+      {
+        "type": "aggressive",
+        "cell": [19, 17]
+      },
+      {
+        "type": "aggressive",
+        "cell": [20, 17]
+      },
+      {
+        "type": "aggressive",
+        "cell": [19, 18]
+      },
+      {
+        "type": "aggressive",
+        "cell": [20, 18]
+      },
+      {
+        "type": "aggressive",
+        "cell": [19, 19]
+      },
+      {
+        "type": "aggressive",
+        "cell": [20, 19]
+      },
+      {
+        "type": "aggressive",
+        "cell": [19, 20]
+      },
+      {
+        "type": "aggressive",
+        "cell": [20, 20]
+      }
+    ],
+    "beacon": null
   }
 }

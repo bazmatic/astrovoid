@@ -15,5 +15,11 @@
     "anemone": 0,
     "split_boss": 2,
     "mother_boss": 0
+  },
+  "exit_policy": {
+    "type": "all_cleared"
+  },
+  "ammo_policy": {
+    "type": "unlimited"
   }
 }

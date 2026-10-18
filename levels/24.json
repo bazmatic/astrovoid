@@ -15,5 +15,31 @@
     "anemone": 0,
     "split_boss": 1,
     "mother_boss": 1
+  },
+  "layout": {
+    "walls": [],
+    "start": [1, 14],
+    "exit": [14, 1],
+    "enemies": [
+      {
+        "type": "neural_hunter",
+        "cell": [9, 5]
+      },
+      {
+        "type": "neural_hunter",
+        "cell": [8, 6]
+      },
+      {
+        "type": "neural_hunter",
+        "cell": [7, 9]
+      }
+    ],
+    "beacon": null
+  },
+  "exit_policy": {
+    "type": "all_cleared"
+  },
+  "ammo_policy": {
+    "type": "unlimited"
   }
 }

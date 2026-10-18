@@ -15,5 +15,66 @@
     "anemone": 0,
     "split_boss": 0,
     "mother_boss": 0
+  },
+  "layout": {
+    "walls": [
+      [14, 1],
+      [1, 4],
+      [2, 4],
+      [3, 4],
+      [4, 4],
+      [8, 4],
+      [9, 4],
+      [10, 4],
+      [11, 4],
+      [12, 4],
+      [8, 10],
+      [9, 10],
+      [1, 14],
+      [5, 14],
+      [6, 14],
+      [7, 14]
+    ],
+    "start": [1, 1],
+    "exit": [13, 13],
+    "enemies": [
+      {
+        "type": "patrol",
+        "cell": [6, 4]
+      },
+      {
+        "type": "patrol",
+        "cell": [14, 4]
+      },
+      {
+        "type": "static",
+        "cell": [10, 7]
+      },
+      {
+        "type": "aggressive",
+        "cell": [4, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [12, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [14, 10]
+      },
+      {
+        "type": "aggressive",
+        "cell": [6, 12]
+      },
+      {
+        "type": "static",
+        "cell": [12, 12]
+      },
+      {
+        "type": "aggressive",
+        "cell": [13, 12]
+      }
+    ],
+    "beacon": [6, 6]
   }
 }

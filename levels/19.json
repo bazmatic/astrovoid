@@ -15,5 +15,11 @@
     "anemone": 4,
     "split_boss": 0,
     "mother_boss": 0
+  },
+  "exit_policy": {
+    "type": "type_cleared",
+    "enemy_types": [
+      "egg"
+    ]
   }
 }
