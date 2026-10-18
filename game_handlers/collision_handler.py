@@ -49,12 +49,10 @@ class CollisionHandler:
         self.scoring = scoring
         self.command_recorder = command_recorder
         self.last_player_kill = None
-        self.player_kills = 0  # Enemies the player has shot down, ever
     
     def _record_projectile_kill(self, projectile, enemy) -> None:
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
-            self.player_kills += 1
             self.last_player_kill = deepcopy(enemy)
 
     def _drop_pickup(

@@ -1019,16 +1019,11 @@ class Game:
                 continue
 
             # Friendly projectile-enemy collisions share normal destruction effects.
-            kills_before = self.collision_handler.player_kills
-            hit = self.collision_handler.handle_projectile_enemy_collisions(
+            if self.collision_handler.handle_projectile_enemy_collisions(
                 projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
                 jev_beacon_allowed=self._jev_beacon_drop_allowed(), enemy_hunters=self.enemy_hunters,
                 maze=self.maze
-            )
-            # Every enemy the player kills gives the same power bonus as a powerup crystal
-            for _ in range(self.collision_handler.player_kills - kills_before):
-                self.ship.activate_gun_upgrade()
-            if hit:
+            ):
                 continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks

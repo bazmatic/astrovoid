@@ -192,7 +192,7 @@ def test_a_level_without_a_file_gets_its_maze_complexity_from_the_rules(monkeypa
     assert level_config.get_maze_complexity(9) == MazeComplexity.NORMAL
 
 
-def test_every_kill_gives_the_player_a_power_bonus(game, monkeypatch):
+def test_a_kill_adds_to_power_but_does_not_upgrade_the_gun(game, monkeypatch):
     from entities.projectile import Projectile
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=2))
     start(game, 3)
@@ -201,7 +201,8 @@ def test_every_kill_gives_the_player_a_power_bonus(game, monkeypatch):
         game.projectiles.append(Projectile(enemy.get_pos(), 0.0))
     game.update(1.0)
     assert not any(enemy.active for enemy in game.enemies)
-    assert game.ship.gun_upgrade_level == 2
+    assert game.ship.gun_upgrade_level == 0
+    assert game.scoring.enemies_destroyed == 2
 
 
 def test_a_kill_counts_on_the_games_score(game, monkeypatch):
