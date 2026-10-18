@@ -42,11 +42,11 @@ def open_level(ed, level=3):
 
 
 def test_the_editor_env_var_gates_the_feature(monkeypatch):
-    monkeypatch.delenv('EDITOR', raising=False)
+    monkeypatch.delenv('LEVEL_EDITOR', raising=False)
     assert config.editor_enabled() is False
-    monkeypatch.setenv('EDITOR', '')
+    monkeypatch.setenv('LEVEL_EDITOR', '')
     assert config.editor_enabled() is False
-    monkeypatch.setenv('EDITOR', '1')
+    monkeypatch.setenv('LEVEL_EDITOR', '1')
     assert config.editor_enabled() is True
 
 
@@ -54,9 +54,9 @@ def test_the_main_menu_has_an_editor_item_only_with_the_variable(monkeypatch):
     from rendering.main_menu import MainMenu
     pygame.init()
     screen = pygame.display.set_mode((1352, 878))
-    monkeypatch.delenv('EDITOR', raising=False)
+    monkeypatch.delenv('LEVEL_EDITOR', raising=False)
     assert 'EDITOR' not in MainMenu(screen).menu_options
-    monkeypatch.setenv('EDITOR', '1')
+    monkeypatch.setenv('LEVEL_EDITOR', '1')
     options = MainMenu(screen).menu_options
     assert options.index('EDITOR') == options.index('QUIT') - 1
 

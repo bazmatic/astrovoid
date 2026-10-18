@@ -1,6 +1,6 @@
 """The level editor screen: a level picker, then a cell-by-cell editor drawn with the game's own maze and sprites.
 
-Switched on by EDITOR (see config.editor_enabled). The rules live in editor.model, the files in editor.files;
+Switched on by LEVEL_EDITOR (see config.editor_enabled). The rules live in editor.model, the files in editor.files;
 this screen only reads keys and draws.
 """
 import json

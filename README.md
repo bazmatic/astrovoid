@@ -269,7 +269,7 @@ The level file format and the pacing rules are described in [levels/README.md](l
 
 ### Level editor
 
-Run with `EDITOR=1` (for example `EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit and the Jev beacon. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
+Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit and the Jev beacon. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
 
 | Key | Action |
 |---|---|

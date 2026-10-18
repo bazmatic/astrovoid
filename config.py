@@ -924,8 +924,8 @@ HUNTER_FIRST_LEVEL = SETTINGS.game.hunterFirstLevel
 
 
 def editor_enabled() -> bool:
-    """Whether the level editor is switched on (environment variable EDITOR, any non-empty value)."""
-    return bool(os.environ.get('EDITOR'))
+    """Whether the level editor is switched on (environment variable LEVEL_EDITOR, any non-empty value)."""
+    return bool(os.environ.get('LEVEL_EDITOR'))
 
 
 def observer_mode_enabled() -> bool:
