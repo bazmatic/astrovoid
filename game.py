@@ -9,6 +9,7 @@ from typing import List, Optional, Tuple
 import config
 from rendering.fonts import get_font
 from rendering.exit_panel import draw_exit_panel
+from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship
 from maze.generator import Maze
 from entities.enemy import Enemy
@@ -78,6 +79,7 @@ DUEL_BANNER_SECONDS = 3.0     # how long the winner is shown before the duel ret
 DUEL_MAZE_LEVEL = 13          # the level number the duel's maze is generated as (its look and seed)
 
 HUNTER_GAUGE_HEIGHT = 60  # The hunter's energy gauge under the EXIT block: label, bar and reading
+PAR_WARNING_SECONDS = 10.0  # The par star pulses for this long before par runs out
 
 
 class Game:
@@ -495,6 +497,13 @@ class Game:
         par = self.base_par_seconds + config.SETTINGS.game.parSecondsPerCrystal * (collected + left)
         return StarTally(self.collision_handler.level_kills, sum(self.entity_manager.active_counts().values()),
                          collected, left, self.play_seconds, par)
+
+    def par_pulse(self) -> float:
+        """How brightly the par star throbs: 0 until its last ten seconds, then a pulse, and 0 once par is past."""
+        left = self.star_tally().par_seconds - self.play_seconds
+        if left < 0 or left > PAR_WARNING_SECONDS:
+            return 0.0
+        return (math.sin(self.play_seconds * math.tau * 1.5) + 1) / 2
 
     def exit_state(self) -> ExitState:
         """What the exit policy may look at this frame."""
@@ -1095,9 +1104,8 @@ class Game:
             self.game_frozen = True
             self._start_game_over_sequence(current_time)
         
-        # Update star indicator (handles change detection and audio feedback)
-        score_percentage = potential.get('score_percentage', 0.0)
-        self.star_indicator.update(score_percentage)
+        # The stars the player would get by reaching the exit now; a change chimes
+        self.star_indicator.update(earned(self.star_tally()))
 
     def _update_critical_warning(self, potential_score: float) -> None:
         """Start/stop critical warning sound based on remaining potential score."""
@@ -1387,6 +1395,9 @@ class Game:
                 self.screen, [] if self.exit_opened else self.exit_policy.describe(self.exit_state()), self.exit_opened,
                 bottom=room)
             self._draw_hunter_energy(below=exit_panel.bottom)
+            if self.star_indicator.flags:
+                draw_star_row(self.screen, self.star_indicator.flags, self.par_pulse(),
+                              (config.UI_ZONE_WIDTH // 2, STAR_ROW_Y), STAR_ROW_SIZE)
         
         # Draw game indicators using component (now only draws time, which is handled by ship.draw_ui)
         # GameIndicators is kept for potential future use but currently doesn't draw anything
