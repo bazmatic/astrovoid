@@ -1327,9 +1327,12 @@ class Game:
         for projectile in self.projectiles:
             projectile.draw(self.screen)
         
-        # Draw ship (hide during exit explosion)
-        if not self.exit_explosion_active and not self.ship.observer:
-            self.ship.draw(self.screen)
+        # Draw ship (hide during exit explosion); an observer shows only faintly
+        if not self.exit_explosion_active:
+            if self.ship.observer:
+                self.ship.draw_as_observer(self.screen)
+            else:
+                self.ship.draw(self.screen)
         
         # Draw UI (hide during exit explosion)
         if not self.exit_explosion_active:

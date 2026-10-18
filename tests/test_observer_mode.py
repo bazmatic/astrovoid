@@ -78,3 +78,24 @@ def test_an_observer_does_not_draw_crystals(monkeypatch):
     g = _crystal_game(monkeypatch, ship_at=(-20.0, 0.0), hunter_at=(900.0, 900.0), observer=True)
     g._update_powerup_crystals(1.0)
     assert g.powerup_crystals[0].x == 0.0
+
+
+def test_an_observer_is_drawn_as_a_faint_shape():
+    import pygame
+    pygame.init()
+    background = (9, 1, 19)
+
+    def drawn(observer):
+        screen = pygame.Surface((400, 400))
+        screen.fill(background)
+        ship = Ship((200.0, 200.0))
+        ship.shield_active = False
+        if observer:
+            ship.draw_as_observer(screen)
+        else:
+            ship.draw(screen)
+        return max(abs(screen.get_at((x, y))[i] - background[i])
+                   for x in range(150, 250) for y in range(150, 250) for i in range(3))
+
+    full, faint = drawn(False), drawn(True)
+    assert 0 < faint <= full * 0.3

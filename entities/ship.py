@@ -18,6 +18,9 @@ from rendering import visual_effects
 from sounds import SoundManager
 
 
+OBSERVER_ALPHA = 50  # how much of an observer's ship shows through: barely there (255 is solid)
+
+
 class Ship(RotatingThrusterShip):
     """Player-controlled ship with momentum-based physics.
     
@@ -54,7 +57,8 @@ class Ship(RotatingThrusterShip):
         self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
         self.sound_manager = SoundManager()  # Initialize sound manager
         self.shield_active = False
-        self.observer = False  # observer mode: invulnerable (as if shielded), invisible, unseen by enemies
+        self.observer = False  # observer mode: invulnerable (as if shielded), drawn faintly, unseen by enemies
+        self._observer_layer: Optional[pygame.Surface] = None  # what draw_as_observer fades onto the screen
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no energy consumed during this period
         self.game_started = False  # Flag to prevent shield timer countdown until game starts
@@ -419,6 +423,15 @@ class Ship(RotatingThrusterShip):
             pygame.draw.circle(wake, color, end, thickness / 2)
         screen.blit(wake, (left, top))
     
+    def draw_as_observer(self, screen: pygame.Surface) -> None:
+        """Draw the ship as a faint, barely-there shape, so an observer can still steer by sight."""
+        if self._observer_layer is None or self._observer_layer.get_size() != screen.get_size():
+            self._observer_layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        self._observer_layer.fill((0, 0, 0, 0))
+        self.draw(self._observer_layer)
+        self._observer_layer.set_alpha(OBSERVER_ALPHA)
+        screen.blit(self._observer_layer, (0, 0))
+
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the ship with enhanced visuals.
         

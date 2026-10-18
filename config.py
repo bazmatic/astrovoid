@@ -929,5 +929,5 @@ def editor_enabled() -> bool:
 
 
 def observer_mode_enabled() -> bool:
-    """Testing switch: ASTROVOID_OBSERVER=1 makes the player an invulnerable, invisible observer (off by default)."""
+    """Testing switch: ASTROVOID_OBSERVER=1 makes the player an invulnerable observer, drawn faintly and unseen by enemies (off by default)."""
     return os.environ.get('ASTROVOID_OBSERVER', '').strip().lower() not in ('', '0', 'false', 'no')
