@@ -79,14 +79,21 @@ def test_no_route_falls_back_to_the_straight_line(game, monkeypatch):
 
 def test_the_tally_is_frozen_when_the_exit_is_reached(game, monkeypatch):
     from entities.baby import Baby
+    from entities.powerup_crystal import PowerupCrystal
     monkeypatch.setattr(level_config, 'load_level_config', level_file())
     start(game, 3)
     reach_exit(game)
     assert game.finish_tally is not None
-    alive = game.finish_tally.alive
+    # What appears during the exit explosion doesn't take stars away
     game.babies.append(Baby((300.0, 300.0), game.command_recorder))
-    game.update(1.0)
-    assert game.finish_tally.alive == alive
+    game.powerup_crystals.append(PowerupCrystal((300.0, 300.0)))
+    for _ in range(200):
+        if game.state == config.STATE_LEVEL_COMPLETE:
+            break
+        game.update(1.0)
+    assert game.state == config.STATE_LEVEL_COMPLETE
+    assert game.star_animation.earned == (True,) * 5
+    assert game.star_lines[2] == 'NONE LEFT' and game.star_lines[3] == 'NO CRYSTALS'
 
 
 def test_restarting_resets_the_tally(game, monkeypatch):
