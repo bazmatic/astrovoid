@@ -145,8 +145,45 @@ class TestLevelComplete:
         stars = AnimatedStarRating((True, True, False, False, False), 0, 0)
         menu.draw(3, True, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None)
         slot = menu.layout(True)['stars']
-        assert stars.y == slot.centery
+        assert stars.y == slot.top + stars.star_size // 2
         assert stars.x + 2 * stars.star_spacing == slot.centerx
+
+    def test_each_star_has_its_line(self, screen):
+        menu = LevelCompleteMenu(screen)
+        stars = AnimatedStarRating((True, True, False, True, False), 0, 0)
+        lines = ('FINISHED', '9/14 KILLED', '5 LEFT', '2/3 CRYSTALS', '1:42 / PAR 1:43')
+        menu.draw(3, True, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None,
+                  star_lines=lines)
+        assert len(menu.star_line_rects) == 5
+        for i, rect in enumerate(menu.star_line_rects):
+            star_x = stars.x + i * stars.star_spacing
+            assert rect.left < star_x < rect.right
+            assert rect.top > stars.y + stars.star_size // 2
+            text = pygame.mask.from_threshold(screen.subsurface(rect), (*config.COLOR_BACKGROUND, 255),
+                                              (40, 40, 40, 255))
+            text.invert()
+            assert text.count() > 20
+
+    @pytest.mark.parametrize('size', [(1352, 878), (1280, 720)])
+    def test_the_star_lines_fit_their_slots(self, monkeypatch, size):
+        pygame.init()
+        pygame.display.set_mode((320, 240))
+        monkeypatch.setattr(config, 'SCREEN_WIDTH', size[0])
+        monkeypatch.setattr(config, 'SCREEN_HEIGHT', size[1])
+        screen = pygame.Surface(size, pygame.SRCALPHA)
+        menu = LevelCompleteMenu(screen)
+        stars = AnimatedStarRating((True,) * 5, 0, 0)
+        lines = ('FINISHED', '120/120 KILLED', 'NONE LEFT', '12/12 CRYSTALS', '12:05 / PAR 9:40')
+        menu.draw(30, True, 725.0, {'final_score': 55, 'total_score': 123456}, stars, False, lambda: None,
+                  star_lines=lines)
+        layout = menu.layout(True)
+        rects = menu.star_line_rects
+        for left, right in zip(rects, rects[1:]):
+            assert left.right <= right.left
+        assert all(layout['stars'].contains(rect) for rect in rects)
+        assert screen.get_rect().contains(layout['stars'])
+        assert layout['stars'].bottom <= layout['stats'].top
+        assert layout['stats'].bottom <= layout['buttons'].top
 
     @pytest.mark.parametrize('succeeded', [True, False])
     def test_draws_and_leaves_the_screen_opaque(self, screen, succeeded):

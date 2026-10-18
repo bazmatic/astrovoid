@@ -187,7 +187,7 @@ When you complete a level, the screen displays:
 
 - **Level Number**: "LEVEL {level} COMPLETE" (e.g., "LEVEL 1 COMPLETE")
 - **Completion Time**: Shown with one decimal place (e.g., "Time: 1:23.4")
-- **Star Rating**: 5-star rating based on score percentage
+- **Star Rating**: five stars, each with a line under it saying what it was for (see [Stars](#stars))
 - **Score Breakdown**: Detailed breakdown of penalties and bonuses
 
 A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squids, with your progress score and the option to retry.
@@ -295,9 +295,29 @@ or celebrates new records. Existing profiles pick up records as levels are clear
 Records set before the levels were re-paced are cleared once, the first time the game
 loads the profile; your furthest level and total score are kept.
 
-Stars require at least **20 / 40 / 60 / 80 / 95 points** for one through five
-stars respectively. Below 20 points earns no stars. Previously earned star records
-are retained when the balance changes.
+### Stars
+
+A level gives up to five stars, each earned on its own:
+
+| Star | Earned when |
+|---|---|
+| Finish | You reach the exit. Finishing always gives at least one star. |
+| Half the enemies | At least half the level's enemies were killed. |
+| Every enemy | No enemy is left alive when you reach the exit. |
+| Every crystal | No powerup crystal is left uncollected (a level where none dropped earns it). |
+| Par | You finished within the level's par time. |
+
+- Enemies that appear during the level (babies, eggs, a boss's children) count too. Kills and crystals by the Jev
+  hunter count as yours. The Jev beacon is not a crystal.
+- Par is worked out when the level starts: the shortest route from the start to the exit flown at half top speed,
+  plus 6 s for each enemy on the level (30 s instead for a Mother or a Squiddler Boss, for her and what she spawns),
+  plus 3 s for each crystal as it drops. A level whose exit opens on a timer gets at least the timer plus 10 s. The
+  clock is play time, from your first move. The numbers are `game.parSpeedShare`, `parSecondsPerEnemy`,
+  `parSecondsPerSpawningBoss`, `parSecondsPerCrystal` and `parTimerMargin` in `config/settings.json`.
+- During play, the stars you'd get by reaching the exit now are shown above the level number. A chime plays when one
+  lights or goes out, and the par star pulses for its last 10 seconds.
+- The score is still kept and shown, but no longer decides the stars. Your best star count for each level is
+  never lowered.
 
 ## Project Structure
 

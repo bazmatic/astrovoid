@@ -5,7 +5,7 @@ This module handles the rendering of the level complete/failed screen.
 
 import math
 import pygame
-from typing import Optional, Dict, List, Tuple
+from typing import Optional, Dict, List, Sequence, Tuple
 import config
 from rendering.fonts import get_font
 from rendering.enemy_death_portrait import EnemyDeathPortrait
@@ -20,6 +20,10 @@ from utils.formatting import format_time
 from profiles import LevelResult
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.command_recorder import CommandRecorder
+
+STAR_SLOT_WIDTH = 170  # Reference width of each star's slot, room for its line
+STAR_LINE_GAP = 14  # Between a star's points and the line under it
+STAR_LINE_MISSED = (96, 90, 138)  # The line under a missed star
 
 
 def comparison_lines(result: Optional[LevelResult], score: int, elapsed: float) -> Tuple[str, str]:
@@ -71,6 +75,8 @@ class LevelCompleteMenu:
         self.label_font = get_font(self._scaled(26), bold=True)
         self.comparison_font = get_font(self._scaled(21))
         self.value_font = get_font(self._scaled(52), bold=True)
+        self.star_line_font = get_font(self._scaled(20), bold=True)
+        self.star_line_rects: List[pygame.Rect] = []  # Where each star's line was last drawn
         self.hints = render_hint_row(
             get_font(self._scaled(28)), [("ARROWS", "Navigate"), ("SPACE / A", "Select"), ("R", "Retry level")]
         )
@@ -189,8 +195,10 @@ class LevelCompleteMenu:
 
         if level_succeeded:
             star_size = config.LEVEL_COMPLETE_STAR_SIZE
-            star_spacing = int(star_size * 1.2)
-            layout['stars'] = pygame.Rect(0, 0, star_spacing * 4 + star_size, star_size)
+            # Each star's slot is wide enough for the line under it; the stars and their lines fill the rect
+            star_spacing = self._star_spacing()
+            lines_height = self._scaled(STAR_LINE_GAP) + self.star_line_font.get_linesize()
+            layout['stars'] = pygame.Rect(0, 0, star_spacing * 5, star_size + lines_height)
             layout['stars'].midtop = (center_x, next_top + self._scaled(26))
             next_top = layout['stars'].bottom
 
@@ -204,6 +212,25 @@ class LevelCompleteMenu:
 
         layout['hints'] = self.hints.get_rect(midbottom=(center_x, config.SCREEN_HEIGHT - self._scaled(48)))
         return layout
+
+    def _star_spacing(self) -> int:
+        """Distance between the stars' centres, which is also the width of each star's line."""
+        return max(int(config.LEVEL_COMPLETE_STAR_SIZE * 1.2), self._scaled(STAR_SLOT_WIDTH))
+
+    def _draw_star_lines(self, star_animation: AnimatedStarRating, lines: Sequence[str]) -> None:
+        """Under each star, what it was for: bright for a star earned, dim for one missed."""
+        self.star_line_rects = []
+        top = star_animation.y + star_animation.star_size // 2 + self._scaled(STAR_LINE_GAP)
+        room = star_animation.star_spacing - self._scaled(8)
+        for i, text in enumerate(lines):
+            lit = i < len(star_animation.earned) and star_animation.earned[i]
+            line = self.star_line_font.render(text, True, TEXT_LABEL if lit else STAR_LINE_MISSED)
+            if line.get_width() > room:
+                line = pygame.transform.smoothscale(
+                    line, (room, max(1, round(line.get_height() * room / line.get_width()))))
+            rect = line.get_rect(midtop=(star_animation.x + i * star_animation.star_spacing, top))
+            self.screen.blit(line, rect)
+            self.star_line_rects.append(rect)
 
     def _draw_stats(self, rect: pygame.Rect, stats: List[Tuple[str, str]], comparisons=()) -> None:
         """Draw a row of figures, each a small label over a large value, with dividers between."""
@@ -263,7 +290,8 @@ class LevelCompleteMenu:
         star_animation: Optional[AnimatedStarRating],
         show_quit_confirmation: bool,
         draw_quit_confirmation_callback,
-        level_result: Optional[LevelResult] = None
+        level_result: Optional[LevelResult] = None,
+        star_lines: Sequence[str] = ()
     ) -> None:
         """Draw level complete or failed screen.
 
@@ -273,6 +301,7 @@ class LevelCompleteMenu:
             completion_time_seconds: Time taken to complete the level.
             level_score_breakdown: Score breakdown dictionary.
             star_animation: Optional animated star rating.
+            star_lines: What each star was for, one short line under each.
             show_quit_confirmation: Whether to show quit confirmation overlay.
             draw_quit_confirmation_callback: Callback to draw quit confirmation.
         """
@@ -311,9 +340,11 @@ class LevelCompleteMenu:
 
         # Draw animated star rating in its slot
         if star_animation and 'stars' in layout:
+            star_animation.star_spacing = self._star_spacing()
             star_animation.x = layout['stars'].centerx - 2 * star_animation.star_spacing
-            star_animation.y = layout['stars'].centery
+            star_animation.y = layout['stars'].top + star_animation.star_size // 2
             star_animation.draw(self.screen)
+            self._draw_star_lines(star_animation, star_lines)
 
         # Figures for the level: time as MM:SS.{tenths} and scores
         total_score = int(level_score_breakdown.get('total_score', 0))

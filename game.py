@@ -1247,7 +1247,8 @@ class Game:
                     self.level_complete_menu.menu_pulse_phase,
                     self.quit_confirmation_selection
                 ),
-                level_result=self.level_result
+                level_result=self.level_result,
+                star_lines=self.star_lines
             )
         
         pygame.display.flip()
