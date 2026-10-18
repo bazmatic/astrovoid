@@ -403,6 +403,14 @@ class GameSettings:
     duelMazeGridSize: int = 26
     # The enemy ships (by the kind a level file names) that carry a bar above them of the hits they have left.
     enemyHitPointBars: Tuple[str, ...] = ("boss_viber",)
+    # Par time, for the par star: the maze route flown at this share of top speed, plus seconds for each enemy
+    # on the level at its start (a Mother or a Squiddler Boss gets the boss allowance instead) and each crystal
+    # dropped. A level whose exit opens on a timer gets at least the timer plus the margin.
+    parSpeedShare: float = 0.5
+    parSecondsPerEnemy: float = 6.0
+    parSecondsPerSpawningBoss: float = 30.0
+    parSecondsPerCrystal: float = 3.0
+    parTimerMargin: float = 10.0
 
 
 @dataclass
