@@ -430,6 +430,7 @@ class AutoplaySettings:
 class ObstacleSettings:
     # Physics gates: a plank on a centre pin, free or motor-driven.
     gateMass: float = 16.0  # the ship is r^2 = 64
+    gateLengthCells: float = 3.0  # tip to tip, rounded ends included, in (average) cells
     gateThicknessCells: float = 0.16
     gateElasticity: float = 0.4
     motorRate: float = 1.2  # rad/s

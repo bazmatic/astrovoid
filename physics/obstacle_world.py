@@ -32,9 +32,11 @@ logger = logging.getLogger(__name__)
 
 
 def plank_size(maze, settings=None) -> Tuple[float, float]:
-    """A gate's half-length and thickness in px on this maze: it reaches one (average) cell from its pin."""
+    """A gate's half-length (pin to the centre of a rounded end) and thickness in px on this maze: the plank is
+    `gateLengthCells` (average) cells long tip to tip."""
     s = settings if settings is not None else config.SETTINGS.obstacles
-    return maze.cell_size, max(6.0, s.gateThicknessCells * maze.cell_size)
+    thickness = max(6.0, s.gateThicknessCells * maze.cell_size)
+    return max(thickness, s.gateLengthCells / 2 * maze.cell_size - thickness / 2), thickness
 
 
 def _plank_line(maze, placement, half_length: float) -> Tuple[Point, Point]:

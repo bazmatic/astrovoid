@@ -33,13 +33,21 @@ class GatePlacement:
     motor: Optional[str] = None
 
 
+def _plank_reach():
+    """How far a plank's tips reach from its pin, in cells; just short of the edge it reaches, so a plank three
+    cells long covers its own cell and its two neighbours."""
+    import config
+    return config.SETTINGS.obstacles.gateLengthCells / 2 - 0.01
+
+
 def plank_cells(placement):
-    """The cells a gate's plank crosses at its angle (its tips are one cell from the pin)."""
+    """The cells a gate's plank crosses at its angle (its tips are half the plank's length from the pin)."""
     col, row = placement.cell
+    reach = _plank_reach()
     dx, dy = math.cos(math.radians(placement.angle)), math.sin(math.radians(placement.angle))
     cells = set()
-    for i in range(9):
-        t = (i - 4) / 4
+    for i in range(13):
+        t = (i - 6) / 6 * reach
         cells.add((math.floor(col + 0.5 + dx * t), math.floor(row + 0.5 + dy * t)))
     return frozenset(cells)
 
@@ -67,8 +75,8 @@ def planks_overlap(a, b):
 
     def segment(g):
         dx, dy = math.cos(math.radians(g.angle)), math.sin(math.radians(g.angle))
-        x, y = g.cell[0] + 0.5, g.cell[1] + 0.5
-        return (x - dx, y - dy), (x + dx, y + dy)
+        x, y, reach = g.cell[0] + 0.5, g.cell[1] + 0.5, _plank_reach()
+        return (x - dx * reach, y - dy * reach), (x + dx * reach, y + dy * reach)
 
     return _segment_gap(segment(a), segment(b)) < 0.2
 

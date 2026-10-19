@@ -153,8 +153,12 @@ def test_a_gate_stops_against_a_wall():
     assert gate.angle < math.radians(60)
 
 
-def test_gates_stop_against_each_other():
-    _, world = world_with([GatePlacement((5, 4)), GatePlacement((5, 6), angle=90)])
+def test_gates_stop_against_each_other(monkeypatch):
+    # On square cells, so the upright plank's tip sits half a cell from the level one: in the spinning one's sweep
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1000)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 1000)
+    _, world = world_with([GatePlacement((5, 4)), GatePlacement((6, 6), angle=90)])
+    assert len(world.gates) == 2
     top, bottom = world.gates
     top.angular_velocity = 3.0
 
@@ -254,7 +258,7 @@ def test_a_jammed_motor_gate_frees_when_the_wall_goes():
         if maze.damage_wall(face):
             break
     assert (6, 6) not in maze.blocks
-    run(world, 60)
+    run(world, 90)
     assert gate.angle > math.radians(80)
 
 

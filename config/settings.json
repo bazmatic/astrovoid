@@ -361,6 +361,7 @@
   },
   "obstacles": {
     "gateMass": 16.0,
+    "gateLengthCells": 3.0,
     "gateThicknessCells": 0.16,
     "gateElasticity": 0.4,
     "motorRate": 1.2,

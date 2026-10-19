@@ -25,6 +25,7 @@ from level_layout import ENEMY_TYPES
 from maze.config import MazeComplexity
 from maze.generator import Maze
 from policies.exit import OpenAfterTime, TypeCleared
+from physics.obstacle_world import plank_size
 from rendering.gates import draw_gate
 from rendering.fonts import get_font
 from rendering.menu_components import (TEXT_DIM, TEXT_LABEL, AnimatedBackground, build_menu_backdrop, build_panel,
@@ -402,10 +403,10 @@ class LevelEditor:
         self.screen.fill(config.COLOR_BACKGROUND)
         maze, sprites = self._preview_scene()
         maze.draw(self.screen)
-        thickness = max(6, config.SETTINGS.obstacles.gateThicknessCells * maze.cell_size)
+        half_length, thickness = plank_size(maze)
         for gate in self.model.gates.values():
             draw_gate(self.screen, maze.position_calculator.grid_center_to_screen(*gate.cell),
-                      math.radians(gate.angle), maze.cell_size, thickness, gate.motor)
+                      math.radians(gate.angle), half_length, thickness, gate.motor)
         for kind, sprite in sprites:
             self._draw_sprite(kind, sprite)
         self._draw_cursor(maze)

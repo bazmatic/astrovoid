@@ -276,7 +276,7 @@ A gate is a plank on a pin at the centre of a cell, one cell long each way from 
 
 Pushing a gate costs nothing: the ship, enemies and the Jev hunter shove them aside by flying into them, and a gate that turns into you pushes you in return. Bullets nudge a gate rather than passing through it. A wall jams a gate that is turned against it; shooting the wall away frees a motor gate again. The hunter and sighted enemies see gates and steer round them.
 
-The `obstacles` section of `config/settings.json` tunes them: `gateMass`, `gateThicknessCells`, `gateElasticity`, `motorRate` (radians per second), `motorMaxForce` (how hard a motor pushes), `bulletImpulse`, `substeps` and `moverReachMargin`. Gates are placed in the level editor and stored in a level's `layout` (see [levels/README.md](levels/README.md)).
+The `obstacles` section of `config/settings.json` tunes them: `gateMass`, `gateLengthCells` (3: a plank covers its pin's cell and the one either side), `gateThicknessCells`, `gateElasticity`, `motorRate` (radians per second), `motorMaxForce` (how hard a motor pushes), `bulletImpulse`, `substeps` and `moverReachMargin`. Gates are placed in the level editor and stored in a level's `layout` (see [levels/README.md](levels/README.md)).
 
 ### Level editor
 

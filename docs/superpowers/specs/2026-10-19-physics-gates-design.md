@@ -53,7 +53,7 @@ gates; nothing ever passes through a wall.
 
 ## The gate's size
 
-The plank is two cells long in total, pinned at its middle (the user's choice): each tip reaches the centre of the
+Update 2026-10-19: the user lengthened planks to three cells (`gateLengthCells`, tip to tip), so a plank covers its pin's cell and the one either side and can bar a three-cell passage. Originally: the plank is two cells long in total, pinned at its middle (the user's choice): each tip reaches the centre of the
 neighbouring cell, so the gate sweeps a circle of one cell's radius around its pin, which is the centre of the cell
 it is placed in. It turns freely in an ordinary three-cell passage. Cells aren't square (`cell_size_x` and
 `cell_size_y` differ); the builder picks how "one cell" is measured for the radius. Longer gates may come later. Its thickness is left to the builder; it should read
