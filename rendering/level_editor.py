@@ -385,7 +385,9 @@ class LevelEditor:
         ship.angle = math.degrees(math.atan2(exit_pos[1] - ship.y, exit_pos[0] - ship.x)) % 360
         sprites.append(('start', ship))
         if model.beacon is not None:
-            sprites.append(('beacon', JevBeacon(centre(*model.beacon))))
+            beacon = JevBeacon(centre(*model.beacon))
+            beacon.age = beacon.SPAWN_FRAMES      # fully popped into view: the preview never updates it
+            sprites.append(('beacon', beacon))
         self._preview, self._preview_key = (maze, sprites), key
         return self._preview
 

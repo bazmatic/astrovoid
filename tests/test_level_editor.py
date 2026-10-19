@@ -240,3 +240,24 @@ def test_the_policy_keys_and_their_settings(editor):
     editor.handle_key(key(pygame.K_t))
     assert editor.model.exit_policy == TypeCleared(('egg', 'static'))
     editor.draw()
+
+
+def test_the_preview_shows_the_jev_beacon(editor):  # noqa: F811
+    open_level(editor)
+    model = editor.model
+    model.walls.clear()
+    model.enemies.clear()
+    model.beacon = None
+    editor.draw()
+    before = editor.screen.copy()
+    model.beacon = (3, 3)
+    editor.draw()
+    calc = editor._preview[0].position_calculator
+    x, y = calc.grid_center_to_screen(3, 3)
+    area = pygame.Rect(0, 0, calc.cell_size_x, calc.cell_size_y)
+    area.center = (x, y)
+    area = area.clip(editor.screen.get_rect())
+    assert area.width > 10 and area.height > 10
+    differ = [(i, j) for i in range(area.left, area.right, 2) for j in range(area.top, area.bottom, 2)
+              if before.get_at((i, j)) != editor.screen.get_at((i, j))]
+    assert len(differ) > 20
