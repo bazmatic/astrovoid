@@ -25,6 +25,7 @@ from level_layout import ENEMY_TYPES
 from maze.config import MazeComplexity
 from maze.generator import Maze
 from policies.exit import OpenAfterTime, TypeCleared
+from rendering.gates import draw_gate
 from rendering.fonts import get_font
 from rendering.menu_components import (TEXT_DIM, TEXT_LABEL, AnimatedBackground, build_menu_backdrop, build_panel,
                                        build_panel_glow, menu_scale, render_hint_row, render_pill, render_title)
@@ -36,14 +37,15 @@ FLASH_SECONDS = 2.0
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 
 LABELS = {'wall': 'Wall', **{kind: enemy_names.name(kind) for kind in ENEMY_TYPES},
-          'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon'}
+          'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon', 'gate': 'Gate', 'motor_gate': 'Motor gate'}
 
 # The chip beside each palette entry, in the colours the things have in play
 CHIPS = {'wall': (120, 130, 150), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
          'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'egg': (240, 220, 200),
          'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
          'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
-         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90)}
+         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
+         'gate': (120, 235, 245), 'motor_gate': (255, 190, 80)}
 
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
 CONFIRM_KEYS = (pygame.K_y, pygame.K_RETURN)
@@ -190,6 +192,15 @@ class LevelEditor:
             return True
         if event.key == pygame.K_a:
             model.cycle_ammo_policy()
+            return True
+        if event.key == pygame.K_r:
+            if not model.turn_gate():
+                self._say('No gate here' if model.contents(model.cursor) not in ('gate', 'motor_gate')
+                          else "Can't turn: a wall is in the way")
+            return True
+        if event.key == pygame.K_f:
+            if not model.flip_gate():
+                self._say('Motor gate only')
             return True
         if event.key in (pygame.K_MINUS, pygame.K_EQUALS):
             if not model.adjust_timer(TIMER_STEP if event.key == pygame.K_EQUALS else -TIMER_STEP):
@@ -352,7 +363,8 @@ class LevelEditor:
     def _preview_scene(self):
         """The maze and sprites of the model as it is, rebuilt only when it changes."""
         model = self.model
-        key = (frozenset(model.walls), tuple(sorted(model.enemies.items())), model.start, model.exit, model.beacon)
+        key = (frozenset(model.walls), tuple(sorted(model.enemies.items())), model.start, model.exit, model.beacon,
+               tuple(sorted(model.gates.values(), key=lambda g: g.cell)))
         if self._preview is not None and key == self._preview_key:
             return self._preview
         layout = model.to_layout()
@@ -390,6 +402,10 @@ class LevelEditor:
         self.screen.fill(config.COLOR_BACKGROUND)
         maze, sprites = self._preview_scene()
         maze.draw(self.screen)
+        thickness = max(6, config.SETTINGS.obstacles.gateThicknessCells * maze.cell_size)
+        for gate in self.model.gates.values():
+            draw_gate(self.screen, maze.position_calculator.grid_center_to_screen(*gate.cell),
+                      math.radians(gate.angle), maze.cell_size, thickness, gate.motor)
         for kind, sprite in sprites:
             self._draw_sprite(kind, sprite)
         self._draw_cursor(maze)
@@ -397,7 +413,8 @@ class LevelEditor:
         self._draw_hints([('Arrows', 'move'), ('Tab', 'item'), ('Space', 'place'), ('Del', 'remove'),
                           ('S', 'save'), ('X', 'revert'), ('Esc', 'back')])
         self._draw_hints([('E', f'Exit: {self.model.exit_policy.label()}'),
-                          ('A', f'Ammo: {self.model.ammo_policy.label()}'), ('- =', 'timer'), ('T', 'kill type')],
+                          ('A', f'Ammo: {self.model.ammo_policy.label()}'), ('- =', 'timer'), ('T', 'kill type'),
+                          ('R', 'turn gate'), ('F', 'flip')],
                          rows_up=1)
 
     def _draw_cursor(self, maze):

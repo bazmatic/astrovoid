@@ -19,7 +19,7 @@ def at(m, cell, item=None):
 
 
 def test_the_palette_lists_everything_placeable():
-    assert PALETTE == ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon')
+    assert PALETTE == ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
 
 
 def test_the_cursor_starts_on_the_start_and_stays_in_the_interior():
@@ -36,7 +36,7 @@ def test_the_cursor_starts_on_the_start_and_stays_in_the_interior():
 def test_stepping_the_palette_wraps_round():
     m = model()
     m.step_palette(-1)
-    assert m.selected == 'beacon'
+    assert m.selected == 'motor_gate'
     m.step_palette(1)
     assert m.selected == 'wall'
 

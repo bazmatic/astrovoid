@@ -1,10 +1,12 @@
 """The editor's rules: what is in each cell, what may be placed where. No drawing and no files."""
 import enemy_names
-from level_layout import ENEMY_TYPES, Layout
+from level_layout import ENEMY_TYPES, GatePlacement, Layout, plank_cells
 from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY
 from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, OpenAfterTime, TypeCleared
 
-PALETTE = ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon')
+PALETTE = ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+GATE_KINDS = ('gate', 'motor_gate')
+GATE_TURN = 45
 TIMER_STEP = 10
 SHORTEST_TIMER = 10
 
@@ -20,6 +22,7 @@ class EditorModel:
         self.start = layout.start
         self.exit = layout.exit
         self.beacon = layout.beacon
+        self.gates = {gate.cell: gate for gate in layout.gates}
         self.cursor = layout.start
         self.palette_index = 0
         self.dirty = False
@@ -38,7 +41,7 @@ class EditorModel:
         self.palette_index = (self.palette_index + delta) % len(PALETTE)
 
     def contents(self, cell):
-        """What is in a cell: 'wall', an enemy type, 'start', 'exit', 'beacon', or None."""
+        """What is in a cell: 'wall', an enemy type, 'start', 'exit', 'beacon', 'gate', 'motor_gate', or None."""
         if cell in self.walls:
             return 'wall'
         if cell == self.start:
@@ -49,6 +52,8 @@ class EditorModel:
             return self.enemies[cell]
         if cell == self.beacon:
             return 'beacon'
+        if cell in self.gates:
+            return 'motor_gate' if self.gates[cell].motor else 'gate'
         return None
 
     def place(self):
@@ -56,7 +61,7 @@ class EditorModel:
         cell, item = self.cursor, self.selected
         here = self.contents(cell)
         if item == 'wall':
-            if here in ('start', 'exit'):
+            if here in ('start', 'exit') or self._under_a_plank(cell):
                 return False
             self.enemies.pop(cell, None)
             if self.beacon == cell:
@@ -66,6 +71,13 @@ class EditorModel:
             if here is not None and here not in ENEMY_TYPES:
                 return False                               # a wall, the start, the exit or the beacon is there
             self.enemies[cell] = item
+        elif item in GATE_KINDS:
+            if here is not None and here not in GATE_KINDS:
+                return False
+            gate = GatePlacement(cell, 0, 'cw') if item == 'motor_gate' else GatePlacement(cell)
+            if not self._plank_fits(gate):
+                return False
+            self.gates[cell] = gate
         else:                                              # start, exit, beacon: one each, so this moves it
             if here is not None and here != item:
                 return False
@@ -82,8 +94,41 @@ class EditorModel:
             self.walls.discard(cell)
         elif here == 'beacon':
             self.beacon = None
+        elif here in GATE_KINDS:
+            del self.gates[cell]
         else:
             del self.enemies[cell]
+        self.dirty = True
+        return True
+
+    def _plank_fits(self, gate):
+        """Whether the gate's plank stays inside the interior and clear of walls."""
+        last = self.grid_size - 2
+        return all(1 <= col <= last and 1 <= row <= last and (col, row) not in self.walls
+                   for col, row in plank_cells(gate))
+
+    def _under_a_plank(self, cell):
+        return any(cell in plank_cells(gate) for gate in self.gates.values())
+
+    def turn_gate(self):
+        """Turn the gate under the cursor 45 degrees clockwise (wrapping at 180). False if there is no gate or the
+        turned plank would cross a wall."""
+        gate = self.gates.get(self.cursor)
+        if gate is None:
+            return False
+        turned = GatePlacement(gate.cell, (gate.angle + GATE_TURN) % 180, gate.motor)
+        if not self._plank_fits(turned):
+            return False
+        self.gates[gate.cell] = turned
+        self.dirty = True
+        return True
+
+    def flip_gate(self):
+        """Reverse the motor of the gate under the cursor. False for no gate or a free gate."""
+        gate = self.gates.get(self.cursor)
+        if gate is None or gate.motor is None:
+            return False
+        self.gates[gate.cell] = GatePlacement(gate.cell, gate.angle, 'ccw' if gate.motor == 'cw' else 'cw')
         self.dirty = True
         return True
 
@@ -123,7 +168,8 @@ class EditorModel:
 
     def to_layout(self):
         return Layout(self.grid_size, frozenset(self.walls), self.start, self.exit,
-                      tuple((kind, cell) for cell, kind in self.enemies.items()), self.beacon)
+                      tuple((kind, cell) for cell, kind in self.enemies.items()), self.beacon,
+                      tuple(self.gates.values()))
 
 
 def _next_policy(registry, policy):

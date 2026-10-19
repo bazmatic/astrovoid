@@ -267,9 +267,20 @@ On every level, no enemy starts within 300 pixels of your ship.
 
 The level file format and the pacing rules are described in [levels/README.md](levels/README.md).
 
+### Gates
+
+A gate is a plank on a pin at the centre of a cell, one cell long each way from the pin, that swings under real physics. There are two kinds:
+
+- **Free gates** swing on their pin and settle wherever they are pushed.
+- **Motor gates** turn steadily, clockwise or anticlockwise, and push back against whatever stops them.
+
+Pushing a gate costs nothing: the ship, enemies and the Jev hunter shove them aside by flying into them, and a gate that turns into you pushes you in return. Bullets nudge a gate rather than passing through it. A wall jams a gate that is turned against it; shooting the wall away frees a motor gate again. The hunter and sighted enemies see gates and steer round them.
+
+The `obstacles` section of `config/settings.json` tunes them: `gateMass`, `gateThicknessCells`, `gateElasticity`, `motorRate` (radians per second), `motorMaxForce` (how hard a motor pushes), `bulletImpulse`, `substeps` and `moverReachMargin`. Gates are placed in the level editor and stored in a level's `layout` (see [levels/README.md](levels/README.md)).
+
 ### Level editor
 
-Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit and the Jev beacon. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
+Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit, the Jev beacon and gates. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
 
 | Key | Action |
 |---|---|
@@ -277,6 +288,8 @@ Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITO
 | Tab, Shift+Tab (or `[` `]`) | Next or previous palette item |
 | Space | Place the selected item |
 | Delete, Backspace | Remove what is under the cursor |
+| R | Turn the gate under the cursor 45 degrees (refused if the plank would cross a wall) |
+| F | Flip a motor gate's direction (clockwise or anticlockwise) |
 | S | Save |
 | X | Revert to the generated level (asks first) |
 | Esc | Back to the level list (asks first if there are unsaved edits) |
