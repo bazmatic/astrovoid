@@ -37,15 +37,14 @@ def test_stars_drop_then_land_in_order_with_one_rising_sound_each(screen):
     assert len(sounds) == 5
 
 
-def test_missed_stars_leave_their_slot_empty_and_the_rest_land_in_slot_order(screen):
+def test_stars_fill_from_the_left_whichever_goals_were_met(screen):
     stars = AnimatedStarRating((True, False, True, True, False), 250, 200)
     assert stars.num_stars == 3
     stars.update(config.STAR_APPEAR_DURATION * 60 * 1.5)
     assert stars.star_scale(0) == pytest.approx(1.0)
-    assert stars.star_scale(1) == 0.0 and stars.star_scale(2) > 0.0 and stars.star_scale(3) == 0.0
+    assert stars.star_scale(1) > 0.0 and stars.star_scale(2) == 0.0
     stars.update(240)
-    assert stars.star_scale(1) == 0.0 and stars.star_scale(4) == 0.0
-    assert stars.star_scale(3) == pytest.approx(1.0)
+    assert [stars.star_scale(i) for i in range(5)] == pytest.approx([1.0, 1.0, 1.0, 0.0, 0.0])
     assert stars.is_complete() and stars.flash == 0
 
 

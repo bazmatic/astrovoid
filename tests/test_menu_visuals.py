@@ -148,16 +148,14 @@ class TestLevelComplete:
         assert stars.y == slot.top + stars.star_size // 2
         assert stars.x + 2 * stars.star_spacing == slot.centerx
 
-    def test_each_star_has_its_line(self, screen):
+    def test_the_goals_are_listed_under_the_stars(self, screen):
         menu = LevelCompleteMenu(screen)
         stars = AnimatedStarRating((True, True, False, True, False), 0, 0)
         lines = ('NO HITS', '9/14 KILLED', '5 LEFT', '2/3 CRYSTALS', '1:42 / PAR 1:43')
         menu.draw(3, True, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None,
                   star_lines=lines)
         assert len(menu.star_line_rects) == 5
-        for i, rect in enumerate(menu.star_line_rects):
-            star_x = stars.x + i * stars.star_spacing
-            assert rect.left < star_x < rect.right
+        for rect in menu.star_line_rects:
             assert rect.top > stars.y + stars.star_size // 2
             text = pygame.mask.from_threshold(screen.subsurface(rect), (*config.COLOR_BACKGROUND, 255),
                                               (40, 40, 40, 255))

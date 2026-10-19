@@ -184,7 +184,7 @@ Static methods for UI element rendering.
 The stars landing on the level-complete screen.
 
 - `AnimatedStarRating(earned: Sequence[bool], x: int, y: int, star_size=..., star_spacing=None, previous_stars=None)`:
-  only earned slots get a star, landing in slot order; every lit star glows when the count beats `previous_stars`
+  one star per goal met, filled from the left and landing left to right; every lit star glows when the count beats `previous_stars`
 - `update(dt: float)`, `draw(screen)`, `is_complete() -> bool`
 
 #### `rendering.ui_elements.StarIndicator`
@@ -198,7 +198,7 @@ Follows the stars during play and chimes on each change.
 #### `rendering.star_row`
 
 - `draw_star_row(screen, flags: Sequence[bool], pulse: float, center: Tuple[int, int], size: int) -> pygame.Rect`: the
-  five small stars in the side panel; `pulse` (0..1) makes the par star throb
+  five small stars in the side panel; `pulse` (0..1) throbs the rightmost lit star
 
 ### Utilities
 

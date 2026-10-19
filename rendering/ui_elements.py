@@ -160,8 +160,8 @@ class AnimatedStarRating:
                  star_size: int = config.LEVEL_COMPLETE_STAR_SIZE,
                  star_spacing: int = None, previous_stars: Optional[int] = None):
         self.earned = tuple(bool(flag) for flag in earned)
-        # The earned slots, in the order their stars land
-        self.slots = [i for i, flag in enumerate(self.earned) if flag]
+        # Stars fill from the left, one for each goal met, whichever goals they were
+        self.slots = list(range(sum(self.earned)))
         self.x, self.y = x, y
         self.star_size = star_size
         self.star_spacing = star_spacing if star_spacing is not None else int(star_size * 1.2)

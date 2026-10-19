@@ -28,13 +28,21 @@ def test_lit_stars_are_brighter_than_unlit_ones_and_the_row_fits_the_panel():
     assert STAR_ROW_Y > 0
 
 
-def test_the_par_star_pulses():
+def test_the_pulse_throbs_the_rightmost_lit_star():
     pygame.init()
     pygame.display.set_mode((320, 240))
     frames = []
     for pulse in (0.0, 1.0):
         screen = pygame.Surface((config.UI_ZONE_WIDTH, 100))
         screen.fill(config.COLOR_BACKGROUND)
-        draw_star_row(screen, (True,) * 5, pulse, (config.UI_ZONE_WIDTH // 2, 50), 20)
-        frames.append(pygame.image.tostring(screen, 'RGB'))
-    assert frames[0] != frames[1]
+        rect = draw_star_row(screen, (True, True, True, False, False), pulse, (config.UI_ZONE_WIDTH // 2, 50), 20)
+        frames.append(screen)
+    step = (rect.width - 20) / 4
+    third = pygame.Rect(0, 0, 20, 20)
+    third.center = (round(rect.left + 10 + 2 * step), 50)
+    first = third.move(-round(2 * step), 0)
+    def pixels(frame, rect):
+        return pygame.image.tostring(frame.subsurface(rect).copy(), 'RGB')
+
+    assert pixels(frames[0], third) != pixels(frames[1], third)
+    assert pixels(frames[0], first) == pixels(frames[1], first)

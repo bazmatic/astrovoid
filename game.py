@@ -1388,7 +1388,8 @@ class Game:
                 bottom=room)
             self._draw_hunter_energy(below=exit_panel.bottom)
             if self.star_indicator.flags:
-                draw_star_row(self.screen, self.star_indicator.flags, self.par_pulse(),
+                lit = self.star_indicator.star_count  # The row fills from the left, whichever goals are met
+                draw_star_row(self.screen, tuple(i < lit for i in range(5)), self.par_pulse(),
                               (config.UI_ZONE_WIDTH // 2, STAR_ROW_Y), STAR_ROW_SIZE)
         
         # Draw game over sequence (fade to black and text)

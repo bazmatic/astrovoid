@@ -14,6 +14,7 @@ from rendering.menu_components import (
     render_title
 )
 from rendering.ui_elements import AnimatedStarRating
+from rendering.stars import draw_star
 from rendering.number_sprite import NumberSprite
 from utils.resource_path import resource_path
 from utils.formatting import format_time
@@ -21,9 +22,9 @@ from profiles import LevelResult
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.command_recorder import CommandRecorder
 
-STAR_SLOT_WIDTH = 170  # Reference width of each star's slot, room for its line
-STAR_LINE_GAP = 14  # Between a star's points and the line under it
-STAR_LINE_MISSED = (96, 90, 138)  # The line under a missed star
+STAR_SLOT_WIDTH = 170  # Reference width of each goal in the checklist under the stars
+STAR_LINE_GAP = 14  # Between the stars' points and the checklist
+STAR_LINE_MISSED = (96, 90, 138)  # A goal that was missed
 
 
 def comparison_lines(result: Optional[LevelResult], score: int, elapsed: float) -> Tuple[str, str]:
@@ -195,10 +196,9 @@ class LevelCompleteMenu:
 
         if level_succeeded:
             star_size = config.LEVEL_COMPLETE_STAR_SIZE
-            # Each star's slot is wide enough for the line under it; the stars and their lines fill the rect
-            star_spacing = self._star_spacing()
+            # The stars, and under them the checklist of goals, one slot wide each
             lines_height = self._scaled(STAR_LINE_GAP) + self.star_line_font.get_linesize()
-            layout['stars'] = pygame.Rect(0, 0, star_spacing * 5, star_size + lines_height)
+            layout['stars'] = pygame.Rect(0, 0, self._scaled(STAR_SLOT_WIDTH) * 5, star_size + lines_height)
             layout['stars'].midtop = (center_x, next_top + self._scaled(26))
             next_top = layout['stars'].bottom
 
@@ -213,23 +213,25 @@ class LevelCompleteMenu:
         layout['hints'] = self.hints.get_rect(midbottom=(center_x, config.SCREEN_HEIGHT - self._scaled(48)))
         return layout
 
-    def _star_spacing(self) -> int:
-        """Distance between the stars' centres, which is also the width of each star's line."""
-        return max(int(config.LEVEL_COMPLETE_STAR_SIZE * 1.2), self._scaled(STAR_SLOT_WIDTH))
-
-    def _draw_star_lines(self, star_animation: AnimatedStarRating, lines: Sequence[str]) -> None:
-        """Under each star, what it was for: bright for a star earned, dim for one missed."""
+    def _draw_star_lines(self, area: pygame.Rect, star_animation: AnimatedStarRating, lines: Sequence[str]) -> None:
+        """The checklist under the stars: each goal with a small star, lit if it was met, and its figure."""
         self.star_line_rects = []
         top = star_animation.y + star_animation.star_size // 2 + self._scaled(STAR_LINE_GAP)
-        room = star_animation.star_spacing - self._scaled(8)
+        slot = area.width // 5
+        mark = self.star_line_font.get_height() * 0.8
+        gap = self._scaled(6)
+        room = slot - self._scaled(8) - round(mark) - gap
         for i, text in enumerate(lines):
-            lit = i < len(star_animation.earned) and star_animation.earned[i]
-            line = self.star_line_font.render(text, True, TEXT_LABEL if lit else STAR_LINE_MISSED)
+            met = i < len(star_animation.earned) and star_animation.earned[i]
+            line = self.star_line_font.render(text, True, TEXT_LABEL if met else STAR_LINE_MISSED)
             if line.get_width() > room:
                 line = pygame.transform.smoothscale(
                     line, (room, max(1, round(line.get_height() * room / line.get_width()))))
-            rect = line.get_rect(midtop=(star_animation.x + i * star_animation.star_spacing, top))
-            self.screen.blit(line, rect)
+            width = round(mark) + gap + line.get_width()
+            rect = pygame.Rect(0, top, width, max(line.get_height(), round(mark)))
+            rect.centerx = area.left + slot * i + slot // 2
+            draw_star(self.screen, rect.left + mark / 2, rect.centery, mark, filled=met)
+            self.screen.blit(line, line.get_rect(midleft=(rect.left + round(mark) + gap, rect.centery)))
             self.star_line_rects.append(rect)
 
     def _draw_stats(self, rect: pygame.Rect, stats: List[Tuple[str, str]], comparisons=()) -> None:
@@ -340,11 +342,10 @@ class LevelCompleteMenu:
 
         # Draw animated star rating in its slot
         if star_animation and 'stars' in layout:
-            star_animation.star_spacing = self._star_spacing()
             star_animation.x = layout['stars'].centerx - 2 * star_animation.star_spacing
             star_animation.y = layout['stars'].top + star_animation.star_size // 2
             star_animation.draw(self.screen)
-            self._draw_star_lines(star_animation, star_lines)
+            self._draw_star_lines(layout['stars'], star_animation, star_lines)
 
         # Figures for the level: time as MM:SS.{tenths} and scores
         total_score = int(level_score_breakdown.get('total_score', 0))

@@ -187,7 +187,7 @@ When you complete a level, the screen displays:
 
 - **Level Number**: "LEVEL {level} COMPLETE" (e.g., "LEVEL 1 COMPLETE")
 - **Completion Time**: Shown with one decimal place (e.g., "Time: 1:23.4")
-- **Star Rating**: five stars, each with a line under it saying what it was for (see [Stars](#stars))
+- **Star Rating**: up to five stars, and under them the goals, each marked met or missed (see [Stars](#stars))
 - **Score Breakdown**: Detailed breakdown of penalties and bonuses
 
 A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squids, with your progress score and the option to retry.
@@ -297,7 +297,8 @@ loads the profile; your furthest level and total score are kept.
 
 ### Stars
 
-Reaching the exit gives up to five stars, each earned on its own; a level you don't finish gives none:
+Reaching the exit gives one star for each of these goals you met, filled in from the left; a level you don't finish
+gives none:
 
 | Star | Earned when |
 |---|---|
@@ -314,8 +315,8 @@ Reaching the exit gives up to five stars, each earned on its own; a level you do
   plus 0.6 s for each crystal as it drops. A level whose exit opens on a timer gets at least the timer plus 2 s. The
   clock is play time, from your first move. The numbers are `game.parSpeedShare`, `parSecondsPerEnemy`,
   `parSecondsPerSpawningBoss`, `parSecondsPerCrystal` and `parTimerMargin` in `config/settings.json`.
-- During play, the stars you'd get by reaching the exit now are shown above the level number. A chime plays when one
-  lights or goes out, and the par star pulses for its last 5 seconds.
+- During play, the stars you'd get by reaching the exit now are shown above the level number, filled from the left. A
+  chime plays when a goal is met or lost, and the rightmost star pulses in the last 5 seconds before par.
 - The score is still kept and shown, but no longer decides the stars. Your best star count for each level is
   never lowered.
 
