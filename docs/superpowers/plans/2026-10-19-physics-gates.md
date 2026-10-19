@@ -162,9 +162,8 @@
   - `test_fire_control_will_not_shoot_through_a_gate`.
   - `test_an_anemone_cannot_see_through_a_gate` (`_wall_between` True).
   - `test_a_flighthouse_cannot_see_through_a_gate`.
-  - `test_the_hunter_route_ignores_gates`: `_route_to_player` gives the same route with or without the plank.
-- [ ] **Step 2: Run** → the five sight tests fail.
-- [ ] **Step 3: Implement**: each reader adds `maze.gate_segments` (active, as `(start, end)`) to the walls it looks through. The route keeps ignoring gates: a gate can always be pushed aside or waited out, and the route is cached per `wall_generation` (ruling recorded in the spec's spirit: gates are in the way for sight, not for planning).
+- [ ] **Step 2: Run** → the five tests fail.
+- [ ] **Step 3: Implement**: each reader adds `maze.gate_segments` (active, as `(start, end)`) to the walls it looks through. Leave `_route_to_player` alone (the user: routes are not an issue).
 - [ ] **Step 4: Run** the new file plus `tests/test_hunter_*.py tests/test_anemone*.py tests/test_flighthouse*.py` → no new failures.
 - [ ] **Step 5: Commit** `feat: the hunter and sighted enemies see gates`.
 
