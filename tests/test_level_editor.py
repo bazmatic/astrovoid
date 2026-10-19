@@ -154,10 +154,11 @@ def test_every_screen_and_palette_item_draws(editor):
     editor.draw()
     open_level(editor)
     model = editor.model
+    model.walls.clear()                                           # open floor, so a gate's plank fits anywhere
     free = [(col, row) for row in range(1, model.grid_size - 1) for col in range(1, model.grid_size - 1)
             if model.contents((col, row)) is None]
     for index, item in enumerate(PALETTE):
-        model.cursor, model.palette_index = free[index * 2], index
+        model.cursor, model.palette_index = free[index * 4], index
         assert model.place(), item                                # every item lands, so every sprite is drawn
         editor.update(1.0)
         editor.draw()

@@ -136,3 +136,20 @@ def test_the_preview_draws_gates(editor):  # noqa: F811
     editor.handle_key(key(pygame.K_r))              # turning rebuilds the preview
     editor.draw()
     assert editor._preview_key != key_before_turn and editor.model.gates[(2, 2)].angle == 45
+
+
+def test_a_gate_cannot_be_placed_or_turned_into_another_plank():
+    model = model_with(gates=[GatePlacement((5, 5), 0), GatePlacement((7, 5), 90)])
+    select(model, 'gate')
+    model.cursor = (6, 5)
+    assert model.place() is False and (6, 5) not in model.gates
+    model.cursor = (7, 5)
+    assert model.turn_gate() is True and model.gates[(7, 5)].angle == 135    # still clear of (4..6, 5)
+    assert model.turn_gate() is False and model.gates[(7, 5)].angle == 135   # at 0 its tip would reach (6, 5)
+
+
+def test_planks_that_share_no_cell_are_fine_and_a_gate_can_replace_its_own_kind():
+    model = model_with(gates=[GatePlacement((5, 5), 0), GatePlacement((7, 5), 90)])
+    model.cursor = (5, 5)
+    select(model, 'motor_gate')
+    assert model.place() is True and model.gates[(5, 5)] == GatePlacement((5, 5), 0, 'cw')

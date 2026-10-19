@@ -42,6 +42,35 @@ def plank_cells(placement):
     return frozenset(cells)
 
 
+def _segment_gap(a, b):
+    """The shortest distance between two segments, each ((x1, y1), (x2, y2))."""
+    def cross(o, p, q):
+        return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
+
+    def to_segment(p, seg):
+        (x1, y1), (x2, y2) = seg
+        length = (x2 - x1) ** 2 + (y2 - y1) ** 2
+        t = max(0.0, min(1.0, ((p[0] - x1) * (x2 - x1) + (p[1] - y1) * (y2 - y1)) / length))
+        return math.hypot(p[0] - (x1 + t * (x2 - x1)), p[1] - (y1 + t * (y2 - y1)))
+
+    if cross(a[0], a[1], b[0]) * cross(a[0], a[1], b[1]) < 0 and cross(b[0], b[1], a[0]) * cross(b[0], b[1], a[1]) < 0:
+        return 0.0
+    return min(to_segment(a[0], b), to_segment(a[1], b), to_segment(b[0], a), to_segment(b[1], a))
+
+
+def planks_overlap(a, b):
+    """Whether two gates' planks share a cell or cross or touch (planks that do would never settle)."""
+    if plank_cells(a) & plank_cells(b):
+        return True
+
+    def segment(g):
+        dx, dy = math.cos(math.radians(g.angle)), math.sin(math.radians(g.angle))
+        x, y = g.cell[0] + 0.5, g.cell[1] + 0.5
+        return (x - dx, y - dy), (x + dx, y + dy)
+
+    return _segment_gap(segment(a), segment(b)) < 0.2
+
+
 @dataclass(frozen=True)
 class Layout:
     grid_size: int
@@ -150,5 +179,8 @@ def parse_layout(data, grid_size):
         for plank in plank_cells(placement):
             if plank in walls or not (1 <= plank[0] <= grid_size - 2 and 1 <= plank[1] <= grid_size - 2):
                 raise LayoutError(f'the plank of the gate at {cell} runs into a wall at {plank}')
+        for other in gates:
+            if planks_overlap(placement, other):
+                raise LayoutError(f'the plank of the gate at {cell} overlaps the plank of the gate at {other.cell}')
         gates.append(placement)
     return Layout(grid_size, walls, start, exit_, tuple(enemies), beacon, tuple(gates))

@@ -54,3 +54,17 @@ def test_the_obstacle_settings_have_their_defaults():
     o = ObstacleSettings()
     assert (o.gateMass, o.gateThicknessCells, o.gateElasticity, o.motorRate) == (16.0, 0.16, 0.4, 1.2)
     assert (o.motorMaxForce, o.bulletImpulse, o.substeps, o.moverReachMargin) == (30_000_000.0, 300.0, 8, 24.0)
+
+
+@pytest.mark.parametrize('gates', [
+    [{'cell': [5, 5], 'angle': 45}, {'cell': [6, 5], 'angle': 135}],      # an X
+    [{'cell': [5, 5]}, {'cell': [7, 5]}],                                  # tips meet
+])
+def test_overlapping_planks_are_refused(gates):
+    with pytest.raises(LayoutError, match='overlaps'):
+        parse_layout(data(gates=gates), 12)
+
+
+def test_planks_that_share_no_cell_are_allowed():
+    layout = parse_layout(data(gates=[{'cell': [5, 5]}, {'cell': [7, 5], 'angle': 90}]), 12)
+    assert len(layout.gates) == 2

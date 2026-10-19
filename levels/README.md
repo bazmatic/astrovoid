@@ -39,7 +39,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 }
 ```
 
-  **gates** (optional): each is a plank on a pin at the centre of `cell`. `angle` is in degrees clockwise on screen, a multiple of 45 from 0 up to but not including 180 (default 0, horizontal). `motor` is `"cw"` or `"ccw"` for a motor gate, and left out for a free gate. A gate may not share a cell with a wall, the start, the exit, the beacon, an enemy or another gate, and its plank (one cell either side of the pin) may not cross a wall or leave the interior; a layout that breaks this is ignored.
+  **gates** (optional): each is a plank on a pin at the centre of `cell`. `angle` is in degrees clockwise on screen, a multiple of 45 from 0 up to but not including 180 (default 0, horizontal). `motor` is `"cw"` or `"ccw"` for a motor gate, and left out for a free gate. A gate may not share a cell with a wall, the start, the exit, the beacon, an enemy or another gate, and its plank (one cell either side of the pin) may not cross a wall, leave the interior, or share a cell with, cross or touch another gate's plank (planks that overlap would creep at rest); a layout that breaks this is ignored.
 
   Cells are `[col, row]`; the border ring is always wall. Types: static, patrol, aggressive, replay, flocker, flighthouse, egg, anemone, split_boss, mother_boss, rules_hunter, neural_hunter. The editor does not check that the exit can be reached. A file the editor creates for a level that had none carries `"created_by_editor": true`, so reverting deletes it again.
 

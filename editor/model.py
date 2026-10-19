@@ -1,6 +1,6 @@
 """The editor's rules: what is in each cell, what may be placed where. No drawing and no files."""
 import enemy_names
-from level_layout import ENEMY_TYPES, GatePlacement, Layout, plank_cells
+from level_layout import ENEMY_TYPES, GatePlacement, Layout, plank_cells, planks_overlap
 from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY
 from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, OpenAfterTime, TypeCleared
 
@@ -104,8 +104,9 @@ class EditorModel:
     def _plank_fits(self, gate):
         """Whether the gate's plank stays inside the interior and clear of walls."""
         last = self.grid_size - 2
-        return all(1 <= col <= last and 1 <= row <= last and (col, row) not in self.walls
-                   for col, row in plank_cells(gate))
+        planks = plank_cells(gate)
+        return (all(1 <= col <= last and 1 <= row <= last and (col, row) not in self.walls for col, row in planks)
+                and not any(planks_overlap(gate, other) for cell, other in self.gates.items() if cell != gate.cell))
 
     def _under_a_plank(self, cell):
         return any(cell in plank_cells(gate) for gate in self.gates.values())
