@@ -1,14 +1,17 @@
 """The obstacle world: physics gates on pymunk, pushed by movers and stopped by walls and each other."""
+import logging
 import math
 import time
 from types import SimpleNamespace
+
+import pytest
 
 import config
 from entities.projectile import Projectile
 from level_layout import GatePlacement, parse_layout
 from maze.config import MazeComplexity
 from maze.generator import Maze
-from physics.obstacle_world import ObstacleWorld
+from physics.obstacle_world import ObstacleWorld, plank_fits
 
 GRID = 12
 PIN = (5, 5)
@@ -77,12 +80,65 @@ def test_a_free_gate_runs_down_like_the_ship():
     assert abs(gate.angular_velocity - expected) < 0.05 * expected
 
 
-def test_a_resting_gate_stays_put():
-    _, world = world_with([GatePlacement(PIN, angle=45)])
+@pytest.fixture
+def real_screen(monkeypatch):
+    """The real fullscreen, where cells are wider than tall."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+
+
+def maze_of(grid, walls=()):
+    layout = parse_layout({'start': [1, 1], 'exit': [grid - 2, grid - 2], 'walls': [list(w) for w in walls]}, grid)
+    return Maze(1, complexity=MazeComplexity.EMPTY, grid_size=grid, layout=layout)
+
+
+# Walls beside a gate at (5, 5) that its plank clears at each angle: along its sides, never across its tips
+BESIDE = {0: [(5, 4), (5, 6)], 45: [(6, 4), (4, 6)], 90: [(4, 5), (6, 5)], 135: [(4, 4), (6, 6)]}
+
+
+@pytest.mark.parametrize('grid', [12, 20])
+@pytest.mark.parametrize('angle', [0, 45, 90, 135])
+def test_a_gate_beside_walls_stays_put(real_screen, grid, angle):
+    maze = maze_of(grid, BESIDE[angle])
+    placement = GatePlacement(PIN, angle=angle)
+    assert plank_fits(maze, placement)
+    world = ObstacleWorld(maze, [placement])
     gate = world.gates[0]
-    before = gate.angle
     run(world, 600)
-    assert abs(gate.angle - before) < 1e-6
+    assert abs(gate.angle - math.radians(angle)) < 1e-6
+    assert abs(gate.angular_velocity) < 1e-6
+
+
+@pytest.mark.parametrize('grid', [12, 20])
+@pytest.mark.parametrize('angle', [45, 135])
+@pytest.mark.parametrize('wall', [(5, 4), (5, 6)])
+def test_a_diagonal_plank_that_would_cut_a_wall_does_not_fit(real_screen, caplog, grid, angle, wall):
+    """Cells are wider than tall, so a diagonal plank as long as the average cell runs steeper than the cell's
+    diagonal and cuts the cell above or below its tips."""
+    maze = maze_of(grid, [wall])
+    placement = GatePlacement(PIN, angle=angle, motor='cw' if angle == 135 else None)
+    assert not plank_fits(maze, placement)
+    with caplog.at_level(logging.WARNING):
+        world = ObstacleWorld(maze, [placement, GatePlacement((8, 8))])
+    assert [g.placement for g in world.gates] == [GatePlacement((8, 8))]
+    assert any('(5, 5)' in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize('grid', [12, 20])
+def test_planks_too_close_to_each_other_do_not_fit(real_screen, grid):
+    maze = maze_of(grid)
+    near = GatePlacement((6, 5), angle=90)      # its plank passes just beyond the tip of the one at (5, 5)
+    assert plank_fits(maze, GatePlacement(PIN), [GatePlacement((8, 5), angle=90)])
+    assert not plank_fits(maze, GatePlacement(PIN), [near])
+    assert not plank_fits(maze, GatePlacement(PIN), [GatePlacement(PIN)])
+    world = ObstacleWorld(maze, [GatePlacement(PIN), near])
+    assert [g.placement for g in world.gates] == [GatePlacement(PIN)]
+
+
+def test_a_gate_on_a_cell_kept_clear_does_not_fit(real_screen):
+    maze = maze_of(12)
+    assert plank_fits(maze, GatePlacement(PIN, angle=45), keep_clear=[(6, 4)])
+    assert not plank_fits(maze, GatePlacement(PIN, angle=45), keep_clear=[(5, 6)])
 
 
 def test_a_gate_stops_against_a_wall():
@@ -240,6 +296,26 @@ def test_a_bullet_nudges_a_gate():
     far = Projectile((px, py - gate.half_length * 2), 90)
     assert not world.bullet_hit(far)
     assert far.active
+
+
+@pytest.mark.parametrize('dt', [1.0, 0.5])
+def test_a_fast_shot_does_not_slip_between_frames_through_a_thin_plank(real_screen, dt):
+    maze = maze_of(28)
+    world = ObstacleWorld(maze, [GatePlacement((14, 14))])
+    gate = world.gates[0]
+    assert gate.thickness == 6.0
+    px, py = gate.pin
+    reach = gate.thickness / 2 + 2.0
+    speed = 13.0 / dt                                   # 13 px a frame
+    # Last frame it was above the plank and now it is below it; neither point touches the plank
+    shot = SimpleNamespace(x=px + 10, y=py + reach + 0.5, vx=0.0, vy=speed, radius=2.0, active=True)
+    assert shot.y - shot.vy * dt < py - reach
+    assert world.bullet_hit(shot, dt)
+    assert not shot.active
+    assert gate.angular_velocity != 0
+    beside = SimpleNamespace(x=px + gate.half_length + 10, y=py + reach + 0.5, vx=0.0, vy=speed, radius=2.0,
+                             active=True)
+    assert not world.bullet_hit(beside, dt) and beside.active
 
 
 def test_only_movers_that_touch_a_gate_are_changed():

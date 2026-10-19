@@ -6,17 +6,17 @@ frame in the space, and writes back only to the movers that touched a gate: wher
 new velocity.
 Pushing a gate is free: this world only changes positions and velocities, never damage or score.
 """
+import logging
 import math
 from typing import List, Optional, Sequence, Tuple
 
 import pymunk
 
 import config
+from level_layout import ANCHORED_KINDS  # noqa: F401 - the game asks this module which enemies are anchored
 from maze.wall_segment import WallSegment
 
 Point = Tuple[float, float]
-
-ANCHORED_KINDS = ('anemone', 'flighthouse')
 
 # Shape categories: movers collide with walls and gates, never with each other
 _WALL, _GATE, _MOVER = 0b001, 0b010, 0b100
@@ -25,6 +25,92 @@ _GATE_FILTER = pymunk.ShapeFilter(categories=_GATE, mask=_WALL | _GATE | _MOVER)
 _MOVER_FILTER = pymunk.ShapeFilter(categories=_MOVER, mask=_WALL | _GATE)
 
 _WALL_RADIUS = 1.0
+# Daylight, in px, a resting plank keeps from wall shapes, kept-clear cells and other planks
+FIT_CLEARANCE = 1.0
+
+logger = logging.getLogger(__name__)
+
+
+def plank_size(maze, settings=None) -> Tuple[float, float]:
+    """A gate's half-length and thickness in px on this maze: it reaches one (average) cell from its pin."""
+    s = settings if settings is not None else config.SETTINGS.obstacles
+    return maze.cell_size, max(6.0, s.gateThicknessCells * maze.cell_size)
+
+
+def _plank_line(maze, placement, half_length: float) -> Tuple[Point, Point]:
+    px, py = maze.position_calculator.grid_center_to_screen(*placement.cell)
+    dx = math.cos(math.radians(placement.angle)) * half_length
+    dy = math.sin(math.radians(placement.angle)) * half_length
+    return (px - dx, py - dy), (px + dx, py + dy)
+
+
+def _cross(o: Point, p: Point, q: Point) -> float:
+    return (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0])
+
+
+def _closest_on(p: Point, a: Point, b: Point) -> Point:
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length_sq = dx * dx + dy * dy
+    t = 0.0 if length_sq == 0 else max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / length_sq))
+    return a[0] + dx * t, a[1] + dy * t
+
+
+def _segment_gap(p1: Point, p2: Point, q1: Point, q2: Point) -> Tuple[float, Point]:
+    """The shortest distance between segments p1-p2 and q1-q2, and the point of q1-q2 that is nearest."""
+    d1, d2 = _cross(q1, q2, p1), _cross(q1, q2, p2)
+    if d1 * d2 < 0 and _cross(p1, p2, q1) * _cross(p1, p2, q2) < 0:
+        t = d1 / (d1 - d2)
+        return 0.0, (p1[0] + (p2[0] - p1[0]) * t, p1[1] + (p2[1] - p1[1]) * t)
+    best = None
+    for p in (p1, p2):
+        c = _closest_on(p, q1, q2)
+        gap = math.hypot(p[0] - c[0], p[1] - c[1])
+        if best is None or gap < best[0]:
+            best = (gap, c)
+    for q in (q1, q2):
+        c = _closest_on(q, p1, p2)
+        gap = math.hypot(q[0] - c[0], q[1] - c[1])
+        if gap < best[0]:
+            best = (gap, q)
+    return best
+
+
+def _segment_rect_gap(a: Point, b: Point, left: float, top: float, right: float, bottom: float) -> float:
+    """The shortest distance between segment a-b and an axis-aligned rectangle (0 if they meet)."""
+    def inside(p):
+        return left <= p[0] <= right and top <= p[1] <= bottom
+
+    if inside(a) or inside(b):
+        return 0.0
+    corners = ((left, top), (right, top), (right, bottom), (left, bottom))
+    return min(_segment_gap(a, b, corners[i], corners[(i + 1) % 4])[0] for i in range(4))
+
+
+def plank_fits(maze, placement, others: Sequence = (), keep_clear: Sequence = (), settings=None) -> bool:
+    """Whether a gate's plank, at rest at its angle, keeps clear of the maze's wall blocks, of the `keep_clear`
+    cells and of the planks of the `others` gates, in px on this maze (whose cells need not be square)."""
+    half_length, thickness = plank_size(maze, settings)
+    a, b = _plank_line(maze, placement, half_length)
+    calc = maze.position_calculator
+    cw, ch = calc.cell_size_x, calc.cell_size_y
+    reach = thickness / 2 + _WALL_RADIUS + FIT_CLEARANCE
+    origin_x, origin_y = calc.grid_to_screen(0, 0)
+    cols = range(max(0, int((min(a[0], b[0]) - reach - origin_x) // cw)),
+                 min(len(maze.grid[0]), int((max(a[0], b[0]) + reach - origin_x) // cw) + 1))
+    rows = range(max(0, int((min(a[1], b[1]) - reach - origin_y) // ch)),
+                 min(len(maze.grid), int((max(a[1], b[1]) + reach - origin_y) // ch) + 1))
+    clear = set(keep_clear)
+    for row in rows:
+        for col in cols:
+            if maze.grid[row][col] != 1 and (col, row) not in clear:
+                continue
+            left, top = calc.grid_to_screen(col, row)
+            if _segment_rect_gap(a, b, left, top, left + cw, top + ch) < reach:
+                return False
+    for other in others:
+        if _segment_gap(a, b, *_plank_line(maze, other, half_length))[0] < thickness + FIT_CLEARANCE:
+            return False
+    return True
 
 
 class Gate:
@@ -76,7 +162,14 @@ class ObstacleWorld:
         self._wall_shapes: List[pymunk.Segment] = []
         self._wall_generation: Optional[int] = None
         self._sync_walls()
-        self.gates: List[Gate] = [self._add_gate(p) for p in placements]
+        self.gates: List[Gate] = []
+        for placement in placements:
+            # The layout's checks are in cells; whether the plank really clears the walls depends on the screen
+            if not plank_fits(self.maze, placement, [g.placement for g in self.gates], settings=self.settings):
+                logger.warning('Skipping the gate at %s (angle %s): its plank does not fit here',
+                               placement.cell, placement.angle)
+                continue
+            self.gates.append(self._add_gate(placement))
         self._segments: List[WallSegment] = []
         self._refresh_segments()
 
@@ -105,8 +198,7 @@ class ObstacleWorld:
     def _add_gate(self, placement) -> Gate:
         s = self.settings
         pin = self.maze.position_calculator.grid_center_to_screen(*placement.cell)
-        half_length = self.maze.cell_size
-        thickness = max(6.0, s.gateThicknessCells * self.maze.cell_size)
+        half_length, thickness = plank_size(self.maze, s)
         a, b = (-half_length, 0.0), (half_length, 0.0)
         body = pymunk.Body(s.gateMass, pymunk.moment_for_segment(s.gateMass, a, b, thickness / 2))
         body.position = pin
@@ -206,16 +298,14 @@ class ObstacleWorld:
 
     # --- bullets and sight ---
 
-    def bullet_hit(self, projectile) -> bool:
-        """Stop a projectile that touches a plank, giving the gate a small push along its flight."""
+    def bullet_hit(self, projectile, dt: float = 1.0) -> bool:
+        """Stop a projectile whose flight this frame (`dt` frames of its velocity back to where it is) touched a
+        plank, giving the gate a small push along its flight. A fast shot can cross a thin plank between frames."""
+        before = (projectile.x - projectile.vx * dt, projectile.y - projectile.vy * dt)
+        now = (projectile.x, projectile.y)
         for gate in self.gates:
-            (ax, ay), (bx, by) = gate.ends()
-            dx, dy = bx - ax, by - ay
-            length_sq = dx * dx + dy * dy
-            t = max(0.0, min(1.0, ((projectile.x - ax) * dx + (projectile.y - ay) * dy) / length_sq))
-            cx, cy = ax + dx * t, ay + dy * t
-            reach = gate.thickness / 2 + projectile.radius
-            if (projectile.x - cx) ** 2 + (projectile.y - cy) ** 2 > reach * reach:
+            gap, (cx, cy) = _segment_gap(before, now, *gate.ends())
+            if gap > gate.thickness / 2 + projectile.radius:
                 continue
             speed = math.hypot(projectile.vx, projectile.vy)
             if speed > 0:

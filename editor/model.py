@@ -1,19 +1,32 @@
 """The editor's rules: what is in each cell, what may be placed where. No drawing and no files."""
 import enemy_names
-from level_layout import ENEMY_TYPES, GatePlacement, Layout, plank_cells, planks_overlap
+from level_layout import ANCHORED_KINDS, ENEMY_TYPES, GatePlacement, Layout, plank_cells, planks_overlap
+from maze.config import MazeComplexity
+from maze.generator import Maze
+from physics.obstacle_world import plank_fits
 from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY
 from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, OpenAfterTime, TypeCleared
 
 PALETTE = ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
 GATE_KINDS = ('gate', 'motor_gate')
+GATE_ANGLES = (0, 45, 90, 135)
 GATE_TURN = 45
 TIMER_STEP = 10
 SHORTEST_TIMER = 10
 
 
+def _empty_maze(level, layout):
+    """The maze a layout makes on this screen: the pixels a gate's plank must fit in."""
+    return Maze(level, complexity=MazeComplexity.EMPTY, grid_size=layout.grid_size, layout=layout)
+
+
 class EditorModel:
-    def __init__(self, level, layout, exit_policy=DEFAULT_EXIT_POLICY, ammo_policy=DEFAULT_AMMO_POLICY):
+    def __init__(self, level, layout, exit_policy=DEFAULT_EXIT_POLICY, ammo_policy=DEFAULT_AMMO_POLICY,
+                 maze_for=_empty_maze):
+        """`maze_for(level, layout)` builds the maze whose pixels decide whether a gate's plank fits."""
         self.level = level
+        self._maze_for = maze_for
+        self._mazes = {}
         self.exit_policy = exit_policy
         self.ammo_policy = ammo_policy
         self.grid_size = layout.grid_size
@@ -61,7 +74,7 @@ class EditorModel:
         cell, item = self.cursor, self.selected
         here = self.contents(cell)
         if item == 'wall':
-            if here in ('start', 'exit') or self._under_a_plank(cell):
+            if here in ('start', 'exit') or not self._gates_fit(walls=self.walls | {cell}):
                 return False
             self.enemies.pop(cell, None)
             if self.beacon == cell:
@@ -70,17 +83,27 @@ class EditorModel:
         elif item in ENEMY_TYPES:
             if here is not None and here not in ENEMY_TYPES:
                 return False                               # a wall, the start, the exit or the beacon is there
+            if item in ANCHORED_KINDS and not self._gates_fit(clear=self._kept_clear() | {cell}):
+                return False                               # a plank over it would rock on it for ever
             self.enemies[cell] = item
         elif item in GATE_KINDS:
             if here is not None and here not in GATE_KINDS:
                 return False
-            gate = GatePlacement(cell, 0, 'cw') if item == 'motor_gate' else GatePlacement(cell)
-            if not self._plank_fits(gate):
+            if here == item:                               # the same kind again: keep its angle and direction
+                return True
+            motor = 'cw' if item == 'motor_gate' else None
+            gate = next((g for g in (GatePlacement(cell, angle, motor) for angle in GATE_ANGLES)
+                         if self._plank_fits(g)), None)
+            if gate is None:
                 return False
             self.gates[cell] = gate
         else:                                              # start, exit, beacon: one each, so this moves it
             if here is not None and here != item:
                 return False
+            if item in ('start', 'exit'):
+                moved = (self._kept_clear() - {getattr(self, item)}) | {cell}
+                if not self._gates_fit(clear=moved):
+                    return False
             setattr(self, item, cell)
         self.dirty = True
         return True
@@ -101,28 +124,49 @@ class EditorModel:
         self.dirty = True
         return True
 
-    def _plank_fits(self, gate):
-        """Whether the gate's plank stays inside the interior and clear of walls."""
-        last = self.grid_size - 2
-        planks = plank_cells(gate)
-        return (all(1 <= col <= last and 1 <= row <= last and (col, row) not in self.walls for col, row in planks)
-                and not any(planks_overlap(gate, other) for cell, other in self.gates.items() if cell != gate.cell))
+    def _kept_clear(self):
+        """The cells no plank may cover: the start, the exit and the anchored enemies."""
+        return {self.start, self.exit} | {cell for cell, kind in self.enemies.items() if kind in ANCHORED_KINDS}
 
-    def _under_a_plank(self, cell):
-        return any(cell in plank_cells(gate) for gate in self.gates.values())
+    def _maze(self, walls):
+        key = frozenset(walls)
+        if key not in self._mazes:
+            if len(self._mazes) > 8:
+                self._mazes.clear()
+            self._mazes[key] = self._maze_for(self.level, Layout(self.grid_size, key, self.start, self.exit))
+        return self._mazes[key]
+
+    def _plank_fits(self, gate, walls=None, clear=None):
+        """Whether the gate's plank stays inside the interior and clear of walls, other planks, the start, the exit
+        and anchored enemies: by the layout's cell rules, and in pixels on the maze this screen makes."""
+        walls = self.walls if walls is None else walls
+        clear = self._kept_clear() if clear is None else clear
+        last = self.grid_size - 2
+        others = [other for cell, other in self.gates.items() if cell != gate.cell]
+        if not all(1 <= col <= last and 1 <= row <= last and (col, row) not in walls and (col, row) not in clear
+                   for col, row in plank_cells(gate)):
+            return False
+        if any(planks_overlap(gate, other) for other in others):
+            return False
+        return plank_fits(self._maze(walls), gate, others, keep_clear=clear)
+
+    def _gates_fit(self, walls=None, clear=None):
+        """Whether every gate would still fit with these walls and kept-clear cells."""
+        return all(self._plank_fits(gate, walls, clear) for gate in self.gates.values())
 
     def turn_gate(self):
-        """Turn the gate under the cursor 45 degrees clockwise (wrapping at 180). False if there is no gate or the
-        turned plank would cross a wall."""
+        """Turn the gate under the cursor clockwise to the next angle its plank fits at, 45 degrees at a time
+        (wrapping at 180). False if there is no gate or it fits at no other angle."""
         gate = self.gates.get(self.cursor)
         if gate is None:
             return False
-        turned = GatePlacement(gate.cell, (gate.angle + GATE_TURN) % 180, gate.motor)
-        if not self._plank_fits(turned):
-            return False
-        self.gates[gate.cell] = turned
-        self.dirty = True
-        return True
+        for step in range(1, len(GATE_ANGLES)):
+            turned = GatePlacement(gate.cell, (gate.angle + step * GATE_TURN) % 180, gate.motor)
+            if self._plank_fits(turned):
+                self.gates[gate.cell] = turned
+                self.dirty = True
+                return True
+        return False
 
     def flip_gate(self):
         """Reverse the motor of the gate under the cursor. False for no gate or a free gate."""

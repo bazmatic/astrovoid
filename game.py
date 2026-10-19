@@ -1052,7 +1052,7 @@ class Game:
                 continue
             
             # A plank stops a shot and takes a nudge from it
-            if self.obstacles and self.obstacles.bullet_hit(projectile):
+            if self.obstacles and self.obstacles.bullet_hit(projectile, dt):
                 continue
             
             # Check projectile-wall collision (use spatial grid)

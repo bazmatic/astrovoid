@@ -11,6 +11,8 @@ Cell = Tuple[int, int]
 
 ENEMY_TYPES = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone',
                'split_boss', 'mother_boss', 'rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet')
+# Enemies that never move, which a gate's plank must not cover (it would rock on them for ever)
+ANCHORED_KINDS = ('anemone', 'flighthouse')
 # Enemies flown by a pilot, which the game makes itself (they need a pilot and a view of the game)
 HUNTER_KINDS = ('rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet')
 
@@ -176,9 +178,14 @@ def parse_layout(data, grid_size):
         for what, cells in blocked.items():
             if cell in cells:
                 raise LayoutError(f'gate at {cell} is on {what}')
+        kept_clear = {'the start': {start}, 'the exit': {exit_},
+                      'an anchored enemy': {c for kind, c in enemies if kind in ANCHORED_KINDS}}
         for plank in plank_cells(placement):
             if plank in walls or not (1 <= plank[0] <= grid_size - 2 and 1 <= plank[1] <= grid_size - 2):
                 raise LayoutError(f'the plank of the gate at {cell} runs into a wall at {plank}')
+            for what, cells in kept_clear.items():
+                if plank in cells:
+                    raise LayoutError(f'the plank of the gate at {cell} covers {what} at {plank}')
         for other in gates:
             if planks_overlap(placement, other):
                 raise LayoutError(f'the plank of the gate at {cell} overlaps the plank of the gate at {other.cell}')
