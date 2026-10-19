@@ -41,8 +41,10 @@ gates; nothing ever passes through a wall.
   gate stops against them, and a motor gate stalls on one (my call; it matches how they already treat the ship).
 - Gate contact is not an enemy hit, so it never costs the "No hits" star, and player shots must never treat a gate
   as a destructible wall block (`maze.damage_wall`).
-- **Bullets** (player's, the hunter's and enemies') stop at a gate and don't push it (my guess, accepted by the
-  user). They do not damage gates.
+- **Bullets** (player's, the hunter's and enemies') stop at a gate and give it a small push: a bullet has a little
+  momentum (the user's rule), so a stream of shots can nudge a free gate round, while a single shot barely moves it.
+  How much is a setting. They do not damage gates. Whether a bullet nudges a motor gate is left to the builder; it
+  should never noticeably slow one.
 - **Everything that sees walls sees gates**: enemies that check walls, the Jev hunter's senses and route, and line of
   sight for enemies that use it (anemones, flighthouses) treat a gate's plank as being in the way, as it is now.
 - **Level editor**: a gate is placed on a cell like an enemy. A key sets its starting angle; for a motor gate, a key
