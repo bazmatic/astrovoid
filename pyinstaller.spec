@@ -40,7 +40,7 @@ A = Analysis(
     hiddenimports=[
         "entities.hunter_ship", "hunter.controller", "hunter.perception",
         "hunter.spawn", "hunter.worker",
-        "hunter.rules_pilot",
+        "hunter.rules_pilot", "pymunk",
     ],
     hookspath=[],
     runtime_hooks=[],

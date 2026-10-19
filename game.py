@@ -12,6 +12,8 @@ from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship
 from maze.generator import Maze
+from physics.obstacle_world import ANCHORED_KINDS, ObstacleWorld
+from rendering.gates import draw_gate
 from entities.enemy import Enemy
 import level_rules
 import level_config
@@ -108,6 +110,7 @@ class Game:
         self.profile_manager = ProfileManager()
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
+        self.obstacles: Optional[ObstacleWorld] = None
         self.hunter_flight: Optional[HunterFlight] = None
         self.hunter_worker = None
         self.hunter_surroundings = GameSurroundings(self)
@@ -316,6 +319,8 @@ class Game:
         # Generate maze
         layout = level_config.get_level_layout(self.level)
         self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout)
+        self.obstacles = ObstacleWorld(self.maze, layout.gates) if layout is not None and layout.gates else None
+        self.maze.gate_segments = self.obstacles.segments() if self.obstacles else []
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
@@ -612,6 +617,24 @@ class Game:
             if self.ship is not None and self.ship.active and not self.ship.is_shield_active():
                 if self.ship.check_circle_collision(hunter.get_pos(), hunter.radius, hunter):
                     self.scoring.record_enemy_collision()
+
+    def _step_gates(self, dt):
+        """Let the gates turn and push back on whatever flies into them; anemones and flighthouses jam them."""
+        movers, anchored, seen = [self.ship], [], set()
+        if self.hunter is not None:
+            movers.append(self.hunter)
+        movers.extend(h for h in self.enemy_hunters if h.active)
+        seen.update(id(m) for m in movers)
+        for enemy in self.entity_manager.get_all_enemies():
+            if not enemy.active or id(enemy) in seen:
+                continue
+            seen.add(id(enemy))
+            if getattr(enemy, 'type', None) in ANCHORED_KINDS:
+                anchored.append(enemy)
+            elif hasattr(enemy, 'vx') and hasattr(enemy, 'vy'):
+                movers.append(enemy)
+        self.obstacles.step(dt, movers, anchored)
+        self.maze.gate_segments = self.obstacles.segments()
 
     def _close_enemy_hunters(self):
         """Stop every enemy hunter's pilot and worker (a level ends, restarts, or the game closes)."""
@@ -1011,7 +1034,10 @@ class Game:
             )
             self._fly_enemy_hunters(dt)
             self.entity_manager.update_dying(dt)
-        
+
+        if self.obstacles:
+            self._step_gates(dt)
+
         if self.player_has_moved:
             self.collision_handler.handle_hunter_contacts(
                 self.hunter, self.ship, self.entity_manager.get_all_active_enemies())
@@ -1023,6 +1049,10 @@ class Game:
             projectile.update(dt)
             
             if not projectile.active:
+                continue
+            
+            # A plank stops a shot and takes a nudge from it
+            if self.obstacles and self.obstacles.bullet_hit(projectile):
                 continue
             
             # Check projectile-wall collision (use spatial grid)
@@ -1285,6 +1315,9 @@ class Game:
         
         # Draw maze
         self.maze.draw(self.screen)
+        if self.obstacles:
+            for gate in self.obstacles.gates:
+                draw_gate(self.screen, gate.pin, gate.angle, gate.half_length, gate.thickness, gate.motor)
         
         # Draw enemies
         player_pos = (self.ship.x, self.ship.y) if self.ship else None
