@@ -53,4 +53,4 @@ def test_the_obstacle_settings_have_their_defaults():
     assert SETTINGS.obstacles == ObstacleSettings()
     o = ObstacleSettings()
     assert (o.gateMass, o.gateThicknessCells, o.gateElasticity, o.motorRate) == (16.0, 0.16, 0.4, 1.2)
-    assert (o.motorMaxForce, o.bulletImpulse, o.substeps, o.moverReachMargin) == (3_000_000.0, 300.0, 4, 24.0)
+    assert (o.motorMaxForce, o.bulletImpulse, o.substeps, o.moverReachMargin) == (30_000_000.0, 300.0, 8, 24.0)

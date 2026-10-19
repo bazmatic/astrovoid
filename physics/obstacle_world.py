@@ -1,8 +1,9 @@
 """The obstacle world: physics gates on a pymunk space.
 
 The game moves everything itself, in px per frame. Once a frame, after everything has moved, `step` mirrors
-the movers near a gate into the space as circle bodies, steps the space one frame, and writes back only to the
-movers that touched a gate: the correction the physics made to where they went, and their new velocity.
+the movers near a gate into the space as circle bodies at where they were before that frame's move, replays the
+frame in the space, and writes back only to the movers that touched a gate: where the space put them and their
+new velocity.
 Pushing a gate is free: this world only changes positions and velocities, never damage or score.
 """
 import math
@@ -134,15 +135,18 @@ class ObstacleWorld:
                 return True
         return False
 
-    def _mirror(self, mover, anchored: bool):
+    def _mirror(self, mover, anchored: bool, dt: float = 0.0):
+        """A circle body for a mover. A free mover starts where it was before this frame's move (`dt` frames
+        of its velocity back), so the space replays the move and meets the plank where the mover would."""
         radius = float(mover.radius)
         if anchored:
             body = pymunk.Body(body_type=pymunk.Body.KINEMATIC)
+            body.position = (mover.x, mover.y)
         else:
             mass = radius * radius
             body = pymunk.Body(mass, pymunk.moment_for_circle(mass, 0, radius))
             body.velocity = (mover.vx * config.FPS, mover.vy * config.FPS)
-        body.position = (mover.x, mover.y)
+            body.position = (mover.x - mover.vx * dt, mover.y - mover.vy * dt)
         shape = pymunk.Circle(body, radius)
         shape.elasticity = 1.0  # the wall's or the gate's elasticity decides the bounce
         shape.friction = 0.0
@@ -160,11 +164,11 @@ class ObstacleWorld:
                 gate.body.angular_velocity *= decay
 
         gate_shapes = {gate.shape for gate in self.gates}
-        mirrored = []  # (mover, body, shape, start position, start velocity, touched)
+        mirrored = []  # [mover, body, shape, touched]
         for mover in movers:
             if self._near_a_gate(mover):
-                body, shape = self._mirror(mover, anchored=False)
-                mirrored.append([mover, body, shape, body.position, body.velocity, False])
+                body, shape = self._mirror(mover, anchored=False, dt=dt)
+                mirrored.append([mover, body, shape, False])
         fixed = []
         for mover in anchored:
             if self._near_a_gate(mover):
@@ -174,15 +178,13 @@ class ObstacleWorld:
         for _ in range(substeps):
             self.space.step(seconds / substeps)
             for entry in mirrored:
-                if not entry[5]:
-                    entry[5] = self._touches_gate(entry[1], gate_shapes)
+                if not entry[3]:
+                    entry[3] = self._touches_gate(entry[1], gate_shapes)
 
-        for mover, body, shape, start, velocity, touched in mirrored:
+        # Only a mover that touched a gate takes the space's version of its move; the rest keep their own
+        for mover, body, shape, touched in mirrored:
             if touched:
-                moved = body.position - start
-                correction = moved - velocity * seconds
-                mover.x += correction.x
-                mover.y += correction.y
+                mover.x, mover.y = body.position.x, body.position.y
                 mover.vx = body.velocity.x / config.FPS
                 mover.vy = body.velocity.y / config.FPS
             self.space.remove(body, shape)

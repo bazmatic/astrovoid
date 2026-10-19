@@ -433,9 +433,9 @@ class ObstacleSettings:
     gateThicknessCells: float = 0.16
     gateElasticity: float = 0.4
     motorRate: float = 1.2  # rad/s
-    motorMaxForce: float = 3_000_000.0
+    motorMaxForce: float = 30_000_000.0  # a torque limit: the push at radius r is max_force / r
     bulletImpulse: float = 300.0
-    substeps: int = 4
+    substeps: int = 8
     moverReachMargin: float = 24.0  # px
 
 

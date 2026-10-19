@@ -134,27 +134,43 @@ def test_a_motor_gate_pushes_a_mover_aside():
     assert point_segment_distance((m.x, m.y), *gate.ends()) >= gate.thickness / 2 + m.radius - 2
 
 
-def test_a_motor_gate_stalls_on_a_pinned_mover():
+def squeeze_run(with_mover):
+    """A cw motor gate turning down onto wall (5,6), with or without a mover lying on the wall's top face in its
+    path. Returns the maze, the gate, the mover and the gate's angle and the mover's gap to the plank each frame."""
     maze, world = world_with([GatePlacement(PIN, motor='cw')], walls=[(5, 6)])
     gate = world.gates[0]
     px, py = gate.pin
     face_y = py + maze.cell_size_y / 2
     # Too big to fit under the plank where it meets the wall's corner, so the plank reaches it first
     m = mover(px + 100, face_y - 16 - 1, radius=16)
-    angles = []
+    frames = []
 
-    def check():
-        angles.append(gate.angle)
+    def record():
+        gap = point_segment_distance((m.x, m.y), *gate.ends()) - m.radius - gate.thickness / 2
+        frames.append((gate.angle, gap))
         values = (m.x, m.y, m.vx, m.vy, gate.angle, gate.angular_velocity)
         assert all(math.isfinite(v) for v in values)
         for wall in maze.walls:
             if wall.active:
                 assert point_segment_distance((m.x, m.y), wall.start, wall.end) >= m.radius - 1
 
-    run(world, 120, [m], each=check)
-    # The squeezed mover slips out towards the pin while the gate presses; then the gate rests on the wall
-    assert abs(angles[-1] - angles[-31]) < 0.01
-    assert angles[-1] < math.radians(30)
+    run(world, 120, [m] if with_mover else [], each=record)
+    return maze, gate, m, frames
+
+
+def test_a_squeezed_mover_holds_a_motor_gate_back_and_is_never_pushed_into_a_wall():
+    # With frictionless contacts a mover between a plank and a wall face is in a wedge that opens towards the pin,
+    # so the gate presses on it, held back, until it slips out; it is never pushed into the wall
+    _, _, m, squeezed = squeeze_run(with_mover=True)
+    _, _, _, free = squeeze_run(with_mover=False)
+    for frame in range(18, 31):
+        angle, gap = squeezed[frame]
+        assert gap <= 0.5, frame  # the plank is on the mover
+        assert angle < free[frame][0] - 0.04, frame  # and held back by it
+    # Once the mover has slipped out the gate rests against the wall, where it would have stopped anyway
+    assert abs(squeezed[-1][0] - squeezed[-31][0]) < 0.01
+    assert abs(squeezed[-1][0] - free[-1][0]) < 0.01
+    assert squeezed[-1][1] > 0
 
 
 def test_a_motor_gate_stalls_on_an_anchored_enemy():
@@ -184,6 +200,24 @@ def test_a_jammed_motor_gate_frees_when_the_wall_goes():
     assert (6, 6) not in maze.blocks
     run(world, 60)
     assert gate.angle > math.radians(80)
+
+
+def test_a_mover_meets_the_plank_where_it_hits_it():
+    # Every phase of an 8 px/frame approach: on its contact frame the mover ends at the plank's surface
+    for offset in range(8):
+        _, world = world_with([GatePlacement(PIN)])
+        gate = world.gates[0]
+        px, py = gate.pin
+        m = mover(px + 5, py - 60 - offset, vy=8.0)
+        for _ in range(20):
+            m.x += m.vx
+            m.y += m.vy
+            world.step(1.0, [m])
+            if m.vy != 8.0:
+                break
+        assert m.vy < 0, offset
+        gap = point_segment_distance((m.x, m.y), *gate.ends()) - m.radius - gate.thickness / 2
+        assert abs(gap) <= 1.5, (offset, gap)
 
 
 def test_a_fast_ship_does_not_pass_through_a_plank():
