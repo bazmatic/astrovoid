@@ -248,3 +248,29 @@ def test_a_plank_cannot_cover_the_start_the_exit_or_an_anchored_enemy(item):
     assert model.contents((6, 5)) is None
     select(model, 'static')
     assert model.place() is True
+
+
+def test_a_gate_that_does_not_fit_this_screen_does_not_lock_the_editor(real_screen):
+    # Saved on a screen of another shape: at 45 degrees its plank cuts the wall below here
+    model = grid_model(12, walls=[(5, 6)], gates=[GatePlacement((5, 5), 45)])
+    assert model.misfit_gates() == [(5, 5)]
+    for item, cell in (('wall', (9, 2)), ('start', (8, 2)), ('exit', (2, 8)), ('anemone', (9, 9))):
+        model.cursor = cell
+        select(model, item)
+        assert model.place(), item
+    assert model.misfit_gates() == [(5, 5)]
+    model.cursor = (5, 5)
+    assert model.turn_gate() and model.misfit_gates() == []
+
+
+def test_the_cursor_says_when_a_gate_does_not_fit(editor, real_screen):  # noqa: F811
+    open_level(editor)
+    model = editor.model
+    model.walls.clear()
+    model.enemies.clear()
+    model.walls.add((5, 6))
+    model.gates[(5, 5)] = GatePlacement((5, 5), 45)
+    model.cursor = (5, 5)
+    assert "doesn't fit" in editor.cursor_label()
+    model.cursor = (8, 8)
+    assert "doesn't fit" not in editor.cursor_label()

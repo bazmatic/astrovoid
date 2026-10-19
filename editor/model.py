@@ -151,8 +151,17 @@ class EditorModel:
         return plank_fits(self._maze(walls), gate, others, keep_clear=clear)
 
     def _gates_fit(self, walls=None, clear=None):
-        """Whether every gate would still fit with these walls and kept-clear cells."""
-        return all(self._plank_fits(gate, walls, clear) for gate in self.gates.values())
+        """Whether every gate that fits now would still fit with these walls and kept-clear cells.
+
+        A gate that already doesn't fit (a level saved on a screen of another shape) is left out, so it can't
+        stop edits elsewhere; the cursor says so when it is on it."""
+        misfits = set(self.misfit_gates())
+        return all(self._plank_fits(gate, walls, clear) for cell, gate in self.gates.items() if cell not in misfits)
+
+    def misfit_gates(self):
+        """The cells of the gates whose planks don't fit as things stand, in row order."""
+        return sorted((cell for cell, gate in self.gates.items() if not self._plank_fits(gate)),
+                      key=lambda cell: (cell[1], cell[0]))
 
     def turn_gate(self):
         """Turn the gate under the cursor clockwise to the next angle its plank fits at, 45 degrees at a time

@@ -427,13 +427,22 @@ class LevelEditor:
         pygame.draw.rect(glow, (*CURSOR_COLOR, int(40 + 50 * pulse)), glow.get_rect(), border_radius=12)
         self.screen.blit(glow, rect.inflate(16, 16))
         pygame.draw.rect(self.screen, CURSOR_COLOR, rect, 2 + round(pulse), border_radius=8)
-        here = self.model.contents(self.model.cursor)
-        label = render_pill(self.small_font, LABELS[here] if here else f'Empty  {col},{row}')
+        label = render_pill(self.small_font, self.cursor_label())
         above = rect.top - label.get_height() - 6 >= maze.offset_y
         anchor = rect.midtop if above else rect.midbottom
         place = label.get_rect(midbottom=(anchor[0], anchor[1] - 6)) if above else label.get_rect(midtop=(anchor[0], anchor[1] + 6))
         place.clamp_ip(pygame.Rect(config.UI_ZONE_WIDTH, 0, config.SCREEN_WIDTH - config.UI_ZONE_WIDTH, config.SCREEN_HEIGHT))
         self.screen.blit(label, place)
+
+    def cursor_label(self):
+        """What the pill above the cursor says: what is in the cell, and whether a gate there fits."""
+        model = self.model
+        here = model.contents(model.cursor)
+        if here is None:
+            return f'Empty  {model.cursor[0]},{model.cursor[1]}'
+        if here in ('gate', 'motor_gate') and model.cursor in model.misfit_gates():
+            return f"{LABELS[here]} doesn't fit: R to turn"
+        return LABELS[here]
 
     def _fitting_font(self, width):
         """The largest font, up to the screen's scale, in which every palette label fits `width`."""
