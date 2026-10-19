@@ -283,6 +283,8 @@ class Maze:
             cell_size=150.0  # Optimal cell size for this game
         )
         self.wall_generation = 0  # Goes up each time a block is destroyed
+        # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
+        self.gate_segments: List[WallSegment] = []
         self.rebuild_walls()
         
         # Set start position
