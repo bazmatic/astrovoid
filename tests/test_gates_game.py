@@ -95,3 +95,21 @@ def test_restarting_puts_the_gates_back(game, monkeypatch):
     start(game, 3)
     assert abs(math.degrees(game.obstacles.gates[0].angle) - 45) < 1e-6
     assert len(game.obstacles.space.bodies) == bodies
+
+
+def test_only_an_active_hunter_is_pushed_by_a_gate(game, monkeypatch):
+    from entities.hunter_ship import HunterShip
+    gate = begin(game, monkeypatch, [FREE])
+    px, py = gate.pin
+    hunter = HunterShip((px, py))
+    hunter.vx, hunter.vy = 0.0, 3.0
+    monkeypatch.setattr(type(game), 'hunter', property(lambda self: hunter))
+    seen = []
+    real_step = game.obstacles.step
+    monkeypatch.setattr(game.obstacles, 'step', lambda dt, movers, anchored=(): (seen.append(list(movers)), real_step(dt, movers, anchored)))
+    hunter.active = False
+    game._step_gates(1.0)
+    assert hunter not in seen[-1]
+    hunter.active = True
+    game._step_gates(1.0)
+    assert hunter in seen[-1]

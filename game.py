@@ -621,7 +621,7 @@ class Game:
     def _step_gates(self, dt):
         """Let the gates turn and push back on whatever flies into them; anemones and flighthouses jam them."""
         movers, anchored, seen = [self.ship], [], set()
-        if self.hunter is not None:
+        if self.hunter is not None and self.hunter.active:
             movers.append(self.hunter)
         movers.extend(h for h in self.enemy_hunters if h.active)
         seen.update(id(m) for m in movers)
