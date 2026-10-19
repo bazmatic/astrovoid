@@ -427,6 +427,19 @@ class AutoplaySettings:
 
 
 @dataclass
+class ObstacleSettings:
+    # Physics gates: a plank on a centre pin, free or motor-driven.
+    gateMass: float = 16.0  # the ship is r^2 = 64
+    gateThicknessCells: float = 0.16
+    gateElasticity: float = 0.4
+    motorRate: float = 1.2  # rad/s
+    motorMaxForce: float = 3_000_000.0
+    bulletImpulse: float = 300.0
+    substeps: int = 4
+    moverReachMargin: float = 24.0  # px
+
+
+@dataclass
 class Settings:
     screen: ScreenSettings
     ship: ShipSettings
@@ -455,6 +468,7 @@ class Settings:
     ui: UISettings
     game: GameSettings
     autoplay: AutoplaySettings = field(default_factory=AutoplaySettings)
+    obstacles: ObstacleSettings = field(default_factory=ObstacleSettings)
 
 
 def _load_settings_json() -> dict:
@@ -632,6 +646,7 @@ def load_settings() -> Settings:
         ),
         game=GameSettings(**raw["game"]),
         autoplay=AutoplaySettings(**raw.get("autoplay", {})),
+        obstacles=ObstacleSettings(**raw.get("obstacles", {})),
     )
 
 

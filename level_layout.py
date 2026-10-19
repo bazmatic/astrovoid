@@ -3,6 +3,7 @@
 A level file may carry one under "layout" (see levels/README.md). Cells are (col, row) pairs; the border ring of the
 grid is always wall and is never listed.
 """
+import math
 from dataclasses import dataclass
 from typing import FrozenSet, Optional, Tuple
 
@@ -18,6 +19,29 @@ class LayoutError(ValueError):
     """A layout that cannot be played."""
 
 
+GATE_MOTORS = ('cw', 'ccw')
+
+
+@dataclass(frozen=True)
+class GatePlacement:
+    """A physics gate: a plank on a pin at the centre of `cell`, turned `angle` degrees; `motor` is None (free),
+    'cw' or 'ccw'."""
+    cell: Cell
+    angle: int = 0
+    motor: Optional[str] = None
+
+
+def plank_cells(placement):
+    """The cells a gate's plank crosses at its angle (its tips are one cell from the pin)."""
+    col, row = placement.cell
+    dx, dy = math.cos(math.radians(placement.angle)), math.sin(math.radians(placement.angle))
+    cells = set()
+    for i in range(9):
+        t = (i - 4) / 4
+        cells.add((math.floor(col + 0.5 + dx * t), math.floor(row + 0.5 + dy * t)))
+    return frozenset(cells)
+
+
 @dataclass(frozen=True)
 class Layout:
     grid_size: int
@@ -26,10 +50,12 @@ class Layout:
     exit: Cell
     enemies: Tuple[Tuple[str, Cell], ...] = ()
     beacon: Optional[Cell] = None
+    gates: Tuple[GatePlacement, ...] = ()
 
     def __post_init__(self):
         # One order for the enemies (by row, column, type), so two layouts of the same level are equal
         object.__setattr__(self, 'enemies', tuple(sorted(self.enemies, key=lambda e: (e[1][1], e[1][0], e[0]))))
+        object.__setattr__(self, 'gates', tuple(sorted(self.gates, key=lambda g: (g.cell[1], g.cell[0]))))
 
     def grid(self):
         """The maze grid, indexed [row][col]: 1 for a wall (the border and `walls`), 0 for open."""
@@ -47,7 +73,7 @@ class Layout:
 
     def to_json(self):
         order = lambda cell: (cell[1], cell[0])
-        return {
+        out = {
             'walls': [list(cell) for cell in sorted(self.walls, key=order)],
             'start': list(self.start),
             'exit': list(self.exit),
@@ -55,6 +81,10 @@ class Layout:
                         for kind, cell in sorted(self.enemies, key=lambda e: (order(e[1]), e[0]))],
             'beacon': list(self.beacon) if self.beacon is not None else None,
         }
+        if self.gates:
+            out['gates'] = [{'cell': list(g.cell), **({'angle': g.angle} if g.angle else {}),
+                             **({'motor': g.motor} if g.motor else {})} for g in self.gates]
+        return out
 
 
 def _cell(value, size, what):
@@ -100,4 +130,25 @@ def parse_layout(data, grid_size):
         beacon = _cell(beacon, grid_size, 'beacon')
         if beacon in walls:
             raise LayoutError('the beacon is on a wall')
-    return Layout(grid_size, walls, start, exit_, tuple(enemies), beacon)
+    gates = []
+    for entry in data.get('gates', ()):
+        if not isinstance(entry, dict) or 'cell' not in entry:
+            raise LayoutError(f'gate {entry!r} needs a cell')
+        cell = _cell(entry['cell'], grid_size, 'gate')
+        angle, motor = entry.get('angle', 0), entry.get('motor')
+        if not (isinstance(angle, int) and not isinstance(angle, bool) and 0 <= angle < 180 and angle % 45 == 0):
+            raise LayoutError(f'gate at {cell} has angle {angle!r}; it must be 0, 45, 90 or 135')
+        if motor is not None and motor not in GATE_MOTORS:
+            raise LayoutError(f'gate at {cell} has motor {motor!r}; it must be cw or ccw')
+        placement = GatePlacement(cell, angle, motor)
+        blocked = {'a wall': walls, 'the start': {start}, 'the exit': {exit_},
+                   'the beacon': {beacon} if beacon is not None else set(),
+                   'an enemy': {c for _, c in enemies}, 'another gate': {g.cell for g in gates}}
+        for what, cells in blocked.items():
+            if cell in cells:
+                raise LayoutError(f'gate at {cell} is on {what}')
+        for plank in plank_cells(placement):
+            if plank in walls or not (1 <= plank[0] <= grid_size - 2 and 1 <= plank[1] <= grid_size - 2):
+                raise LayoutError(f'the plank of the gate at {cell} runs into a wall at {plank}')
+        gates.append(placement)
+    return Layout(grid_size, walls, start, exit_, tuple(enemies), beacon, tuple(gates))
