@@ -1,13 +1,14 @@
 """The five stars a level gives, from what the player did.
 
-Each star is earned on its own: finishing, killing half the enemies, killing
-every enemy, collecting every crystal, and finishing inside par.
+Each star is earned on its own: taking no hits, killing half the enemies,
+killing every enemy, collecting every crystal, and finishing inside par. A level
+that isn't finished gives none.
 """
 
 from dataclasses import dataclass
 from typing import Sequence, Tuple
 
-STAR_NAMES = ('finish', 'half_enemies', 'every_enemy', 'every_crystal', 'par')
+STAR_NAMES = ('no_hits', 'half_enemies', 'every_enemy', 'every_crystal', 'par')
 
 
 @dataclass(frozen=True)
@@ -20,13 +21,14 @@ class StarTally:
     crystals_left: int
     play_seconds: float
     par_seconds: float
+    hits: int = 0  # Enemy bullets and enemies that struck the ship
 
 
 def earned(tally: StarTally) -> Tuple[bool, bool, bool, bool, bool]:
     """Which of the five stars the tally earns, in STAR_NAMES order."""
     half = tally.kills * 2 >= tally.kills + tally.alive
     return (
-        True,
+        tally.hits == 0,
         half,
         tally.alive == 0,
         tally.crystals_left == 0,
@@ -50,7 +52,7 @@ def describe(tally: StarTally) -> Tuple[str, str, str, str, str]:
     total_enemies = tally.kills + tally.alive
     total_crystals = tally.crystals_collected + tally.crystals_left
     return (
-        'FINISHED',
+        'NO HITS' if tally.hits == 0 else f"{tally.hits} HIT{'S' if tally.hits > 1 else ''}",
         f"{tally.kills}/{total_enemies} KILLED",
         'NONE LEFT' if tally.alive == 0 else f"{tally.alive} LEFT",
         'NO CRYSTALS' if total_crystals == 0 else f"{tally.crystals_collected}/{total_crystals} CRYSTALS",

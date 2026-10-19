@@ -297,11 +297,11 @@ loads the profile; your furthest level and total score are kept.
 
 ### Stars
 
-A level gives up to five stars, each earned on its own:
+Reaching the exit gives up to five stars, each earned on its own; a level you don't finish gives none:
 
 | Star | Earned when |
 |---|---|
-| Finish | You reach the exit. Finishing always gives at least one star. |
+| No hits | No enemy bullet struck your ship and no enemy touched it (shield up, nothing counts). |
 | Half the enemies | At least half the level's enemies were killed. |
 | Every enemy | No enemy is left alive when you reach the exit. |
 | Every crystal | No powerup crystal is left uncollected (a level where none dropped earns it). |

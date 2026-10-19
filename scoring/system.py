@@ -37,6 +37,7 @@ class ScoringSystem:
         self.enemies_destroyed = 0
         self.powerup_crystals_collected = 0
         self.enemy_bullet_hits = 0
+        self.enemy_bullets_taken = 0  # Every bullet that struck the ship, however weak
         # Testing switch: with NO_POWER_DRAIN set, power stays full, so a level
         # never fails and has no time limit. Final scores are unaffected.
         self.power_drain_enabled = os.getenv('NO_POWER_DRAIN', '').lower() not in ('1', 'true', 'yes', 'on')
@@ -57,6 +58,7 @@ class ScoringSystem:
         self.enemies_destroyed = 0
         self.powerup_crystals_collected = 0
         self.enemy_bullet_hits = 0
+        self.enemy_bullets_taken = 0  # Every bullet that struck the ship, however weak
     
     def record_wall_collision(self) -> None:
         """Record a wall collision."""
@@ -78,9 +80,14 @@ class ScoringSystem:
         """Record when the ship collects a powerup crystal."""
         self.powerup_crystals_collected += 1
 
+    def hits_taken(self) -> int:
+        """Enemy bullets and enemies that struck the ship this level."""
+        return self.enemy_collisions + self.enemy_bullets_taken
+
     def record_enemy_bullet_hit(self, strength: float = 1.0) -> None:
         """Record when the ship is hit by an enemy projectile; a weaker bullet counts as part of a hit."""
         self.enemy_bullet_hits += strength
+        self.enemy_bullets_taken += 1
 
     def calculate_level_score(
         self,

@@ -1,4 +1,4 @@
-"""The game keeps the star tally: kills and crystals by the player and the Jev hunter, par, and the finish."""
+"""The game keeps the star tally: kills and crystals by the player and the Jev hunter, hits taken, par, and the finish."""
 import pytest
 
 import config
@@ -118,4 +118,15 @@ def test_completion_records_the_star_count(game, monkeypatch):
     assert game.state == config.STATE_LEVEL_COMPLETE
     assert game.star_animation.num_stars == 5
     assert game.profile_manager.get_active_profile().bests[3].stars == 5
-    assert game.star_lines[0] == 'FINISHED'
+    assert game.star_lines[0] == 'NO HITS'
+
+
+def test_a_bullet_or_an_enemy_touching_the_ship_is_a_hit(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'load_level_config', level_file())
+    start(game, 3)
+    assert game.star_tally().hits == 0
+    game.scoring.record_enemy_bullet_hit(strength=0.1)   # even a Vibelet's bullet
+    game.scoring.record_enemy_collision()
+    assert game.star_tally().hits == 2
+    start(game, 3)
+    assert game.star_tally().hits == 0

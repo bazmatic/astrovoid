@@ -151,7 +151,7 @@ class TestLevelComplete:
     def test_each_star_has_its_line(self, screen):
         menu = LevelCompleteMenu(screen)
         stars = AnimatedStarRating((True, True, False, True, False), 0, 0)
-        lines = ('FINISHED', '9/14 KILLED', '5 LEFT', '2/3 CRYSTALS', '1:42 / PAR 1:43')
+        lines = ('NO HITS', '9/14 KILLED', '5 LEFT', '2/3 CRYSTALS', '1:42 / PAR 1:43')
         menu.draw(3, True, 42.3, {'final_score': 55, 'total_score': 1234}, stars, False, lambda: None,
                   star_lines=lines)
         assert len(menu.star_line_rects) == 5
@@ -173,7 +173,7 @@ class TestLevelComplete:
         screen = pygame.Surface(size, pygame.SRCALPHA)
         menu = LevelCompleteMenu(screen)
         stars = AnimatedStarRating((True,) * 5, 0, 0)
-        lines = ('FINISHED', '120/120 KILLED', 'NONE LEFT', '12/12 CRYSTALS', '12:05 / PAR 9:40')
+        lines = ('NO HITS', '120/120 KILLED', 'NONE LEFT', '12/12 CRYSTALS', '12:05 / PAR 9:40')
         menu.draw(30, True, 725.0, {'final_score': 55, 'total_score': 123456}, stars, False, lambda: None,
                   star_lines=lines)
         layout = menu.layout(True)

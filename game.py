@@ -487,7 +487,7 @@ class Game:
                    if crystal.active and not isinstance(crystal, JevBeacon))
         par = self.base_par_seconds + config.SETTINGS.game.parSecondsPerCrystal * (collected + left)
         return StarTally(self.collision_handler.level_kills, sum(self.entity_manager.active_counts().values()),
-                         collected, left, self.play_seconds, par)
+                         collected, left, self.play_seconds, par, self.scoring.hits_taken())
 
     def par_pulse(self) -> float:
         """How brightly the par star throbs: 0 until its last few seconds, then a pulse, and 0 once par is past."""

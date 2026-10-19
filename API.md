@@ -105,6 +105,7 @@ Manages scoring and metrics tracking.
 - `record_enemy_collision() -> None`: Record enemy collision
 - `record_shot() -> None`: Record shot fired
 - `record_enemy_destroyed() -> None`: Record enemy destroyed
+- `hits_taken() -> int`: Enemy bullets (however weak) and enemies that struck the ship this level
 - `calculate_level_score(completion_time: float, remaining_fuel: int, remaining_ammo: int) -> Dict`: Calculate final score
 - `calculate_current_potential_score(current_time: float, remaining_fuel: int, remaining_ammo: int) -> Dict`: Calculate real-time score
 - `get_total_score() -> int`: Get total accumulated score
@@ -139,10 +140,10 @@ The score no longer decides a level's stars; see `scoring.stars`.
 
 #### `scoring.stars`
 
-The five stars a level gives, each earned on its own, in this order: finish, half the enemies, every enemy, every
+The five stars a level gives, each earned on its own, in this order: no hits, half the enemies, every enemy, every
 crystal, par.
 
-- `StarTally(kills, alive, crystals_collected, crystals_left, play_seconds, par_seconds)`: what happened on a level
+- `StarTally(kills, alive, crystals_collected, crystals_left, play_seconds, par_seconds, hits=0)`: what happened on a level
   (frozen dataclass). Kills and crystals by the Jev hunter count as the player's.
 - `earned(tally: StarTally) -> Tuple[bool, bool, bool, bool, bool]`: which stars the tally earns
 - `star_count(flags: Sequence[bool]) -> int`: how many are lit (what profiles save)
