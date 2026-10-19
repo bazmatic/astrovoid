@@ -107,7 +107,8 @@ class Senses:
         h = math.radians(hunter.angle)
         ch, sh = math.cos(h), math.sin(h)
 
-        walls = [w for w in maze.spatial_grid.get_nearby_walls(origin, reach) if w.active]
+        walls = [w for w in list(maze.spatial_grid.get_nearby_walls(origin, reach)) + list(getattr(maze, 'gate_segments', ()))
+                 if w.active]
         starts = np.array([w.start for w in walls], dtype=float).reshape(-1, 2)
         ends = np.array([w.end for w in walls], dtype=float).reshape(-1, 2)
 

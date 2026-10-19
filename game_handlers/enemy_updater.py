@@ -197,7 +197,7 @@ class EnemyUpdater:
             if not flighthouse.active:
                 continue
 
-            spawned = flighthouse.update(dt, player_pos, maze.walls, maze.spatial_grid)
+            spawned = flighthouse.update(dt, player_pos, maze.walls, maze.spatial_grid, maze.gate_segments)
             if spawned:
                 flockers.extend(spawned)
 

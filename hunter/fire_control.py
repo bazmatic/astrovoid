@@ -32,7 +32,7 @@ def find_firing_solution(hunter, enemies, maze, settings):
         left, right = min(origin[0], enemy.x) - 1, max(origin[0], enemy.x) + 1
         top, bottom = min(origin[1], enemy.y) - 1, max(origin[1], enemy.y) + 1
         across = [
-            (w.start, w.end) for w in maze.walls
+            (w.start, w.end) for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ()))
             if w.active
             and not (w.start[0] < left and w.end[0] < left) and not (w.start[0] > right and w.end[0] > right)
             and not (w.start[1] < top and w.end[1] < top) and not (w.start[1] > bottom and w.end[1] > bottom)]

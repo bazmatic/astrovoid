@@ -154,7 +154,7 @@ class Anemone(GameEntity, Collidable, Drawable):
             walls = maze.spatial_grid.get_walls_along_path(self.get_pos(), pos, 0.0)
         return any(
             wall.active and line_line_collision(self.get_pos(), pos, wall.start, wall.end)
-            for wall in walls
+            for wall in list(walls) + list(getattr(maze, 'gate_segments', ()))
         )
 
     def pull_on(self, ship, maze) -> Tuple[float, float]:

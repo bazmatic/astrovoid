@@ -92,7 +92,8 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         dt: float,
         player_pos: Optional[Tuple[float, float]] = None,
         walls: Optional[List] = None,
-        spatial_grid = None
+        spatial_grid = None,
+        gates = ()
     ) -> List[FlockerEnemyShip]:
         """Update scanning/tracking and spawn flockers if the player is visible.
         
@@ -101,6 +102,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
             player_pos: Current player position, if available.
             walls: List of wall segments for line-of-sight checking.
             spatial_grid: Optional spatial grid for optimized wall queries.
+            gates: Gate segments, which block sight like walls but are not in the grid.
         """
         if not self.active:
             return []
@@ -112,7 +114,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         player_visible = False
 
         if player_pos is not None:
-            player_visible = self._player_in_fov(player_pos, walls, spatial_grid)
+            player_visible = self._player_in_fov(player_pos, walls, spatial_grid, gates)
             if player_visible:
                 self._track_player(player_pos, dt_seconds)
                 if not self._had_target_last_frame:
@@ -144,7 +146,8 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         self,
         player_pos: Tuple[float, float],
         walls: Optional[List] = None,
-        spatial_grid = None
+        spatial_grid = None,
+        gates = ()
     ) -> bool:
         """Check if player is in field of view with line-of-sight.
         
@@ -152,6 +155,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
             player_pos: Player position.
             walls: List of wall segments for line-of-sight checking.
             spatial_grid: Optional spatial grid for optimized wall queries.
+            gates: Gate segments, which block sight like walls but are not in the grid.
             
         Returns:
             True if player is visible (in range, in cone, and line-of-sight clear).
@@ -190,6 +194,10 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
                     segment[0], segment[1]
                 ):
                     return False  # Wall blocks line-of-sight
+
+        for gate in gates:
+            if gate.active and line_line_collision((self.x, self.y), player_pos, gate.start, gate.end):
+                return False
         
         return True
 

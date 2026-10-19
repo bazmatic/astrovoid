@@ -49,7 +49,8 @@ class HunterPerception:
                 powerups=()):
         origin = hunter.get_pos()
         radius = self.settings.sensor_range(maze)
-        walls = local_segments(origin, [(w.start,w.end) for w in maze.walls if w.active], radius)
+        sight = [(w.start,w.end) for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ())) if w.active]
+        walls = local_segments(origin, sight, radius)
         contacts = []
         visible_ids = set()
         for entity in list(enemies) + ([player] if player is not None else []):
