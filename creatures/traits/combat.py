@@ -6,6 +6,7 @@ from typing import Optional
 import config
 import level_rules
 from creatures.trait import Trait
+from entities.explosion import Blast
 from entities.projectile import Projectile
 from utils import circle_line_collision, get_angle_to_point
 from utils.math_utils import apply_wall_collision_physics
@@ -118,3 +119,25 @@ class Gun(Trait):
         low = strength.fire_interval_min if self.interval_min is None else self.interval_min
         high = strength.fire_interval_max if self.interval_max is None else self.interval_max
         c.gun_interval = c.gun_cooldown = random.randint(low, high)
+
+
+class Explodes(Trait):
+    """Its death lights a blast: `reach` is in multiples of its radius, `damage` the hits it deals each enemy it
+    reaches, `push` the speed it gives a thing at its centre, `wallHits` the hits on each wall block, and `fuse` the
+    frames before it goes off. Its kills count for whoever killed this creature, so a chain counts for whoever lit
+    the first."""
+    NAME = 'explodes'
+
+    def __init__(self, reach: float, damage: int = 1, push: float = 6.0, wallHits: int = 1, fuse: float = 0.0,
+                 color: Optional[list] = None):
+        self.reach, self.damage, self.push, self.wall_hits, self.fuse = reach, damage, push, wallHits, fuse
+        self.color = tuple(color) if color is not None else None
+
+    def blast(self, c, source: str) -> Blast:
+        """The blast this creature makes; its kills count for `source`."""
+        styling = {} if self.color is None else {'color': self.color}
+        return Blast((c.x, c.y), c.radius * self.reach, damage=self.damage, push=self.push, wall_hits=self.wall_hits,
+                     source=source, fuse=self.fuse, **styling)
+
+    def on_death(self, c, enc):
+        enc.explode(self.blast(c, c.killed_by))

@@ -265,7 +265,7 @@
     "parTimerMargin": 2.0
   },
   "autoplay": {
-    "firstLevel": 13,
+    "firstLevel": 10,
     "lastLevel": 30,
     "timeLimitSeconds": 120,
     "hidePlayer": true,

@@ -64,7 +64,7 @@
       "ramsShip": {},
       "takesHits": {"hitPoints": 1},
       "dropsPickup": {},
-      "keepsApart": {}
+      "keepsApart": {"crowd": "chasers"}
     }
   },
   "replay": {
@@ -263,6 +263,29 @@
     "tuning": {
       "size": 10,
       "speedMultiplier": 0.1
+    }
+  },
+  "belemnite": {
+    "name": ["Belemnite", "Belemnites"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "layer": 0,
+    "tuning": {
+      "size": 8
+    },
+    "allegiance": "enemy",
+    "body": "belemnite",
+    "traits": {
+      "chase": {},
+      "drift": {"speed": "aggressive_speed"},
+      "bouncesOffWalls": {},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 3},
+      "dropsPickup": {},
+      "explodes": {"reach": 7.0, "damage": 3, "push": 7.0, "wallHits": 1, "fuse": 8.0, "color": [240, 120, 60]},
+      "keepsApart": {"crowd": "chasers"}
     }
   }
 }

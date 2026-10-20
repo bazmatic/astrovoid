@@ -58,5 +58,3 @@ def test_destroying_it_pays_the_bounty_once_in_the_step_it_happens():
 def test_no_bounty_without_a_win_and_none_by_default():
     assert not _bounty_rewards(None, 50.0).any()
     assert not _bounty_rewards(2, 0.0).any()
-
-

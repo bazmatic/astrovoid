@@ -256,7 +256,7 @@ class TestRealGameWiring:
 
     @pytest.mark.parametrize('level', [7])
     def test_no_anemone_can_reach_the_player_at_the_start(self, game, level):
-        # These two levels used to put one within reach of the start
+        # This level used to put one within reach of the start
         game.level = level
         game.start_level()
         assert game.roster.of_kind('anemone')

@@ -275,6 +275,7 @@ class Game:
         self.collision_handler.last_player_kill = None
         self.collision_handler.level_kills = 0
         self.collision_handler.level_crystals_collected = 0
+        self.collision_handler.explosions.clear()
         self.finish_tally = None
         self.replaying = self.level < self.profile_manager.get_active_level()
         self.level_result = None
@@ -349,7 +350,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + 5,  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + level_config.get_level_belemnite_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
         # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
@@ -377,7 +378,8 @@ class Game:
         if layout is None:
             self.spawn_manager.spawn_all_enemies(
                 self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
-                anemone_keep_clear=(self.maze.start_pos, anemone_reach), maze=self.maze
+                anemone_keep_clear=(self.maze.start_pos, anemone_reach), maze=self.maze,
+                belemnite_count=level_config.get_level_belemnite_count(self.level)
             )
             self._spawn_enemy_hunters(spawn_positions)
         else:
@@ -618,6 +620,18 @@ class Game:
                 movers.append(enemy)
         self.obstacles.step(dt, movers, anchored)
         self.maze.gate_segments = self.obstacles.segments()
+
+    def _hit_enemies(self, projectile) -> bool:
+        """A friendly shot meets the level's enemies; True when one of them took it."""
+        return self.encounter.shoot(projectile)
+
+    def _update_explosions(self, dt):
+        """Set off the blasts whose fuse has burnt; what they kill may light more."""
+        for blast in self.collision_handler.explosions.update(dt):
+            self.collision_handler.handle_blast(
+                blast, self.ship, self.hunter, self.roster.alive(), self._hit_enemies,
+                self.maze)
+            self._stop_dead_hunter()
 
     def _close_enemy_hunters(self):
         """Stop every enemy hunter's pilot and worker (a level ends, restarts, or the game closes)."""
@@ -1052,7 +1066,7 @@ class Game:
                 continue
 
             # Friendly projectile-enemy collisions share normal destruction effects.
-            if self.encounter.shoot(projectile):
+            if self._hit_enemies(projectile):
                 continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks
@@ -1061,6 +1075,8 @@ class Game:
         
         # Replace projectiles list with active ones
         self.projectiles = active_projectiles
+
+        self._update_explosions(dt)
         
         self._update_powerup_crystals(dt)
         
@@ -1292,8 +1308,9 @@ class Game:
             for gate in self.obstacles.gates:
                 draw_gate(self.screen, gate.pin, gate.angle, gate.half_length, gate.thickness, gate.motor)
         
-        # Draw enemies, each kind on its layer, then the death animations of those just killed
+        # Draw enemies, each kind on its layer, then the death animations of those just killed, then any blasts
         self.roster.draw(self.screen)
+        self.collision_handler.explosions.draw(self.screen)
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)

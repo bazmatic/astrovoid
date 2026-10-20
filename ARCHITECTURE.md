@@ -79,6 +79,14 @@ The entity system provides a foundation for all game objects:
 - **`urchin.py`**, **`patrol_crab.py`**, **`jellyfish.py`**: the `urchin`, `crab` and `jelly` Bodies of the Urchin,
   Crab and Jelly Creatures (see `creatures/`): they animate and draw, and read only the creature's attributes
 
+- **`explosion.py`**: `Blast`, `Explosions`, `Fireball` - reusable explosions (Belemnites now, bombs later)
+  - A `Blast` is a reach, damage, push, wall hits and whom its kills count for; `fuse` delays it so chains ripple
+  - `Explosions` (held by `CollisionHandler`) lights blasts and returns those going off; `CollisionHandler.handle_blast` applies one to the player, the hunter, the enemies (through the same path a shot takes, so each kind dies its own way) and the walls
+  - A Creature with the `explodes` trait lights its blast when it is killed (through `Encounter.explode`); any other
+    enemy with a `blast(source)` method does when `CollisionHandler.record_kill` counts it. So explosions chain
+- **`belemnite.py`**: `BelemniteBody` - the `belemnite` Body of the Belemnite Creature, a gunless squid with a
+  Jelly's chase brain that explodes when it dies
+
 - **`projectile.py`**: `Projectile` - Weapons fired by the ship
   - Inherits from `GameEntity`, `Collidable`, `Drawable`
   - Manages lifetime and collision detection
@@ -94,7 +102,7 @@ The entity system provides a foundation for all game objects:
 ### Creatures (`creatures/`)
 
 An enemy whose `config/enemies.json` entry names a `body` is a **Creature**: a Body (how it looks) and a list of Traits
-(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`) and Jelly (`aggressive`) are Creatures;
+(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`), Jelly (`aggressive`) and Belemnite are Creatures;
 the other kinds keep their own classes until they move over (see
 `docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`).
 
@@ -102,10 +110,12 @@ the other kinds keep their own classes until they move over (see
   `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
   keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter.
 - **`trait.py`**: `Trait`, whose hooks all do nothing by default: `on_spawn`, `on_frame`, `on_shot`, `on_death`,
-  `on_event`, and `on_crowd` for a `CROWD` trait. A trait is stateless; `REQUIRES` names traits it needs, and
+  `on_event`, and `on_crowd` for a `CROWD` trait (once a frame per crowd: a kind, or a crowd the trait names, as
+  Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
   `from_params` builds it from its catalogue parameters.
 - **`traits/`**: `brains.py` (`still`, `patrol`, `chase`), `propulsion.py` (`coasts`, `drift`), `combat.py`
-  (`takesHits`, `shovedByShots`, `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`), `crowd.py` (`keepsApart`)
+  (`takesHits`, `shovedByShots`, `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`), `crowd.py`
+  (`keepsApart`, which also keeps a crowd out of the walls)
 - **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
   bad parameters or a missing requirement when the game starts
 - **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for a kind with a `body`

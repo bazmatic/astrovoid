@@ -1,7 +1,7 @@
 """A level's hand-made layout: the exact walls, start, exit, enemies and beacon, in grid cells.
 
 A level file may carry one under "layout" (see levels/README.md). Cells are (col, row) pairs; the border ring of the
-grid is always wall and is never listed.
+grid is always wall and is never listed. Strong walls are wall blocks that no shot can destroy.
 """
 import math
 from dataclasses import dataclass
@@ -86,6 +86,7 @@ class Layout:
     enemies: Tuple[Tuple[str, Cell], ...] = ()
     beacon: Optional[Cell] = None
     gates: Tuple[GatePlacement, ...] = ()
+    strong_walls: FrozenSet[Cell] = frozenset()
 
     def __post_init__(self):
         # One order for the enemies (by row, column, type), so two layouts of the same level are equal
@@ -93,10 +94,10 @@ class Layout:
         object.__setattr__(self, 'gates', tuple(sorted(self.gates, key=lambda g: (g.cell[1], g.cell[0]))))
 
     def grid(self):
-        """The maze grid, indexed [row][col]: 1 for a wall (the border and `walls`), 0 for open."""
+        """The maze grid, indexed [row][col]: 1 for a wall (the border, `walls` and `strong_walls`), 0 for open."""
         n = self.grid_size
         grid = [[1 if row in (0, n - 1) or col in (0, n - 1) else 0 for col in range(n)] for row in range(n)]
-        for col, row in self.walls:
+        for col, row in self.walls | self.strong_walls:
             grid[row][col] = 1
         return grid
 
@@ -116,6 +117,8 @@ class Layout:
                         for kind, cell in sorted(self.enemies, key=lambda e: (order(e[1]), e[0]))],
             'beacon': list(self.beacon) if self.beacon is not None else None,
         }
+        if self.strong_walls:
+            out['strong_walls'] = [list(cell) for cell in sorted(self.strong_walls, key=order)]
         if self.gates:
             out['gates'] = [{'cell': list(g.cell), **({'angle': g.angle} if g.angle else {}),
                              **({'motor': g.motor} if g.motor else {})} for g in self.gates]
@@ -139,7 +142,11 @@ def parse_layout(data, grid_size):
     for key in ('start', 'exit'):
         if key not in data:
             raise LayoutError(f'layout has no {key}')
-    walls = frozenset(_cell(cell, grid_size, 'wall') for cell in data.get('walls', ()))
+    rock = frozenset(_cell(cell, grid_size, 'wall') for cell in data.get('walls', ()))
+    strong = frozenset(_cell(cell, grid_size, 'strong wall') for cell in data.get('strong_walls', ()))
+    if rock & strong:
+        raise LayoutError(f'{sorted(rock & strong)[0]} is both a wall and a strong wall')
+    walls = rock | strong                                  # what nothing else may be on or cross
     start = _cell(data['start'], grid_size, 'start')
     exit_ = _cell(data['exit'], grid_size, 'exit')
     if start == exit_:
@@ -194,4 +201,4 @@ def parse_layout(data, grid_size):
             if planks_overlap(placement, other):
                 raise LayoutError(f'the plank of the gate at {cell} overlaps the plank of the gate at {other.cell}')
         gates.append(placement)
-    return Layout(grid_size, walls, start, exit_, tuple(enemies), beacon, tuple(gates))
+    return Layout(grid_size, rock, start, exit_, tuple(enemies), beacon, tuple(gates), strong)

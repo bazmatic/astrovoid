@@ -36,15 +36,15 @@ REPEAT_INTERVAL = 0.05
 FLASH_SECONDS = 2.0
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 
-LABELS = {'wall': 'Wall', **{kind: enemy_kinds.name(kind) for kind in enemy_kinds.kinds()},
+LABELS = {'wall': 'Wall', 'strong_wall': 'Strong wall', **{kind: enemy_kinds.name(kind) for kind in enemy_kinds.kinds()},
           'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon', 'gate': 'Gate', 'motor_gate': 'Motor gate'}
 
 # The chip beside each palette entry, in the colours the things have in play
-CHIPS = {'wall': (120, 130, 150), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
+CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
          'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'egg': (240, 220, 200),
          'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
          'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
-         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'baby': (215, 170, 255), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
+         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'baby': (215, 170, 255), 'belemnite': (240, 120, 60), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
          'gate': (120, 235, 245), 'motor_gate': (255, 190, 80)}
 
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
@@ -363,7 +363,7 @@ class LevelEditor:
     def _preview_scene(self):
         """The maze and sprites of the model as it is, rebuilt only when it changes."""
         model = self.model
-        key = (frozenset(model.walls), tuple(sorted(model.enemies.items())), model.start, model.exit, model.beacon,
+        key = (frozenset(model.walls), frozenset(model.strong_walls), tuple(sorted(model.enemies.items())), model.start, model.exit, model.beacon,
                tuple(sorted(model.gates.values(), key=lambda g: g.cell)))
         if self._preview is not None and key == self._preview_key:
             return self._preview
@@ -479,7 +479,7 @@ class LevelEditor:
                 colour = TEXT_DIM
             chip_rect = pygame.Rect(0, 0, chip, chip)
             chip_rect.midleft = (row.left + 10, row.centery)
-            pygame.draw.rect(self.screen, CHIPS[item], chip_rect, border_radius=3 if item == 'wall' else chip // 2)
+            pygame.draw.rect(self.screen, CHIPS[item], chip_rect, border_radius=3 if item in ('wall', 'strong_wall') else chip // 2)
             text = font.render(LABELS[item], True, colour)
             self.screen.blit(text, text.get_rect(midleft=(chip_rect.right + 10, row.centery)))
 

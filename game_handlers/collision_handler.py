@@ -12,6 +12,8 @@ import config
 import enemy_kinds
 from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
+from entities.explosion import Explosions, push, reaches
+from entities.projectile import Projectile
 if TYPE_CHECKING:
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
@@ -23,7 +25,7 @@ if TYPE_CHECKING:
     from entities.anemone import Anemone
     from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
-    from entities.projectile import Projectile
+    from entities.explosion import Blast
     from maze.generator import Maze
     from scoring.system import ScoringSystem
     from sounds import SoundManager
@@ -52,13 +54,19 @@ class CollisionHandler:
         # This level's kills and crystals by the player and the Jev hunter, for the stars
         self.level_kills = 0
         self.level_crystals_collected = 0
+        # Blasts lit and fireballs burning; the game applies each blast with handle_blast as it goes off
+        self.explosions = Explosions()
     
     def record_kill(self, projectile, enemy) -> None:
+        """Count a kill for whoever fired the shot (or lit the blast), and light the blast of anything that explodes."""
         if projectile.source in ('player', 'hunter'):
             self.level_kills += 1
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
             self.last_player_kill = deepcopy(enemy)
+        blast = getattr(enemy, 'blast', None)
+        if blast is not None:
+            self.explosions.trigger(blast(projectile.source))
 
     def drop_pickup(
         self,
@@ -384,6 +392,70 @@ class CollisionHandler:
         
         return False
     
+    def handle_blast(self, blast: 'Blast', ship, hunter, enemies, hit_enemy, maze: Optional['Maze'] = None) -> None:
+        """A blast goes off: it shoves and hurts the player, the hunter, each enemy and each wall block it reaches.
+        The player and the hunter take one hit, as from touching an enemy; each enemy takes the blast's damage.
+
+        `enemies` are the enemies on the level. `hit_enemy(shot)` deals a shot to the enemies as a projectile would
+        (the Encounter's shoot), so a blast kills each kind of enemy the way a shot does: bosses split, pickups drop,
+        and the kill counts for the blast's source. Anything it kills that explodes lights its own blast, which is how
+        a chain of them goes off.
+        """
+        self.sound_manager.play_enemy_destroy()
+        if ship is not None and ship.active and reaches(blast, ship.get_pos(), ship.radius):
+            dvx, dvy = push(blast, ship.get_pos())
+            ship.vx += dvx
+            ship.vy += dvy
+            if not ship.is_shield_active():
+                self.scoring.record_enemy_collision()   # it costs what touching an enemy does
+                self.sound_manager.play_bad_hit()
+        if hunter is not None and hunter.active and reaches(blast, hunter.get_pos(), hunter.radius):
+            dvx, dvy = push(blast, hunter.get_pos())
+            hunter.vx += dvx
+            hunter.vy += dvy
+            hunter.register_hit(dvx, dvy)
+            hunter.take_damage()
+        caught = [e for e in enemies if e.active and reaches(blast, e.get_pos(), e.radius)]
+        for enemy in caught:
+            dvx, dvy = push(blast, enemy.get_pos())
+            if hasattr(enemy, 'apply_momentum'):
+                enemy.apply_momentum(dvx, dvy)    # the anchored kinds ignore it
+            else:
+                enemy.vx += dvx
+                enemy.vy += dvy
+            for _ in range(blast.damage):
+                if not enemy.active:
+                    break
+                hit_enemy(self._blast_shot(blast, enemy))
+        if maze is not None and blast.wall_hits:
+            self._blast_walls(blast, maze)
+
+    @staticmethod
+    def _blast_shot(blast: 'Blast', enemy) -> Projectile:
+        """One hit of a blast on an enemy, as a still, friendly shot at its centre whose kill counts for the blast's
+        source. (The blast has already shoved it, so the shot carries no momentum.)"""
+        shot = Projectile(enemy.get_pos(), 0.0, source='player')
+        shot.vx = shot.vy = 0.0
+        shot.source = blast.source            # may be 'enemy': still a hit on enemies, but a kill for no one
+        shot.is_enemy = False
+        return shot
+
+    @staticmethod
+    def _blast_walls(blast: 'Blast', maze: 'Maze') -> None:
+        """Each wall block the blast reaches takes its wall hits once, struck at the nearest point of the face."""
+        from utils.math_utils import circle_line_collision, get_closest_point_on_line
+        faces = {}
+        for wall in maze.spatial_grid.get_nearby_walls(blast.pos, blast.radius):
+            if not wall.active:
+                continue
+            start, end = wall.get_segment()
+            if circle_line_collision(blast.pos, blast.radius, start, end):
+                faces.setdefault(wall.cell if wall.cell is not None else id(wall), (wall, get_closest_point_on_line(blast.pos, start, end)))
+        for wall, impact in faces.values():
+            for _ in range(blast.wall_hits):
+                if maze.damage_wall(wall, impact):
+                    break
+
     def handle_projectile_hunter_collision(self, projectile, hunter) -> bool:
         """Enemy bullets damage the hunter without changing player statistics."""
         if hunter is None or not hunter.active or not projectile.active or not projectile.is_enemy:

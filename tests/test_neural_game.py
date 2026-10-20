@@ -20,5 +20,3 @@ def test_the_loader_returns_none_and_warns_for_a_missing_or_bad_file(tmp_path, c
     good = tmp_path / 'good.npz'
     random_policy(0).save(good)
     assert loader.load_neural_policy(good) is not None
-
-

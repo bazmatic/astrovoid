@@ -35,4 +35,8 @@ class Trait:
         """Another trait emitted an event on the creature."""
 
     def on_crowd(self, creatures, enc, dt: float) -> None:
-        """Once a frame, with every live creature of a kind that has this trait (CROWD traits only)."""
+        """Once a frame, with every live creature of a crowd that has this trait (CROWD traits only)."""
+
+    def crowd(self, c) -> str:
+        """Which crowd a creature joins for this trait: by default, its kind."""
+        return c.type

@@ -43,11 +43,12 @@ class Encounter:
         return [enemy for enemy in self.roster.all() if isinstance(enemy, Creature)]
 
     def step(self, dt: float) -> None:
-        """One frame: spawn hooks for newcomers, every live creature's traits and Body, then the crowd traits."""
+        """One frame: spawn hooks for newcomers, every live creature's traits and Body, then the crowd traits (once
+        for each crowd: by default a kind, or the crowd a trait names)."""
         creatures = self.creatures()
         for creature in creatures:
             self._spawn(creature)
-        crowds: Dict[str, List[Creature]] = {}
+        crowds: Dict[Tuple[str, str], Tuple[object, List[Creature]]] = {}
         for creature in creatures:
             if not creature.active:
                 continue
@@ -57,12 +58,13 @@ class Encounter:
                     break
             else:
                 creature.body.update(creature, dt, self.target_for(creature))
-                crowds.setdefault(creature.type, []).append(creature)
-        for members in crowds.values():
+                for trait in creature.traits:
+                    if trait.CROWD:
+                        crowds.setdefault((trait.NAME, trait.crowd(creature)), (trait, []))[1].append(creature)
+        for trait, members in crowds.values():
             live = [creature for creature in members if creature.active]
-            for trait in members[0].traits:
-                if trait.CROWD and live:
-                    trait.on_crowd(live, self, dt)
+            if live:
+                trait.on_crowd(live, self, dt)
 
     def _spawn(self, creature) -> None:
         """Run a newcomer's spawn hooks, once."""
@@ -96,6 +98,7 @@ class Encounter:
         """The creature dies; a shot that killed it counts as a kill for whoever fired it."""
         if not creature.active:
             return
+        creature.killed_by = shot.source if shot is not None else 'enemy'
         creature.die()
         self.world.sound_manager.play_enemy_destroy()
         if shot is not None:
@@ -106,6 +109,10 @@ class Encounter:
     def drop_pickup(self, pos) -> None:
         """Roll for what a dead creature leaves behind."""
         self.world.collision_handler.drop_pickup(pos, self.world.powerup_crystals, self.world.jev_beacon_allowed())
+
+    def explode(self, blast) -> None:
+        """Light a blast; the game sets it off when its fuse has burnt."""
+        self.world.collision_handler.explosions.trigger(blast)
 
     def add_shot(self, projectile) -> None:
         self.world.projectiles.append(projectile)

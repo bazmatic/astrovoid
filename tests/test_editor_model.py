@@ -20,7 +20,7 @@ def at(m, cell, item=None):
 
 
 def test_the_palette_lists_everything_placeable():
-    assert PALETTE == ('wall',) + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+    assert PALETTE == ('wall', 'strong_wall') + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
 
 
 def test_the_cursor_starts_on_the_start_and_stays_in_the_interior():

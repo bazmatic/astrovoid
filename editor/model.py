@@ -7,7 +7,8 @@ from physics.obstacle_world import plank_fits
 from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY
 from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, OpenAfterTime, TypeCleared
 
-PALETTE = ('wall',) + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+PALETTE = ('wall', 'strong_wall') + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+WALL_KINDS = ('wall', 'strong_wall')
 GATE_KINDS = ('gate', 'motor_gate')
 GATE_ANGLES = (0, 45, 90, 135)
 GATE_TURN = 45
@@ -31,6 +32,7 @@ class EditorModel:
         self.ammo_policy = ammo_policy
         self.grid_size = layout.grid_size
         self.walls = set(layout.walls)
+        self.strong_walls = set(layout.strong_walls)
         self.enemies = {cell: kind for kind, cell in layout.enemies}
         self.start = layout.start
         self.exit = layout.exit
@@ -54,9 +56,12 @@ class EditorModel:
         self.palette_index = (self.palette_index + delta) % len(PALETTE)
 
     def contents(self, cell):
-        """What is in a cell: 'wall', an enemy type, 'start', 'exit', 'beacon', 'gate', 'motor_gate', or None."""
+        """What is in a cell: 'wall', 'strong_wall', an enemy type, 'start', 'exit', 'beacon', 'gate', 'motor_gate',
+        or None."""
         if cell in self.walls:
             return 'wall'
+        if cell in self.strong_walls:
+            return 'strong_wall'
         if cell == self.start:
             return 'start'
         if cell == self.exit:
@@ -73,13 +78,15 @@ class EditorModel:
         """Put the selected item at the cursor. False (and nothing changes) if the rules refuse it."""
         cell, item = self.cursor, self.selected
         here = self.contents(cell)
-        if item == 'wall':
-            if here in ('start', 'exit') or not self._gates_fit(walls=self.walls | {cell}):
+        if item in WALL_KINDS:                             # one kind of wall replaces the other
+            if here in ('start', 'exit') or not self._gates_fit(walls=self._solid() | {cell}):
                 return False
             self.enemies.pop(cell, None)
             if self.beacon == cell:
                 self.beacon = None
-            self.walls.add(cell)
+            self.walls.discard(cell)
+            self.strong_walls.discard(cell)
+            (self.walls if item == 'wall' else self.strong_walls).add(cell)
         elif item in enemy_kinds.kinds():
             if here is not None and here not in enemy_kinds.kinds():
                 return False                               # a wall, the start, the exit or the beacon is there
@@ -113,8 +120,9 @@ class EditorModel:
         cell, here = self.cursor, self.contents(self.cursor)
         if here in (None, 'start', 'exit'):
             return False
-        if here == 'wall':
+        if here in WALL_KINDS:
             self.walls.discard(cell)
+            self.strong_walls.discard(cell)
         elif here == 'beacon':
             self.beacon = None
         elif here in GATE_KINDS:
@@ -123,6 +131,10 @@ class EditorModel:
             del self.enemies[cell]
         self.dirty = True
         return True
+
+    def _solid(self):
+        """Every wall cell, of either kind."""
+        return self.walls | self.strong_walls
 
     def _kept_clear(self):
         """The cells no plank may cover: the start, the exit and the anchored enemies."""
@@ -139,7 +151,7 @@ class EditorModel:
     def _plank_fits(self, gate, walls=None, clear=None):
         """Whether the gate's plank stays inside the interior and clear of walls, other planks, the start, the exit
         and anchored enemies: by the layout's cell rules, and in pixels on the maze this screen makes."""
-        walls = self.walls if walls is None else walls
+        walls = self._solid() if walls is None else walls
         clear = self._kept_clear() if clear is None else clear
         last = self.grid_size - 2
         others = [other for cell, other in self.gates.items() if cell != gate.cell]
@@ -223,7 +235,7 @@ class EditorModel:
     def to_layout(self):
         return Layout(self.grid_size, frozenset(self.walls), self.start, self.exit,
                       tuple((kind, cell) for cell, kind in self.enemies.items()), self.beacon,
-                      tuple(self.gates.values()))
+                      tuple(self.gates.values()), frozenset(self.strong_walls))
 
 
 def _next_policy(registry, policy):
