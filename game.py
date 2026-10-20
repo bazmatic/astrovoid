@@ -7,12 +7,13 @@ import random
 import os
 from typing import List, Optional, Tuple
 import config
+import enemy_kinds
 from rendering.fonts import get_font
 from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship
 from maze.generator import Maze
-from physics.obstacle_world import ANCHORED_KINDS, ObstacleWorld
+from physics.obstacle_world import ObstacleWorld
 from rendering.gates import draw_gate
 from entities.enemy import Enemy
 import level_rules
@@ -599,7 +600,7 @@ class Game:
         """Make an enemy hunter of each (kind, position): a Rules hunter with its own pilot worker, or a Viber of
         any size flown by the neural pilot. Without an installed neural model a Viber is left out (and said so)."""
         for kind, pos in placements:
-            if kind == 'rules_hunter':
+            if enemy_kinds.kind(kind).pilot == 'rules':
                 self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
                 continue
             policy = self._load_enemy_policy()
@@ -629,7 +630,7 @@ class Game:
             if not enemy.active or id(enemy) in seen:
                 continue
             seen.add(id(enemy))
-            if getattr(enemy, 'type', None) in ANCHORED_KINDS:
+            if enemy_kinds.kind(enemy.type).anchored:
                 anchored.append(enemy)
             elif hasattr(enemy, 'vx') and hasattr(enemy, 'vy'):
                 movers.append(enemy)

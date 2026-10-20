@@ -1,11 +1,12 @@
 """The Rules hunter: the Rules pilot's hunter ship, flown as an enemy that hunts only its protagonist."""
 import time
 
-from entities.enemy_hunter import ENEMY_HUNTER_HIT_POINTS, EnemyHunter
+import enemy_kinds
+from entities.enemy_hunter import EnemyHunter
 from hunter.flight import WorkerPilot
 from hunter.settings_for import hunter_settings_for
 
-RULES_HUNTER_HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
+RULES_HUNTER_HIT_POINTS = enemy_kinds.kind('rules_hunter').hunter.hit_points
 
 
 class RulesHunter(EnemyHunter):

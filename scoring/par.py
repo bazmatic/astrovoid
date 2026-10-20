@@ -4,9 +4,7 @@ from collections import deque
 from typing import Mapping, Optional, Sequence, Tuple
 
 import config
-
-# Bosses that keep making enemies: each adds a flat allowance for itself and what it spawns.
-SPAWNING_BOSSES = ('mother_boss', 'split_boss')
+import enemy_kinds
 
 
 def route_cells(grid: Sequence[Sequence[int]], start: Tuple[int, int],
@@ -39,7 +37,8 @@ def par_seconds(route_px: float, enemy_counts: Mapping[str, int], crystals: int,
     """Par from the route length, the enemies on the level at its start and the crystals dropped."""
     settings = settings or config.SETTINGS.game
     speed = settings.parSpeedShare * config.SHIP_MAX_SPEED * config.FPS
-    bosses = sum(enemy_counts.get(kind, 0) for kind in SPAWNING_BOSSES)
+    # Bosses that keep making enemies: each adds a flat allowance for itself and what it spawns
+    bosses = sum(count for kind, count in enemy_counts.items() if enemy_kinds.kind(kind).par_weight == 'spawningBoss')
     others = sum(enemy_counts.values()) - bosses
     par = (route_px / speed
            + settings.parSecondsPerSpawningBoss * bosses

@@ -47,7 +47,7 @@ def test_flocker_spawns_are_clustered():
 
     config = SpawnConfig(
         count=4,
-        entity_list_attr="flockers",
+        kind="flocker",
         factory_func=_make_flocker,
         requires_command_recorder=False,
         post_create_hook=None,

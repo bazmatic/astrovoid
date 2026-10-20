@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 
+import enemy_kinds
+
 
 def _as_color(value: Tuple[int, int, int]) -> Tuple[int, int, int]:
     return tuple(value)
@@ -91,10 +93,6 @@ class MazeSettings:
 
 @dataclass
 class EnemySettings:
-    staticSize: int
-    dynamicSize: int
-    patrolSpeed: float
-    aggressiveSpeed: float
     damage: int
     stuckDetectionThreshold: float
     shiftAngleMin: int
@@ -209,7 +207,6 @@ class EggSettings:
 
 @dataclass
 class MomentumSettings:
-    staticEnemyHitPoints: int
     transferFactor: float
     frictionCoefficient: float
     minVelocityThreshold: float
@@ -401,8 +398,6 @@ class GameSettings:
     # COMPLEX at 26 is how real level 13 is built.
     duelMazeComplexity: str = "COMPLEX"
     duelMazeGridSize: int = 26
-    # The enemy ships (by the kind a level file names) that carry a bar above them of the hits they have left.
-    enemyHitPointBars: Tuple[str, ...] = ("boss_viber",)
     # Par time, for the par star: the maze route flown at this share of top speed, plus seconds for each enemy
     # on the level at its start (a Mother or a Squiddler Boss gets the boss allowance instead) and each crystal
     # dropped. A level whose exit opens on a timer gets at least the timer plus the margin.
@@ -481,6 +476,11 @@ def _load_settings_json() -> dict:
 
 def load_settings() -> Settings:
     raw = _load_settings_json()
+    # Each kind's own settings live with the kind, in config/enemies.json
+    for key, section in (("replay", "replayEnemy"), ("flocker", "flockerEnemy"), ("flighthouse", "flighthouseEnemy"),
+                         ("anemone", "anemone"), ("baby", "baby"), ("split_boss", "splitBoss"),
+                         ("mother_boss", "motherBoss"), ("egg", "egg")):
+        raw[section] = enemy_kinds.kind(key).tuning
 
     def _preset_map(presets: dict) -> Dict[str, MazeComplexityPreset]:
         return {
@@ -718,10 +718,11 @@ MIN_PASSAGE_WIDTH = SETTINGS.maze.minPassageWidth
 WALL_HIT_POINTS = SETTINGS.maze.wallHitPoints
 SHIP_SPAWN_OFFSET = SETTINGS.maze.shipSpawnOffset
 
-STATIC_ENEMY_SIZE = SETTINGS.enemies.staticSize
-DYNAMIC_ENEMY_SIZE = SETTINGS.enemies.dynamicSize
-ENEMY_PATROL_SPEED = SETTINGS.enemies.patrolSpeed
-ENEMY_AGGRESSIVE_SPEED = SETTINGS.enemies.aggressiveSpeed
+STATIC_ENEMY_SIZE = enemy_kinds.kind("static").tuning["size"]
+# The larger of the Crab and the Jelly
+DYNAMIC_ENEMY_SIZE = max(enemy_kinds.kind("patrol").tuning["size"], enemy_kinds.kind("aggressive").tuning["size"])
+ENEMY_PATROL_SPEED = enemy_kinds.kind("patrol").tuning["speed"]
+ENEMY_AGGRESSIVE_SPEED = enemy_kinds.kind("aggressive").tuning["speed"]
 ENEMY_DAMAGE = SETTINGS.enemies.damage
 ENEMY_STUCK_DETECTION_THRESHOLD = SETTINGS.enemies.stuckDetectionThreshold
 ENEMY_SHIFT_ANGLE_MIN = SETTINGS.enemies.shiftAngleMin
@@ -813,7 +814,7 @@ EGG_HIT_POINTS = SETTINGS.egg.hitPoints
 EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin
 EGG_BABY_SPAWN_MAX = SETTINGS.egg.babySpawnMax
 
-STATIC_ENEMY_HIT_POINTS = SETTINGS.momentum.staticEnemyHitPoints
+STATIC_ENEMY_HIT_POINTS = enemy_kinds.kind("static").tuning["hitPoints"]
 MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
 FRICTION_COEFFICIENT = SETTINGS.momentum.frictionCoefficient
 MIN_VELOCITY_THRESHOLD = SETTINGS.momentum.minVelocityThreshold

@@ -9,6 +9,7 @@ import random
 import math
 from typing import Tuple, List, Optional, TYPE_CHECKING
 import config
+import enemy_kinds
 import level_rules
 from utils import (
     circle_line_collision,
@@ -54,8 +55,9 @@ class Enemy(GameEntity, Collidable, Drawable):
             enemy_type: Type of enemy - "static", "patrol", or "aggressive".
             level: Current level number (1-based) for strength scaling.
         """
-        radius = config.STATIC_ENEMY_SIZE if enemy_type == "static" else config.DYNAMIC_ENEMY_SIZE
-        super().__init__(pos, radius)
+        if enemy_type not in ("static", "patrol", "aggressive"):
+            raise ValueError(f"Unknown enemy type: {enemy_type}")
+        super().__init__(pos, enemy_kinds.kind(enemy_type).tuning["size"])
         
         self.type = enemy_type
         self.level = level

@@ -1,7 +1,7 @@
 """An enemy hunter: a hunter ship flown by a pilot as an enemy that hunts only its protagonist.
 
-It is a HunterShip flown by a HunterFlight, and a game enemy: shots damage it, it takes ENEMY_HUNTER_HIT_POINTS of
-them, and its shots are enemy shots. What it hunts comes from its surroundings (see
+It is a HunterShip flown by a HunterFlight, and a game enemy: shots damage it, it takes its kind's hit points of
+them (see config/enemies.json), and its shots are enemy shots. What it hunts comes from its surroundings (see
 hunter.surroundings.ProtagonistSurroundings), so it never sees or fires at anything else. The Rules hunter and the
 Neural hunter differ only in their pilot and colour.
 """
@@ -10,18 +10,16 @@ from dataclasses import replace
 
 import pygame
 
-import config
+import enemy_kinds
 from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight
 
-ENEMY_HUNTER_HIT_POINTS = 12
 _LIVE = ('flight', '_worker', 'surroundings')       # what a copy for a death portrait must not carry
 
 
 class EnemyHunter(HunterShip):
+    """Subclasses name their kind in `type`; its size, hit points and shot strength come from the catalogue."""
     SHOT_SOURCE = 'enemy'
-    HIT_POINTS = ENEMY_HUNTER_HIT_POINTS
-    SIZE_SCALE = 1.0  # its radius (and so its drawing and collisions) as a share of a normal ship's
     BAR_WIDTH = 40
     BAR_HEIGHT = 4
 
@@ -30,10 +28,23 @@ class EnemyHunter(HunterShip):
         # Hit points, not the hunter's health, are what a hit costs it: the ship itself is indestructible.
         super().__init__(start_pos, replace(settings, indestructible=True))
         self.radius *= self.SIZE_SCALE
-        self.hit_points = self.max_hit_points = self.HIT_POINTS
+        self.hit_points = self.max_hit_points = self.stats.hit_points
         self.surroundings = surroundings
         self._worker = worker
         self.flight = HunterFlight(self, pilot, surroundings) if pilot is not None else None
+
+    @property
+    def stats(self):
+        """Its kind's numbers: hit points, size, shot strength and whether it shows its hit points."""
+        return enemy_kinds.kind(self.type).hunter
+
+    @property
+    def SIZE_SCALE(self):
+        return self.stats.size_scale
+
+    @property
+    def SHOT_STRENGTH(self):
+        return self.stats.shot_strength
 
     def fly(self, dt):
         """Fly one frame; returns the shots fired, for the game to place."""
@@ -66,8 +77,8 @@ class EnemyHunter(HunterShip):
             self._draw_hit_points(screen)
 
     def shows_hit_points(self):
-        """Whether it carries a bar of the hits it has left: the settings name the kinds that do."""
-        return self.type in config.SETTINGS.game.enemyHitPointBars
+        """Whether it carries a bar of the hits it has left: its kind says."""
+        return self.stats.shows_hit_points
 
     def _draw_hit_points(self, screen):
         """A bar above it, as wide as the ship is big, that drains as it is hit."""

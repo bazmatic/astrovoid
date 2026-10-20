@@ -25,9 +25,17 @@ Entry point of the application. Initializes Pygame and starts the game loop.
 
 Main game coordinator class. Manages game state, level progression, and coordinates between different systems. While it still contains some state management logic, the architecture supports future extraction to a state machine.
 
+#### `enemy_kinds.py`
+
+The Enemy Kind catalogue, read from `config/enemies.json`: one entry per kind, in the order the editor palette and the
+level counts use. `kind(key)` gives an `EnemyKind` (names, `anchored`, `replays_player`, `par_weight`, `spawn_radius`,
+an enemy hunter's `pilot` and `hunter` numbers, and its own `tuning`); `kinds()`, `anchored()` and `hunters()` list
+keys; `name()` and `plural()` give what the player reads. A missing or unknown field stops the game at startup.
+
 #### `config.py`
 
-Loads the centralized configuration from `config/settings.json` and exposes both:
+Loads the centralized configuration from `config/settings.json`, and each Enemy Kind's own tuning from
+`config/enemies.json` (see `enemy_kinds.py` below), and exposes both:
 
 - A typed `config.SETTINGS` object with per-section dataclasses (`ScreenSettings`, `MazeSettings`, `PowerupSettings`, etc.)
 - Legacy uppercase constants for backwards compatibility (e.g., `config.FPS`, `config.COLOR_BACKGROUND`)
@@ -215,10 +223,13 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 
 ### Adding New Enemy Types
 
-1. Create new strategy class inheriting from `EnemyStrategy`
-2. Implement `update()` method with desired behavior
-3. Add a count for it to `EnemyCounts` (`level_rules.py`) and spawn it in `SpawnManager`
-4. No modification to `Enemy` class needed (OCP)
+1. Add an entry to `config/enemies.json`: its names, whether it is anchored or replays the player, its par weight,
+   the room it needs and its own `tuning`. The editor palette, level files, exit policies, par and the names on screen
+   all follow from the entry.
+2. Give its class a `type` naming the entry, make it in `make_enemy` (`game_handlers/spawn_manager.py`) and give it a
+   list in `LIST_OF_KIND` (`game_handlers/entity_manager.py`)
+3. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
+4. For movement, a new strategy class inheriting from `EnemyStrategy` needs no change to the `Enemy` class (OCP)
 
 ### Adding New Game States
 

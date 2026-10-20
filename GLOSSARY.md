@@ -42,6 +42,12 @@ _Avoid_: item, loot
 
 ### Enemies
 
+**Enemy Kind**:
+One kind of enemy as `config/enemies.json` describes it: its code name, the names the player reads, how it behaves in
+the maze (anchored, replays the player, its par allowance, the room it needs) and its own tuning. Every kind can be
+placed in a level.
+_Avoid_: enemy type (in new code; level files still say "type")
+
 The names the player reads. The friendly hunter keeps its own names ("Rules hunter", "Neural hunter"); these are for enemies only.
 
 **Urchin**:
@@ -73,7 +79,7 @@ An enemy that hatches into squidlets.
 _Code name_: egg
 
 **Squidlet**:
-An enemy hatched from an egg. Never placed in a level.
+An enemy hatched from an egg, or placed in a level.
 _Code name_: baby
 
 **Anemone**:

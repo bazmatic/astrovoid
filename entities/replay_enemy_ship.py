@@ -27,6 +27,7 @@ class ReplayEnemyShip(RotatingThrusterShip):
         command_recorder: The CommandRecorder instance to get commands from.
         current_replay_index: Index of the current command being replayed.
     """
+    type = 'replay'  # the enemy kind a level file names
     
     
     # Drawing constants (lengths are multiples of the ship radius, in local

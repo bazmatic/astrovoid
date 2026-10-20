@@ -2,7 +2,8 @@
 import pytest
 
 import level_config
-from level_layout import ENEMY_TYPES, Layout, LayoutError, parse_layout
+import enemy_kinds
+from level_layout import Layout, LayoutError, parse_layout
 
 
 def data(**changes):
@@ -25,7 +26,7 @@ def test_a_layout_parses_and_describes_its_grid():
     assert grid[0] == [1] * 9 and all(row[0] == 1 and row[8] == 1 for row in grid)   # the border
     assert grid[3][3] == 1 and grid[3][4] == 1 and grid[3][5] == 0                    # [row][col]
     assert layout.counts()['static'] == 1 and layout.counts()['rules_hunter'] == 1
-    assert set(layout.counts()) == set(ENEMY_TYPES)
+    assert set(layout.counts()) == set(enemy_kinds.kinds())
 
 
 def test_a_layout_round_trips_through_json():

@@ -1,0 +1,221 @@
+{
+  "static": {
+    "name": ["Urchin", "Urchins"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 10,
+      "hitPoints": 3
+    }
+  },
+  "patrol": {
+    "name": ["Crab", "Crabs"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 8,
+      "speed": 1
+    }
+  },
+  "aggressive": {
+    "name": ["Jelly", "Jellies"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 8,
+      "speed": 1.0
+    }
+  },
+  "replay": {
+    "name": ["Squiddler", "Squiddlers"],
+    "anchored": false,
+    "replaysPlayer": true,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "windowSize": 100,
+      "size": 15,
+      "color": [150, 100, 255],
+      "hitPoints": 3
+    }
+  },
+  "flocker": {
+    "name": ["Flocker", "Flockers"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 12,
+      "color": [255, 180, 50],
+      "speedMultiplier": 0.4,
+      "separationRadius": 50,
+      "alignmentRadius": 80,
+      "cohesionRadius": 100,
+      "separationWeight": 1.5,
+      "alignmentWeight": 1.0,
+      "cohesionWeight": 1.0,
+      "seekWeight": 0.8,
+      "closeRangeFireDistance": 150,
+      "closeRangeFireAngleTolerance": 30.0,
+      "clusterRadius": 300,
+      "fireCooldownSeconds": 5.0
+    }
+  },
+  "flighthouse": {
+    "name": ["Flighthouse", "Flighthouses"],
+    "anchored": true,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 14,
+      "color": [120, 240, 200],
+      "visionConeDegrees": 45,
+      "visionRange": 600,
+      "scanHalfAngleDegrees": 45,
+      "scanSpeedDegreesPerSecond": 90,
+      "trackSpeedDegreesPerSecond": 240,
+      "spawnIntervalSeconds": 0.5,
+      "hitPoints": 5,
+      "initialFlockerSpeedMultiplier": 0.8
+    }
+  },
+  "egg": {
+    "name": ["Egg", "Eggs"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 24,
+    "tuning": {
+      "initialSize": 8,
+      "maxSize": 24,
+      "growthRateMin": 0.01,
+      "growthRateMax": 0.04,
+      "spawnOffsetRange": 60,
+      "color": [255, 200, 100],
+      "hitPoints": 2,
+      "babySpawnMin": 1,
+      "babySpawnMax": 3
+    }
+  },
+  "anemone": {
+    "name": ["Anemone", "Anemones"],
+    "anchored": true,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 14,
+      "hitPoints": 4,
+      "reachCells": 3.5,
+      "pullThrustFraction": 0.8,
+      "flingSpeed": 5.0,
+      "releaseFrames": 60,
+      "flinchFrames": 90,
+      "firstLevel": 7,
+      "maxCoverage": 0.4,
+      "color": [255, 110, 170],
+      "tipColor": [90, 230, 210]
+    }
+  },
+  "split_boss": {
+    "name": ["Squiddler Boss", "Squiddler Bosses"],
+    "anchored": false,
+    "replaysPlayer": true,
+    "parWeight": "spawningBoss",
+    "spawnRadius": 30.0,
+    "tuning": {
+      "sizeMultiplier": 2.0,
+      "hitPoints": 8,
+      "spawnOffsetRange": 80,
+      "splitVelocityMagnitude": 2.0,
+      "childrenCount": 6
+    }
+  },
+  "mother_boss": {
+    "name": ["Mother", "Mothers"],
+    "anchored": false,
+    "replaysPlayer": true,
+    "parWeight": "spawningBoss",
+    "spawnRadius": 45.0,
+    "tuning": {
+      "sizeMultiplier": 3.0,
+      "hitPoints": 20,
+      "eggLayInterval": 180,
+      "lineGlowIntensityMax": 0.7,
+      "blinkFrequencyMultiplierMax": 2.0,
+      "blinkDurationMultiplierMax": 1.5,
+      "projectileSpeedMultiplier": 1.6,
+      "projectileImpactMultiplier": 1.4,
+      "projectileGlowColor": [255, 160, 100],
+      "projectileGlowRadiusMultiplier": 1.8,
+      "projectileGlowIntensity": 0.65
+    }
+  },
+  "rules_hunter": {
+    "name": ["Terminator", "Terminators"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "pilot": "rules",
+    "hitPoints": 12,
+    "sizeScale": 1.0,
+    "shotStrength": 1.0,
+    "showsHitPoints": false
+  },
+  "neural_hunter": {
+    "name": ["Viber", "Vibers"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "pilot": "neural",
+    "hitPoints": 12,
+    "sizeScale": 1.0,
+    "shotStrength": 1.0,
+    "showsHitPoints": false
+  },
+  "boss_viber": {
+    "name": ["Boss Viber", "Boss Vibers"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "pilot": "neural",
+    "hitPoints": 24,
+    "sizeScale": 2.0,
+    "shotStrength": 1.0,
+    "showsHitPoints": true
+  },
+  "vibelet": {
+    "name": ["Vibelet", "Vibelets"],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "pilot": "neural",
+    "hitPoints": 1,
+    "sizeScale": 0.5,
+    "shotStrength": 0.1,
+    "showsHitPoints": false
+  },
+  "baby": {
+    "name": ["Squidlet", "Squidlets"],
+    "anchored": false,
+    "replaysPlayer": true,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "tuning": {
+      "size": 10,
+      "speedMultiplier": 0.1
+    }
+  }
+}

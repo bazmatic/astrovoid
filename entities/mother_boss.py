@@ -23,6 +23,7 @@ class MotherBoss(SplitBoss):
         egg_lay_cooldown: Frames remaining until next egg can be laid.
         egg_lay_interval: Frames between egg laying.
     """
+    type = 'mother_boss'  # the enemy kind a level file names
     
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize Mother Boss enemy.

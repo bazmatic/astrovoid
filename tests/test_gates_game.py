@@ -113,3 +113,16 @@ def test_only_an_active_hunter_is_pushed_by_a_gate(game, monkeypatch):
     hunter.active = True
     game._step_gates(1.0)
     assert hunter in seen[-1]
+
+
+def test_anemones_and_flighthouses_in_play_are_anchored_not_pushed(game, monkeypatch):
+    for kind, enemies in (('anemone', lambda: game.anemones), ('flighthouse', lambda: game.flighthouses)):
+        begin(game, monkeypatch, [FREE], kind)
+        enemy = enemies()[0]
+        seen = []
+        real_step = game.obstacles.step
+        monkeypatch.setattr(game.obstacles, 'step', lambda dt, movers, anchored=(): (
+            seen.append((list(movers), list(anchored))), real_step(dt, movers, anchored)))
+        game._step_gates(1.0)
+        movers, anchored = seen[-1]
+        assert enemy in anchored and enemy not in movers

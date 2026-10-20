@@ -75,6 +75,7 @@ class Anemone(GameEntity, Collidable, Drawable):
         pull_angle: Direction from the anemone to the ship it is pulling, in radians.
         reach_px: Reach in pixels, known once it has been asked to pull.
     """
+    type = 'anemone'  # the enemy kind a level file names
 
     DEATH_DURATION = 30.0  # Frames (0.5 seconds at 60 FPS)
 

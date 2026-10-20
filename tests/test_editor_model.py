@@ -2,7 +2,8 @@
 import pytest
 
 from editor.model import PALETTE, EditorModel
-from level_layout import ENEMY_TYPES, parse_layout
+import enemy_kinds
+from level_layout import parse_layout
 
 
 def model():
@@ -19,7 +20,7 @@ def at(m, cell, item=None):
 
 
 def test_the_palette_lists_everything_placeable():
-    assert PALETTE == ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+    assert PALETTE == ('wall',) + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
 
 
 def test_the_cursor_starts_on_the_start_and_stays_in_the_interior():

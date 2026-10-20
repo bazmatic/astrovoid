@@ -21,6 +21,7 @@ class SplitBoss(ReplayEnemyShip):
         hit_points: Current hit points remaining.
         max_hit_points: Maximum hit points (for visual feedback if needed).
     """
+    type = 'split_boss'  # the enemy kind a level file names
     
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize SplitBoss enemy.

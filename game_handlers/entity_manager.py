@@ -4,7 +4,7 @@ This module provides a unified interface for managing all enemy types,
 eliminating the need to maintain separate lists in the main game class.
 """
 
-from typing import Dict, List, Iterator, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, List, Iterator, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -18,12 +18,12 @@ if TYPE_CHECKING:
     from entities.rules_hunter import RulesHunter
     from entities.neural_hunter import NeuralHunter
 
-# Each enemy list and the kind of enemy in it; None means the enemies say their own kind (enemy.type),
-# as the Vibers of every size in neural_hunters do
-ENEMY_LISTS: Dict[str, Optional[str]] = {
-    'enemies': None, 'replay_enemies': 'replay', 'flockers': 'flocker', 'flighthouses': 'flighthouse',
-    'split_bosses': 'split_boss', 'mother_bosses': 'mother_boss', 'babies': 'baby', 'eggs': 'egg',
-    'anemones': 'anemone', 'rules_hunters': 'rules_hunter', 'neural_hunters': None}
+# The list each kind of enemy lives in (every enemy names its kind in `type`)
+LIST_OF_KIND: Dict[str, str] = {
+    'static': 'enemies', 'patrol': 'enemies', 'aggressive': 'enemies', 'replay': 'replay_enemies',
+    'flocker': 'flockers', 'flighthouse': 'flighthouses', 'egg': 'eggs', 'anemone': 'anemones',
+    'split_boss': 'split_bosses', 'mother_boss': 'mother_bosses', 'rules_hunter': 'rules_hunters',
+    'neural_hunter': 'neural_hunters', 'boss_viber': 'neural_hunters', 'vibelet': 'neural_hunters', 'baby': 'babies'}
 
 
 class EntityManager:
@@ -125,13 +125,15 @@ class EntityManager:
                       self.rules_hunters, self.neural_hunters):
             yield from group
     
+    def add(self, enemy) -> None:
+        """Put an enemy in the list for its kind."""
+        getattr(self, LIST_OF_KIND[enemy.type]).append(enemy)
+    
     def active_counts(self) -> Dict[str, int]:
         """How many enemies of each kind are alive; kinds with none alive are left out."""
         counts: Dict[str, int] = {}
-        for attr, kind in ENEMY_LISTS.items():
-            for enemy in getattr(self, attr):
-                if enemy.active:
-                    counts[kind or enemy.type] = counts.get(kind or enemy.type, 0) + 1
+        for enemy in self.get_all_active_enemies():
+            counts[enemy.type] = counts.get(enemy.type, 0) + 1
         return counts
     
     def update_dying(self, dt: float) -> None:

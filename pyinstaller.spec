@@ -25,6 +25,7 @@ def collect_tree(source: Path, target: str) -> list[tuple[str, str]]:
 
 DATA_FILES = [
     (str(PROJECT_ROOT / "config" / "settings.json"), "config"),
+    (str(PROJECT_ROOT / "config" / "enemies.json"), "config"),
     # main.py loads this file explicitly to avoid the game package name clash.
     (str(PROJECT_ROOT / "game.py"), "."),
 ]

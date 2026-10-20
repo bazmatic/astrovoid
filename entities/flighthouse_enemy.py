@@ -29,6 +29,7 @@ from utils.math_utils import apply_circle_collision_physics
 
 class FlighthouseEnemy(GameEntity, Collidable, Drawable):
     """Stationary scanner that spawns flockers when the player is seen."""
+    type = 'flighthouse'  # the enemy kind a level file names
 
     # Drawing constants (lengths are multiples of the radius unless noted)
     BEAM_LENGTH_FRACTION = 0.5  # Visible beam length as a fraction of the vision range

@@ -3,7 +3,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, ClassVar, Dict, Iterable, List, Mapping, Optional, Protocol, Tuple
 
-import enemy_names
+import enemy_kinds
 from policies.registry import PolicyError, PolicyRegistry
 
 
@@ -121,7 +121,7 @@ class TypeCleared:
         return 'Kill ' + self._plurals()
 
     def _plurals(self) -> str:
-        return ', '.join(enemy_names.plural(kind) for kind in self.enemy_types)
+        return ', '.join(enemy_kinds.plural(kind) for kind in self.enemy_types)
 
     def to_json(self) -> Dict[str, Any]:
         return {'type': self.name, 'enemy_types': list(self.enemy_types)}
@@ -129,8 +129,8 @@ class TypeCleared:
     @classmethod
     def from_json(cls, data: Mapping) -> 'TypeCleared':
         kinds = data.get('enemy_types')
-        if not isinstance(kinds, list) or not kinds or not all(kind in enemy_names.KINDS for kind in kinds):
-            raise PolicyError(f'"enemy_types" must list enemy kinds from {enemy_names.KINDS}, got {kinds!r}')
+        if not isinstance(kinds, list) or not kinds or not all(kind in enemy_kinds.kinds() for kind in kinds):
+            raise PolicyError(f'"enemy_types" must list enemy kinds from {enemy_kinds.kinds()}, got {kinds!r}')
         return cls(tuple(dict.fromkeys(kinds)))  # a kind named twice still counts once
 
     @classmethod

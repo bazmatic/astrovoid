@@ -8,8 +8,10 @@ from dataclasses import dataclass
 from typing import List, Tuple, Callable, Optional, TYPE_CHECKING
 import random
 import math
+import enemy_kinds
 import level_rules
 import config as game_config
+from game_handlers.entity_manager import LIST_OF_KIND
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -27,7 +29,7 @@ class SpawnConfig:
     
     Attributes:
         count: Number of entities to spawn.
-        entity_list_attr: Attribute name on EntityManager (e.g., "replay_enemies").
+        kind: The kind of enemy (e.g., "replay").
         factory_func: Factory function that takes (pos, command_recorder) and returns entity.
         requires_command_recorder: Whether command_recorder is needed for factory.
         post_create_hook: Optional function to call after entity creation (entity) -> None.
@@ -35,26 +37,18 @@ class SpawnConfig:
             from the walls are used first.
     """
     count: int
-    entity_list_attr: str
+    kind: str
     factory_func: Callable[[Tuple[float, float], Optional['CommandRecorder']], object]
     requires_command_recorder: bool = False
     post_create_hook: Optional[Callable[[object], None]] = None
     radius: float = 0.0
 
 
-# The entity manager list each enemy type lives in
-ENEMY_LISTS = {'static': 'enemies', 'patrol': 'enemies', 'aggressive': 'enemies', 'replay': 'replay_enemies',
-               'flocker': 'flockers', 'flighthouse': 'flighthouses', 'split_boss': 'split_bosses',
-               'mother_boss': 'mother_bosses', 'egg': 'eggs', 'anemone': 'anemones'}
-# Types that replay the player's recorded commands
-RECORDED = ('replay', 'split_boss', 'mother_boss')
-
-
 def make_enemy(kind, pos, level, command_recorder):
-    """One enemy of a type at a position, and the entity manager list it belongs in: (list attribute, entity).
+    """One enemy of a kind at a position.
 
-    Every spawn path makes its enemies here. Rules hunters are not made here: they need a pilot worker and a view
-    of the game, which Game provides.
+    Every spawn path makes its enemies here. Enemy hunters are not made here: they need a pilot and a view of the
+    game, which Game provides.
     """
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -64,18 +58,19 @@ def make_enemy(kind, pos, level, command_recorder):
     from entities.mother_boss import MotherBoss
     from entities.egg import Egg
     from entities.anemone import Anemone
-    if kind not in ENEMY_LISTS:
+    from entities.baby import Baby
+    if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
         raise ValueError(f'cannot make an enemy of type {kind!r}')
     if kind in ('static', 'patrol', 'aggressive'):
         entity = Enemy(pos, kind, level)
-    elif kind in RECORDED:
-        entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss}[kind](
+    elif enemy_kinds.kind(kind).replays_player:
+        entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss, 'baby': Baby}[kind](
             pos, command_recorder)
         entity.current_replay_index = 0
     else:
         entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
                   'egg': lambda: Egg(pos), 'anemone': lambda: Anemone(pos)}[kind]()
-    return ENEMY_LISTS[kind], entity
+    return entity
 
 
 class SpawnManager:
@@ -126,7 +121,7 @@ class SpawnManager:
         if config.count <= 0 or len(available_positions) == 0:
             return []
 
-        entity_list = getattr(self.entity_manager, config.entity_list_attr)
+        entity_list = getattr(self.entity_manager, LIST_OF_KIND[config.kind])
         entity_list.clear()
 
         positions_to_use = self._select_positions(config, available_positions)
@@ -150,7 +145,7 @@ class SpawnManager:
         """Create an entity using the provided factory and recorder requirement."""
         if config.requires_command_recorder:
             if command_recorder is None:
-                raise ValueError(f"command_recorder required for {config.entity_list_attr}")
+                raise ValueError(f"command_recorder required for {config.kind}")
             return config.factory_func(pos, command_recorder)
         return config.factory_func(pos, None)
 
@@ -160,7 +155,7 @@ class SpawnManager:
         available_positions: List[Tuple[float, float]]
     ) -> List[Tuple[float, float]]:
         """Select spawn positions with special handling for flockers and anemones."""
-        if config.entity_list_attr == "anemones" and self._anemone_keep_clear is not None:
+        if config.kind == "anemone" and self._anemone_keep_clear is not None:
             (clear_x, clear_y), distance = self._anemone_keep_clear
             available_positions = [
                 pos for pos in available_positions
@@ -176,7 +171,7 @@ class SpawnManager:
             available_positions = sorted(available_positions,
                                          key=lambda pos: not self._maze.is_open(pos, config.radius))
 
-        if config.entity_list_attr == "flockers":
+        if config.kind == "flocker":
             return self._select_flocker_positions(available_positions, spawn_count)
 
         return available_positions[:spawn_count]
@@ -262,17 +257,15 @@ class SpawnManager:
 
         Returns (kind, pixel position) for each of its enemy hunters, which the game makes and flies itself.
         """
-        from level_layout import HUNTER_KINDS
         self._anemone_keep_clear = None
         self.entity_manager.clear_all()
         hunters = []
         for kind, cell in layout.enemies:
             pos = maze.position_calculator.grid_center_to_screen(*cell)
-            if kind in HUNTER_KINDS:
+            if kind in enemy_kinds.hunters():
                 hunters.append((kind, pos))
                 continue
-            attr, entity = make_enemy(kind, pos, level, command_recorder)
-            getattr(self.entity_manager, attr).append(entity)
+            self.entity_manager.add(make_enemy(kind, pos, level, command_recorder))
         return hunters
 
     def _create_spawn_configs(
@@ -296,13 +289,10 @@ class SpawnManager:
                   ('flighthouse', enemy_counts.flighthouse), ('split_boss', split_boss_count),
                   ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone))
         # Big enemies need their whole body clear of walls, not just their centre
-        radii = {'split_boss': game_config.REPLAY_ENEMY_SIZE * game_config.SPLIT_BOSS_SIZE_MULTIPLIER,
-                 'mother_boss': game_config.REPLAY_ENEMY_SIZE * game_config.MOTHER_BOSS_SIZE_MULTIPLIER,
-                 'egg': game_config.EGG_MAX_SIZE}
-        return [SpawnConfig(count=count, entity_list_attr=ENEMY_LISTS[kind],
-                            factory_func=lambda pos, cr, kind=kind: make_enemy(kind, pos, level, cr)[1],
-                            requires_command_recorder=kind in RECORDED, post_create_hook=None,
-                            radius=radii.get(kind, 0.0))
+        return [SpawnConfig(count=count, kind=kind,
+                            factory_func=lambda pos, cr, kind=kind: make_enemy(kind, pos, level, cr),
+                            requires_command_recorder=enemy_kinds.kind(kind).replays_player, post_create_hook=None,
+                            radius=enemy_kinds.kind(kind).spawn_radius)
                 for kind, count in counts if count > 0]
     
     def _create_enemies_from_counts(
@@ -347,7 +337,7 @@ class SpawnManager:
             
             for i in range(spawn_count):
                 pos = remaining_positions[i]
-                enemies.append(make_enemy(enemy_type, pos, level, None)[1])
+                enemies.append(make_enemy(enemy_type, pos, level, None))
                 used_positions.append(pos)
         
         return enemies

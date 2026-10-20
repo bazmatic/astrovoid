@@ -7,14 +7,10 @@ import math
 from dataclasses import dataclass
 from typing import FrozenSet, Optional, Tuple
 
+import enemy_kinds
+
 Cell = Tuple[int, int]
 
-ENEMY_TYPES = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone',
-               'split_boss', 'mother_boss', 'rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet')
-# Enemies that never move, which a gate's plank must not cover (it would rock on them for ever)
-ANCHORED_KINDS = ('anemone', 'flighthouse')
-# Enemies flown by a pilot, which the game makes itself (they need a pilot and a view of the game)
-HUNTER_KINDS = ('rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet')
 
 
 class LayoutError(ValueError):
@@ -105,7 +101,7 @@ class Layout:
         return grid
 
     def counts(self):
-        counts = dict.fromkeys(ENEMY_TYPES, 0)
+        counts = dict.fromkeys(enemy_kinds.kinds(), 0)
         for kind, _ in self.enemies:
             counts[kind] += 1
         return counts
@@ -157,7 +153,7 @@ def parse_layout(data, grid_size):
             kind, raw = entry['type'], entry['cell']
         except (TypeError, KeyError):
             raise LayoutError(f'enemy {entry!r} needs a type and a cell')
-        if kind not in ENEMY_TYPES:
+        if kind not in enemy_kinds.kinds():
             raise LayoutError(f'unknown enemy type {kind!r}')
         cell = _cell(raw, grid_size, f'{kind}')
         if cell in walls or cell in taken:
@@ -187,7 +183,7 @@ def parse_layout(data, grid_size):
             if cell in cells:
                 raise LayoutError(f'gate at {cell} is on {what}')
         kept_clear = {'the start': {start}, 'the exit': {exit_},
-                      'an anchored enemy': {c for kind, c in enemies if kind in ANCHORED_KINDS}}
+                      'an anchored enemy': {c for kind, c in enemies if kind in enemy_kinds.anchored()}}
         for plank in plank_cells(placement):
             if plank in walls or not (1 <= plank[0] <= grid_size - 2 and 1 <= plank[1] <= grid_size - 2):
                 raise LayoutError(f'the plank of the gate at {cell} runs into a wall at {plank}')

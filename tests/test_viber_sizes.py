@@ -12,7 +12,7 @@ from entities.ship import Ship
 from game_handlers.collision_handler import CollisionHandler
 from hunter.neural.policy import random_policy
 from hunter.surroundings import ProtagonistSurroundings
-from level_layout import ENEMY_TYPES, HUNTER_KINDS
+import enemy_kinds
 from scoring.system import ScoringSystem
 from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_layout_play import real_level_config
@@ -54,7 +54,7 @@ def test_a_half_strength_bullet_costs_half_and_pushes_half_as_hard():
 
 
 def test_a_vibelet_bullet_is_almost_harmless():
-    scoring, _ = hit(Vibelet.SHOT_STRENGTH)
+    scoring, _ = hit(enemy_kinds.kind('vibelet').hunter.shot_strength)
     assert scoring.enemy_bullet_hits * config.ENEMY_BULLET_PENALTY == pytest.approx(0.5)
 
 
@@ -75,7 +75,7 @@ def test_the_vibelet_is_half_size_dies_to_one_hit_and_its_bullets_are_a_tenth_as
 
 def test_both_are_enemy_kinds_a_level_can_place_and_say_their_kind():
     for kind, cls in (('boss_viber', BossViber), ('vibelet', Vibelet), ('neural_hunter', NeuralHunter)):
-        assert kind in ENEMY_TYPES and kind in HUNTER_KINDS and make(cls).type == kind
+        assert kind in enemy_kinds.hunters() and make(cls).type == kind
 
 
 LAYOUT = {'walls': [], 'start': [1, 1], 'exit': [9, 9],
@@ -164,10 +164,13 @@ def test_the_boss_viber_has_a_power_bar_above_it_that_drains_as_it_is_hit():
     assert 0 < bar_pixels() < full
 
 
-def test_the_settings_say_which_enemies_carry_a_bar(monkeypatch):
+def test_each_kind_says_whether_it_carries_a_bar(monkeypatch):
+    from dataclasses import replace
     from entities.rules_hunter import RulesHunter
-    assert tuple(config.SETTINGS.game.enemyHitPointBars) == ('boss_viber',)
-    monkeypatch.setattr(config.SETTINGS.game, 'enemyHitPointBars', ['vibelet', 'rules_hunter'])
+    assert [k for k in enemy_kinds.hunters() if enemy_kinds.kind(k).hunter.shows_hit_points] == ['boss_viber']
+    for key, shows in (('boss_viber', False), ('vibelet', True), ('rules_hunter', True)):
+        entry = enemy_kinds.kind(key)
+        monkeypatch.setitem(enemy_kinds._CATALOGUE, key, replace(entry, hunter=replace(entry.hunter, shows_hit_points=shows)))
     shows = {cls.__name__: cls((400.0, 400.0), *((SilentWorker(), None) if cls is RulesHunter else (None, None)))
              .shows_hit_points() for cls in (NeuralHunter, BossViber, Vibelet, RulesHunter)}
     assert shows == {'NeuralHunter': False, 'BossViber': False, 'Vibelet': True, 'RulesHunter': True}

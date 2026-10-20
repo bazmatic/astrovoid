@@ -59,6 +59,7 @@ class Egg(GameEntity, Collidable, Drawable):
         ending: "hatched" or "burst" once the egg is gone, None while it lives.
         blobs: Lumps of jelly flung out when the egg is burst.
     """
+    type = 'egg'  # the enemy kind a level file names
     
     # Drawing constants (lengths are multiples of the current radius)
     SAC_POINTS = 28  # Points around the sac's outline

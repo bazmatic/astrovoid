@@ -10,7 +10,7 @@ import os
 import pygame
 
 import config
-import enemy_names
+import enemy_kinds
 import level_config
 from editor import files
 from editor.generated import generated_layout
@@ -21,7 +21,6 @@ from entities.neural_hunter import VIBERS
 from entities.rules_hunter import RulesHunter
 from entities.ship import Ship
 from game_handlers.spawn_manager import make_enemy
-from level_layout import ENEMY_TYPES
 from maze.config import MazeComplexity
 from maze.generator import Maze
 from policies.exit import OpenAfterTime, TypeCleared
@@ -37,7 +36,7 @@ REPEAT_INTERVAL = 0.05
 FLASH_SECONDS = 2.0
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 
-LABELS = {'wall': 'Wall', **{kind: enemy_names.name(kind) for kind in ENEMY_TYPES},
+LABELS = {'wall': 'Wall', **{kind: enemy_kinds.name(kind) for kind in enemy_kinds.kinds()},
           'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon', 'gate': 'Gate', 'motor_gate': 'Motor gate'}
 
 # The chip beside each palette entry, in the colours the things have in play
@@ -45,7 +44,7 @@ CHIPS = {'wall': (120, 130, 150), 'static': (255, 90, 90), 'patrol': (255, 150, 
          'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'egg': (240, 220, 200),
          'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
          'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
-         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
+         'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'baby': (215, 170, 255), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
          'gate': (120, 235, 245), 'motor_gate': (255, 190, 80)}
 
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
@@ -374,12 +373,12 @@ class LevelEditor:
         recorder = CommandRecorder()
         sprites = []
         for kind, cell in layout.enemies:
-            if kind == 'rules_hunter':
+            if enemy_kinds.kind(kind).pilot == 'rules':
                 sprites.append((kind, RulesHunter(centre(*cell), _NullWorker(), _NoView())))
             elif kind in VIBERS:
                 sprites.append((kind, VIBERS[kind](centre(*cell), None, _NoView())))      # drawn, never flown
             else:
-                sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)[1]))
+                sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)))
         ship = Ship(centre(*model.start))
         exit_pos = centre(*model.exit)
         ship.angle = math.degrees(math.atan2(exit_pos[1] - ship.y, exit_pos[0] - ship.x)) % 360

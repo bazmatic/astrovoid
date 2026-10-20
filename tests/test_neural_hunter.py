@@ -11,7 +11,7 @@ from entities.neural_hunter import NeuralHunter
 from entities.rules_hunter import RulesHunter
 from hunter.neural.policy import random_policy
 from hunter.surroundings import ProtagonistSurroundings
-from level_layout import ENEMY_TYPES
+import enemy_kinds
 from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_layout_play import real_level_config
 from tests.test_rules_hunter import FakeGame, target, SilentWorker
@@ -23,7 +23,7 @@ def make(game=None, policy=None):
 
 
 def test_it_is_an_enemy_type_a_level_can_place():
-    assert 'neural_hunter' in ENEMY_TYPES
+    assert 'neural_hunter' in enemy_kinds.kinds()
 
 
 def test_it_is_magenta_not_the_rules_red_or_the_allied_green():

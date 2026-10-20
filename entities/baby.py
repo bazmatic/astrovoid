@@ -18,6 +18,7 @@ class Baby(ReplayEnemyShip):
     Attributes:
         Inherits all attributes from ReplayEnemyShip.
     """
+    type = 'baby'  # the enemy kind a level file names
     
     def __init__(self, start_pos: Tuple[float, float], command_recorder: CommandRecorder):
         """Initialize Baby enemy.

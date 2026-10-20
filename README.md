@@ -225,7 +225,7 @@ The maze is built from solid blocks of rock. A block has walls only where it fac
 - **Aggressive**: Actively chase the player when alerted
 - **Replay**: Purple ships that replay your previous successful attempt
 - **Egg**: Stationary enemies that grow over time. When they reach maximum size, they hatch and spawn 1-3 Baby enemies. Can be destroyed by projectiles before hatching (requires 2 hits). When hit, they gain momentum and move with physics.
-- **Baby**: Small, fast versions of Replay enemies that spawn when Eggs hatch
+- **Baby**: Small, fast versions of Replay enemies that spawn when Eggs hatch (a level's layout can also place them)
 - **Split Boss**: Large enemies (2x size) that split into two Replay enemies when destroyed. Require 8 hits to destroy.
 - **Mother Boss**: Very large enemies (3x size) that continuously lay Egg enemies. Require 20 hits to destroy. When destroyed, they split into two Replay enemies like Split Boss.
 - **Rules hunter**: The Rules pilot's hunter ship, flown as an enemy (`entities/rules_hunter.py`). It sees only its target (you, or in training the neural hunter) and fires only at it. Requires 12 hits.
@@ -402,6 +402,7 @@ asterdroids/
 ## Configuration
 
 - All the tuning constants (screen dimensions, enemy behavior, maze presets, UI colors, etc.) live in `config/settings.json`. Edit this file to tweak the experience and keep everything organized by section.
+- Each kind of enemy (its names, how it behaves in the maze and its own tuning) has one entry in `config/enemies.json`.
 - `config.py` loads the JSON into typed dataclasses and exposes the legacy uppercase names for backward compatibility (e.g., `config.SCREEN_WIDTH`) while also providing `config.SETTINGS` for new code that prefers structured access.
 - When updating `config/settings.json`, rerun the game or tests to reload the new configuration.
 

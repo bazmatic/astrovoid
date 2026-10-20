@@ -1,13 +1,13 @@
 """The editor's rules: what is in each cell, what may be placed where. No drawing and no files."""
-import enemy_names
-from level_layout import ANCHORED_KINDS, ENEMY_TYPES, GatePlacement, Layout, plank_cells, planks_overlap
+import enemy_kinds
+from level_layout import GatePlacement, Layout, plank_cells, planks_overlap
 from maze.config import MazeComplexity
 from maze.generator import Maze
 from physics.obstacle_world import plank_fits
 from policies.ammo import AMMO_POLICIES, DEFAULT_AMMO_POLICY
 from policies.exit import DEFAULT_EXIT_POLICY, EXIT_POLICIES, OpenAfterTime, TypeCleared
 
-PALETTE = ('wall',) + ENEMY_TYPES + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
+PALETTE = ('wall',) + enemy_kinds.kinds() + ('start', 'exit', 'beacon', 'gate', 'motor_gate')
 GATE_KINDS = ('gate', 'motor_gate')
 GATE_ANGLES = (0, 45, 90, 135)
 GATE_TURN = 45
@@ -80,10 +80,10 @@ class EditorModel:
             if self.beacon == cell:
                 self.beacon = None
             self.walls.add(cell)
-        elif item in ENEMY_TYPES:
-            if here is not None and here not in ENEMY_TYPES:
+        elif item in enemy_kinds.kinds():
+            if here is not None and here not in enemy_kinds.kinds():
                 return False                               # a wall, the start, the exit or the beacon is there
-            if item in ANCHORED_KINDS and not self._gates_fit(clear=self._kept_clear() | {cell}):
+            if item in enemy_kinds.anchored() and not self._gates_fit(clear=self._kept_clear() | {cell}):
                 return False                               # a plank over it would rock on it for ever
             self.enemies[cell] = item
         elif item in GATE_KINDS:
@@ -126,7 +126,7 @@ class EditorModel:
 
     def _kept_clear(self):
         """The cells no plank may cover: the start, the exit and the anchored enemies."""
-        return {self.start, self.exit} | {cell for cell, kind in self.enemies.items() if kind in ANCHORED_KINDS}
+        return {self.start, self.exit} | {cell for cell, kind in self.enemies.items() if kind in enemy_kinds.anchored()}
 
     def _maze(self, walls):
         key = frozenset(walls)
@@ -207,7 +207,7 @@ class EditorModel:
 
     def toggle_exit_type(self, kind):
         """Add an enemy kind to a kill-these exit, or take it out. The last kind can't be taken out."""
-        if not isinstance(self.exit_policy, TypeCleared) or kind not in enemy_names.KINDS:
+        if not isinstance(self.exit_policy, TypeCleared) or kind not in enemy_kinds.kinds():
             return False
         kinds = self.exit_policy.enemy_types
         if kind in kinds:

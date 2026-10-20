@@ -13,7 +13,6 @@ from typing import List, Optional, Sequence, Tuple
 import pymunk
 
 import config
-from level_layout import ANCHORED_KINDS  # noqa: F401 - the game asks this module which enemies are anchored
 from maze.wall_segment import WallSegment
 
 Point = Tuple[float, float]

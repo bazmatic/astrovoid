@@ -34,6 +34,7 @@ class FlockerEnemyShip(RotatingThrusterShip):
     Attributes:
         All attributes inherited from RotatingThrusterShip.
     """
+    type = 'flocker'  # the enemy kind a level file names
     
     DEATH_DURATION = 48.0  # Frames: wings fold, then the bird tumbles away
     DEATH_FRICTION = 0.94
