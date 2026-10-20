@@ -2,7 +2,7 @@ import math
 import numpy as np
 import pytest
 from types import SimpleNamespace
-from entities.enemy import Enemy
+import creatures
 from entities.hunter_ship import HunterShip
 from hunter.model import HunterSettings
 from hunter.senses import (FEATURE_NAMES, SENSE_SIZE, Senses, blocked, ray_distances)
@@ -79,7 +79,7 @@ def test_ray_distances_and_blocked_direct():
 def test_an_enemy_ahead_has_geometry_in_the_hunters_frame():
     ship = HunterShip((500, 500))
     ship.angle = 0.0
-    enemy = Enemy((700, 500), 'patrol', 1)
+    enemy = creatures.build('patrol', (700, 500), 1)
     v = sense(ship, world(), [enemy])
     assert value(v, 'enemy0_present') == 1.0
     assert value(v, 'enemy0_sin') == pytest.approx(0.0, abs=1e-6)
@@ -91,13 +91,13 @@ def test_an_enemy_ahead_has_geometry_in_the_hunters_frame():
 def test_right_of_the_nose_is_a_positive_sine():
     ship = HunterShip((500, 500))
     ship.angle = 0.0
-    south = Enemy((500, 700), 'patrol', 1)       # y grows downward: south is to the right of an east-facing nose
+    south = creatures.build('patrol', (500, 700), 1)       # y grows downward: south is to the right of an east-facing nose
     assert value(sense(ship, world(), [south]), 'enemy0_sin') > 0.9
 
 
 def test_enemies_are_listed_nearest_first_and_capped_at_six():
     ship = HunterShip((500, 500))
-    enemies = [Enemy((500 + 40 * (i + 1), 500), 'patrol', 1) for i in range(9)]
+    enemies = [creatures.build('patrol', (500 + 40 * (i + 1), 500), 1) for i in range(9)]
     v = sense(ship, world(), enemies)
     dists = [value(v, f'enemy{i}_dist') for i in range(6)]
     assert dists == sorted(dists) and all(d > 0 for d in dists)
@@ -107,14 +107,14 @@ def test_enemies_are_listed_nearest_first_and_capped_at_six():
 def test_an_enemy_behind_a_wall_is_not_sensed_but_still_counts_as_present():
     ship = HunterShip((500, 500))
     wall = WallSegment((600, 300), (600, 700), 3)
-    v = sense(ship, world([wall]), [Enemy((700, 500), 'patrol', 1)])
+    v = sense(ship, world([wall]), [creatures.build('patrol', (700, 500), 1)])
     assert value(v, 'enemy0_present') == 0.0
     assert value(v, 'enemies_present') == 1.0
 
 
 def test_dead_enemies_are_neither_sensed_nor_present():
     ship = HunterShip((500, 500))
-    enemy = Enemy((700, 500), 'patrol', 1)
+    enemy = creatures.build('patrol', (700, 500), 1)
     enemy.active = False
     v = sense(ship, world(), [enemy])
     assert value(v, 'enemy0_present') == 0.0 and value(v, 'enemies_present') == 0.0
@@ -255,7 +255,7 @@ def test_last_controls_are_echoed():
 def test_an_enemy_seen_then_hidden_is_remembered_with_its_age_then_forgotten():
     ship = HunterShip((500, 500))
     ship.angle = 0.0
-    enemy = Enemy((700, 500), 'patrol', 1)
+    enemy = creatures.build('patrol', (700, 500), 1)
     senses = Senses(HunterSettings())
     sense(ship, world(), [enemy], senses=senses, now=0.0)
     hidden = world([WallSegment((600, 300), (600, 700), 3)])
@@ -271,7 +271,7 @@ def test_an_enemy_seen_then_hidden_is_remembered_with_its_age_then_forgotten():
 
 def test_reset_clears_memory():
     ship = HunterShip((500, 500))
-    enemy = Enemy((700, 500), 'patrol', 1)
+    enemy = creatures.build('patrol', (700, 500), 1)
     senses = Senses(HunterSettings())
     sense(ship, world(), [enemy], senses=senses, now=0.0)
     senses.reset()
@@ -282,7 +282,7 @@ def test_reset_clears_memory():
 def test_a_remembered_position_now_in_plain_view_and_empty_is_dropped():
     ship = HunterShip((500, 500))
     ship.angle = 0.0
-    enemy = Enemy((700, 500), 'patrol', 1)
+    enemy = creatures.build('patrol', (700, 500), 1)
     senses = Senses(HunterSettings())
     sense(ship, world(), [enemy], senses=senses, now=0.0)
     enemy.x = 500.0; enemy.y = 800.0                      # it moved away; its old spot is visible and empty
@@ -294,7 +294,7 @@ def test_senses_are_cheap():
     import time
     ship = HunterShip((500, 500))
     w = world([WallSegment((100 + 50 * i, 100), (100 + 50 * i, 900), 3) for i in range(16)])
-    enemies = [Enemy((300 + 40 * i, 500), 'patrol', 1) for i in range(12)]
+    enemies = [creatures.build('patrol', (300 + 40 * i, 500), 1) for i in range(12)]
     senses = Senses(HunterSettings())
     start = time.perf_counter()
     for k in range(200):

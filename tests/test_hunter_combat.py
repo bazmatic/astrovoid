@@ -1,6 +1,6 @@
 from unittest.mock import Mock
 from entities.projectile import Projectile
-from entities.enemy import Enemy
+import creatures
 from game_handlers.collision_handler import CollisionHandler
 from hunter.model import HunterSettings
 
@@ -15,7 +15,7 @@ def test_hunter_kill_does_not_award_player_points():
     scoring = Mock()
     handler = CollisionHandler(Mock(), scoring, Mock())
     for source in ('hunter', 'player'):
-        enemy = Enemy((200,200), 'patrol', 1)
+        enemy = creatures.build('patrol', (200,200), 1)
         bullet = Projectile((200,200), 0, source=source)
         assert handler.handle_projectile_enemy_collisions(bullet, [enemy], [], [], [], [], [], [], [], [])
         assert not enemy.active
@@ -61,6 +61,6 @@ def test_friendly_contact_bounces_without_damage_and_hostile_contact_hurts():
     handler = CollisionHandler(Mock(),Mock(),Mock())
     handler.handle_hunter_contacts(hunter,player,[])
     assert hunter.health == 3
-    enemy = Enemy((hunter.x,hunter.y),'patrol',1)
+    enemy = creatures.build('patrol', (hunter.x,hunter.y),1)
     handler.handle_hunter_contacts(hunter,None,[enemy])
     assert hunter.health == 2

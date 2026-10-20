@@ -43,6 +43,8 @@ class Creature(GameEntity):
         self.hit_points = 1
         self.max_hit_points = 1
         self.has_spawned = False
+        self.gun_range = 0.0    # how far it can shoot; 0 without a gun
+        self.gun_charge = 0.0   # how far its gun is through reloading, 0 to 1
 
     @property
     def DEATH_DURATION(self) -> float:

@@ -79,3 +79,15 @@ def test_enemies_go_after_whichever_hunter_is_nearer(world):
     assert nearest_friendly(foe, _Target(a), b) is b
     a.x, a.y = foe.x + 30, foe.y
     assert nearest_friendly(foe, _Target(a), b) is not b          # now the first hunter is the nearer one
+
+
+def test_creatures_in_the_duel_move_and_aim_at_the_nearer_hunter(world):
+    maze, a, b, enemies = world
+    enemies.spawn([a.get_pos(), b.get_pos()], rng=random.Random(5))
+    crab = enemies.roster.of_kind('patrol')[0]
+    start = crab.get_pos()
+    b.x, b.y = crab.x + 40, crab.y
+    for _ in range(30):
+        enemies.update(1.0, [a, b])
+    assert crab.get_pos() != start
+    assert enemies.encounter.target_for(crab) == b.get_pos()

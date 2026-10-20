@@ -2,7 +2,7 @@ import asyncio
 import json
 import math
 import pytest
-from entities.enemy import Enemy
+import creatures
 from entities.hunter_ship import HunterShip
 from hunter.jev_pilot import JevPilot
 from hunter.model import ACTIONS, NEUTRAL
@@ -35,7 +35,7 @@ def test_every_default_is_inside_its_bounds():
 
 
 def test_default_params_change_nothing():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     assert pilot_state(raw) == pilot_state(raw, DEFAULT)
 
 
@@ -54,21 +54,21 @@ def test_bad_params_are_rejected(bad):
 
 
 def test_engage_standoff_reaches_the_engage_reading():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     near = pilot_state(raw, RuleParams(engage_standoff_cells=1.0))['engage']
     far = pilot_state(raw, RuleParams(engage_standoff_cells=3.0))['engage']
     assert far['standoff_metres'] == pytest.approx(3 * near['standoff_metres'])
 
 
 def test_harmless_speed_reaches_holding_still():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     speed = pilot_state(raw)['speed_metres_per_second']
     assert pilot_state(raw, RuleParams(harmless_speed=speed + 5))['engage']['holding_still']
     assert not pilot_state(raw, RuleParams(harmless_speed=speed - 5))['engage']['holding_still']
 
 
 def test_ratios_reach_the_range_state():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     standoff = pilot_state(raw)['engage']['standoff_metres']
     distance = pilot_state(raw)['engage']['distance_metres']
     wide = RuleParams(too_close_ratio=distance / standoff * 1.1)
@@ -102,7 +102,7 @@ def test_rules_client_passes_params_to_decide():
 
 
 def test_pulse_frames_reach_the_action():
-    raw, obs = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, obs = raw_state([creatures.build('patrol', (250, 150), 1)])
 
     class Pulse:
         async def system_one(self, **_):
@@ -120,7 +120,7 @@ def test_pulse_frames_reach_the_action():
 
 def moving_away_state():
     """A real raw state with one visible enemy that runs away too fast to be shot."""
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     raw['visible_contacts'][0]['velocity'] = [20.0, 0.0]
     return raw
 
@@ -152,7 +152,7 @@ def test_pursue_gives_a_course_to_a_visible_enemy_that_cannot_be_aimed_at():
 
 
 def test_pursue_is_absent_when_the_enemy_can_be_aimed_at():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     assert pilot_state(raw)['visible_contacts'][0]['aim'] is not None
     assert pilot_state(raw, RuleParams(pursue_unaimed=True)).get('pursue') is None
 
@@ -172,7 +172,7 @@ def test_investigate_heads_for_the_nearest_remembered_enemy_that_is_out_of_sight
 
 
 def test_investigate_ignores_a_remembered_enemy_that_is_visible_again():
-    raw, _ = raw_state([Enemy((250, 150), 'patrol', 1)])
+    raw, _ = raw_state([creatures.build('patrol', (250, 150), 1)])
     seen = raw['visible_contacts'][0]
     raw['remembered_contacts'] = [dict(seen, age=1.0)]
     assert pilot_state(raw, RuleParams(investigate_memory=True)).get('investigate') is None
@@ -235,7 +235,7 @@ def strafing_state(walls=None, tracking=True, heading=0, speed=0.3):
     """A slow hunter aiming at an enemy dead ahead, last steering `track`, with the given walls."""
     ship = HunterShip((150, 150))
     ship.vx, ship.vy, ship.angle = speed, 0, heading
-    obs = HunterPerception().observe(ship, maze(), None, [Enemy((250, 150), 'patrol', 1)], [], NEUTRAL, 0, 1)
+    obs = HunterPerception().observe(ship, maze(), None, [creatures.build('patrol', (250, 150), 1)], [], NEUTRAL, 0, 1)
     raw = json.loads(obs.state_json)
     raw['previous_action'] = {'track': tracking, 'turn': 0}
     if walls is not None:

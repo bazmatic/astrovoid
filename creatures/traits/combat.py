@@ -1,9 +1,13 @@
 """Combat: how a creature hurts, is hurt, is pushed about, and what its death leaves."""
 import math
+import random
+from typing import Optional
 
 import config
+import level_rules
 from creatures.trait import Trait
-from utils import circle_line_collision
+from entities.projectile import Projectile
+from utils import circle_line_collision, get_angle_to_point
 from utils.math_utils import apply_wall_collision_physics
 
 
@@ -84,3 +88,33 @@ class BouncesOffWalls(Trait):
                 c.y += normal_y * (c.radius + 1.0)
             c.emit('hit_wall', enc)
             return
+
+
+class Gun(Trait):
+    """Fires at where its brain aims when its brain says fire and it has reloaded. Numbers left out come from the
+    creature's level. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show."""
+    NAME = 'gun'
+
+    def __init__(self, intervalMin: Optional[int] = None, intervalMax: Optional[int] = None,
+                 range: Optional[float] = None):
+        self.interval_min, self.interval_max, self.range = intervalMin, intervalMax, range
+
+    def on_spawn(self, c, enc):
+        strength = level_rules.get_enemy_strength(c.level)
+        c.gun_range = strength.fire_range if self.range is None else self.range
+        self._reload(c, strength)
+
+    def on_frame(self, c, enc, dt):
+        c.gun_cooldown = max(0.0, c.gun_cooldown - dt)
+        controls = c.controls
+        if controls.fire and controls.aim is not None and c.gun_cooldown <= 0:
+            pos = c.get_pos()
+            enc.add_shot(Projectile(pos, get_angle_to_point(pos, controls.aim), is_enemy=c.allegiance == 'enemy'))
+            self._reload(c, level_rules.get_enemy_strength(c.level))
+            c.emit('fired', enc)
+        c.gun_charge = 1.0 - c.gun_cooldown / c.gun_interval
+
+    def _reload(self, c, strength):
+        low = strength.fire_interval_min if self.interval_min is None else self.interval_min
+        high = strength.fire_interval_max if self.interval_max is None else self.interval_max
+        c.gun_interval = c.gun_cooldown = random.randint(low, high)

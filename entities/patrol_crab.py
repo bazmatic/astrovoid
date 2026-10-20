@@ -5,8 +5,8 @@ This module draws it as a crab scuttling sideways: the shell lies along the
 patrol line, the legs step with real movement, and one oversized cannon claw
 swivels to track the player and telegraphs each shot.
 
-The crab is purely visual. Movement, firing and collision stay with the Enemy
-and its strategy.
+The crab is purely visual: it is the `crab` Body of a Creature. Movement,
+firing and collision belong to the creature's traits.
 """
 
 import math
@@ -19,7 +19,7 @@ from rendering import visual_effects
 from utils import distance, get_angle_to_point
 
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
+    from creatures.creature import Creature
 
 Point = Tuple[float, float]
 
@@ -83,20 +83,20 @@ class PatrolCrab:
     DEATH_CURL = (0.25, 0.7)
     DEATH_FADE = (0.65, 1.0)
 
-    def __init__(self, enemy: 'Enemy'):
+    def __init__(self, enemy: 'Creature'):
         """Initialize the crab for an enemy."""
         self.walk_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
         self.charge = 0.0
         self.fire_flash = 0.0
         self.reset(enemy)
 
-    def reset(self, enemy: 'Enemy') -> None:
+    def reset(self, enemy: 'Creature') -> None:
         """Square the crab up to the enemy's current patrol line and position."""
         self.facing = (enemy.angle + 90.0) % 360
         self.claw_angle = self.facing
         self._last_pos = (enemy.x, enemy.y)
 
-    def update(self, enemy: 'Enemy', dt: float, player_pos: Optional[Point]) -> None:
+    def update(self, enemy: 'Creature', dt: float, player_pos: Optional[Point]) -> None:
         """Advance the gait, claw aim and firing tell.
 
         Args:
@@ -124,21 +124,25 @@ class PatrolCrab:
         swivel = _angle_diff(target, self.claw_angle)
         self.claw_angle = (self.claw_angle + max(-max_turn, min(max_turn, swivel))) % 360
 
-        # Charge follows the strategy's fire cooldown while the player is in range
+        # Charge follows the gun's reloading while the target is in range
         target_charge = 0.0
-        interval = getattr(enemy.strategy, 'next_fire_interval', 0)
-        if player_pos and interval > 0 and distance((enemy.x, enemy.y), player_pos) <= enemy.fire_range:
-            target_charge = 1.0 - min(1.0, enemy.strategy.fire_cooldown / interval)
+        if player_pos and distance((enemy.x, enemy.y), player_pos) <= enemy.gun_range:
+            target_charge = enemy.gun_charge
         self.charge += (target_charge - self.charge) * self.CHARGE_SMOOTHING
 
         self.fire_flash = max(0.0, self.fire_flash - dt / self.FIRE_FLASH_FRAMES)
+
+    def on_event(self, enemy: 'Creature', name: str) -> None:
+        """The claw snaps shut when the gun fires."""
+        if name == 'fired':
+            self.on_fire()
 
     def on_fire(self) -> None:
         """Snap the claw shut with a flash: a shot was just fired."""
         self.fire_flash = 1.0
         self.charge = 0.0
 
-    def update_death(self, enemy: 'Enemy', dt: float) -> None:
+    def update_death(self, enemy: 'Creature', dt: float) -> None:
         """Let the claw go limp while the crab dies."""
         self.charge *= 0.8
         self.fire_flash = max(0.0, self.fire_flash - dt / self.FIRE_FLASH_FRAMES)
@@ -152,7 +156,7 @@ class PatrolCrab:
         side_rad = math.radians(self.facing - 90.0)
         return (math.cos(side_rad), math.sin(side_rad))
 
-    def draw(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the living crab.
 
         Args:
@@ -163,7 +167,7 @@ class PatrolCrab:
         screen.blit(glow, glow.get_rect(center=(int(enemy.x), int(enemy.y))))
         self._draw_body(screen, (enemy.x, enemy.y), enemy.radius, 0.0)
 
-    def draw_death(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw_death(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the dying crab: it flips onto its back, curls its legs in and fades.
 
         Args:

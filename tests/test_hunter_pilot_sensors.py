@@ -2,7 +2,7 @@ import math
 import json
 import pytest
 from entities.hunter_ship import HunterShip
-from entities.enemy import Enemy
+import creatures
 from hunter.perception import HunterPerception
 from hunter.model import NEUTRAL
 from hunter.pilot_sensors import pilot_state
@@ -14,7 +14,7 @@ from maze.wall_segment import WallSegment
 def test_real_observation_reports_enemy_direction_relative_to_nose(heading,direction):
     ship = HunterShip((150,150))
     ship.angle = heading
-    obs = HunterPerception().observe(ship,maze(),None,[Enemy((250,150),'patrol',1)],[],NEUTRAL,0,1)
+    obs = HunterPerception().observe(ship,maze(),None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     state = pilot_state(json.loads(obs.state_json))
     assert state['visible_contacts'][0]['direction'] == direction
 
@@ -22,7 +22,7 @@ def test_real_observation_reports_enemy_direction_relative_to_nose(heading,direc
 def test_navigation_sensors_do_not_offer_cells_behind_a_wall():
     ship,world = HunterShip((150,150)),maze()
     world.walls = [WallSegment((180,0),(180,900),3)]
-    obs = HunterPerception().observe(ship,world,None,[Enemy((250,150),'patrol',1)],[],NEUTRAL,0,1)
+    obs = HunterPerception().observe(ship,world,None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     state = pilot_state(json.loads(obs.state_json))
     assert state['visible_contacts'] == []
     assert state['space']['ahead']['clearance_metres'] == pytest.approx(30-ship.radius)
@@ -32,7 +32,7 @@ def test_navigation_sensors_do_not_offer_cells_behind_a_wall():
 def test_metres_speed_heading_and_rotation_use_physics_units():
     ship = HunterShip((150,150))
     ship.vx,ship.vy,ship.angle = 3,4,315
-    obs = HunterPerception().observe(ship,maze(),None,[Enemy((250,150),'patrol',1)],[],NEUTRAL,0,1)
+    obs = HunterPerception().observe(ship,maze(),None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     raw = json.loads(obs.state_json)
     state = pilot_state(raw)
     assert state['speed_metres_per_second'] == 5*raw['physics']['fps']
@@ -110,7 +110,7 @@ def test_turning_state_and_bearings_projected_to_next_decision():
     from dataclasses import replace
     ship = HunterShip((150,150))
     ship.angle = 300
-    enemy = Enemy((250,150),'patrol',1)
+    enemy = creatures.build('patrol', (250,150),1)
 
     def state(action):
         obs = HunterPerception().observe(ship,maze(),None,[enemy],[],action,0,1)
@@ -139,7 +139,7 @@ def test_aim_leads_a_crossing_enemy_and_reports_whether_the_nose_is_on_target():
     import config
     from entities.ship import Ship
     ship = HunterShip((150,150))
-    enemy = Enemy((350,150),'patrol',1)
+    enemy = creatures.build('patrol', (350,150),1)
 
     def contacts(player=None):
         obs = HunterPerception().observe(ship,maze(),player,[enemy],[],NEUTRAL,0,1)
@@ -211,7 +211,7 @@ def test_brake_solution_compares_speed_with_what_can_be_stopped_before_the_wall(
 def test_follow_player_routes_around_walls_to_the_player():
     from entities.ship import Ship
     ship,world,player = HunterShip((150,150)),maze(),Ship((350,150))
-    enemy = Enemy((150,450),'patrol',1)
+    enemy = creatures.build('patrol', (150,450),1)
 
     def follow():
         obs = HunterPerception().observe(ship,world,player,[enemy],[],NEUTRAL,0,1)

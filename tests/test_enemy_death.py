@@ -257,7 +257,7 @@ class TestBirdAndFlighthouseDeath:
 
 
 class TestLastKillPortrait:
-    @pytest.mark.parametrize('enemy', make_all_enemies() + [Enemy(POS, 'patrol'), Enemy(POS, 'aggressive')],
+    @pytest.mark.parametrize('enemy', make_all_enemies() + [creatures.build('patrol', POS), Enemy(POS, 'aggressive')],
                              ids=lambda e: type(e).__name__ + getattr(e, 'type', ''))
     def test_portrait_replays_every_enemy_without_changing_original(self, enemy):
         from copy import deepcopy

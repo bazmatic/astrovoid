@@ -206,8 +206,8 @@ class TestLevelComplete:
         assert squid_pixels(True) == 0
 
     def test_last_enemy_portraits_play_once_and_restart_on_next_clear(self, screen):
-        from entities.enemy import Enemy
-        enemy = Enemy((4000, 3000), "patrol")
+        import creatures
+        enemy = creatures.build('patrol', (4000, 3000))
         enemy.die()
         menu = LevelCompleteMenu(screen)
         menu.set_options(True, enemy)

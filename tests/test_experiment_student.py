@@ -50,10 +50,11 @@ class HunterShipRate:
 
 def test_a_different_turn_rate_changes_the_episode(spec, tmp_path):
     fast = StudentSpec(weights=spec.weights, decision_frames=6, turn_rate=3.0)
-    a = run_episode(14, 0, horizon=15.0, student=spec)
-    b = run_episode(14, 0, horizon=15.0, student=fast)
-    assert (a.kills, a.wall_hits, a.hits_taken, round(a.idle_seconds, 2)) != \
-           (b.kills, b.wall_hits, b.hits_taken, round(b.idle_seconds, 2))
+    def outcome(seed, student):
+        r = run_episode(14, seed, horizon=15.0, student=student)
+        return r.kills, r.wall_hits, r.hits_taken, round(r.idle_seconds, 2)
+    # A random policy may not turn at all in one short episode, and then the turn rate cannot show: try a few
+    assert any(outcome(seed, spec) != outcome(seed, fast) for seed in range(3))
 
 
 def test_evaluate_passes_the_student_to_each_episode(monkeypatch, spec):

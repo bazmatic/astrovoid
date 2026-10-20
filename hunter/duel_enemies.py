@@ -8,6 +8,7 @@ import math
 import random
 
 import config
+from creatures.encounter import Encounter
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.enemy_roster import EnemyRoster
@@ -42,6 +43,26 @@ class _Target:
         return False
 
 
+class _DuelWorld:
+    """What the Encounter acts on in a duel: the first hunter stands in for the player's ship, the second is the
+    hunter, and nothing drops pickups."""
+
+    def __init__(self, enemies):
+        self._enemies = enemies
+        self.ship = self.hunter = None
+        self.maze, self.scoring = enemies.maze, enemies.scoring
+        self.sound_manager, self.command_recorder = enemies.sound_manager, enemies.recorder
+        self.collision_handler = enemies.collisions
+        self.powerup_crystals = []
+
+    @property
+    def projectiles(self):
+        return self._enemies.bullets
+
+    def jev_beacon_allowed(self):
+        return False
+
+
 class DuelEnemies:
     def __init__(self, maze, sound_manager):
         self.maze, self.sound_manager = maze, sound_manager
@@ -52,6 +73,8 @@ class DuelEnemies:
         self.recorder = CommandRecorder()
         self.collisions = CollisionHandler(sound_manager, self.scoring, self.recorder)
         self.bullets = []                           # shots the enemies have fired
+        self.world = _DuelWorld(self)
+        self.encounter = Encounter(self.roster, self.world)
 
     def spawn(self, hunter_positions, rng=None):
         """A random handful of enemies on open ground, well clear of both hunters."""
@@ -74,6 +97,8 @@ class DuelEnemies:
         first, second = hunters
         roster = self.roster
         target = _Target(first)
+        self.world.ship, self.world.hunter = target, second
+        self.encounter.step(dt)
         self.updater.update_enemies(roster.of_kind('static', 'patrol', 'aggressive'), dt, None, self.maze, target, self.scoring, self.bullets,
                                     hunter=second)
         self.updater.update_flockers(roster.of_kind('flocker'), dt, None, self.maze, target, self.scoring, self.bullets,
@@ -86,7 +111,7 @@ class DuelEnemies:
         """Whether a hunter's shot struck an enemy (it is then spent). The enemy code only lets friendly shots hit."""
         was_enemy, shot.is_enemy = shot.is_enemy, False
         try:
-            return self.collisions.shoot_into(shot, self.roster, [], maze=self.maze)
+            return self.encounter.shoot(shot)
         finally:
             shot.is_enemy = was_enemy
 

@@ -6,7 +6,7 @@ import pygame
 import pytest
 import config
 import level_config
-from entities.enemy import Enemy
+import creatures
 from entities.jev_beacon import JevBeacon
 from entities.powerup_crystal import PowerupCrystal
 from entities.projectile import Projectile
@@ -22,7 +22,7 @@ def beacons(game):
 
 def shoot(handler, pickups, allowed):
     """Kill one enemy with a player shot and return what it dropped."""
-    enemy = Enemy((100, 100), 'patrol')
+    enemy = creatures.build('patrol', (100, 100))
     shot = Projectile((100, 100), 0)
     handler.handle_projectile_enemy_collisions(
         shot, [enemy], [], [], [], [], [], [], [], pickups, jev_beacon_allowed=allowed)

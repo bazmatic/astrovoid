@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 from dataclasses import replace
 from entities.hunter_ship import HunterShip
-from entities.enemy import Enemy
+import creatures
 from maze.wall_segment import WallSegment
 from hunter.model import NEUTRAL, HunterSettings
 from hunter.perception import HunterPerception
@@ -20,7 +20,7 @@ def read(perception, hunter, world, enemies, now):
 
 def test_hidden_motion_does_not_rewrite_sighting():
     p, h, m = HunterPerception(), HunterShip((150,150)), maze()
-    e = Enemy((250,150),'patrol',1)
+    e = creatures.build('patrol', (250,150),1)
     first = read(p,h,m,[e],0)
     assert len(first['visible_contacts']) == 1
     m.walls = [WallSegment((200,0),(200,900),3)]
@@ -35,7 +35,7 @@ def test_hidden_motion_does_not_rewrite_sighting():
 def test_contact_caps_do_not_erase_visible_memory_and_snapshot_is_detached():
     settings = replace(HunterSettings(), max_contacts=1, max_memory_contacts=2)
     p, h, m = HunterPerception(settings), HunterShip((150,150)), maze()
-    enemies = [Enemy((200+i*10,150),'patrol',1) for i in range(3)]
+    enemies = [creatures.build('patrol', (200+i*10,150),1) for i in range(3)]
     snap = p.observe(h,m,None,enemies,[],NEUTRAL,0,1)
     for e in enemies:
         e.x = 300
@@ -49,13 +49,13 @@ def test_contact_caps_do_not_erase_visible_memory_and_snapshot_is_detached():
 
 def test_visible_empty_position_removes_sighting():
     p,h,m = HunterPerception(), HunterShip((150,150)), maze()
-    read(p,h,m,[Enemy((250,150),'patrol',1)],0)
+    read(p,h,m,[creatures.build('patrol', (250,150),1)],0)
     assert not read(p,h,m,[],1)['remembered_contacts']
 
 
 def test_observed_death_removes_old_hidden_sighting():
     p,h,m = HunterPerception(),HunterShip((150,150)),maze()
-    enemy = Enemy((250,150),'patrol',1)
+    enemy = creatures.build('patrol', (250,150),1)
     read(p,h,m,[enemy],0)
     m.walls = [WallSegment((200,0),(200,900),3)]
     enemy.x=160
@@ -97,7 +97,7 @@ def test_sight_range_is_the_same_distance_whatever_the_cell_size():
     assert settings.sensor_range(coarse) == pytest.approx(settings.sensor_range(dense)) == pytest.approx(800)
 
     def sees(world, distance):
-        state = read(HunterPerception(), HunterShip((150, 150)), world, [Enemy((150 + distance, 150), 'patrol', 1)], 0)
+        state = read(HunterPerception(), HunterShip((150, 150)), world, [creatures.build('patrol', (150 + distance, 150), 1)], 0)
         return len(state['visible_contacts']) == 1
 
     for world in (coarse, dense):
@@ -111,7 +111,7 @@ def test_the_state_says_whether_any_enemy_is_still_alive_even_out_of_sight():
     ship = HunterShip((150, 150))
     world = maze()
     world.walls = [WallSegment((180, 0), (180, 900), 3)]
-    hidden = Enemy((250, 150), 'patrol', 1)          # behind a wall, so not visible
+    hidden = creatures.build('patrol', (250, 150), 1)          # behind a wall, so not visible
     state = read(HunterPerception(), ship, world, [hidden], 0)
     assert state['visible_contacts'] == []
     assert state['enemies_present'] is True

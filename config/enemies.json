@@ -31,6 +31,17 @@
     "tuning": {
       "size": 8,
       "speed": 1
+    },
+    "allegiance": "enemy",
+    "body": "crab",
+    "traits": {
+      "patrol": {},
+      "drift": {"speed": "patrol_speed"},
+      "gun": {},
+      "bouncesOffWalls": {},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 1},
+      "dropsPickup": {}
     }
   },
   "aggressive": {
