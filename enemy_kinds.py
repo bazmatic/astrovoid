@@ -16,6 +16,7 @@ from utils.resource_path import resource_path
 
 PAR_WEIGHTS = ('enemy', 'spawningBoss')
 PILOTS = ('rules', 'neural')
+ALLEGIANCES = ('friend', 'enemy')
 
 
 @dataclass(frozen=True)
@@ -40,16 +41,20 @@ class EnemyKind:
     pilot: Optional[str] = None             # an enemy hunter's pilot; None for every other kind
     hunter: Optional[HunterStats] = None    # an enemy hunter's own numbers
     tuning: Mapping[str, Any] = field(default_factory=dict)   # settings only this kind's own code reads
+    allegiance: str = 'enemy'              # whom it targets and whose shots hurt it: 'friend' or 'enemy'
+    body: Optional[str] = None             # the Body a Creature of this kind is drawn with; None: not a Creature yet
+    traits: Tuple[Tuple[str, Mapping[str, Any]], ...] = ()   # (trait name, its parameters), in the order they run
 
 
 _COMMON = {'name', 'anchored', 'replaysPlayer', 'parWeight', 'spawnRadius', 'layer'}
 _HUNTER = {'pilot', 'hitPoints', 'sizeScale', 'shotStrength', 'showsHitPoints'}
+_CREATURE = {'allegiance', 'body', 'traits'}   # optional while the kinds move onto Creatures one by one
 
 
 def _parse(key: str, raw: Dict[str, Any]) -> EnemyKind:
     is_hunter = 'pilot' in raw
     required = _COMMON | (_HUNTER if is_hunter else {'tuning'})
-    missing, unknown = required - set(raw), set(raw) - required
+    missing, unknown = required - set(raw), set(raw) - required - _CREATURE
     if missing or unknown:
         raise ValueError(f'enemy kind {key!r}: missing {sorted(missing)}, unknown {sorted(unknown)}')
     singular, plural = raw['name']
@@ -60,10 +65,14 @@ def _parse(key: str, raw: Dict[str, Any]) -> EnemyKind:
         if raw['pilot'] not in PILOTS:
             raise ValueError(f'enemy kind {key!r}: pilot must be one of {PILOTS}')
         hunter = HunterStats(raw['hitPoints'], raw['sizeScale'], raw['shotStrength'], raw['showsHitPoints'])
+    allegiance = raw.get('allegiance', 'enemy')
+    if allegiance not in ALLEGIANCES:
+        raise ValueError(f'enemy kind {key!r}: allegiance must be one of {ALLEGIANCES}')
     return EnemyKind(key=key, name=singular, plural=plural, anchored=raw['anchored'],
                      replays_player=raw['replaysPlayer'], par_weight=raw['parWeight'],
                      spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=raw.get('pilot'), hunter=hunter,
-                     tuning=raw.get('tuning', {}))
+                     tuning=raw.get('tuning', {}), allegiance=allegiance, body=raw.get('body'),
+                     traits=tuple(raw.get('traits', {}).items()))
 
 
 def load(path: Optional[str] = None) -> Dict[str, EnemyKind]:

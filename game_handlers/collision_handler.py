@@ -54,14 +54,14 @@ class CollisionHandler:
         self.level_kills = 0
         self.level_crystals_collected = 0
     
-    def _record_projectile_kill(self, projectile, enemy) -> None:
+    def record_kill(self, projectile, enemy) -> None:
         if projectile.source in ('player', 'hunter'):
             self.level_kills += 1
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
             self.last_player_kill = deepcopy(enemy)
 
-    def _drop_pickup(
+    def drop_pickup(
         self,
         pos: Tuple[float, float],
         powerup_crystals: List['PowerupCrystal'],
@@ -146,16 +146,16 @@ class CollisionHandler:
                         if enemy.take_damage():
                             enemy.die()
                             self.sound_manager.play_enemy_destroy()
-                            self._record_projectile_kill(projectile, enemy)
+                            self.record_kill(projectile, enemy)
                             
-                            self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
+                            self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Non-static enemies destroyed immediately (existing behavior)
                         enemy.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, enemy)
+                        self.record_kill(projectile, enemy)
                         
-                        self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
+                        self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -169,9 +169,9 @@ class CollisionHandler:
                     if replay_enemy.take_damage():
                         replay_enemy.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, replay_enemy)
+                        self.record_kill(projectile, replay_enemy)
                         
-                        self._drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
+                        self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Flinch so the hit registers
                         replay_enemy.trigger_blink()
@@ -185,9 +185,9 @@ class CollisionHandler:
                     flocker_pos = flocker.get_pos()
                     flocker.die()
                     self.sound_manager.play_enemy_destroy()
-                    self._record_projectile_kill(projectile, flocker)
+                    self.record_kill(projectile, flocker)
                     
-                    self._drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
+                    self.drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
 
@@ -199,8 +199,8 @@ class CollisionHandler:
                     if anemone.take_damage():
                         anemone.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, anemone)
-                        self._drop_pickup(anemone_pos, powerup_crystals, jev_beacon_allowed)
+                        self.record_kill(projectile, anemone)
+                        self.drop_pickup(anemone_pos, powerup_crystals, jev_beacon_allowed)
                     else:
                         # Clamp shut so the hit buys a moment without the pull
                         anemone.stun(config.ANEMONE_FLINCH_FRAMES)
@@ -215,8 +215,8 @@ class CollisionHandler:
                     if flighthouse.take_damage():
                         flighthouse.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, flighthouse)
-                        self._drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
+                        self.record_kill(projectile, flighthouse)
+                        self.drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
                     return True
         
         # Check projectile-SplitBoss collision
@@ -231,7 +231,7 @@ class CollisionHandler:
                         # SplitBoss destroyed - spawn two ReplayEnemyShip instances
                         split_boss.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, split_boss)
+                        self.record_kill(projectile, split_boss)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -254,7 +254,7 @@ class CollisionHandler:
                         # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
                         mother_boss.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, mother_boss)
+                        self.record_kill(projectile, mother_boss)
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
@@ -272,7 +272,7 @@ class CollisionHandler:
                     if hunter.take_damage():
                         hunter.die()
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, hunter)
+                        self.record_kill(projectile, hunter)
                     return True  # Projectile destroyed
 
         # Check projectile-baby collision
@@ -282,9 +282,9 @@ class CollisionHandler:
                     baby_pos = baby.get_pos()
                     baby.die()
                     self.sound_manager.play_enemy_destroy()
-                    self._record_projectile_kill(projectile, baby)
+                    self.record_kill(projectile, baby)
                     
-                    self._drop_pickup(baby_pos, powerup_crystals, jev_beacon_allowed)
+                    self.drop_pickup(baby_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -303,9 +303,9 @@ class CollisionHandler:
                     if egg.take_damage():
                         egg.die()  # Destroy egg without spawning Replay Enemies
                         self.sound_manager.play_enemy_destroy()
-                        self._record_projectile_kill(projectile, egg)
+                        self.record_kill(projectile, egg)
                         
-                        self._drop_pickup(egg_pos, powerup_crystals, jev_beacon_allowed)
+                        self.drop_pickup(egg_pos, powerup_crystals, jev_beacon_allowed)
                     
                     return True  # Projectile destroyed
         
@@ -316,7 +316,8 @@ class CollisionHandler:
 
         Returns True if it hit one (the shot is then spent).
         """
-        lists = [roster.of_kind(*kinds) for kinds in (
+        from creatures.creature import Creature   # the Encounter has already offered the shot to every Creature
+        lists = [[enemy for enemy in roster.of_kind(*kinds) if not isinstance(enemy, Creature)] for kinds in (
             ('static', 'patrol', 'aggressive'), ('replay',), ('flocker',), ('flighthouse',), ('split_boss',),
             ('mother_boss',), ('baby',), ('egg',))]
         return self.handle_projectile_enemy_collisions(
@@ -375,7 +376,7 @@ class CollisionHandler:
             spawned_baby.current_replay_index = 0
             replay_enemies.append(spawned_baby)
         
-        self._drop_pickup(boss_pos, powerup_crystals, jev_beacon_allowed)
+        self.drop_pickup(boss_pos, powerup_crystals, jev_beacon_allowed)
     
     def handle_projectile_ship_collision(
         self,

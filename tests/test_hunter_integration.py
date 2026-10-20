@@ -9,6 +9,7 @@ from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
+from creatures.encounter import Encounter
 from entities.command_recorder import CommandRecorder
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
@@ -29,6 +30,7 @@ def game(monkeypatch, tmp_path):
     g.spawn_manager = SpawnManager(g.roster)
     g.enemy_updater = EnemyUpdater()
     g.collision_handler = CollisionHandler(g.sound_manager,g.scoring,g.command_recorder)
+    g.encounter = Encounter(g.roster, g)
     g.star_indicator = Mock()
     g.hunter_flight = None
     g.hunter_worker = None

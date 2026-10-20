@@ -69,7 +69,7 @@ def test_which_levels_allow_a_beacon(monkeypatch, hunter_entry, level, allowed):
 def test_no_beacon_drops_on_a_level_that_forbids_the_hunter(game, monkeypatch):
     monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: False)
     game.start_level()
-    assert not game._jev_beacon_drop_allowed()
+    assert not game.jev_beacon_allowed()
 
 
 def test_a_kill_drops_a_beacon_in_place_of_a_crystal(handler, monkeypatch):

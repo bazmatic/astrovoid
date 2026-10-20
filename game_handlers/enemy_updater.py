@@ -55,6 +55,8 @@ class EnemyUpdater:
             scoring: Scoring system for recording collisions.
             projectiles: List to add fired projectiles to.
         """
+        from creatures.creature import Creature   # the Encounter runs these
+        enemies = [enemy for enemy in enemies if not isinstance(enemy, Creature)]
         for enemy in enemies:
             if not enemy.active:
                 continue

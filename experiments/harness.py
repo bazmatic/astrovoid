@@ -193,7 +193,7 @@ def _active_enemies(game):
     return game.roster.alive()
 
 
-_OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_rules_worker_factory',
+_OVERRIDDEN = ('_summon_hunter', 'jev_beacon_allowed', '_hunter_sees_player', '_rules_worker_factory',
                'protagonist')
 
 
@@ -278,7 +278,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     # This hunter is the episode's hunter: picking up a Jev beacon (which would summon a new one
     # with a real-clock controller) must not replace it, and no new beacon may drop.
     game._summon_hunter = lambda near: None
-    game._jev_beacon_drop_allowed = lambda: False
+    game.jev_beacon_allowed = lambda: False
 
     counter = EventCounter()
 

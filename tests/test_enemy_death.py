@@ -284,10 +284,10 @@ class TestLastKillPortrait:
         handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
         squid = make_squid()
         squid.die()
-        handler._record_projectile_kill(Mock(source='player'), squid)
+        handler.record_kill(Mock(source='player'), squid)
         recorded = handler.last_player_kill
         assert isinstance(recorded, ReplayEnemyShip)
         squid.update_death(10)
         assert recorded.death_progress == 0
-        handler._record_projectile_kill(Mock(source='hunter'), FlighthouseEnemy(POS))
+        handler.record_kill(Mock(source='hunter'), FlighthouseEnemy(POS))
         assert handler.last_player_kill is recorded

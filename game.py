@@ -50,6 +50,7 @@ from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
+from creatures.encounter import Encounter
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
 from game_handlers.state_handlers import StateHandlerRegistry
 from utils.math_utils import get_angle_to_point
@@ -139,6 +140,7 @@ class Game:
             self.scoring,
             self.command_recorder
         )
+        self.encounter = Encounter(self.roster, self)
         self.state_handler_registry = StateHandlerRegistry()
         
         self.running = True
@@ -497,7 +499,7 @@ class Game:
         """What the exit policy may look at this frame."""
         return ExitState(self.play_seconds, self.roster.counts())
 
-    def _jev_beacon_drop_allowed(self) -> bool:
+    def jev_beacon_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
         return self.jev_beacon_level and (self.hunter is None or not self.hunter.active)
 
@@ -981,7 +983,8 @@ class Game:
         if self.player_has_moved:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
-            # Update all enemy types using EnemyUpdater
+            self.encounter.step(dt)
+            # Update the enemies that are not Creatures yet using EnemyUpdater
             roster = self.roster
             self.enemy_updater.update_enemies(
                 roster.of_kind('static', 'patrol', 'aggressive'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
@@ -1053,8 +1056,7 @@ class Game:
                 continue
 
             # Friendly projectile-enemy collisions share normal destruction effects.
-            if self.collision_handler.shoot_into(projectile, self.roster, self.powerup_crystals,
-                                                 jev_beacon_allowed=self._jev_beacon_drop_allowed(), maze=self.maze):
+            if self.encounter.shoot(projectile):
                 continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks

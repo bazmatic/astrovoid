@@ -18,3 +18,20 @@ Measured at `d3638c0`, which only adds docs on top of `420b0e2`.
 | 8 | 33 | 1.422 | 1.829 | 3.455 | 4.877 | 5.852 |
 | 9 | 22 | 1.959 | 2.558 | 4.627 | 6.586 | 7.903 |
 | 40 | 32 | 1.428 | 1.734 | 7.990 | 9.418 | 11.302 |
+
+## Dispatch gate (Task 2)
+
+`venv/bin/python -m tools.frame_timer --levels 9 --frames 600 --seed 1 --creatures N`, N = 0 and N = 33, run
+alternately three times each. The 33 test Creatures each have six traits whose `on_frame` does one attribute write,
+and a Body that does nothing; the Encounter still finds each one's target every frame.
+
+| N | update_ms_mean (three runs) | median |
+|---:|---|---:|
+| 0 | 2.398, 2.189, 2.105 | 2.189 |
+| 33 | 2.223, 2.230, 2.243 | 2.230 |
+
+33 creatures add **0.041 ms** per frame. The gate is 20% of level 8's baseline update time: 0.2 × 1.422 = 0.284 ms.
+**Passed**, with the difference inside the run-to-run noise (the N = 0 runs alone spread by 0.29 ms).
+
+With the skeleton in place and no kind moved yet, the four levels measure (medians of three) 0.176 / 1.426 / 2.001 /
+1.442 ms update and 3.188 / 3.455 / 4.682 / 8.018 ms draw on levels 1 / 8 / 9 / 40: within 3% of the baseline.
