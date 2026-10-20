@@ -183,11 +183,18 @@
     "spawnRadius": 30.0,
     "layer": 5,
     "tuning": {
-      "sizeMultiplier": 2.0,
-      "hitPoints": 8,
-      "spawnOffsetRange": 80,
-      "splitVelocityMagnitude": 2.0,
-      "childrenCount": 6
+      "size": 30
+    },
+    "allegiance": "enemy",
+    "body": "squid",
+    "traits": {
+      "replaysPlayer": {},
+      "thrusters": {"speedShare": 0.3},
+      "ramsShip": {},
+      "gun": {"strengthLevel": 1, "startsLoaded": true},
+      "takesHits": {"hitPoints": 8},
+      "splitsOnDeath": {"into": "baby", "count": 6, "spread": 80, "speed": 2.0},
+      "dropsPickup": {}
     }
   },
   "mother_boss": {
@@ -198,17 +205,23 @@
     "spawnRadius": 45.0,
     "layer": 6,
     "tuning": {
-      "sizeMultiplier": 3.0,
-      "hitPoints": 20,
-      "eggLayInterval": 180,
+      "size": 45,
       "lineGlowIntensityMax": 0.7,
       "blinkFrequencyMultiplierMax": 2.0,
-      "blinkDurationMultiplierMax": 1.5,
-      "projectileSpeedMultiplier": 1.6,
-      "projectileImpactMultiplier": 1.4,
-      "projectileGlowColor": [255, 160, 100],
-      "projectileGlowRadiusMultiplier": 1.8,
-      "projectileGlowIntensity": 0.65
+      "blinkDurationMultiplierMax": 1.5
+    },
+    "allegiance": "enemy",
+    "body": "squid",
+    "traits": {
+      "replaysPlayer": {},
+      "thrusters": {"speedShare": 0.15},
+      "ramsShip": {},
+      "gun": {"strengthLevel": 1, "startsLoaded": true, "shotSpeed": 1.6, "impact": 1.4,
+              "glowColor": [255, 160, 100], "glowRadius": 1.8, "glowIntensity": 0.65},
+      "takesHits": {"hitPoints": 20},
+      "laysEggs": {"interval": 180},
+      "splitsOnDeath": {"into": "baby", "count": 6, "spread": 80, "speed": 2.0},
+      "dropsPickup": {}
     }
   },
   "rules_hunter": {

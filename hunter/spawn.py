@@ -1,6 +1,7 @@
 """Level spawn overrides, automatic placement, and safe spawn reservation."""
 import math
 import config
+import enemy_kinds
 from utils.math_utils import circle_line_collision
 
 
@@ -68,7 +69,6 @@ def reserve_hunter_clearance(positions, hunter_pos, radius):
     enemy_radius = max(config.STATIC_ENEMY_SIZE, config.DYNAMIC_ENEMY_SIZE,
         config.REPLAY_ENEMY_SIZE, config.FLOCKER_ENEMY_SIZE, config.FLIGHTHOUSE_ENEMY_SIZE,
         config.EGG_INITIAL_SIZE, config.BABY_SIZE,
-        config.REPLAY_ENEMY_SIZE * config.SPLIT_BOSS_SIZE_MULTIPLIER,
-        config.REPLAY_ENEMY_SIZE * config.MOTHER_BOSS_SIZE_MULTIPLIER)
+        enemy_kinds.kind('split_boss').tuning['size'], enemy_kinds.kind('mother_boss').tuning['size'])
     return [p for p in positions if math.hypot(p[0]-hunter_pos[0], p[1]-hunter_pos[1])
             >= radius + enemy_radius]

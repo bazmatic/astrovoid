@@ -38,9 +38,15 @@ def creature(traits, pos=(100.0, 100.0), key='static', level=1):
     return Creature(kind, pos, RecordingBody(), traits, level=level)
 
 
+def open_maze(walls=()):
+    """A maze with these walls (none by default) and room everywhere."""
+    return SimpleNamespace(walls=list(walls), spatial_grid=None, is_open=lambda pos, radius: True,
+                           open_spot_near=lambda origin, radius, max_offset, *a, **k: origin)
+
+
 def world(**overrides):
     stand_in = SimpleNamespace(
-        ship=None, hunter=None, maze=SimpleNamespace(walls=[], spatial_grid=None), scoring=Mock(),
+        ship=None, hunter=None, maze=open_maze(), scoring=Mock(),
         sound_manager=Mock(), command_recorder=Mock(), collision_handler=Mock(), projectiles=[], powerup_crystals=[],
         jev_beacon_allowed=lambda: False)
     stand_in.collision_handler.shoot_into.return_value = False

@@ -39,18 +39,19 @@ def test_hostile_bullets_consumed_even_during_immunity_and_no_friendly_fire():
 
 
 def test_hunter_boss_kill_still_spawns_children():
-    import config
-    from entities.split_boss import SplitBoss
+    import enemy_kinds
     from entities.command_recorder import CommandRecorder
-    boss = SplitBoss((200,200),CommandRecorder())
-    boss.hit_points = 1
-    babies = []
+    boss = creatures.build('split_boss', (200, 200), 1, CommandRecorder())
     scoring = Mock()
-    handler = CollisionHandler(Mock(),scoring,CommandRecorder())
-    assert handler.handle_projectile_enemy_collisions(
-        Projectile((200,200),0,source='hunter'), babies, [], [], [boss], [], [], [], [])
+    handler = CollisionHandler(Mock(), scoring, CommandRecorder())
+    enc = encounter(boss, world_=world(collision_handler=handler, scoring=scoring,
+                                       command_recorder=handler.command_recorder, maze=None))
+    enc.step(1.0)
+    boss.hit_points = 1
+    assert enc.shoot(Projectile((200, 200), 0, source='hunter'))
     assert not boss.active
-    assert len(babies) == config.SPLIT_BOSS_CHILD_COUNT
+    babies = [e for e in enc.roster.all() if e.type == 'baby']
+    assert len(babies) == dict(enemy_kinds.kind('split_boss').traits)['splitsOnDeath']['count']
     scoring.record_enemy_destroyed.assert_not_called()
 
 

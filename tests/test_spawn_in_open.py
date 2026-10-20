@@ -4,8 +4,9 @@ import random
 import config
 from entities.command_recorder import CommandRecorder
 from entities.egg import Egg
-from entities.mother_boss import MotherBoss
-from game_handlers.collision_handler import CollisionHandler
+import creatures
+from creatures.traits.spawning import LaysEggs
+from tests.creature_parts import encounter, world
 from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from level_rules import EnemyCounts
@@ -50,11 +51,15 @@ def test_hatched_babies_are_never_inside_a_wall():
 
 def test_boss_children_are_never_inside_a_wall():
     maze = walled_maze()
-    handler = CollisionHandler(None, None, CommandRecorder())
     random.seed(2)
     children = []
     for _ in range(200):
-        handler._spawn_split_boss_children(beside_wall(maze), (1.0, 0.0), children, [], False, maze)
+        boss = creatures.build('split_boss', beside_wall(maze), 1, CommandRecorder())
+        boss.vx = 1.0
+        enc = encounter(boss, world_=world(maze=maze, command_recorder=CommandRecorder()))
+        enc.kill(boss)
+        children += [e for e in enc.roster.all() if e is not boss]
+    assert children
     assert all(maze.is_open(child.get_pos(), config.BABY_SIZE) for child in children)
 
 
@@ -63,9 +68,14 @@ def test_laid_eggs_have_room_to_grow():
     random.seed(3)
     eggs = []
     for _ in range(100):
-        boss = MotherBoss(maze.position_calculator.grid_center_to_screen(2, 5), CommandRecorder())
-        boss.egg_lay_cooldown = 0
-        boss.lay_egg(eggs, maze)
+        mother = creatures.build('mother_boss', maze.position_calculator.grid_center_to_screen(2, 5), 1,
+                                 CommandRecorder())
+        laying = next(t for t in mother.traits if isinstance(t, LaysEggs))
+        enc = encounter(mother, world_=world(maze=maze, command_recorder=CommandRecorder()))
+        laying.on_spawn(mother, enc)
+        laying.on_frame(mother, enc, 1.0)
+        eggs += [e for e in enc.roster.all() if e is not mother]
+    assert len(eggs) == 100
     assert all(maze.is_open(egg.get_pos(), config.EGG_MAX_SIZE) for egg in eggs)
 
 

@@ -110,6 +110,14 @@ class Encounter:
         """Roll for what a dead creature leaves behind."""
         self.world.collision_handler.drop_pickup(pos, self.world.powerup_crystals, self.world.jev_beacon_allowed())
 
+    def spawn(self, kind: str, pos, level: int):
+        """Put a new enemy of this kind on the roster, and return it. A Creature spawned during a frame first acts on
+        the next one (or when a shot reaches it)."""
+        from game_handlers.spawn_manager import make_enemy
+        enemy = make_enemy(kind, pos, level, self.world.command_recorder)
+        self.roster.add(enemy)
+        return enemy
+
     def explode(self, blast) -> None:
         """Light a blast; the game sets it off when its fuse has burnt."""
         self.world.collision_handler.explosions.trigger(blast)

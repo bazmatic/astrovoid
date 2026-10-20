@@ -7,7 +7,7 @@ import creatures
 from entities.command_recorder import CommandRecorder
 from utils import angle_to_radians
 
-SQUID_KINDS = ['replay', 'baby']
+SQUID_KINDS = ['replay', 'baby', 'split_boss', 'mother_boss']
 
 
 def make_squid(kind='replay', pos=(400.0, 300.0), angle=0.0):

@@ -472,6 +472,25 @@ def _load_settings_json() -> dict:
         return json.load(fh)
 
 
+def _old_boss_settings(squid_size):
+    """The Squiddler Boss's and the Mother's settings as their old classes read them, from their catalogue entries."""
+    split, mother = enemy_kinds.kind("split_boss"), enemy_kinds.kind("mother_boss")
+    split_traits, mother_traits = dict(split.traits), dict(mother.traits)
+    splits = split_traits["splitsOnDeath"]
+    gun = mother_traits["gun"]
+    split_boss = {"sizeMultiplier": split.tuning["size"] / squid_size,
+                  "hitPoints": split_traits["takesHits"]["hitPoints"], "spawnOffsetRange": splits["spread"],
+                  "splitVelocityMagnitude": splits["speed"], "childrenCount": splits["count"]}
+    mother_boss = {**mother.tuning, "sizeMultiplier": mother.tuning["size"] / squid_size,
+                   "hitPoints": mother_traits["takesHits"]["hitPoints"],
+                   "eggLayInterval": mother_traits["laysEggs"]["interval"],
+                   "projectileSpeedMultiplier": gun["shotSpeed"], "projectileImpactMultiplier": gun["impact"],
+                   "projectileGlowColor": gun["glowColor"], "projectileGlowRadiusMultiplier": gun["glowRadius"],
+                   "projectileGlowIntensity": gun["glowIntensity"]}
+    del mother_boss["size"]
+    return split_boss, mother_boss
+
+
 def load_settings() -> Settings:
     raw = _load_settings_json()
     # Each kind's own settings live with the kind, in config/enemies.json
@@ -479,6 +498,8 @@ def load_settings() -> Settings:
                          ("anemone", "anemone"), ("baby", "baby"), ("split_boss", "splitBoss"),
                          ("mother_boss", "motherBoss"), ("egg", "egg")):
         raw[section] = enemy_kinds.kind(key).tuning
+    # The old boss classes read these until they go; the numbers now live in the bosses' traits
+    raw["splitBoss"], raw["motherBoss"] = _old_boss_settings(raw["replayEnemy"]["size"])
 
     def _preset_map(presets: dict) -> Dict[str, MazeComplexityPreset]:
         return {

@@ -292,8 +292,8 @@ class CollisionHandler:
 
         Returns True if it hit one (the shot is then spent).
         """
-        lists = [[]] + [roster.of_kind(*kinds) for kinds in (     # Squiddlers and Squidlets are Creatures
-            ('flocker',), ('flighthouse',), ('split_boss',), ('mother_boss',))] + [[], roster.of_kind('egg')]
+        # The squids are Creatures: the Encounter has offered the shot to them
+        lists = [[], roster.of_kind('flocker'), roster.of_kind('flighthouse'), [], [], [], roster.of_kind('egg')]
         return self.handle_projectile_enemy_collisions(
             projectile, *lists, powerup_crystals, anemones=roster.of_kind('anemone'),
             jev_beacon_allowed=jev_beacon_allowed, enemy_hunters=roster.of_kind(*enemy_kinds.hunters()),

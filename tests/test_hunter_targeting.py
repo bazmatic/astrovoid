@@ -20,8 +20,6 @@ from unittest.mock import Mock
 from entities.command_recorder import CommandRecorder
 import creatures
 from entities.flocker_enemy_ship import FlockerEnemyShip
-from entities.split_boss import SplitBoss
-from entities.mother_boss import MotherBoss
 from entities.ship import Ship
 from entities.hunter_ship import HunterShip
 from game_handlers.enemy_updater import EnemyUpdater
@@ -39,7 +37,7 @@ def test_a_creature_aims_at_the_nearest_hunter():
     assert crab.controls.aim == hunter.get_pos()
 
 
-@pytest.mark.parametrize('kind', ['patrol', 'replay', 'baby'])
+@pytest.mark.parametrize('kind', ['patrol', 'replay', 'baby', 'split_boss', 'mother_boss'])
 def test_a_creature_targets_the_nearest_hunter(kind):
     from tests.creature_parts import encounter, world
     creature = creatures.build(kind, (300, 300), 1, CommandRecorder())
@@ -49,24 +47,16 @@ def test_a_creature_targets_the_nearest_hunter(kind):
     assert encounter(creature, world_=world(ship=player, hunter=hunter)).target_for(creature) == hunter.get_pos()
 
 
-@pytest.mark.parametrize('kind,method', [
-    (FlockerEnemyShip,'update_flockers'), (SplitBoss,'update_split_bosses'),
-    (MotherBoss,'update_mother_bosses')])
+@pytest.mark.parametrize('kind,method', [(FlockerEnemyShip,'update_flockers')])
 def test_enemy_update_and_aim_use_nearest_hunter(kind,method):
-    if kind is FlockerEnemyShip:
-        enemy = kind((300,300))
-    else:
-        enemy = kind((300,300),CommandRecorder())
+    enemy = kind((300,300))
     enemy.update = Mock()
     enemy.get_fired_projectile = Mock(return_value=None)
     enemy.check_wall_collision = Mock(return_value=False)
-    enemy.lay_egg = Mock()
     player = Ship((900,800))
     player.shield_active = True
     hunter = HunterShip((320,300))
     kwargs = {'hunter':hunter}
-    if kind is MotherBoss:
-        kwargs['eggs'] = []
     getattr(EnemyUpdater(),method)([enemy],1,player.get_pos(),Mock(walls=[],spatial_grid=None),
                                   player,Mock(),[],**kwargs)
     assert enemy.update.call_args.args[1] == hunter.get_pos()
