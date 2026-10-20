@@ -14,6 +14,7 @@ import random
 from typing import Tuple, List, Optional, TYPE_CHECKING
 from abc import ABC, abstractmethod
 import config
+from physics import thrust
 
 if TYPE_CHECKING:
     from entities.base import GameEntity
@@ -122,37 +123,16 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         Returns:
             True if thrust was applied, False otherwise.
         """
-        # Calculate thrust vector
-        angle_rad = angle_to_radians(self.angle)
-        thrust_x = math.cos(angle_rad) * self.thrust_force
-        thrust_y = math.sin(angle_rad) * self.thrust_force
-        
-        # Apply thrust
-        self.vx += thrust_x
-        self.vy += thrust_y
-        
-        # Limit max speed
-        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-        if speed > self.max_speed:
-            scale = self.max_speed / speed
-            self.vx *= scale
-            self.vy *= scale
-        
-        # Mark that thrust is active
+        thrust.apply_thrust(self, self.thrust_force, self.max_speed)
         self.thrusting = True
-        
         return True
-    
+
     def update(self, dt: float) -> None:
         """Update ship position and apply friction.
         
         Args:
             dt: Delta time since last update.
         """
-        # Save previous position for swept collision detection
-        self.prev_x = self.x
-        self.prev_y = self.y
-        
         # Save thrusting state from previous frame (set by apply_thrust)
         # This allows it to persist through the draw() call
         was_thrusting = self.thrusting
@@ -160,28 +140,8 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         # Clear thrusting flag at start of update (will be set again if apply_thrust is called this frame)
         self.thrusting = False
         
-        # Apply friction and update position
-        self.apply_friction_and_update_position(config.SHIP_FRICTION, dt)
-        
-        # Bounce off screen edges using physics
-        # Check horizontal edges (left and right)
-        if self.x < self.radius:
-            self.x = self.radius
-            apply_wall_collision_physics(self, (1.0, 0.0), config.COLLISION_RESTITUTION)
-            self.on_edge_collision()
-        elif self.x > config.SCREEN_WIDTH - self.radius:
-            self.x = config.SCREEN_WIDTH - self.radius
-            apply_wall_collision_physics(self, (-1.0, 0.0), config.COLLISION_RESTITUTION)
-            self.on_edge_collision()
-        
-        # Check vertical edges (top and bottom)
-        if self.y < self.radius:
-            self.y = self.radius
-            apply_wall_collision_physics(self, (0.0, 1.0), config.COLLISION_RESTITUTION)
-            self.on_edge_collision()
-        elif self.y > config.SCREEN_HEIGHT - self.radius:
-            self.y = config.SCREEN_HEIGHT - self.radius
-            apply_wall_collision_physics(self, (0.0, -1.0), config.COLLISION_RESTITUTION)
+        # Move with friction (remembering where it was, for swept wall collision), bouncing off screen edges
+        for _ in range(thrust.coast(self, dt, config.SHIP_FRICTION)):
             self.on_edge_collision()
         
         # Update thrust particles (only when thrusting from previous frame)
@@ -214,11 +174,7 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         
         # Enforce maximum speed limit (after all physics updates)
         # This ensures speed never exceeds max, regardless of collisions, bounces, etc.
-        speed = math.sqrt(self.vx * self.vx + self.vy * self.vy)
-        if speed > self.max_speed:
-            scale = self.max_speed / speed
-            self.vx *= scale
-            self.vy *= scale
+        thrust.cap_speed(self, self.max_speed)
     
     def check_wall_collision(
         self,
@@ -238,116 +194,11 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         Returns:
             True if collision occurred, False otherwise.
         """
-        # Use swept collision detection to find earliest collision
-        earliest_collision = None
-        earliest_time = 1.0  # Start with end of path
-        collision_wall = None
-        
-        start_pos = (self.prev_x, self.prev_y)
-        end_pos = (self.x, self.y)
-        
-        # Use spatial grid if available, otherwise check all walls
-        walls_to_check = walls
-        if spatial_grid is not None:
-            # Get walls along the entire movement path to prevent tunneling
-            # This ensures walls near both start and end positions are checked
-            walls_to_check = spatial_grid.get_walls_along_path(
-                start_pos, end_pos, self.radius * 2.0  # Check slightly larger area
-            )
-        
-        # Check walls for collisions along movement path
-        for wall in walls_to_check:
-            # Handle both WallSegment and tuple formats
-            if hasattr(wall, 'get_segment'):
-                # WallSegment instance
-                if not wall.active:
-                    continue
-                segment = wall.get_segment()
-            else:
-                # Tuple format (backward compatibility)
-                segment = wall
-            
-            collision_detected, collision_time, collision_point = circle_line_collision_swept(
-                start_pos, end_pos, self.radius,
-                segment[0], segment[1]
-            )
-            
-            if collision_detected and collision_time is not None:
-                # Found a collision - check if it's earlier than previous
-                if collision_time < earliest_time:
-                    earliest_time = collision_time
-                    earliest_collision = collision_point
-                    collision_wall = segment
-        
-        # If no collision found, also check if ship is already inside a wall
-        # (can happen if ship spawns in wall or previous frame had issues)
-        if earliest_collision is None:
-            for wall in walls_to_check:
-                # Handle both WallSegment and tuple formats
-                if hasattr(wall, 'get_segment'):
-                    if not wall.active:
-                        continue
-                    segment = wall.get_segment()
-                else:
-                    segment = wall
-                
-                if circle_line_collision(
-                    (self.x, self.y), self.radius,
-                    segment[0], segment[1]
-                ):
-                    # Ship is already inside wall - push out immediately
-                    normal = get_wall_normal((self.x, self.y), segment[0], segment[1])
-                    
-                    # Calculate penetration depth
-                    closest_point = get_closest_point_on_line((self.x, self.y), segment[0], segment[1])
-                    dist_to_wall_sq = distance_squared((self.x, self.y), closest_point)
-                    dist_to_wall = math.sqrt(dist_to_wall_sq)
-                    penetration_depth = self.radius - dist_to_wall
-                    
-                    # Push back by penetration depth + safety margin
-                    push_distance = penetration_depth + self.radius * 0.5
-                    self.x += normal[0] * push_distance
-                    self.y += normal[1] * push_distance
-                    
-                    # Reflect velocity using physics
-                    apply_wall_collision_physics(self, normal, config.COLLISION_RESTITUTION)
-                    
-                    # Notify subclass of collision (hook for damage, sound, etc.)
-                    self.on_wall_collision()
-                    return True
-        
-        # Handle swept collision
-        if earliest_collision is not None and collision_wall is not None:
-            # Move ship to collision point (or slightly before to be safe)
-            # Use a small epsilon before collision point to ensure we're not inside wall
-            safe_time = max(0.0, earliest_time - 0.01)
-            self.x = self.prev_x + (self.x - self.prev_x) * safe_time
-            self.y = self.prev_y + (self.y - self.prev_y) * safe_time
-            
-            # Get wall normal at collision point
-            normal = get_wall_normal((self.x, self.y), collision_wall[0], collision_wall[1])
-            
-            # Calculate penetration depth (how far inside wall we are)
-            closest_point = get_closest_point_on_line((self.x, self.y), collision_wall[0], collision_wall[1])
-            dist_to_wall_sq = distance_squared((self.x, self.y), closest_point)
-            dist_to_wall = math.sqrt(dist_to_wall_sq)
-            penetration_depth = max(0.0, self.radius - dist_to_wall)
-            
-            # Push ship away from wall
-            # Use penetration depth + safety margin to ensure complete clearance
-            push_distance = penetration_depth + self.radius * 0.5
-            self.x += normal[0] * push_distance
-            self.y += normal[1] * push_distance
-            
-            # Reflect velocity off the wall using physics
-            apply_wall_collision_physics(self, normal, config.COLLISION_RESTITUTION)
-            
-            # Notify subclass of collision (hook for damage, sound, etc.)
-            self.on_wall_collision()
+        if thrust.sweep_walls(self, walls, spatial_grid):
+            self.on_wall_collision()   # hook for damage, sound, etc.
             return True
-        
         return False
-    
+
     def check_circle_collision(
         self,
         other_pos: Tuple[float, float],
