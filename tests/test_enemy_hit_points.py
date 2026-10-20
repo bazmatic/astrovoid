@@ -4,7 +4,6 @@ from unittest.mock import Mock
 import config
 import creatures
 import enemy_kinds
-from entities.baby import Baby
 from entities.command_recorder import CommandRecorder
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.projectile import Projectile
@@ -13,15 +12,6 @@ from tests.creature_parts import encounter, world
 
 POS = (400.0, 300.0)
 SQUIDDLER_HIT_POINTS = dict(enemy_kinds.kind('replay').traits)['takesHits']['hitPoints']
-
-
-def shoot_old(handler, enemy, crystals=None):
-    """A player's shot through the hit loops of the enemies that are not Creatures yet."""
-    projectile = Projectile(POS, 0.0)
-    projectile.source = 'player'
-    return handler.handle_projectile_enemy_collisions(
-        projectile, [enemy], [], [], [], [], [], [], crystals if crystals is not None else []
-    )
 
 
 def shoot(handler, squid, crystals=None):
@@ -91,12 +81,10 @@ def test_wounded_squid_flinches_and_shows_its_damage():
 
 
 def test_baby_among_the_squids_still_dies_in_one_hit():
-    # Bosses release their babies into the squid list
     handler = make_handler()
-    baby = Baby(POS, CommandRecorder())
-    assert baby.hit_points == 1
-    shoot_old(handler, baby)
-    assert not baby.active
+    baby = creatures.build('baby', POS, 1, CommandRecorder())
+    assert shoot(handler, baby)
+    assert baby.max_hit_points == 1 and not baby.active
 
 
 def test_flighthouse_takes_five_hits():

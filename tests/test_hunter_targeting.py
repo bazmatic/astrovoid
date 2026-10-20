@@ -22,7 +22,6 @@ import creatures
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.split_boss import SplitBoss
 from entities.mother_boss import MotherBoss
-from entities.baby import Baby
 from entities.ship import Ship
 from entities.hunter_ship import HunterShip
 from game_handlers.enemy_updater import EnemyUpdater
@@ -40,7 +39,7 @@ def test_a_creature_aims_at_the_nearest_hunter():
     assert crab.controls.aim == hunter.get_pos()
 
 
-@pytest.mark.parametrize('kind', ['patrol', 'replay'])
+@pytest.mark.parametrize('kind', ['patrol', 'replay', 'baby'])
 def test_a_creature_targets_the_nearest_hunter(kind):
     from tests.creature_parts import encounter, world
     creature = creatures.build(kind, (300, 300), 1, CommandRecorder())
@@ -52,7 +51,7 @@ def test_a_creature_targets_the_nearest_hunter(kind):
 
 @pytest.mark.parametrize('kind,method', [
     (FlockerEnemyShip,'update_flockers'), (SplitBoss,'update_split_bosses'),
-    (MotherBoss,'update_mother_bosses'), (Baby,'update_babies')])
+    (MotherBoss,'update_mother_bosses')])
 def test_enemy_update_and_aim_use_nearest_hunter(kind,method):
     if kind is FlockerEnemyShip:
         enemy = kind((300,300))

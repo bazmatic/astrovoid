@@ -164,7 +164,6 @@ class AnemoneSettings:
 @dataclass
 class BabySettings:
     size: int
-    speedMultiplier: float
 
 
 @dataclass
@@ -780,7 +779,6 @@ ANEMONE_COLOR = SETTINGS.anemone.color
 ANEMONE_TIP_COLOR = SETTINGS.anemone.tipColor
 
 BABY_SIZE = SETTINGS.baby.size
-BABY_SPEED_MULTIPLIER = SETTINGS.baby.speedMultiplier
 
 SPLIT_BOSS_SIZE_MULTIPLIER = SETTINGS.splitBoss.sizeMultiplier
 SPLIT_BOSS_HIT_POINTS = SETTINGS.splitBoss.hitPoints

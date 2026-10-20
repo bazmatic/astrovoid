@@ -292,8 +292,8 @@ class CollisionHandler:
 
         Returns True if it hit one (the shot is then spent).
         """
-        lists = [[]] + [roster.of_kind(*kinds) for kinds in (     # Squiddlers are Creatures
-            ('flocker',), ('flighthouse',), ('split_boss',), ('mother_boss',), ('baby',), ('egg',))]
+        lists = [[]] + [roster.of_kind(*kinds) for kinds in (     # Squiddlers and Squidlets are Creatures
+            ('flocker',), ('flighthouse',), ('split_boss',), ('mother_boss',))] + [[], roster.of_kind('egg')]
         return self.handle_projectile_enemy_collisions(
             projectile, *lists, powerup_crystals, anemones=roster.of_kind('anemone'),
             jev_beacon_allowed=jev_beacon_allowed, enemy_hunters=roster.of_kind(*enemy_kinds.hunters()),
@@ -317,7 +317,7 @@ class CollisionHandler:
             powerup_crystals: List to add spawned crystal to.
             maze: When given, children only appear in open space, never inside a block.
         """
-        from entities.baby import Baby
+        from game_handlers.spawn_manager import make_enemy
         
         for i in range(config.SPLIT_BOSS_CHILD_COUNT):
             # Random offset within spawn range
@@ -343,11 +343,10 @@ class CollisionHandler:
             spawn_velocity_x = math.cos(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
             spawn_velocity_y = math.sin(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
             
-            # Create new ReplayEnemyShip
-            spawned_baby = Baby(spawn_pos, self.command_recorder)
+            # A Squidlet, flying apart from its siblings
+            spawned_baby = make_enemy('baby', spawn_pos, 1, self.command_recorder)
             spawned_baby.vx = spawn_velocity_x
             spawned_baby.vy = spawn_velocity_y
-            spawned_baby.current_replay_index = 0
             replay_enemies.append(spawned_baby)
         
         self.drop_pickup(boss_pos, powerup_crystals, jev_beacon_allowed)

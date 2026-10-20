@@ -1014,9 +1014,6 @@ class Game:
             self.enemy_updater.update_mother_bosses(
                 roster.of_kind('mother_boss'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, roster, hunter=self.hunter
             )
-            self.enemy_updater.update_babies(
-                roster.of_kind('baby'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
-            )
             self.enemy_updater.update_eggs(
                 roster.of_kind('egg'), dt, self.maze, self.ship, self.scoring, self.command_recorder, roster
             )

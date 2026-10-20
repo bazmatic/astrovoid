@@ -271,8 +271,17 @@
     "spawnRadius": 0,
     "layer": 8,
     "tuning": {
-      "size": 10,
-      "speedMultiplier": 0.1
+      "size": 10
+    },
+    "allegiance": "enemy",
+    "body": "squid",
+    "traits": {
+      "replaysPlayer": {},
+      "thrusters": {"speedShare": 0.5},
+      "ramsShip": {},
+      "gun": {"strengthLevel": 1, "startsLoaded": true},
+      "takesHits": {"hitPoints": 1},
+      "dropsPickup": {}
     }
   },
   "belemnite": {

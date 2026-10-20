@@ -290,11 +290,9 @@ class Egg(GameEntity, Collidable, Drawable):
             if maze is not None and not maze.is_open(spawn_pos, config.BABY_SIZE):
                 spawn_pos = maze.open_spot_near(self.get_pos(), config.BABY_SIZE, config.EGG_SPAWN_OFFSET_RANGE)
             
-            # Create new Baby enemy
-            from entities.baby import Baby
-            spawned_baby = Baby(spawn_pos, command_recorder)
-            spawned_baby.current_replay_index = 0
-            babies.append(spawned_baby)
+            # Hatch a Squidlet
+            from game_handlers.spawn_manager import make_enemy
+            babies.append(make_enemy('baby', spawn_pos, 1, command_recorder))
         
         # The egg is gone; die() plays the sac splitting open
         self.die()
