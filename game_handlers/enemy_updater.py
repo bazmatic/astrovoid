@@ -5,6 +5,7 @@ eliminating code duplication in the main game loop.
 """
 
 from game_handlers.combat_targets import nearest_friendly_pos
+from utils.math_utils import get_closest_point_on_line
 
 import math
 import config
@@ -71,7 +72,7 @@ class EnemyUpdater:
             fired_projectile = enemy.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
-        _keep_apart([enemy for enemy in enemies if enemy.active and enemy.type in CHASERS])
+        _keep_apart([enemy for enemy in enemies if enemy.active and enemy.type in CHASERS], maze.walls, maze.spatial_grid)
     
     def update_replay_enemies(
         self,
@@ -463,8 +464,10 @@ SEPARATION_PASSES = 20  # a crowd can need a few rounds of pushing before nobody
 CHASERS = ('aggressive', 'belemnite')
 
 
-def _keep_apart(entities: List['GameEntity']) -> None:
-    """Push overlapping entities apart, each by half the overlap, until they only touch."""
+def _keep_apart(entities: List['GameEntity'], walls=(), spatial_grid=None) -> None:
+    """Push overlapping entities apart, each by half the overlap, until they only touch. Walls win: after each round
+    anything pushed into a wall is put back out, so a crowd pressed against a wall packs tighter rather than squeezing
+    one of its members into the wall."""
     for _ in range(SEPARATION_PASSES):
         moved = False
         for i, a in enumerate(entities):
@@ -482,3 +485,26 @@ def _keep_apart(entities: List['GameEntity']) -> None:
                 moved = True
         if not moved:
             return
+        if walls:
+            for entity in entities:
+                _push_out_of_walls(entity, walls, spatial_grid)
+
+
+def _push_out_of_walls(entity: 'GameEntity', walls, spatial_grid=None) -> None:
+    """Move an entity straight out of any wall it overlaps, leaving its velocity alone."""
+    nearby = spatial_grid.get_nearby_walls((entity.x, entity.y), entity.radius * 2.0) if spatial_grid else walls
+    for wall in nearby:
+        if hasattr(wall, 'get_segment'):
+            if not wall.active:
+                continue
+            start, end = wall.get_segment()
+        else:
+            start, end = wall
+        closest = get_closest_point_on_line((entity.x, entity.y), start, end)
+        dx, dy = entity.x - closest[0], entity.y - closest[1]
+        distance = math.hypot(dx, dy)
+        overlap = entity.radius - distance
+        if overlap <= 0 or distance == 0:
+            continue
+        entity.x += dx / distance * overlap
+        entity.y += dy / distance * overlap
