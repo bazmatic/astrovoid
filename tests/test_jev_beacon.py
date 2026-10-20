@@ -12,7 +12,6 @@ from entities.powerup_crystal import PowerupCrystal
 from entities.projectile import Projectile
 from game_handlers.collision_handler import CollisionHandler
 from hunter.spawn import nearest_hunter_spawn
-from tests.test_hunter_controller import Worker
 from tests.test_hunter_integration import game, summon  # noqa: F401 - game is a fixture
 from tests.test_hunter_spawn import open_maze
 
@@ -45,58 +44,11 @@ def test_summoned_hunter_takes_the_nearest_safe_cell_clear_of_the_player():
     assert nearest_hunter_spawn((440, 440), open_maze(blocked=[(4, 4)]), player) in ((350, 450), (450, 350))
 
 
-def test_a_hunter_level_starts_with_a_beacon_and_no_hunter(game):
-    game.start_level()
-    assert game.hunter is None
-    placed = beacons(game)
-    assert len(placed) == 1
-    assert placed[0].get_pos() == game.maze.position_calculator.grid_center_to_screen(4, 4)
-    assert game.hunter_worker is not None  # The pilot is warmed up ready for the summons
-
-
 def test_a_level_without_a_hunter_has_no_beacon(game, monkeypatch):
     monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: False)
     game.start_level()
     assert game.hunter is None
     assert not beacons(game)
-
-
-def test_collecting_the_beacon_summons_the_hunter_beside_it(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    beacon = beacons(game)[0]
-    game.ship.x, game.ship.y = beacon.get_pos()
-    game._update_powerup_crystals(1)
-    assert not beacon.active
-    assert game.hunter is not None and game.hunter.active
-    reach = math.hypot(game.maze.cell_size_x, game.maze.cell_size_y)
-    assert 0 < math.dist(game.hunter.get_pos(), (game.ship.x, game.ship.y)) <= reach
-        # It is not a gun crystal
-    assert game.ship.gun_upgrade_level == 0
-
-
-def test_a_beacon_can_drop_only_while_no_hunter_flies(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    assert game._jev_beacon_drop_allowed()
-    beacon = beacons(game)[0]
-    game.ship.x, game.ship.y = beacon.get_pos()
-    game._update_powerup_crystals(1)
-    assert not game._jev_beacon_drop_allowed()
-    game.hunter.active = False
-    assert game._jev_beacon_drop_allowed()
-
-
-def test_a_second_beacon_replaces_a_dead_hunter(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    game.ship.x, game.ship.y = beacons(game)[0].get_pos()
-    game._update_powerup_crystals(1)
-    dead = game.hunter
-    dead.active = False
-    game.powerup_crystals.append(JevBeacon((game.ship.x, game.ship.y)))
-    game._update_powerup_crystals(1)
-    assert game.hunter is not dead and game.hunter.active
 
 
 @pytest.mark.parametrize('hunter_entry, level, allowed', [

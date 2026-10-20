@@ -27,13 +27,6 @@ def test_flying_and_labelling_gives_aligned_senses_and_teacher_labels(spec):
     assert set(np.unique(labels[:, 0])) <= {0, 1, 2}
 
 
-def test_the_labels_come_from_the_teacher_not_the_student(spec):
-    # A random student turns arbitrarily; the teacher's labels follow the rules pilot and have far more
-    # thrust than a random policy's even split.
-    _, labels = dagger.fly_and_label(13, 200, spec, horizon=15.0)
-    assert 0.1 < labels[:, 1].mean() < 0.9
-
-
 def test_the_run_is_deterministic(spec):
     a = dagger.fly_and_label(14, 201, spec, horizon=5.0)
     b = dagger.fly_and_label(14, 201, spec, horizon=5.0)

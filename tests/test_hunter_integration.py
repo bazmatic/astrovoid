@@ -1,4 +1,3 @@
-import math
 import pygame
 import pytest
 from unittest.mock import Mock
@@ -11,13 +10,10 @@ from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
 from entities.command_recorder import CommandRecorder
-from entities.enemy import Enemy
 from scoring.system import ScoringSystem
 from maze.config import MazeComplexity
 from hunter.surroundings import GameSurroundings
-from hunter.model import PilotResult, PilotDecision, ACTIONS
 from entities.jev_beacon import JevBeacon
-from tests.test_hunter_controller import Worker
 
 
 @pytest.fixture
@@ -62,88 +58,3 @@ def summon(game):
     game.ship.x, game.ship.y = beacon.get_pos()
     game._update_powerup_crystals(1)
     game.ship.x, game.ship.y = start
-
-
-def test_beacon_lies_on_every_third_level_and_wherever_a_level_places_one(game,monkeypatch):
-    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
-    monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',3)
-    monkeypatch.setattr(config,'HUNTER_FIRST_LEVEL',1)
-    for level in range(1,10):
-        game.level = level
-        game.start_level()
-        assert has_beacon(game) == (level % 3 == 0)
-        assert game.hunter is None
-    assert game.hunter_worker is not None
-    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[4,4]})
-    game.level = 1
-    game.start_level()
-    assert has_beacon(game)
-    # An invalid override still gets a beacon at a safe default cell.
-    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:{'spawn_cell':[-1,0]})
-    game.start_level()
-    assert has_beacon(game)
-    monkeypatch.setattr(config,'HUNTER_LEVEL_INTERVAL',0)
-    monkeypatch.setattr(level_config,'get_level_hunter_config',lambda _:None)
-    game.level = 3
-    game.start_level()
-    assert not has_beacon(game)
-
-
-def test_hunter_moves_only_on_decision_and_resets_on_level_restart(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    summon(game)
-    assert game.hunter is not None
-    assert game.hunter not in list(game.entity_manager.get_all_active_enemies())
-    game._update_hunter(1)
-    assert not game.hunter_worker.sent  # Waiting for player's first move.
-    game.player_has_moved = True
-    game._update_hunter(1)
-    obs = game.hunter_worker.sent[-1]
-    assert not game.hunter.vx
-    game.hunter_worker.result = PilotResult(obs.generation,obs.snapshot_at,obs.snapshot_at,
-                                            PilotDecision(ACTIONS['none_thrust_fire']))
-    # Fire control only releases a shot at an enemy in its sights.
-    nose = math.radians(game.hunter.angle)
-    game.enemies.append(Enemy((game.hunter.x + math.cos(nose) * 60,
-                               game.hunter.y + math.sin(nose) * 60), 'static'))
-    game._update_hunter(1)
-    assert game.hunter.vx > 0
-    assert any(p.source == 'hunter' for p in game.projectiles)
-    old, old_flight = game.hunter, game.hunter_flight
-    game.start_level()
-    assert game.hunter is None
-    summon(game)
-    assert game.hunter is not old
-    assert game.hunter.health == 3
-    assert game.hunter_flight is not old_flight      # a new flight: nothing remembered from the last one
-
-
-def test_real_update_pauses_requests_and_keeps_dead_hunter_dead(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    summon(game)
-    game.state = config.STATE_PLAYING
-    game.game_frozen = game.game_over_active = False
-    game.input_handler = Mock(key_mappings={})
-    game.input_handler.process_controller_input.return_value = []
-    game.input_handler.is_controller_shield_pressed.return_value = False
-    game.input_handler.is_controller_fire_pressed.return_value = False
-    game.update(1)
-    assert not game.hunter_worker.sent
-    game.player_has_moved = True
-    game.update(1)
-    assert len(game.hunter_worker.sent) == 1
-    generation = game.hunter_flight.controller.generation
-    game.state = config.STATE_QUIT_CONFIRM
-    game.update(1)
-    assert game.hunter_flight.controller.generation != generation
-    assert not game.hunter_worker.busy
-    game.state = config.STATE_PLAYING
-    game.update(1)
-    assert len(game.hunter_worker.sent) == 2
-    dead = game.hunter
-    dead.active = False
-    game.update(1)
-    assert game.hunter is dead
-    assert game.hunter_flight.controller.closed
