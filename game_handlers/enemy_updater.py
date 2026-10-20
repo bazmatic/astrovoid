@@ -71,7 +71,7 @@ class EnemyUpdater:
             fired_projectile = enemy.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
-        _keep_apart([enemy for enemy in enemies if enemy.active and enemy.type == 'aggressive'])
+        _keep_apart([enemy for enemy in enemies if enemy.active and enemy.type in CHASERS])
     
     def update_replay_enemies(
         self,
@@ -459,6 +459,8 @@ class EnemyUpdater:
 
 
 SEPARATION_PASSES = 20  # a crowd can need a few rounds of pushing before nobody overlaps
+# The enemies that chase their target, so would pile into one another without being kept apart: Jellies and Belemnites
+CHASERS = ('aggressive', 'belemnite')
 
 
 def _keep_apart(entities: List['GameEntity']) -> None:

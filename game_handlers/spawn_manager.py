@@ -45,7 +45,7 @@ class SpawnConfig:
 # The entity manager list each enemy type lives in
 ENEMY_LISTS = {'static': 'enemies', 'patrol': 'enemies', 'aggressive': 'enemies', 'replay': 'replay_enemies',
                'flocker': 'flockers', 'flighthouse': 'flighthouses', 'split_boss': 'split_bosses',
-               'mother_boss': 'mother_bosses', 'egg': 'eggs', 'anemone': 'anemones'}
+               'mother_boss': 'mother_bosses', 'egg': 'eggs', 'anemone': 'anemones', 'belemnite': 'enemies'}
 # Types that replay the player's recorded commands
 RECORDED = ('replay', 'split_boss', 'mother_boss')
 
@@ -64,6 +64,7 @@ def make_enemy(kind, pos, level, command_recorder):
     from entities.mother_boss import MotherBoss
     from entities.egg import Egg
     from entities.anemone import Anemone
+    from entities.belemnite import Belemnite
     if kind not in ENEMY_LISTS:
         raise ValueError(f'cannot make an enemy of type {kind!r}')
     if kind in ('static', 'patrol', 'aggressive'):
@@ -73,7 +74,7 @@ def make_enemy(kind, pos, level, command_recorder):
             pos, command_recorder)
         entity.current_replay_index = 0
     else:
-        entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
+        entity = {'belemnite': lambda: Belemnite(pos, level), 'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
                   'egg': lambda: Egg(pos), 'anemone': lambda: Anemone(pos)}[kind]()
     return ENEMY_LISTS[kind], entity
 
@@ -215,7 +216,8 @@ class SpawnManager:
         split_boss_count: int,
         mother_boss_count: int,
         anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None,
-        maze=None
+        maze=None,
+        belemnite_count: int = 0
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -229,6 +231,7 @@ class SpawnManager:
             anemone_keep_clear: Optional (position, distance); no anemone is placed
                 within that distance of the position (the player's start and its reach).
             maze: When given, big enemies are placed where they do not touch a wall.
+            belemnite_count: Number of Belemnites to spawn.
         """
         self._anemone_keep_clear = anemone_keep_clear
         self._maze = maze
@@ -248,7 +251,7 @@ class SpawnManager:
         
         # Define spawn configurations for all enemy types
         spawn_configs = self._create_spawn_configs(
-            enemy_counts, split_boss_count, mother_boss_count, level
+            enemy_counts, split_boss_count, mother_boss_count, level, belemnite_count
         )
         
         # Spawn all entities using configuration
@@ -280,7 +283,8 @@ class SpawnManager:
         enemy_counts: 'EnemyCounts',
         split_boss_count: int,
         mother_boss_count: int,
-        level: int = 1
+        level: int = 1,
+        belemnite_count: int = 0
     ) -> List[SpawnConfig]:
         """Create spawn configurations for all enemy types.
         
@@ -294,7 +298,8 @@ class SpawnManager:
         """
         counts = (('replay', enemy_counts.replay), ('flocker', enemy_counts.flocker),
                   ('flighthouse', enemy_counts.flighthouse), ('split_boss', split_boss_count),
-                  ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone))
+                  ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone),
+                  ('belemnite', belemnite_count))
         # Big enemies need their whole body clear of walls, not just their centre
         radii = {'split_boss': game_config.REPLAY_ENEMY_SIZE * game_config.SPLIT_BOSS_SIZE_MULTIPLIER,
                  'mother_boss': game_config.REPLAY_ENEMY_SIZE * game_config.MOTHER_BOSS_SIZE_MULTIPLIER,

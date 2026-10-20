@@ -10,7 +10,8 @@ from typing import FrozenSet, Optional, Tuple
 Cell = Tuple[int, int]
 
 ENEMY_TYPES = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone',
-               'split_boss', 'mother_boss', 'rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet')
+               'split_boss', 'mother_boss', 'rules_hunter', 'neural_hunter', 'boss_viber', 'vibelet',
+               'belemnite')
 # Enemies that never move, which a gate's plank must not cover (it would rock on them for ever)
 ANCHORED_KINDS = ('anemone', 'flighthouse')
 # Enemies flown by a pilot, which the game makes itself (they need a pilot and a view of the game)

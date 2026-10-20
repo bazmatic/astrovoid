@@ -80,6 +80,12 @@ The entity system provides a foundation for all game objects:
   - `AggressiveEnemyStrategy`: Enemies that chase the player
   - Demonstrates Strategy pattern and OCP
 
+- **`explosion.py`**: `Blast`, `Explosions`, `Fireball` - reusable explosions (Belemnites now, bombs later)
+  - A `Blast` is a reach, damage, push, wall hits and whom its kills count for; `fuse` delays it so chains ripple
+  - `Explosions` (held by `CollisionHandler`) lights blasts and returns those going off; `CollisionHandler.handle_blast` applies one to the player, the hunter, the enemies (through the same path a shot takes, so each kind dies its own way) and the walls
+  - Anything with a `blast(source)` method lights its blast when killed, so explosions chain
+- **`belemnite.py`**: `Belemnite` - a gunless squid with a Jelly's chase strategy that explodes when it dies
+
 - **`projectile.py`**: `Projectile` - Weapons fired by the ship
   - Inherits from `GameEntity`, `Collidable`, `Drawable`
   - Manages lifetime and collision detection

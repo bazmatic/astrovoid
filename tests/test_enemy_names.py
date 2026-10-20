@@ -14,6 +14,7 @@ def test_the_names_chosen_for_the_game():
                 'baby': ('Squidlet', 'Squidlets'), 'anemone': ('Anemone', 'Anemones'),
                 'split_boss': ('Squiddler Boss', 'Squiddler Bosses'), 'mother_boss': ('Mother', 'Mothers'),
                 'rules_hunter': ('Terminator', 'Terminators'), 'neural_hunter': ('Viber', 'Vibers'),
-                'boss_viber': ('Boss Viber', 'Boss Vibers'), 'vibelet': ('Vibelet', 'Vibelets')}
+                'boss_viber': ('Boss Viber', 'Boss Vibers'), 'vibelet': ('Vibelet', 'Vibelets'),
+                'belemnite': ('Belemnite', 'Belemnites')}
     assert enemy_names.ENEMY_NAMES == expected
     assert enemy_names.name('static') == 'Urchin' and enemy_names.plural('aggressive') == 'Jellies'

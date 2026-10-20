@@ -238,6 +238,11 @@ def get_level_vibelet_count(level: int) -> int:
     return _placed_only_count(level, 'vibelet')
 
 
+def get_level_belemnite_count(level: int) -> int:
+    """Belemnites on a level: the level file's `belemnite` count, else none."""
+    return _placed_only_count(level, 'belemnite')
+
+
 def _placed_only_count(level: int, kind: str) -> int:
     """How many of an enemy only a level file places: its layout's, else its `enemies` count, else none."""
     layout = get_level_layout(level)

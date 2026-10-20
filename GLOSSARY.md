@@ -108,6 +108,14 @@ _Code name_: boss_viber
 A Viber at half the size that one hit destroys; its shots are almost harmless.
 _Code name_: vibelet
 
+**Belemnite**:
+A spiky squid in a pointed shell that chases the player as a Jelly does. It has no guns; when it dies it explodes, hurting everything near it, other enemies too, so one can set off the next.
+_Code name_: belemnite
+
+**Blast**:
+An explosion's reach and what it does to everything inside it: the player, the hunter, enemies and wall blocks. A blast set off by another counts its kills for whoever lit the first.
+_Avoid_: explosion (that is what the player sees of it), splash damage
+
 ### Modes
 
 **Duel**:

@@ -22,6 +22,7 @@ ENEMY_NAMES: Dict[str, Tuple[str, str]] = {
     'neural_hunter': ('Viber', 'Vibers'),
     'boss_viber': ('Boss Viber', 'Boss Vibers'),
     'vibelet': ('Vibelet', 'Vibelets'),
+    'belemnite': ('Belemnite', 'Belemnites'),
 }
 
 
