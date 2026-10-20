@@ -167,27 +167,11 @@ class BabySettings:
 
 
 @dataclass
-class SplitBossSettings:
-    sizeMultiplier: float
-    hitPoints: int
-    spawnOffsetRange: int
-    splitVelocityMagnitude: float
-    childrenCount: int
-
-
-@dataclass
 class MotherBossSettings:
-    sizeMultiplier: float
-    hitPoints: int
-    eggLayInterval: int
+    size: int
     lineGlowIntensityMax: float
     blinkFrequencyMultiplierMax: float
     blinkDurationMultiplierMax: float
-    projectileSpeedMultiplier: float
-    projectileImpactMultiplier: float
-    projectileGlowColor: Tuple[int, int, int]
-    projectileGlowRadiusMultiplier: float
-    projectileGlowIntensity: float
 
 
 @dataclass
@@ -447,7 +431,6 @@ class Settings:
     flighthouseEnemy: FlighthouseEnemySettings
     anemone: AnemoneSettings
     baby: BabySettings
-    splitBoss: SplitBossSettings
     motherBoss: MotherBossSettings
     egg: EggSettings
     momentum: MomentumSettings
@@ -472,34 +455,13 @@ def _load_settings_json() -> dict:
         return json.load(fh)
 
 
-def _old_boss_settings(squid_size):
-    """The Squiddler Boss's and the Mother's settings as their old classes read them, from their catalogue entries."""
-    split, mother = enemy_kinds.kind("split_boss"), enemy_kinds.kind("mother_boss")
-    split_traits, mother_traits = dict(split.traits), dict(mother.traits)
-    splits = split_traits["splitsOnDeath"]
-    gun = mother_traits["gun"]
-    split_boss = {"sizeMultiplier": split.tuning["size"] / squid_size,
-                  "hitPoints": split_traits["takesHits"]["hitPoints"], "spawnOffsetRange": splits["spread"],
-                  "splitVelocityMagnitude": splits["speed"], "childrenCount": splits["count"]}
-    mother_boss = {**mother.tuning, "sizeMultiplier": mother.tuning["size"] / squid_size,
-                   "hitPoints": mother_traits["takesHits"]["hitPoints"],
-                   "eggLayInterval": mother_traits["laysEggs"]["interval"],
-                   "projectileSpeedMultiplier": gun["shotSpeed"], "projectileImpactMultiplier": gun["impact"],
-                   "projectileGlowColor": gun["glowColor"], "projectileGlowRadiusMultiplier": gun["glowRadius"],
-                   "projectileGlowIntensity": gun["glowIntensity"]}
-    del mother_boss["size"]
-    return split_boss, mother_boss
-
-
 def load_settings() -> Settings:
     raw = _load_settings_json()
     # Each kind's own settings live with the kind, in config/enemies.json
     for key, section in (("replay", "replayEnemy"), ("flocker", "flockerEnemy"), ("flighthouse", "flighthouseEnemy"),
-                         ("anemone", "anemone"), ("baby", "baby"), ("split_boss", "splitBoss"),
+                         ("anemone", "anemone"), ("baby", "baby"),
                          ("mother_boss", "motherBoss"), ("egg", "egg")):
         raw[section] = enemy_kinds.kind(key).tuning
-    # The old boss classes read these until they go; the numbers now live in the bosses' traits
-    raw["splitBoss"], raw["motherBoss"] = _old_boss_settings(raw["replayEnemy"]["size"])
 
     def _preset_map(presets: dict) -> Dict[str, MazeComplexityPreset]:
         return {
@@ -597,13 +559,7 @@ def load_settings() -> Settings:
             "tipColor": _as_color(tuple(raw["anemone"]["tipColor"])),
         }),
         baby=BabySettings(**raw["baby"]),
-        splitBoss=SplitBossSettings(**raw["splitBoss"]),
-        motherBoss=MotherBossSettings(
-            **{
-                **raw["motherBoss"],
-                "projectileGlowColor": _as_color(tuple(raw["motherBoss"]["projectileGlowColor"]))
-            }
-        ),
+        motherBoss=MotherBossSettings(**raw["motherBoss"]),
         egg=EggSettings(
             initialSize=raw["egg"]["initialSize"],
             maxSize=raw["egg"]["maxSize"],
@@ -759,7 +715,6 @@ REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = SETTINGS.enemies.replayFireAngleTolerance
 REPLAY_ENEMY_WINDOW_SIZE = SETTINGS.replayEnemy.windowSize
 REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
 REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
-REPLAY_ENEMY_HIT_POINTS = dict(enemy_kinds.kind("replay").traits)["takesHits"]["hitPoints"]  # until ReplayEnemyShip goes
 
 FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
 FLOCKER_ENEMY_COLOR = SETTINGS.flockerEnemy.color
@@ -801,25 +756,12 @@ ANEMONE_TIP_COLOR = SETTINGS.anemone.tipColor
 
 BABY_SIZE = SETTINGS.baby.size
 
-SPLIT_BOSS_SIZE_MULTIPLIER = SETTINGS.splitBoss.sizeMultiplier
-SPLIT_BOSS_HIT_POINTS = SETTINGS.splitBoss.hitPoints
-SPLIT_BOSS_SPAWN_OFFSET_RANGE = SETTINGS.splitBoss.spawnOffsetRange
-SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE = SETTINGS.splitBoss.splitVelocityMagnitude
-SPLIT_BOSS_CHILD_COUNT = SETTINGS.splitBoss.childrenCount
 
-MOTHER_BOSS_SIZE_MULTIPLIER = SETTINGS.motherBoss.sizeMultiplier
-MOTHER_BOSS_HIT_POINTS = SETTINGS.motherBoss.hitPoints
-MOTHER_BOSS_EGG_LAY_INTERVAL = SETTINGS.motherBoss.eggLayInterval
 
 MOTHER_BOSS_LINE_GLOW_INTENSITY_MAX = SETTINGS.motherBoss.lineGlowIntensityMax
 MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkFrequencyMultiplierMax
 MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkDurationMultiplierMax
 
-MOTHER_BOSS_PROJECTILE_SPEED_MULTIPLIER = SETTINGS.motherBoss.projectileSpeedMultiplier
-MOTHER_BOSS_PROJECTILE_IMPACT_MULTIPLIER = SETTINGS.motherBoss.projectileImpactMultiplier
-MOTHER_BOSS_PROJECTILE_GLOW_COLOR = SETTINGS.motherBoss.projectileGlowColor
-MOTHER_BOSS_PROJECTILE_GLOW_RADIUS_MULTIPLIER = SETTINGS.motherBoss.projectileGlowRadiusMultiplier
-MOTHER_BOSS_PROJECTILE_GLOW_INTENSITY = SETTINGS.motherBoss.projectileGlowIntensity
 
 EGG_INITIAL_SIZE = SETTINGS.egg.initialSize
 EGG_MAX_SIZE = SETTINGS.egg.maxSize

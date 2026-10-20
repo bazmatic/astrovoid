@@ -128,7 +128,7 @@ _Avoid_: explosion (that is what the player sees of it), splash damage
 
 ### Creatures
 
-How an enemy is built when its catalogue entry names a `body` (the Urchin, Crab, Jelly and Belemnite so far).
+How an enemy is built when its catalogue entry names a `body` (the Urchin, Crab, Jelly, Belemnite and the four squids so far).
 
 **Creature**:
 One enemy assembled from its Enemy Kind's catalogue entry: a Body and a list of Traits. It holds what every enemy has

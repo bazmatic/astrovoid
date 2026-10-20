@@ -47,9 +47,6 @@ class HunterShip(RotatingThrusterShip):
         self._decision = None  # The pilot decision the burn budget belongs to
         self._burn_left = None  # Frames of burn the present course still allows
 
-    def is_enemy_ship(self):
-        return False
-
     @property
     def thrust_force(self):
         return config.SHIP_THRUST_FORCE * self.settings.thrust_multiplier

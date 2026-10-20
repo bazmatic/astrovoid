@@ -70,14 +70,6 @@ class Ship(RotatingThrusterShip):
         self.trail: List[Tuple[float, float]] = []
         self._level_badge: Optional[Tuple[int, Optional[pygame.Surface]]] = None  # (level, rendered number)
     
-    def is_enemy_ship(self) -> bool:
-        """Check if this ship is an enemy ship.
-        
-        Returns:
-            False - this is the player ship, not an enemy.
-        """
-        return False
-    
     def apply_thrust(self) -> bool:
         """Apply thrust in current direction.
         

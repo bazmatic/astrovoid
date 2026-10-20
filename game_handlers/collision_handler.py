@@ -15,12 +15,8 @@ from entities.jev_beacon import JevBeacon
 from entities.explosion import Explosions, push, reaches
 from entities.projectile import Projectile
 if TYPE_CHECKING:
-    from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.split_boss import SplitBoss
-    from entities.mother_boss import MotherBoss
-    from entities.baby import Baby
     from entities.egg import Egg
     from entities.anemone import Anemone
     from entities.enemy_hunter import EnemyHunter
@@ -94,36 +90,26 @@ class CollisionHandler:
     def handle_projectile_enemy_collisions(
         self,
         projectile: 'Projectile',
-        replay_enemies: List['ReplayEnemyShip'],
         flockers: List['FlockerEnemyShip'],
         flighthouses: List['FlighthouseEnemy'],
-        split_bosses: List['SplitBoss'],
-        mother_bosses: List['MotherBoss'],
-        babies: List['Baby'],
         eggs: List['Egg'],
         powerup_crystals: List['PowerupCrystal'],
         anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
         enemy_hunters: Optional[List['EnemyHunter']] = None,
-        maze: Optional['Maze'] = None,
-        spawn_into=None
+        maze: Optional['Maze'] = None
     ) -> bool:
-        """Handle collisions between a projectile and enemies.
+        """Handle collisions between a projectile and the enemies that are not Creatures.
         
         Args:
             projectile: The projectile to check collisions for.
-            replay_enemies: List of replay enemies.
             flockers: List of flocker enemies.
-            split_bosses: List of SplitBoss enemies.
-            mother_bosses: List of Mother Boss enemies.
-            babies: List of Baby enemies.
+            flighthouses: List of flighthouse enemies.
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
             anemones: List of anemone enemies (optional).
             jev_beacon_allowed: Whether a kill may drop a Jev beacon.
             enemy_hunters: List of enemy hunters, Rules and Neural (optional).
-            spawn_into: Where a split boss's children go (anything with append: the roster); by default the
-                replay_enemies list.
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -133,25 +119,6 @@ class CollisionHandler:
         
         if not projectile.active:
             return False
-        
-        # Check projectile-replay enemy collision
-        for replay_enemy in replay_enemies:
-            if replay_enemy.active and projectile.active:
-                if projectile.check_circle_collision(replay_enemy.get_pos(), replay_enemy.radius):
-                    enemy_pos = replay_enemy.get_pos()
-                    
-                    # Take damage - returns True if destroyed
-                    if replay_enemy.take_damage():
-                        replay_enemy.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, replay_enemy)
-                        
-                        self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
-                    else:
-                        # Flinch so the hit registers
-                        replay_enemy.trigger_blink()
-                    
-                    return True  # Projectile destroyed
         
         # Check projectile-flocker collision
         for flocker in flockers:
@@ -194,52 +161,6 @@ class CollisionHandler:
                         self.drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
                     return True
         
-        # Check projectile-SplitBoss collision
-        for split_boss in split_bosses:
-            if split_boss.active and projectile.active:
-                if projectile.check_circle_collision(split_boss.get_pos(), split_boss.radius):
-                    boss_pos = split_boss.get_pos()
-                    boss_velocity = (split_boss.vx, split_boss.vy)
-                    
-                    # Take damage - returns True if destroyed
-                    if split_boss.take_damage():
-                        # SplitBoss destroyed - spawn two ReplayEnemyShip instances
-                        split_boss.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, split_boss)
-                        
-                        # Spawn two ReplayEnemyShip instances at random nearby positions
-                        self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies if spawn_into is None else spawn_into,
-                            powerup_crystals, jev_beacon_allowed, maze
-                        )
-                    # Note: If not destroyed, projectile still hits but boss survives
-                    
-                    return True  # Projectile destroyed
-        
-        # Check projectile-Mother Boss collision
-        for mother_boss in mother_bosses:
-            if mother_boss.active and projectile.active:
-                if projectile.check_circle_collision(mother_boss.get_pos(), mother_boss.radius):
-                    boss_pos = mother_boss.get_pos()
-                    boss_velocity = (mother_boss.vx, mother_boss.vy)
-                    
-                    # Take damage - returns True if destroyed
-                    if mother_boss.take_damage():
-                        # Mother Boss destroyed - spawn two ReplayEnemyShip instances (like SplitBoss)
-                        mother_boss.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, mother_boss)
-                        
-                        # Spawn two ReplayEnemyShip instances at random nearby positions
-                        self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies if spawn_into is None else spawn_into,
-                            powerup_crystals, jev_beacon_allowed, maze
-                        )
-                    # Note: If not destroyed, projectile still hits but boss survives
-                    
-                    return True  # Projectile destroyed
-        
         # Check projectile-enemy hunter collision: it takes hits like a boss and leaves no crystal
         for hunter in enemy_hunters or ():
             if hunter.active and projectile.active:
@@ -250,19 +171,6 @@ class CollisionHandler:
                         self.record_kill(projectile, hunter)
                     return True  # Projectile destroyed
 
-        # Check projectile-baby collision
-        for baby in babies:
-            if baby.active and projectile.active:
-                if projectile.check_circle_collision(baby.get_pos(), baby.radius):
-                    baby_pos = baby.get_pos()
-                    baby.die()
-                    self.sound_manager.play_enemy_destroy()
-                    self.record_kill(projectile, baby)
-                    
-                    self.drop_pickup(baby_pos, powerup_crystals, jev_beacon_allowed)
-                    
-                    return True  # Projectile destroyed
-        
         # Check projectile-egg collision
         for egg in eggs:
             if egg.active and projectile.active:
@@ -287,70 +195,15 @@ class CollisionHandler:
         return False
     
     def shoot_into(self, projectile, roster, powerup_crystals, jev_beacon_allowed=False, maze=None) -> bool:
-        """A friendly shot against every enemy on the roster that is not a Creature (the Encounter offers it to those);
-        a split boss's children join the roster.
+        """A friendly shot against every enemy on the roster that is not a Creature (the Encounter offers it to those).
 
         Returns True if it hit one (the shot is then spent).
         """
-        # The squids are Creatures: the Encounter has offered the shot to them
-        lists = [[], roster.of_kind('flocker'), roster.of_kind('flighthouse'), [], [], [], roster.of_kind('egg')]
         return self.handle_projectile_enemy_collisions(
-            projectile, *lists, powerup_crystals, anemones=roster.of_kind('anemone'),
-            jev_beacon_allowed=jev_beacon_allowed, enemy_hunters=roster.of_kind(*enemy_kinds.hunters()),
-            maze=maze, spawn_into=roster)
+            projectile, roster.of_kind('flocker'), roster.of_kind('flighthouse'), roster.of_kind('egg'),
+            powerup_crystals, anemones=roster.of_kind('anemone'), jev_beacon_allowed=jev_beacon_allowed,
+            enemy_hunters=roster.of_kind(*enemy_kinds.hunters()), maze=maze)
 
-    def _spawn_split_boss_children(
-        self,
-        boss_pos: Tuple[float, float],
-        boss_velocity: Tuple[float, float],
-        replay_enemies: List['ReplayEnemyShip'],
-        powerup_crystals: List['PowerupCrystal'],
-        jev_beacon_allowed: bool = False,
-        maze: Optional['Maze'] = None
-    ) -> None:
-        """Spawn two ReplayEnemyShip instances when SplitBoss is destroyed.
-        
-        Args:
-            boss_pos: Position where SplitBoss was destroyed.
-            boss_velocity: Velocity of the SplitBoss at destruction.
-            replay_enemies: List to add spawned enemies to.
-            powerup_crystals: List to add spawned crystal to.
-            maze: When given, children only appear in open space, never inside a block.
-        """
-        from game_handlers.spawn_manager import make_enemy
-        
-        for i in range(config.SPLIT_BOSS_CHILD_COUNT):
-            # Random offset within spawn range
-            angle_offset = random.uniform(0, 2 * math.pi)
-            distance_offset = random.uniform(
-                config.SPLIT_BOSS_SPAWN_OFFSET_RANGE * 0.5,
-                config.SPLIT_BOSS_SPAWN_OFFSET_RANGE
-            )
-            spawn_pos = (boss_pos[0] + math.cos(angle_offset) * distance_offset,
-                         boss_pos[1] + math.sin(angle_offset) * distance_offset)
-            if maze is not None and not maze.is_open(spawn_pos, config.BABY_SIZE):
-                spawn_pos = maze.open_spot_near(boss_pos, config.BABY_SIZE, config.SPLIT_BOSS_SPAWN_OFFSET_RANGE)
-            
-            # Split velocity: one leftward, one rightward
-            split_angle = math.atan2(boss_velocity[1], boss_velocity[0])
-            if i == 0:
-                # First enemy: leftward component
-                velocity_angle = split_angle - math.pi / 4  # 45 degrees left
-            else:
-                # Second enemy: rightward component
-                velocity_angle = split_angle + math.pi / 4  # 45 degrees right
-            
-            spawn_velocity_x = math.cos(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
-            spawn_velocity_y = math.sin(velocity_angle) * config.SPLIT_BOSS_SPLIT_VELOCITY_MAGNITUDE
-            
-            # A Squidlet, flying apart from its siblings
-            spawned_baby = make_enemy('baby', spawn_pos, 1, self.command_recorder)
-            spawned_baby.vx = spawn_velocity_x
-            spawned_baby.vy = spawn_velocity_y
-            replay_enemies.append(spawned_baby)
-        
-        self.drop_pickup(boss_pos, powerup_crystals, jev_beacon_allowed)
-    
     def handle_projectile_ship_collision(
         self,
         projectile: 'Projectile',

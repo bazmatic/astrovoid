@@ -5,6 +5,7 @@ import config
 from entities.command_recorder import CommandRecorder
 from entities.egg import Egg
 import creatures
+import enemy_kinds
 from creatures.traits.spawning import LaysEggs
 from tests.creature_parts import encounter, world
 from game_handlers.enemy_roster import EnemyRoster
@@ -83,7 +84,7 @@ def test_big_enemies_take_the_positions_with_room_for_them():
     maze = walled_maze()
     cramped = beside_wall(maze)
     roomy = maze.position_calculator.grid_center_to_screen(2, 5)
-    boss_radius = config.REPLAY_ENEMY_SIZE * config.MOTHER_BOSS_SIZE_MULTIPLIER
+    boss_radius = enemy_kinds.kind('mother_boss').tuning['size']
     assert maze.is_open(roomy, boss_radius) and not maze.is_open(cramped, boss_radius)
     roster = EnemyRoster()
     counts = EnemyCounts(total=0, static=0, patrol=0, aggressive=0, replay=0, flocker=0, flighthouse=0, egg=0)

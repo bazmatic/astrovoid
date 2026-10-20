@@ -49,3 +49,25 @@ Same command as the baseline, three runs, medians.
 
 **Passed**: every level is well inside the 20% limit. Level 9 (20 Jellies) is the only one slower: its update is 8%
 slower than the baseline (2.115 against 1.959 ms), about 0.16 ms a frame.
+
+## Stage 3 gate: the four squids are Creatures
+
+Measured on 2026-10-21 while another job's 12 training workers kept all 12 cores busy (load average 17 to 31). Wall
+time was meaningless (two trees with identical squid code differed by 30%), so each frame was timed in **CPU time**
+(`time.process_time`, the timer's own code otherwise unchanged), and three trees ran alternately, five rounds each:
+`420b0e2` (the stage 1 baseline's code), `4479984` (this stage's start: stage 2 plus `main` merged in) and the commit that
+deletes the old squid classes (this stage's end). Medians of five, update + draw, ms per frame.
+
+| level | 420b0e2 | 4479984 | stage 3 | vs 420b0e2 | vs 4479984 | stage 3 spread |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 3.88 | 3.64 | 3.94 | +1.6% | +8.2% | 3.29–4.14 |
+| 8 | 5.68 | 5.16 | 5.84 | +2.9% | +13.2% | 4.86–6.03 |
+| 9 | 7.37 | 8.27 | 8.11 | +10.0% | −1.9% | 7.21–8.96 |
+| 40 | 10.47 | 9.71 | 10.12 | −3.4% | +4.2% | 9.70–11.95 |
+| 18 | 3.76 | 4.18 | 3.72 | −1.1% | −11.0% | 3.63–4.53 |
+| 42 | 5.87 | 5.89 | 6.21 | +5.9% | +5.6% | 5.58–6.77 |
+| 48 | 4.76 | 4.54 | 5.15 | +8.0% | +13.4% | 4.30–5.25 |
+
+**Passed**: every level is inside 20% of both baselines; the largest change, +13.4%, is inside the run-to-run spread
+(about 20% under this load). Level 9 has no squids: its +10% against `420b0e2` came with `main` (the crowd is now also
+pushed out of walls each round). Re-measure on an idle machine to confirm.

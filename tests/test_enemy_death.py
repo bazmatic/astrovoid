@@ -6,10 +6,6 @@ from unittest.mock import Mock
 import pygame
 import pytest
 import creatures
-from entities.replay_enemy_ship import ReplayEnemyShip
-from entities.baby import Baby
-from entities.split_boss import SplitBoss
-from entities.mother_boss import MotherBoss
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.egg import Egg
@@ -18,19 +14,17 @@ from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.enemy_roster import EnemyRoster
+from tests.creature_parts import encounter, world
 
 POS = (400.0, 300.0)
-SQUID_CLASSES = [ReplayEnemyShip, Baby, SplitBoss, MotherBoss]
+SQUID_KINDS = ['replay', 'baby', 'split_boss', 'mother_boss']
 
 
 def make_all_enemies():
     recorder = CommandRecorder()
     return [
         creatures.build("static", POS),
-        ReplayEnemyShip(POS, recorder),
-        Baby(POS, recorder),
-        SplitBoss(POS, recorder),
-        MotherBoss(POS, recorder),
+        *(creatures.build(kind, POS, 1, recorder) for kind in SQUID_KINDS),
         FlockerEnemyShip(POS),
         FlighthouseEnemy(POS),
         Anemone(POS),
@@ -38,11 +32,15 @@ def make_all_enemies():
     ]
 
 
-def make_squid(cls=ReplayEnemyShip):
-    squid = cls(POS, CommandRecorder())
+def make_squid(kind='replay'):
+    """A squid with its hit points set as on its first frame, its tentacles settled."""
+    squid = creatures.build(kind, POS, 1, CommandRecorder())
+    for trait in squid.traits:
+        trait.on_spawn(squid, None)
+    squid.has_spawned = True
     squid.angle = 0.0
     for _ in range(60):
-        squid._update_tentacles(1.0)
+        squid.body._update_tentacles(1.0)
     return squid
 
 
@@ -53,7 +51,7 @@ def run_death(entity, fraction):
 
 
 def longest_reach(squid):
-    return max(math.hypot(chain[-1][0] - chain[0][0], chain[-1][1] - chain[0][1]) for chain in squid.tentacles)
+    return max(math.hypot(chain[-1][0] - chain[0][0], chain[-1][1] - chain[0][1]) for chain in squid.body.tentacles)
 
 
 def blank_screen():
@@ -90,9 +88,9 @@ class TestDieHook:
 class TestSquidWithdrawal:
     """The squid pulls into itself and vanishes."""
 
-    @pytest.mark.parametrize("cls", SQUID_CLASSES)
-    def test_squid_has_death_animation(self, cls):
-        squid = make_squid(cls)
+    @pytest.mark.parametrize("kind", SQUID_KINDS)
+    def test_squid_has_death_animation(self, kind):
+        squid = make_squid(kind)
         squid.die()
         assert squid.is_dying
 
@@ -120,9 +118,9 @@ class TestSquidWithdrawal:
         squid = make_squid()
         squid.die()
         run_death(squid, 0.55)
-        reach = [math.hypot(c[-1][0] - c[0][0], c[-1][1] - c[0][1]) for c in squid.tentacles]
-        long_reach = [reach[i] for i in squid.LONG_TENTACLE_INDICES]
-        short_reach = [r for i, r in enumerate(reach) if i not in squid.LONG_TENTACLE_INDICES]
+        reach = [math.hypot(c[-1][0] - c[0][0], c[-1][1] - c[0][1]) for c in squid.body.tentacles]
+        long_reach = [reach[i] for i in squid.body.LONG_TENTACLE_INDICES]
+        short_reach = [r for i, r in enumerate(reach) if i not in squid.body.LONG_TENTACLE_INDICES]
         assert max(short_reach) < 0.5
         assert min(long_reach) > 0.5
 
@@ -130,7 +128,7 @@ class TestSquidWithdrawal:
         squid = make_squid()
         squid.die()
         run_death(squid, 0.25)
-        assert squid.blink_state == 0.0
+        assert squid.body.blink_state == 0.0
 
     def test_remnant_coasts_to_a_stop(self):
         squid = make_squid()
@@ -140,9 +138,9 @@ class TestSquidWithdrawal:
         assert POS[0] < squid.x < POS[0] + 30
         assert abs(squid.vx) < 0.05
 
-    @pytest.mark.parametrize("cls", SQUID_CLASSES)
-    def test_drawn_body_shrinks_away(self, cls):
-        squid = make_squid(cls)
+    @pytest.mark.parametrize("kind", SQUID_KINDS)
+    def test_drawn_body_shrinks_away(self, kind):
+        squid = make_squid(kind)
         squid.die()
         sizes = []
         for _ in range(4):
@@ -172,18 +170,15 @@ class TestGameIntegration:
         handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
         squid = make_squid()
         squid.hit_points = 1
-        projectile = Projectile(POS, 0.0)
-        hit = handler.handle_projectile_enemy_collisions(
-            projectile, [squid], [], [], [], [], [], [], []
-        )
-        assert hit
+        stand_in = world(collision_handler=handler, scoring=handler.scoring, sound_manager=handler.sound_manager)
+        assert encounter(squid, world_=stand_in).shoot(Projectile(POS, 0.0))
         assert not squid.active
         assert squid.is_dying
 
     def test_entity_manager_updates_and_draws_dying(self):
         manager = EnemyRoster()
         dying = make_squid()
-        alive = make_squid(Baby)
+        alive = make_squid('baby')
         manager.add(dying)
         manager.add(alive)
         dying.die()
@@ -286,7 +281,7 @@ class TestLastKillPortrait:
         squid.die()
         handler.record_kill(Mock(source='player'), squid)
         recorded = handler.last_player_kill
-        assert isinstance(recorded, ReplayEnemyShip)
+        assert recorded is not squid and recorded.type == 'replay'
         squid.update_death(10)
         assert recorded.death_progress == 0
         handler.record_kill(Mock(source='hunter'), FlighthouseEnemy(POS))

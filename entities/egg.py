@@ -1,4 +1,4 @@
-"""Egg enemy that grows and spawns Baby enemies when it pops.
+"""Egg enemy that grows and hatches Squidlets when it pops.
 
 This module implements an Egg enemy that grows over time and spawns 1-3
 Baby enemies when it reaches maximum size, or can be destroyed by bullets
@@ -23,7 +23,7 @@ from utils.math_utils import apply_circle_collision_physics, apply_wall_collisio
 from rendering import visual_effects
 
 if TYPE_CHECKING:
-    from entities.baby import Baby
+    from creatures.creature import Creature
     from entities.command_recorder import CommandRecorder
     from maze.generator import Maze
 
@@ -39,7 +39,7 @@ class JellyBlob:
 
 
 class Egg(GameEntity, Collidable, Drawable):
-    """Egg enemy that grows and spawns Baby enemies when it pops.
+    """Egg enemy that grows and hatches Squidlets when it pops.
     
     The egg grows at a random rate. When it reaches maximum size, it pops
     and spawns 1-3 Baby enemies. If destroyed by bullets before popping,
@@ -265,7 +265,7 @@ class Egg(GameEntity, Collidable, Drawable):
         """
         return self.current_radius >= self.max_radius and not self.has_popped
     
-    def pop(self, command_recorder: 'CommandRecorder', babies: List['Baby'], maze: Optional['Maze'] = None) -> None:
+    def pop(self, command_recorder: 'CommandRecorder', babies: List['Creature'], maze: Optional['Maze'] = None) -> None:
         """Pop the egg and spawn Baby enemies.
         
         Args:

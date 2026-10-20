@@ -12,10 +12,8 @@ import enemy_kinds
 import level_rules
 import config as game_config
 if TYPE_CHECKING:
-    from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.split_boss import SplitBoss
     from entities.command_recorder import CommandRecorder
     from game_handlers.enemy_roster import EnemyRoster
     from level_rules import EnemyCounts
@@ -48,23 +46,15 @@ def make_enemy(kind, pos, level, command_recorder):
     Every spawn path makes its enemies here. Enemy hunters are not made here: they need a pilot and a view of the
     game, which Game provides.
     """
-    from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.split_boss import SplitBoss
-    from entities.mother_boss import MotherBoss
     from entities.egg import Egg
     from entities.anemone import Anemone
-    from entities.baby import Baby
     if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
         raise ValueError(f'cannot make an enemy of type {kind!r}')
     if enemy_kinds.kind(kind).body is not None:
         import creatures
         entity = creatures.build(kind, pos, level, command_recorder)
-    elif enemy_kinds.kind(kind).replays_player:
-        entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss, 'baby': Baby}[kind](
-            pos, command_recorder)
-        entity.current_replay_index = 0
     else:
         entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
                   'egg': lambda: Egg(pos), 'anemone': lambda: Anemone(pos)}[kind]()

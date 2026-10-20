@@ -17,8 +17,6 @@ from physics.obstacle_world import ObstacleWorld
 from rendering.gates import draw_gate
 import level_rules
 import level_config
-from entities.replay_enemy_ship import ReplayEnemyShip
-from entities.split_boss import SplitBoss
 from entities.projectile import Projectile
 from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon

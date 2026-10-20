@@ -78,6 +78,8 @@ The entity system provides a foundation for all game objects:
 
 - **`urchin.py`**, **`patrol_crab.py`**, **`jellyfish.py`**: the `urchin`, `crab` and `jelly` Bodies of the Urchin,
   Crab and Jelly Creatures (see `creatures/`): they animate and draw, and read only the creature's attributes
+- **`squid.py`**: `Squid`, the `squid` Body of the Squiddler, Squidlet, Squiddler Boss and Mother: mantle, blinking
+  eyes, trailing tentacles, the jet (on the `thrust` event) and the withdrawal on death
 
 - **`explosion.py`**: `Blast`, `Explosions`, `Fireball` - reusable explosions (Belemnites now, bombs later)
   - A `Blast` is a reach, damage, push, wall hits and whom its kills count for; `fuse` delays it so chains ripple
@@ -102,7 +104,8 @@ The entity system provides a foundation for all game objects:
 ### Creatures (`creatures/`)
 
 An enemy whose `config/enemies.json` entry names a `body` is a **Creature**: a Body (how it looks) and a list of Traits
-(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`), Jelly (`aggressive`) and Belemnite are Creatures;
+(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`), Jelly (`aggressive`), Belemnite and
+the four squids (Squiddler `replay`, Squidlet `baby`, Squiddler Boss `split_boss`, Mother `mother_boss`) are Creatures;
 the other kinds keep their own classes until they move over (see
 `docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`).
 
@@ -113,9 +116,10 @@ the other kinds keep their own classes until they move over (see
   `on_event`, and `on_crowd` for a `CROWD` trait (once a frame per crowd: a kind, or a crowd the trait names, as
   Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
   `from_params` builds it from its catalogue parameters.
-- **`traits/`**: `brains.py` (`still`, `patrol`, `chase`), `propulsion.py` (`coasts`, `drift`), `combat.py`
-  (`takesHits`, `shovedByShots`, `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`), `crowd.py`
-  (`keepsApart`, which also keeps a crowd out of the walls)
+- **`traits/`**: `brains.py` (`still`, `patrol`, `chase`, `replaysPlayer`), `propulsion.py` (`coasts`, `drift`,
+  `thrusters`, which flies like a ship through `physics/thrust.py`), `combat.py` (`takesHits`, `shovedByShots`,
+  `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`, `blinksWhenHit`), `crowd.py` (`keepsApart`, which
+  also keeps a crowd out of the walls), `spawning.py` (`splitsOnDeath`, `laysEggs`)
 - **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
   bad parameters or a missing requirement when the game starts
 - **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for a kind with a `body`
@@ -123,7 +127,7 @@ the other kinds keep their own classes until they move over (see
   animates its Body, then each kind's crowd traits; `shoot(projectile)` offers a friendly shot to each live creature in
   roster order and stops at the first it reaches, handing a shot no creature took to `CollisionHandler.shoot_into`.
   Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
-  `add_shot`). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
+  `add_shot`, `explode`, and `spawn`, which puts a new enemy of any kind on the roster). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
 
 ### Enemy Roster (`game_handlers/enemy_roster.py`)
 
@@ -301,7 +305,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   ├── collidable.py
 │   ├── drawable.py
 │   ├── ship.py
-│   ├── urchin.py           # the Bodies of the Urchin, Crab and Jelly
+│   ├── urchin.py           # the Bodies of the Urchin, Crab and Jelly; squid.py the squids'
 │   ├── patrol_crab.py
 │   ├── jellyfish.py
 │   ├── anemone.py
