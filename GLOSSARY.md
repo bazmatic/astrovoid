@@ -28,6 +28,10 @@ _Avoid_: snapshot, world state, entities
 
 ### Things in the maze
 
+**Strong wall**:
+A wall block that no shot can destroy, drawn as riveted metal plate. Only hand-made layouts have them.
+_Avoid_: steel wall, indestructible block, rim (the outer ring is a different thing)
+
 **Jev beacon**:
 A pickup that summons the hunter. Only the player collects it; the hunter never perceives it as a pickup.
 _Avoid_: hunter powerup, summon crystal

@@ -1,8 +1,9 @@
 """Rock knocked off the maze walls by shots.
 
 A hit makes the struck block flash and throws a few chips out from the point
-of impact. A block that is destroyed bursts into rubble instead. None of it
-collides with anything; it tumbles, slows and fades.
+of impact. A block that is destroyed bursts into rubble instead. A strong
+wall is metal: a shot only strikes sparks from it. None of it collides with
+anything; it tumbles, slows and fades.
 """
 
 import math
@@ -60,6 +61,10 @@ class WallDebris:
     FLASH_FRAMES = 7.0
     FLASH_COLOR = (235, 245, 255)
     FLASH_ALPHA = 120
+    SPARKS = 6
+    SPARK_COLOR = (255, 225, 150)
+    SPARK_SIZE = (1.5, 2.5)
+    SPARK_FRAMES = 12.0
 
     def __init__(self):
         """Initialize with nothing flying."""
@@ -83,6 +88,16 @@ class WallDebris:
         for _ in range(self.HIT_CHIPS):
             self._throw(impact, away + random.uniform(-1.2, 1.2), self.CHIP_SIZE, self.CHIP_FRAMES)
 
+    def spark(self, impact: Point) -> None:
+        """A shot glanced off a strong wall: a few short-lived sparks, and no rock.
+
+        Args:
+            impact: Where the shot landed.
+        """
+        for _ in range(self.SPARKS):
+            self._throw(impact, random.uniform(0.0, 2 * math.pi), self.SPARK_SIZE, self.SPARK_FRAMES,
+                        self.SPARK_COLOR)
+
     def destroy(self, rect: BlockRect) -> None:
         """A block broke apart: scatter rubble from all over it.
 
@@ -103,10 +118,13 @@ class WallDebris:
                 outward = math.atan2(start[1] - area.centery, start[0] - area.centerx)
                 self._throw(start, outward + random.uniform(-0.6, 0.6), self.RUBBLE_SIZE, self.RUBBLE_FRAMES)
 
-    def _throw(self, start: Point, direction: float, sizes: Tuple[float, float], frames: float) -> None:
-        """Send one chip flying from a point, in roughly the given direction (radians)."""
+    def _throw(self, start: Point, direction: float, sizes: Tuple[float, float], frames: float,
+               color: Optional[Color] = None) -> None:
+        """Send one chip flying from a point, in roughly the given direction (radians). Rock unless given a color."""
         speed = random.uniform(*self.CHIP_SPEED)
         shade = random.uniform(0.45, 0.95)
+        if color is None:
+            color = tuple(int(channel * shade) for channel in config.COLOR_WALLS)
         self.chips.append(Chip(
             x=start[0],
             y=start[1],
@@ -115,7 +133,7 @@ class WallDebris:
             angle=random.uniform(0.0, 360.0),
             spin=random.uniform(-self.CHIP_SPIN, self.CHIP_SPIN),
             size=random.uniform(*sizes),
-            color=tuple(int(channel * shade) for channel in config.COLOR_WALLS),
+            color=color,
             # Chips with less life to begin with are gone sooner
             life=random.uniform(0.6, 1.0) * frames / self.RUBBLE_FRAMES,
         ))

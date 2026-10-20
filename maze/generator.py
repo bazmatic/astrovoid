@@ -3,7 +3,7 @@
 import random
 import pygame
 import math
-from typing import List, Tuple, Set, Dict, Optional
+from typing import Dict, FrozenSet, List, Optional, Set, Tuple
 import config
 from utils import (
     distance,
@@ -250,6 +250,8 @@ class Maze:
         self.offset_x = self.position_calculator.offset_x
         self.offset_y = self.position_calculator.offset_y
         
+        # Wall blocks no shot can destroy; only a hand-made layout has them
+        self.strong_cells: FrozenSet[Tuple[int, int]] = frozenset()
         if layout is None:
             # Generate maze grid
             generator = RecursiveBacktrackingGenerator(gen_config, self.grid_width, self.grid_height, level)
@@ -270,10 +272,11 @@ class Maze:
         else:
             # A hand-made layout: its walls, its start and its exit
             self.grid = layout.grid()
+            self.strong_cells = layout.strong_walls
             start_grid, exit_grid = layout.start, layout.exit
         
         # Convert grid to blocks and their wall segments
-        self.converter = GridToWallsConverter(self.position_calculator)
+        self.converter = GridToWallsConverter(self.position_calculator, self.strong_cells)
         self.wall_renderer = WallRenderer()
         self.wall_debris = WallDebris()
         # Spatial grid for efficient collision detection
@@ -316,6 +319,8 @@ class Maze:
         self.unbreakable_blocks = frozenset(
             self.converter.cell_rect(x, y) for x, y in self.blocks if self.converter.on_perimeter(self.grid, x, y)
         )
+        # Screen areas of the strong walls, which shots never mark
+        self.strong_blocks = frozenset(self.converter.cell_rect(x, y) for x, y in self.strong_cells)
         # Where each block has been hit, as points on its edge, oldest first
         self.wounds: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
         self.spatial_grid.add_walls(self.walls)
@@ -358,6 +363,10 @@ class Maze:
             return False
 
         cell = wall.cell
+        if cell in self.strong_cells:
+            # Metal: the shot strikes sparks and leaves no mark
+            self.wall_debris.spark(impact if impact is not None else wall.start)
+            return False
         if cell not in self.blocks:
             # A loose segment that belongs to no block
             destroyed = wall.damage()
@@ -496,7 +505,8 @@ class Maze:
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
         self.wall_renderer.draw(
-            screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks
+            screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks,
+            strong=self.strong_blocks
         )
         self.wall_debris.draw(screen)
         

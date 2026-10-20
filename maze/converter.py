@@ -5,7 +5,7 @@ A wall cell is a solid block: it gets a segment only on each face that looks
 onto open space, so blocks packed together share no inner edges.
 """
 
-from typing import List, Tuple
+from typing import FrozenSet, List, Tuple
 import config
 from maze.wall_segment import WallSegment
 from maze.positioning import MazePositionCalculator
@@ -17,13 +17,16 @@ SIDES = ((0, -1), (1, 0), (0, 1), (-1, 0))
 class GridToWallsConverter:
     """Converts maze grid to wall segments."""
     
-    def __init__(self, position_calculator: MazePositionCalculator):
+    def __init__(self, position_calculator: MazePositionCalculator,
+                 strong: FrozenSet[Tuple[int, int]] = frozenset()):
         """Initialize converter.
         
         Args:
             position_calculator: Calculator for position conversions.
+            strong: Cells of strong walls, which like the outer ring can never be destroyed.
         """
         self.position_calculator = position_calculator
+        self.strong = strong
     
     def convert(self, grid: List[List[int]]) -> List[WallSegment]:
         """Convert grid to list of wall line segments.
@@ -85,4 +88,5 @@ class GridToWallsConverter:
             (-1, 0): ((screen_x, screen_y + cell_size_y), (screen_x, screen_y)),
         }
         start, end = corners[side]
-        return WallSegment(start, end, hit_points, not self.on_perimeter(grid, cell[0], cell[1]), cell)
+        indestructible = cell in self.strong or self.on_perimeter(grid, cell[0], cell[1])
+        return WallSegment(start, end, hit_points, not indestructible, cell)

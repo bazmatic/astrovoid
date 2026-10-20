@@ -280,7 +280,7 @@ The `obstacles` section of `config/settings.json` tunes them: `gateMass`, `gateL
 
 ### Level editor
 
-Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, every enemy type, the start, the exit, the Jev beacon and gates. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
+Run with `LEVEL_EDITOR=1` (for example `LEVEL_EDITOR=1 ./run.sh`) and an **EDITOR** item appears in the main menu. Pick a level, then lay it out cell by cell: walls, strong walls (metal blocks no shot can destroy), every enemy type, the start, the exit, the Jev beacon and gates. The level opens as it plays today; saving writes an exact `layout` into `levels/N.json` (git is the undo), and reverting takes it out again.
 
 | Key | Action |
 |---|---|

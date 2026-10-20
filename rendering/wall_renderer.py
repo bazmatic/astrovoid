@@ -18,6 +18,9 @@ covers it, and a block's fill stays inside the block, so what the player sees
 is still what they collide with. Each wall's shape is derived from its end
 points, so it looks the same every frame.
 
+A strong wall, which nothing can destroy, is a riveted plate of metal
+instead: no ridge of rock, no weed, and shots leave no mark on it.
+
 Walls are painted once onto a cached surface. When one is damaged or destroyed
 only the patch around it is repainted. Weed is the only part drawn fresh each
 frame.
@@ -123,6 +126,13 @@ class WallRenderer:
     WEED_COLORS = ((70, 170, 120), (95, 190, 110), (60, 150, 140))
     WEED_SWAY = 2.5  # Pixels the tips move
     WEED_SWAY_SPEED = 1.6  # Radians per second
+    # Strong walls: steel plate, lit from the top left, riveted at the corners
+    STEEL_COLOR = (96, 112, 138)
+    STEEL_LIGHT = (176, 192, 214)
+    STEEL_SHADOW = (38, 44, 58)
+    STEEL_BEVEL = 2  # Pixels of lit and shadowed rim
+    STEEL_STREAKS = 4  # Brushed streaks across each plate
+    RIVET_INSET = 5  # Pixels from each corner to its rivet
     # Never produced by the palette, so it can mark empty space in the cache
     TRANSPARENT = (255, 0, 255)
 
@@ -135,6 +145,8 @@ class WallRenderer:
         self._wounds: Dict[BlockRect, Tuple[Wound, ...]] = {}  # Where each block shown has been hit
         self._unbreakable: FrozenSet[BlockRect] = frozenset()  # Blocks that wear without ever going
         self._unbreakable_edges: Set[SegmentKey] = set()
+        self._strong: FrozenSet[BlockRect] = frozenset()  # Blocks drawn as metal plate
+        self._strong_edges: Set[SegmentKey] = set()
         self._weed_by_segment: Dict[SegmentKey, Weed] = {}
         self._surface: Optional[pygame.Surface] = None
         self._origin = (0, 0)
@@ -148,7 +160,8 @@ class WallRenderer:
         animate: bool = True,
         blocks: Optional[Mapping[BlockRect, int]] = None,
         wounds: Optional[Mapping[BlockRect, Sequence[Wound]]] = None,
-        unbreakable: Iterable[BlockRect] = ()
+        unbreakable: Iterable[BlockRect] = (),
+        strong: Iterable[BlockRect] = ()
     ) -> None:
         """Draw the walls.
 
@@ -160,6 +173,7 @@ class WallRenderer:
             blocks: Solid blocks to fill with rock, as screen area to hit points left.
             wounds: Where shots have landed on each block's edge, oldest first.
             unbreakable: Blocks that can never be destroyed, which show their damage differently.
+            strong: Strong walls, drawn as metal plate rather than rock.
         """
         blocks = blocks or {}
         unbreakable = frozenset(unbreakable)
@@ -167,6 +181,11 @@ class WallRenderer:
             self._unbreakable = unbreakable
             self._unbreakable_edges = {edge[0] for rect in unbreakable for edge in self._edges(rect)}
             # Everything is painted afresh
+            self._surface = self._signature = None
+        strong = frozenset(strong)
+        if strong != self._strong:
+            self._strong = strong
+            self._strong_edges = {edge[0] for rect in strong for edge in self._edges(rect)}
             self._surface = self._signature = None
         # Walls only ever lose hit points or vanish, so this changes whenever
         # the picture should
@@ -279,6 +298,7 @@ class WallRenderer:
         self._paint_blocks(self._blocks.keys())
         self._paint_segments(self._segments.keys())
         self._paint_bites(self._blocks.keys())
+        self._paint_plates(self._blocks.keys())
     
     def _paint_patch(self, patch: pygame.Rect) -> None:
         """Repaint one patch of the cached surface from the walls and blocks crossing it."""
@@ -298,6 +318,7 @@ class WallRenderer:
             self._paint_blocks(rects)
             self._paint_segments(keys)
             self._paint_bites(rects)
+            self._paint_plates(rects)
         finally:
             self._surface, self._origin = cache, origin
         cache.blit(scratch, patch.topleft, patch.move(-area.x, -area.y))
@@ -307,7 +328,7 @@ class WallRenderer:
         surface = self._surface
         for rect in rects:
             left, top, width, height = rect
-            if width < 1 or height < 1:
+            if width < 1 or height < 1 or rect in self._strong:
                 continue
             shade = self.FILL_SHADE * self._damage_shade(self._darkening(rect))
             rng = self._rng(left, top, width, height)
@@ -328,6 +349,33 @@ class WallRenderer:
                 self._paint_cracks(surface, bite, min(width, height), edge)
             surface.set_clip(None)
     
+    def _paint_plates(self, rects) -> None:
+        """Paint the strong walls among the given blocks as riveted steel plates, over any rock that meets them."""
+        surface = self._surface
+        for rect in rects:
+            left, top, width, height = rect
+            if rect not in self._strong or width < 1 or height < 1:
+                continue
+            plate = pygame.Rect(left - self._origin[0], top - self._origin[1], width, height)
+            rng = self._rng(left, top, width, height, 6007)
+            surface.fill(self.STEEL_COLOR, plate)
+            for _ in range(self.STEEL_STREAKS):
+                y = plate.top + rng.randrange(height)
+                streak = interpolate_color(self.STEEL_COLOR, self.STEEL_LIGHT, rng.uniform(0.08, 0.2))
+                pygame.draw.line(surface, streak, (plate.left, y), (plate.right - 1, y))
+            bevel = min(self.STEEL_BEVEL, width // 4, height // 4)
+            for i in range(bevel):
+                edge = plate.inflate(-2 * i, -2 * i)
+                pygame.draw.line(surface, self.STEEL_LIGHT, edge.topleft, (edge.right - 1, edge.top))
+                pygame.draw.line(surface, self.STEEL_LIGHT, edge.topleft, (edge.left, edge.bottom - 1))
+                pygame.draw.line(surface, self.STEEL_SHADOW, (edge.left, edge.bottom - 1), (edge.right - 1, edge.bottom - 1))
+                pygame.draw.line(surface, self.STEEL_SHADOW, (edge.right - 1, edge.top), (edge.right - 1, edge.bottom - 1))
+            inset = min(self.RIVET_INSET, width // 3, height // 3)
+            for x, y in ((plate.left + inset, plate.top + inset), (plate.right - 1 - inset, plate.top + inset),
+                         (plate.left + inset, plate.bottom - 1 - inset), (plate.right - 1 - inset, plate.bottom - 1 - inset)):
+                pygame.draw.circle(surface, self.STEEL_SHADOW, (x + 1, y + 1), 2)
+                pygame.draw.circle(surface, self.STEEL_LIGHT, (x, y), 2)
+
     def _darkening(self, rect: BlockRect) -> int:
         """Hits that darken a block from side to side. An unbreakable block is stained instead."""
         if rect in self._unbreakable:
@@ -514,7 +562,8 @@ class WallRenderer:
 
     def _paint_segments(self, keys) -> None:
         """Paint the given segments and the joints at their ends."""
-        keys = list(keys)
+        # A strong wall's faces are the edges of its plate, with no rock along them
+        keys = [key for key in keys if key not in self._strong_edges]
         for key in keys:
             self._paint_ridge(self._surface, key, self._segments[key])
         # Knobbly joints go on top so corners look the same from every wall
