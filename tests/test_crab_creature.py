@@ -73,7 +73,7 @@ def test_one_hit_kills_a_crab():
     stand_in.collision_handler.drop_pickup.assert_called_once()
 
 
-@pytest.mark.parametrize('kind', ['patrol'])
+@pytest.mark.parametrize('kind', ['patrol', 'aggressive'])
 def test_with_no_target_a_crab_and_a_jelly_hold_still(kind):
     still = creatures.build(kind, POS, 5)
     enc = encounter(still)                                # no ship, no hunter: nobody to go after

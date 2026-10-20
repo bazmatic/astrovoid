@@ -1,10 +1,9 @@
-"""Unit tests for the aggressive enemy's jellyfish rendering and animation."""
+"""Unit tests for the Jelly's jellyfish Body: rendering and animation."""
 
 import math
 import pygame
 import pytest
-from entities.enemy import Enemy
-from entities.enemy_strategies import MODE_ESCAPE_OBSTACLE, MODE_SEEK_ENEMY
+import creatures
 from entities.jellyfish import Jellyfish
 from entities.tentacle_chain import drag_chain
 
@@ -12,16 +11,19 @@ POS = (400.0, 300.0)
 
 
 def make_jelly(angle=0.0):
-    """Create an aggressive enemy heading in a known direction."""
-    enemy = Enemy(POS, "aggressive")
+    """A jelly heading in a known direction, set up as on its first frame."""
+    enemy = creatures.build("aggressive", POS)
+    for trait in enemy.traits:
+        trait.on_spawn(enemy, None)
+    enemy.has_spawned = True
     enemy.angle = angle
-    enemy.jellyfish.reset(enemy)
+    enemy.body.reset(enemy)
     return enemy
 
 
 def settle(enemy, frames=90):
     for _ in range(frames):
-        enemy.jellyfish.update(enemy, 1.0, None)
+        enemy.body.update(enemy, 1.0, None)
 
 
 def angle_gap(a, b):
@@ -34,14 +36,10 @@ def blank_screen():
 
 
 class TestRig:
-    """Only aggressive enemies are jellyfish."""
+    """The Jelly is drawn as a jellyfish."""
 
     def test_aggressive_has_jellyfish(self):
-        assert isinstance(make_jelly().jellyfish, Jellyfish)
-
-    @pytest.mark.parametrize("enemy_type", ["static", "patrol"])
-    def test_other_types_have_no_jellyfish(self, enemy_type):
-        assert Enemy(POS, enemy_type).jellyfish is None
+        assert isinstance(make_jelly().body, Jellyfish)
 
     def test_jellyfish_is_pale_blue(self):
         red, green, blue = Jellyfish.COLOR
@@ -85,27 +83,27 @@ class TestSwimming:
     def test_heading_turns_smoothly(self):
         enemy = make_jelly(angle=0.0)
         enemy.angle = 180.0
-        enemy.jellyfish.update(enemy, 1.0, None)
-        assert 0 < angle_gap(enemy.jellyfish.heading, 0.0) < 45
+        enemy.body.update(enemy, 1.0, None)
+        assert 0 < angle_gap(enemy.body.heading, 0.0) < 45
         settle(enemy)
-        assert angle_gap(enemy.jellyfish.heading, 180.0) < 0.5
+        assert angle_gap(enemy.body.heading, 180.0) < 0.5
 
     def test_pulses_faster_when_chasing(self):
         idle = make_jelly()
         chasing = make_jelly()
         chasing.is_alert = True
-        chasing.strategy.mode = MODE_SEEK_ENEMY
-        idle.jellyfish.pulse_phase = chasing.jellyfish.pulse_phase = 0.0
+        chasing.backing_off = False
+        idle.body.pulse_phase = chasing.body.pulse_phase = 0.0
         settle(idle, 60)
         settle(chasing, 60)
-        assert chasing.jellyfish.pulse_phase > idle.jellyfish.pulse_phase * 1.5
+        assert chasing.body.pulse_phase > idle.body.pulse_phase * 1.5
 
     def test_contraction_stays_in_range(self):
         enemy = make_jelly()
         values = []
         for _ in range(200):
-            enemy.jellyfish.update(enemy, 1.0, None)
-            values.append(enemy.jellyfish.contraction)
+            enemy.body.update(enemy, 1.0, None)
+            values.append(enemy.body.contraction)
         assert min(values) >= 0.0 and max(values) <= 1.0
         assert max(values) - min(values) > 0.8
 
@@ -114,8 +112,8 @@ class TestSwimming:
         enemy = make_jelly(angle)
         settle(enemy)
         forward = (math.cos(math.radians(angle)), math.sin(math.radians(angle)))
-        assert len(enemy.jellyfish.tentacles) == Jellyfish.TENTACLE_COUNT
-        for chain in enemy.jellyfish.tentacles:
+        assert len(enemy.body.tentacles) == Jellyfish.TENTACLE_COUNT
+        for chain in enemy.body.tentacles:
             tip = chain[-1]
             assert (tip[0] - enemy.x) * forward[0] + (tip[1] - enemy.y) * forward[1] < 0
 
@@ -126,24 +124,24 @@ class TestMood:
     def test_calm_without_a_target(self):
         enemy = make_jelly()
         settle(enemy)
-        assert enemy.jellyfish.agitation < 0.05
-        assert enemy.jellyfish.flutter < 0.05
+        assert enemy.body.agitation < 0.05
+        assert enemy.body.flutter < 0.05
 
     def test_agitated_when_chasing(self):
         enemy = make_jelly()
         enemy.is_alert = True
-        enemy.strategy.mode = MODE_SEEK_ENEMY
+        enemy.backing_off = False
         settle(enemy)
-        assert enemy.jellyfish.agitation > 0.95
-        assert enemy.jellyfish.flutter < 0.05
+        assert enemy.body.agitation > 0.95
+        assert enemy.body.flutter < 0.05
 
     def test_flutters_when_backing_off(self):
         enemy = make_jelly()
         enemy.is_alert = True
-        enemy.strategy.mode = MODE_ESCAPE_OBSTACLE
+        enemy.backing_off = True
         settle(enemy)
-        assert enemy.jellyfish.flutter > 0.95
-        assert enemy.jellyfish.agitation < 0.05
+        assert enemy.body.flutter > 0.95
+        assert enemy.body.agitation < 0.05
 
 
 class TestDrawing:
@@ -156,15 +154,15 @@ class TestDrawing:
         screen = blank_screen()
         enemy.draw(screen, None)
         assert screen.get_bounding_rect().width > enemy.radius * 2
-        enemy.jellyfish.agitation = 1.0
+        enemy.body.agitation = 1.0
         enemy.draw(screen, None)
-        enemy.jellyfish.agitation = 0.0
-        enemy.jellyfish.flutter = 1.0
+        enemy.body.agitation = 0.0
+        enemy.body.flutter = 1.0
         enemy.draw(screen, None)
 
     def test_draws_before_first_update(self):
         screen = blank_screen()
-        Enemy(POS, "aggressive").draw(screen, None)
+        creatures.build("aggressive", POS).draw(screen, None)
         assert screen.get_bounding_rect().width > 0
 
     def test_bell_is_translucent(self):
@@ -182,11 +180,6 @@ class TestDrawing:
         enemy.draw(screen, None)
         assert screen.get_bounding_rect().width == 0
 
-    def test_static_still_draws(self):
-        screen = blank_screen()
-        Enemy(POS, "static").draw(screen, None)
-        assert screen.get_bounding_rect().width > 0
-
 
 class TestDeath:
     """The bell collapses and the jellyfish dissolves."""
@@ -199,7 +192,7 @@ class TestDeath:
         assert enemy.DEATH_DURATION == Jellyfish.DEATH_DURATION
 
     def test_bell_collapses(self):
-        jelly = make_jelly().jellyfish
+        jelly = make_jelly().body
         assert jelly.bell_length_scale(0.0) == pytest.approx(1.0)
         assert jelly.bell_length_scale(0.6) < 0.4
 

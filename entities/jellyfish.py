@@ -4,8 +4,8 @@ An aggressive enemy chases the player and stings on contact. This module draws
 it as a small jellyfish: a translucent bell that leads the way and pulses as it
 swims, with stinging tentacles trailing behind.
 
-The jellyfish is purely visual. Movement, chasing and collision stay with the
-Enemy and its strategy.
+The jellyfish is purely visual: it is the `jelly` Body of a Creature. Movement,
+chasing and collision belong to the creature's traits.
 """
 
 import math
@@ -13,13 +13,12 @@ import random
 from typing import List, Optional, Tuple, TYPE_CHECKING
 
 import pygame
-from entities.enemy_strategies import MODE_ESCAPE_OBSTACLE
 from entities.tentacle_chain import drag_chain
 from rendering import visual_effects
 from utils import distance
 
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
+    from creatures.creature import Creature
 
 Point = Tuple[float, float]
 
@@ -77,14 +76,14 @@ class Jellyfish:
     DEATH_FADE = (0.3, 1.0)
     DEATH_SPLAY_ANGLE = 75  # Degrees - how far the loose tentacles fan out
 
-    def __init__(self, enemy: 'Enemy'):
+    def __init__(self, enemy: 'Creature'):
         """Initialize the jellyfish for an enemy."""
         self.pulse_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
         self.agitation = 0.0
         self.flutter = 0.0
         self.reset(enemy)
 
-    def reset(self, enemy: 'Enemy') -> None:
+    def reset(self, enemy: 'Creature') -> None:
         """Point the bell along the enemy's current angle and re-lay the tentacles."""
         self.heading = enemy.angle % 360
         self.tentacles: List[List[Point]] = []
@@ -98,7 +97,10 @@ class Jellyfish:
         """Length of the bell relative to normal; it collapses flat on death."""
         return 1.0 - 0.85 * _ease(death_progress, self.DEATH_COLLAPSE)
 
-    def update(self, enemy: 'Enemy', dt: float, player_pos: Optional[Point] = None) -> None:
+    def on_event(self, enemy: 'Creature', name: str) -> None:
+        """Its look follows the chase, so events change nothing."""
+
+    def update(self, enemy: 'Creature', dt: float, player_pos: Optional[Point] = None) -> None:
         """Advance the swimming pulse, heading, mood and tentacles.
 
         Args:
@@ -110,7 +112,7 @@ class Jellyfish:
         max_turn = self.TURN_SPEED * dt
         self.heading = (self.heading + max(-max_turn, min(max_turn, turn))) % 360
 
-        backing_off = enemy.is_alert and getattr(enemy.strategy, 'mode', None) == MODE_ESCAPE_OBSTACLE
+        backing_off = enemy.is_alert and enemy.backing_off
         chasing = enemy.is_alert and not backing_off
         self.agitation += ((1.0 if chasing else 0.0) - self.agitation) * self.MOOD_SMOOTHING
         self.flutter += ((1.0 if backing_off else 0.0) - self.flutter) * self.MOOD_SMOOTHING
@@ -118,7 +120,7 @@ class Jellyfish:
         self.pulse_phase += dt * (self.PULSE_SPEED + self.CHASE_PULSE_SPEED * self.agitation)
         self._update_tentacles(enemy, 0.0)
 
-    def update_death(self, enemy: 'Enemy', dt: float) -> None:
+    def update_death(self, enemy: 'Creature', dt: float) -> None:
         """Let the tentacles go slack and splay while the jellyfish dies."""
         self.agitation *= 0.85
         self.flutter *= 0.85
@@ -141,7 +143,7 @@ class Jellyfish:
         apex = self.BELL_APEX_X * (1.0 + self.BELL_STRETCH * self.contraction)
         return self.BELL_RIM_X + (apex - self.BELL_RIM_X) * u * self.bell_length_scale(death_progress)
 
-    def _update_tentacles(self, enemy: 'Enemy', death_progress: float) -> None:
+    def _update_tentacles(self, enemy: 'Creature', death_progress: float) -> None:
         """Drag the tentacle chains behind the bell."""
         heading_rad = math.radians(self.heading)
         cos_heading, sin_heading = math.cos(heading_rad), math.sin(heading_rad)
@@ -179,7 +181,7 @@ class Jellyfish:
                 self.TENTACLE_STIFFNESS_BASE, self.TENTACLE_STIFFNESS_TIP, snap
             )
 
-    def draw(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the living jellyfish.
 
         Args:
@@ -188,7 +190,7 @@ class Jellyfish:
         """
         self._draw(screen, enemy, 0.0)
 
-    def draw_death(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw_death(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the dying jellyfish: the bell collapses flat and it all dissolves.
 
         Args:
@@ -197,7 +199,7 @@ class Jellyfish:
         """
         self._draw(screen, enemy, enemy.death_progress)
 
-    def _draw(self, screen: pygame.Surface, enemy: 'Enemy', death_progress: float) -> None:
+    def _draw(self, screen: pygame.Surface, enemy: 'Creature', death_progress: float) -> None:
         """Draw the jellyfish, part-way through dying if death_progress > 0."""
         fade = _ease(death_progress, self.DEATH_FADE)
         if fade >= 1.0:

@@ -54,6 +54,17 @@
     "tuning": {
       "size": 8,
       "speed": 1.0
+    },
+    "allegiance": "enemy",
+    "body": "jelly",
+    "traits": {
+      "chase": {},
+      "drift": {"speed": "aggressive_speed"},
+      "bouncesOffWalls": {},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 1},
+      "dropsPickup": {},
+      "keepsApart": {}
     }
   },
   "replay": {

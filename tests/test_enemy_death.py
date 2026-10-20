@@ -5,7 +5,6 @@ from unittest.mock import Mock
 
 import pygame
 import pytest
-from entities.enemy import Enemy
 import creatures
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.baby import Baby
@@ -257,7 +256,7 @@ class TestBirdAndFlighthouseDeath:
 
 
 class TestLastKillPortrait:
-    @pytest.mark.parametrize('enemy', make_all_enemies() + [creatures.build('patrol', POS), Enemy(POS, 'aggressive')],
+    @pytest.mark.parametrize('enemy', make_all_enemies() + [creatures.build('patrol', POS), creatures.build('aggressive', POS)],
                              ids=lambda e: type(e).__name__ + getattr(e, 'type', ''))
     def test_portrait_replays_every_enemy_without_changing_original(self, enemy):
         from copy import deepcopy

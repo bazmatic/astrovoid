@@ -2,8 +2,9 @@
 import math
 import random
 
+import config
 from creatures.trait import Trait
-from utils import circle_line_collision, distance
+from utils import circle_line_collision, distance, get_angle_to_point
 
 
 class Still(Trait):
@@ -55,3 +56,35 @@ class Patrol(Trait):
             if circle_line_collision(ahead, c.radius, start, end):
                 return True
         return False
+
+
+class Chase(Trait):
+    """Heads for its target. Stuck (it barely moved last frame), it backs away from the target for a while, then
+    chases again. With no target it wants nothing."""
+    NAME = 'chase'
+
+    def on_spawn(self, c, enc):
+        c.is_alert = c.backing_off = False
+        c.chase_last_pos = None
+        c.chase_escape_left = 0
+
+    def on_frame(self, c, enc, dt):
+        target = enc.target_for(c)
+        if target is None:
+            c.is_alert = c.backing_off = False
+            c.chase_last_pos, c.chase_escape_left = None, 0
+            c.controls.heading = None
+            return
+        c.is_alert = True
+        pos, last = c.get_pos(), c.chase_last_pos
+        c.chase_last_pos = pos
+        if c.chase_escape_left > 0:
+            c.chase_escape_left -= 1
+        elif last is not None and distance(pos, last) < config.ENEMY_STUCK_DETECTION_THRESHOLD and not c.backing_off:
+            c.angle = (get_angle_to_point(pos, target) + 180 + random.uniform(-45, 45)) % 360
+            c.chase_escape_left = random.randint(config.ENEMY_SHIFT_DURATION_MIN, config.ENEMY_SHIFT_DURATION_MAX) - 1
+            c.backing_off = True
+        else:
+            c.backing_off = False
+            c.angle = get_angle_to_point(pos, target)
+        c.controls.heading = c.angle

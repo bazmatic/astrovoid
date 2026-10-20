@@ -1,7 +1,11 @@
 """Brains: the traits that decide where a creature goes and when it fires."""
+import math
 from types import SimpleNamespace
 
-from creatures.traits.brains import Patrol
+import pytest
+
+import config
+from creatures.traits.brains import Chase, Patrol
 from creatures.traits.propulsion import Drift
 from tests.creature_parts import creature, encounter, target, world
 
@@ -59,3 +63,43 @@ def test_a_patroller_aims_at_a_target_in_range_only():
     enc.world.ship = target((crab.x + 500.0, crab.y))
     enc.step(1.0)
     assert not crab.controls.fire
+
+
+def chaser(pos=(300.0, 300.0), speed=1.0, ship_at=(600.0, 300.0)):
+    jelly = creature([Chase(), Drift(speed=speed)], pos=pos, key='aggressive')
+    return jelly, encounter(jelly, world_=world(ship=target(ship_at)))
+
+
+def test_a_chasing_creature_closes_on_its_target():
+    jelly, enc = chaser()
+    for _ in range(60):
+        enc.step(1.0)
+    assert jelly.is_alert and not jelly.backing_off
+    assert 330.0 < jelly.x < 600.0 and jelly.y == pytest.approx(300.0)
+
+
+def test_a_stuck_chaser_backs_off_then_chases_again(monkeypatch):
+    monkeypatch.setattr(config, 'ENEMY_SHIFT_DURATION_MIN', 5)
+    monkeypatch.setattr(config, 'ENEMY_SHIFT_DURATION_MAX', 5)
+    jelly, enc = chaser(speed=0.0)                            # it cannot move, so it is stuck at once
+    backing = []
+    for _ in range(12):
+        enc.step(1.0)
+        backing.append(jelly.backing_off)
+        if jelly.backing_off:
+            away = (jelly.controls.heading - 180.0 + 180) % 360 - 180   # the target is due east (0 degrees)
+            assert abs(away) <= 45.0
+    assert backing[0] is False                                # nothing to compare with on its first frame
+    assert backing[1:6] == [True] * 5                         # five frames of backing off
+    assert backing[6] is False                                # then it chases again
+
+
+def test_crowd_traits_keep_jellies_from_overlapping():
+    from creatures.traits.crowd import KeepsApart
+    jellies = [creature([Chase(), Drift(speed=1.0), KeepsApart()], pos=(300.0 + 0.5 * i, 300.0), key='aggressive')
+               for i in range(3)]
+    enc = encounter(*jellies, world_=world(ship=target((600.0, 300.0))))
+    enc.step(1.0)
+    gaps = [math.dist(a.get_pos(), b.get_pos()) - a.radius - b.radius
+            for i, a in enumerate(jellies) for b in jellies[i + 1:]]
+    assert min(gaps) >= -0.01
