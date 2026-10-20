@@ -27,7 +27,6 @@
       [9, 4],
       [10, 4],
       [11, 4],
-      [12, 4],
       [8, 10],
       [9, 10],
       [1, 14],
@@ -38,10 +37,6 @@
     "start": [1, 1],
     "exit": [13, 13],
     "enemies": [
-      {
-        "type": "patrol",
-        "cell": [6, 4]
-      },
       {
         "type": "patrol",
         "cell": [14, 4]
@@ -75,6 +70,21 @@
         "cell": [13, 12]
       }
     ],
-    "beacon": [6, 6]
+    "beacon": [6, 6],
+    "gates": [
+      {
+        "cell": [6, 4]
+      },
+      {
+        "cell": [13, 4],
+        "angle": 90
+      }
+    ]
+  },
+  "exit_policy": {
+    "type": "always_open"
+  },
+  "ammo_policy": {
+    "type": "limited"
   }
 }
