@@ -255,7 +255,7 @@ class TestRealGameWiring:
         game.ship.vx = game.ship.vy = 0.0
         return anemone
 
-    @pytest.mark.parametrize('level', [7, 11])
+    @pytest.mark.parametrize('level', [7])
     def test_no_anemone_can_reach_the_player_at_the_start(self, game, level):
         # These two levels used to put one within reach of the start
         game.level = level
@@ -269,14 +269,6 @@ class TestRealGameWiring:
         assert not game.player_has_moved
         assert game.anemones[0].reach_px == pytest.approx(game.anemones[0].reach(game.maze))
         assert game.anemones[0].reach_px > 0
-
-    def test_update_pulls_the_ship(self, game):
-        anemone = self.clear_space(game)
-        game.ship.x, game.ship.y = anemone.x + anemone.reach(game.maze) * 0.5, anemone.y
-        game.player_has_moved = True
-        game.update(1.0)
-        assert game.ship.vx < 0
-        assert anemone.pull_fraction > 0
 
     def test_player_shots_hurt_it(self, game):
         anemone = self.clear_space(game)

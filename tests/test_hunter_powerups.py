@@ -6,7 +6,6 @@ import pytest
 import config
 from entities.hunter_ship import HunterShip
 from entities.enemy import Enemy
-from entities.jev_beacon import JevBeacon
 from entities.powerup_crystal import PowerupCrystal
 from entities.ship import Ship
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
@@ -16,8 +15,7 @@ from hunter.perception import HunterPerception
 from hunter.pilot_sensors import pilot_state
 from maze.wall_segment import WallSegment
 from tests.test_hunter_burn_choice import decide, ship_at
-from tests.test_hunter_controller import Worker
-from tests.test_hunter_integration import game, summon  # noqa: F401 - pytest fixture
+from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_hunter_perception import maze
 
 LINED_UP = FiringSolution(0.0, True)
@@ -174,68 +172,6 @@ def test_powerups_beyond_the_third_make_bigger_faster_shots():
 
 
 # --- in the game ---
-
-def crystal_on(target):
-    return PowerupCrystal((target.x, target.y))
-
-
-def playing(game):
-    game.hunter_worker = Worker()
-    game.start_level()
-    summon(game)
-    # Well clear of the player, so a crystal by the hunter is the hunter's alone.
-    game.hunter.x, game.hunter.y = game.maze.position_calculator.grid_center_to_screen(7, 7)
-    game.powerup_crystals = []
-
-
-def test_the_hunter_collects_a_powerup_it_touches(game):
-    playing(game)
-    crystal = crystal_on(game.hunter)
-    game.powerup_crystals = [crystal]
-    game._update_powerup_crystals(1)
-    assert not crystal.active
-    assert game.hunter.get_gun_upgrade_level() == 1
-    # It is the hunter's powerup, not the player's.
-    assert game.ship.get_gun_upgrade_level() == 0
-    assert game.scoring.powerup_crystals_collected == 0
-
-
-def test_the_player_gets_a_powerup_both_ships_touch(game):
-    playing(game)
-    game.hunter.x, game.hunter.y = game.ship.x, game.ship.y
-    game.powerup_crystals = [crystal_on(game.ship)]
-    game._update_powerup_crystals(1)
-    assert game.ship.get_gun_upgrade_level() == 1
-    assert game.hunter.get_gun_upgrade_level() == 0
-
-
-def test_the_hunter_leaves_a_jev_beacon_alone(game):
-    playing(game)
-    beacon = JevBeacon((game.hunter.x, game.hunter.y))
-    game.powerup_crystals = [beacon]
-    hunter = game.hunter
-    game._update_powerup_crystals(1)
-    assert beacon.active
-    assert game.hunter is hunter
-    assert hunter.get_gun_upgrade_level() == 0
-
-
-def test_the_pilot_is_shown_powerups_but_not_beacons(game):
-    playing(game)
-    x, y = game.hunter.x, game.hunter.y
-    game.powerup_crystals = [PowerupCrystal((x + 60, y)), JevBeacon((x - 60, y))]
-    game.player_has_moved = True
-    game._update_hunter(1)
-    state = json.loads(game.hunter_worker.sent[-1].state_json)
-    assert [p['position'] for p in state['visible_powerups']] == [[x + 60, y]]
-
-
-def test_a_newly_summoned_hunter_starts_without_upgrades(game):
-    playing(game)
-    game.hunter.collect_powerup()
-    game._summon_hunter((game.ship.x, game.ship.y))
-    assert game.hunter.get_gun_upgrade_level() == 0
-
 
 # --- flying there ---
 

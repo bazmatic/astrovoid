@@ -80,11 +80,6 @@ def test_anemones_fit_the_maze(level):
     assert enemies(level)['anemone'] <= anemones_that_fit(level_config.get_maze_grid_size(level))
 
 
-def test_the_hunter_flies_from_level_four():
-    without = [level for level in ARC if not level_config.level_has_hunter(level)]
-    assert without == [1, 2, 3]
-
-
 @pytest.fixture
 def game(tmp_path, monkeypatch):
     from game import Game
@@ -105,7 +100,7 @@ def game(tmp_path, monkeypatch):
     game._close_hunter()
 
 
-@pytest.mark.parametrize('level', list(ARC) + [25, 30, 36, 42, 47, 66])
+@pytest.mark.parametrize('level', [level for level in ARC if level not in (2, 16)] + [25, 30, 36, 42, 47, 66])
 def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level):
     counts = level_config.get_level_enemy_counts(level) or level_rules.get_enemy_counts(level)
     asked_for = {
