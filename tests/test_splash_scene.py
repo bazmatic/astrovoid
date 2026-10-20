@@ -52,7 +52,7 @@ class TestSplashScene:
     def test_squid_jets_on_the_way_in(self, screen):
         scene = SplashScene(screen)
         scene.update(1.0)
-        assert scene.squid.jet > 0.5
+        assert scene.squid.body.jet > 0.5
 
     def test_title_appears_once_the_squid_has_arrived(self, screen):
         scene = SplashScene(screen)

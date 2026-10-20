@@ -125,13 +125,13 @@ def test_the_timer_waits_for_the_first_move(game, monkeypatch):
 
 
 def test_the_exit_stays_open_once_opened(game, monkeypatch):
-    from entities.replay_enemy_ship import ReplayEnemyShip
+    import creatures
     monkeypatch.setattr(level_config, 'load_level_config', level_file(ALL_CLEARED, replay=1))
     start(game, 3)
     kill(game.roster.of_kind('replay'))
     game.update(1.0)
     assert game.maze.exit.is_activated
-    game.roster.add(ReplayEnemyShip((600.0, 400.0), game.command_recorder))
+    game.roster.add(creatures.build('replay', (600.0, 400.0), game.level, game.command_recorder))
     game.update(1.0)
     assert game.maze.exit.is_activated
 

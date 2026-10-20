@@ -112,7 +112,6 @@ class ReplayEnemySettings:
     windowSize: int
     size: int
     color: Tuple[int, int, int]
-    hitPoints: int
 
 
 @dataclass
@@ -543,7 +542,6 @@ def load_settings() -> Settings:
             windowSize=raw["replayEnemy"]["windowSize"],
             size=raw["replayEnemy"]["size"],
             color=_as_color(tuple(raw["replayEnemy"]["color"])),
-            hitPoints=raw["replayEnemy"]["hitPoints"]
         ),
         flockerEnemy=FlockerEnemySettings(
             size=raw["flockerEnemy"]["size"],
@@ -741,7 +739,7 @@ REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE = SETTINGS.enemies.replayFireAngleTolerance
 REPLAY_ENEMY_WINDOW_SIZE = SETTINGS.replayEnemy.windowSize
 REPLAY_ENEMY_SIZE = SETTINGS.replayEnemy.size
 REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
-REPLAY_ENEMY_HIT_POINTS = SETTINGS.replayEnemy.hitPoints
+REPLAY_ENEMY_HIT_POINTS = dict(enemy_kinds.kind("replay").traits)["takesHits"]["hitPoints"]  # until ReplayEnemyShip goes
 
 FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
 FLOCKER_ENEMY_COLOR = SETTINGS.flockerEnemy.color

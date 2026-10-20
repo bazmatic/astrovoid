@@ -19,8 +19,7 @@ from rendering.number_sprite import NumberSprite
 from utils.resource_path import resource_path
 from utils.formatting import format_time
 from profiles import LevelResult
-from entities.replay_enemy_ship import ReplayEnemyShip
-from entities.command_recorder import CommandRecorder
+import creatures
 
 STAR_SLOT_WIDTH = 170  # Reference width of each goal in the checklist under the stars
 STAR_LINE_GAP = 14  # Between the stars' points and the checklist
@@ -70,7 +69,7 @@ class LevelCompleteMenu:
         self._banner_is_light: Dict[bool, bool] = {}
         self._level_numbers: Dict[Tuple[int, int], Optional[pygame.Surface]] = {}
         self.menu_pulse_phase = 0.0
-        self.failed_squids = [ReplayEnemyShip((0.0, 0.0), CommandRecorder()) for _ in range(2)]
+        self.failed_squids = [creatures.build('replay', (0.0, 0.0)) for _ in range(2)]
         self.failed_squid_phase = 0.0
         self.complete_portraits: List[EnemyDeathPortrait] = []
         self.label_font = get_font(self._scaled(26), bold=True)
@@ -265,7 +264,7 @@ class LevelCompleteMenu:
             squid.angle = -90 - side * self.FAILED_SQUID_TILT + self.FAILED_SQUID_SWAY * math.sin(phase * 0.6)
             squid.x = title.centerx + side * title.width * self.FAILED_SQUID_OFFSET_X
             squid.y = title.top + title.height * self.FAILED_SQUID_Y + self._scaled(self.FAILED_SQUID_BOB) * math.sin(phase)
-            squid.animate(dt)
+            squid.body.update(squid, dt, None)
 
     def update(self, dt: float) -> None:
         """Update menu animations.

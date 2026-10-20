@@ -93,25 +93,44 @@ class BouncesOffWalls(Trait):
 
 class Gun(Trait):
     """Fires at where its brain aims when its brain says fire and it has reloaded. Numbers left out come from the
-    creature's level. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show."""
+    strength of level `strengthLevel` (by default the creature's own). `startsLoaded` lets it fire on its first frame.
+    The shot can be styled: `shotSpeed` scales its speed; `impact`, `glowColor`, `glowRadius` and `glowIntensity` are
+    the projectile's. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show."""
     NAME = 'gun'
 
     def __init__(self, intervalMin: Optional[int] = None, intervalMax: Optional[int] = None,
-                 range: Optional[float] = None):
+                 range: Optional[float] = None, strengthLevel: Optional[int] = None, startsLoaded: bool = False,
+                 shotSpeed: float = 1.0, impact: float = 1.0, glowColor: Optional[list] = None,
+                 glowRadius: float = 1.0, glowIntensity: float = 0.0):
         self.interval_min, self.interval_max, self.range = intervalMin, intervalMax, range
+        self.strength_level, self.starts_loaded = strengthLevel, startsLoaded
+        self.shot_speed = shotSpeed
+        self.styling = {'impact_force_multiplier': impact, 'glow_radius_multiplier': glowRadius,
+                        'glow_intensity': glowIntensity}
+        if glowColor is not None:
+            self.styling['glow_color'] = tuple(glowColor)
+
+    def _strength(self, c):
+        return level_rules.get_enemy_strength(c.level if self.strength_level is None else self.strength_level)
 
     def on_spawn(self, c, enc):
-        strength = level_rules.get_enemy_strength(c.level)
+        strength = self._strength(c)
         c.gun_range = strength.fire_range if self.range is None else self.range
         self._reload(c, strength)
+        if self.starts_loaded:
+            c.gun_cooldown = 0.0
 
     def on_frame(self, c, enc, dt):
         c.gun_cooldown = max(0.0, c.gun_cooldown - dt)
         controls = c.controls
         if controls.fire and controls.aim is not None and c.gun_cooldown <= 0:
             pos = c.get_pos()
-            enc.add_shot(Projectile(pos, get_angle_to_point(pos, controls.aim), is_enemy=c.allegiance == 'enemy'))
-            self._reload(c, level_rules.get_enemy_strength(c.level))
+            shot = Projectile(pos, get_angle_to_point(pos, controls.aim), is_enemy=c.allegiance == 'enemy',
+                              **self.styling)
+            shot.vx *= self.shot_speed
+            shot.vy *= self.shot_speed
+            enc.add_shot(shot)
+            self._reload(c, self._strength(c))
             c.emit('fired', enc)
         c.gun_charge = 1.0 - c.gun_cooldown / c.gun_interval
 
@@ -141,3 +160,12 @@ class Explodes(Trait):
 
     def on_death(self, c, enc):
         enc.explode(self.blast(c, c.killed_by))
+
+
+class BlinksWhenHit(Trait):
+    """It blinks when a shot hits it, when it rams the ship and when it bounces off a wall."""
+    NAME = 'blinksWhenHit'
+
+    def on_event(self, c, name, enc):
+        if name in ('hit', 'hit_wall', 'rammed'):
+            c.emit('blink', enc)

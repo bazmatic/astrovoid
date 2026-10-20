@@ -4,6 +4,7 @@ import random
 
 import config
 from creatures.trait import Trait
+from entities.command_recorder import CommandType
 from utils import circle_line_collision, distance, get_angle_to_point
 
 
@@ -88,3 +89,42 @@ class Chase(Trait):
             c.backing_off = False
             c.angle = get_angle_to_point(pos, target)
         c.controls.heading = c.angle
+
+
+class ReplaysPlayer(Trait):
+    """Flies the player's own recorded moves, round and round, once the recording is a full window long; an idle
+    stretch of the recording turns it to face its target. Whatever the recording, a target within its gun's range and
+    within `fireAngle` degrees of its heading makes it thrust and fire where it faces."""
+    NAME = 'replaysPlayer'
+    REQUIRES = ('thrusters', 'gun')
+
+    def __init__(self, fireAngle: float = config.REPLAY_ENEMY_FIRE_ANGLE_TOLERANCE):
+        self.fire_angle = fireAngle
+
+    def on_spawn(self, c, enc):
+        c.replay_index = 0
+
+    def on_frame(self, c, enc, dt):
+        controls = c.controls
+        controls.turn, controls.thrust, controls.fire, controls.heading, controls.aim = 0.0, False, False, None, None
+        target = enc.target_for(c)
+        recorder = c.recorder
+        commands = recorder.get_replay_commands() if recorder is not None else []
+        if commands and recorder.get_command_count() >= config.REPLAY_ENEMY_WINDOW_SIZE:
+            command = commands[c.replay_index % len(commands)]
+            c.replay_index = (c.replay_index + 1) % len(commands)
+            if command == CommandType.NO_ACTION:
+                if target is not None:
+                    controls.heading = get_angle_to_point(c.get_pos(), target)
+            elif command == CommandType.ROTATE_LEFT:
+                controls.turn = -1.0
+            elif command == CommandType.ROTATE_RIGHT:
+                controls.turn = 1.0
+            elif command == CommandType.APPLY_THRUST:
+                controls.thrust = True
+        if target is not None and distance(c.get_pos(), target) <= c.gun_range:
+            off = (get_angle_to_point(c.get_pos(), target) - c.angle + 180) % 360 - 180
+            if abs(off) <= self.fire_angle:
+                heading = math.radians(c.angle)
+                controls.thrust = controls.fire = True
+                controls.aim = (c.x + math.cos(heading) * c.gun_range, c.y + math.sin(heading) * c.gun_range)

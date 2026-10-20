@@ -229,11 +229,11 @@ class TestLevelComplete:
     def test_failed_squids_hover_and_trail_their_tentacles(self, screen):
         menu = LevelCompleteMenu(screen)
         squid = menu.failed_squids[0]
-        before = (squid.y, squid.angle, list(squid.tentacles[0]))
+        before = (squid.y, squid.angle, list(squid.body.tentacles[0]))
         for _ in range(30):
             menu.update(1.0)
-        assert (squid.y, squid.angle, list(squid.tentacles[0])) != before
-        assert all(len(chain) > 1 for chain in squid.tentacles)
+        assert (squid.y, squid.angle, list(squid.body.tentacles[0])) != before
+        assert all(len(chain) > 1 for chain in squid.body.tentacles)
 
 
 class TestStarRating:

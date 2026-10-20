@@ -4,6 +4,7 @@ from dataclasses import fields
 
 import config
 import level_rules
+from physics import thrust
 from creatures.trait import Trait
 
 
@@ -71,3 +72,33 @@ class Drift(Trait):
         if alignment > 0.3:
             return base * 0.8
         return base * 0.5
+
+
+class Thrusters(Trait):
+    """Flies like a ship: it turns toward its brain's heading (or by its brain's turn) and thrusts along its own
+    heading, coasting with friction between thrusts, bouncing off the screen edges, and sweeping into walls so it
+    never passes through one. Its top speed is `speedShare` of the player ship's."""
+    NAME = 'thrusters'
+
+    def __init__(self, speedShare: float, thrust: float = config.SHIP_THRUST_FORCE,
+                 turnRate: float = config.SHIP_ROTATION_SPEED, friction: float = config.SHIP_FRICTION):
+        self.max_speed = speedShare * config.SHIP_MAX_SPEED
+        self.force, self.turn_rate, self.friction = thrust, turnRate, friction
+
+    def on_spawn(self, c, enc):
+        c.prev_x, c.prev_y = c.x, c.y
+
+    def on_frame(self, c, enc, dt):
+        controls = c.controls
+        if controls.heading is not None:
+            thrust.turn_toward(c, controls.heading, self.turn_rate)
+        elif controls.turn:
+            c.angle = (c.angle + controls.turn * self.turn_rate) % 360
+        if controls.thrust:
+            thrust.apply_thrust(c, self.force, self.max_speed)
+            c.emit('thrust', enc)
+        thrust.coast(c, dt, self.friction)
+        thrust.cap_speed(c, self.max_speed)
+        maze = enc.maze
+        if maze is not None and thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
+            c.emit('hit_wall', enc)

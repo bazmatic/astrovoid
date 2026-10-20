@@ -19,7 +19,6 @@ import pytest
 from unittest.mock import Mock
 from entities.command_recorder import CommandRecorder
 import creatures
-from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.split_boss import SplitBoss
 from entities.mother_boss import MotherBoss
@@ -41,8 +40,17 @@ def test_a_creature_aims_at_the_nearest_hunter():
     assert crab.controls.aim == hunter.get_pos()
 
 
+@pytest.mark.parametrize('kind', ['patrol', 'replay'])
+def test_a_creature_targets_the_nearest_hunter(kind):
+    from tests.creature_parts import encounter, world
+    creature = creatures.build(kind, (300, 300), 1, CommandRecorder())
+    player = Ship((900, 800))
+    player.shield_active = True
+    hunter = HunterShip((320, 300))
+    assert encounter(creature, world_=world(ship=player, hunter=hunter)).target_for(creature) == hunter.get_pos()
+
+
 @pytest.mark.parametrize('kind,method', [
-    (ReplayEnemyShip,'update_replay_enemies'),
     (FlockerEnemyShip,'update_flockers'), (SplitBoss,'update_split_bosses'),
     (MotherBoss,'update_mother_bosses'), (Baby,'update_babies')])
 def test_enemy_update_and_aim_use_nearest_hunter(kind,method):

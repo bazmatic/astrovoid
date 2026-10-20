@@ -999,9 +999,6 @@ class Game:
             self.encounter.step(dt)
             # Update the enemies that are not Creatures yet using EnemyUpdater
             roster = self.roster
-            self.enemy_updater.update_replay_enemies(
-                roster.of_kind('replay'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
-            )
             self.enemy_updater.update_flighthouses(
                 roster.of_kind('flighthouse'), dt, player_pos, self.maze, self.ship, self.scoring, roster
             )

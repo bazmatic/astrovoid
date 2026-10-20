@@ -6,16 +6,17 @@ from creatures.trait import Trait
 from creatures.traits import brains, combat, crowd, propulsion
 from entities.belemnite import BelemniteBody
 from entities.jellyfish import Jellyfish
+from entities.squid import Squid
 from entities.patrol_crab import PatrolCrab
 from entities.urchin import Urchin
 
 TRAITS: Dict[str, Type[Trait]] = {trait.NAME: trait for trait in (
-    brains.Still, brains.Patrol, brains.Chase,
-    propulsion.Coasts, propulsion.Drift,
-    combat.TakesHits, combat.ShovedByShots, combat.RamsShip, combat.DropsPickup, combat.BouncesOffWalls, combat.Gun, combat.Explodes,
+    brains.Still, brains.Patrol, brains.Chase, brains.ReplaysPlayer,
+    propulsion.Coasts, propulsion.Drift, propulsion.Thrusters,
+    combat.TakesHits, combat.ShovedByShots, combat.RamsShip, combat.DropsPickup, combat.BouncesOffWalls, combat.Gun, combat.Explodes, combat.BlinksWhenHit,
     crowd.KeepsApart,
 )}
-BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody}
+BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody, 'squid': Squid}
 
 
 def validate(catalogue: Mapping) -> None:

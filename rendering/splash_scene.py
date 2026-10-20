@@ -12,8 +12,7 @@ import config
 from rendering.fonts import get_font
 from rendering.menu_components import AnimatedBackground, build_menu_backdrop, menu_scale, render_title
 from utils.resource_path import resource_path
-from entities.replay_enemy_ship import ReplayEnemyShip
-from entities.command_recorder import CommandRecorder
+import creatures
 from entities.ship import Ship
 
 
@@ -53,7 +52,7 @@ class SplashScene:
         self.backdrop = build_menu_backdrop(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         self.background = AnimatedBackground(config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
         self.title = self._load_title()
-        self.squid = ReplayEnemyShip((0.0, 0.0), CommandRecorder())
+        self.squid = creatures.build('replay', (0.0, 0.0))
         self.ship = Ship((0.0, 0.0))
         self.ship_route = self._build_ship_route()
         self.reset()
@@ -146,8 +145,8 @@ class SplashScene:
         self.swim_y = config.SCREEN_HEIGHT + self.squid.radius * 1.2
         self.squid.y = self.swim_y
         self.swim_speed = 0.0
-        self.squid.jet = 0.0
-        self.squid.tentacles = []
+        self.squid.body.jet = 0.0
+        self.squid.body.tentacles = []
         self.ship.x, self.ship.y = self.ship_route[0]
         self.ship.vx = self.ship.vy = 0.0
         self.ship.angle = -90.0
@@ -186,7 +185,7 @@ class SplashScene:
             self.stroke_timer = self.STROKE_INTERVAL
             max_kick = self.STROKE_MAX_KICK * self.scale
             self.swim_speed = min(max_kick, remaining * self.STROKE_REACH)
-            self.squid.jet = self.swim_speed / max_kick
+            self.squid.body.jet = self.swim_speed / max_kick
         self.swim_y -= self.swim_speed * dt
         self.swim_speed *= self.FRICTION ** dt
 
@@ -202,7 +201,7 @@ class SplashScene:
             lean = max(-self.SQUID_TRACK_ANGLE, min(self.SQUID_TRACK_ANGLE, off_upright))
         turn = 1.0 - (1.0 - self.SQUID_TURN_RATE) ** dt
         self.squid.angle += (-90.0 + lean - self.squid.angle) * turn
-        self.squid.animate(dt)
+        self.squid.body.update(self.squid, dt, None)
 
     def draw(self) -> None:
         """Draw the scene."""

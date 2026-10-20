@@ -77,8 +77,18 @@
     "tuning": {
       "windowSize": 100,
       "size": 15,
-      "color": [150, 100, 255],
-      "hitPoints": 3
+      "color": [150, 100, 255]
+    },
+    "allegiance": "enemy",
+    "body": "squid",
+    "traits": {
+      "replaysPlayer": {},
+      "thrusters": {"speedShare": 0.3},
+      "ramsShip": {},
+      "gun": {"strengthLevel": 1, "startsLoaded": true},
+      "blinksWhenHit": {},
+      "takesHits": {"hitPoints": 3},
+      "dropsPickup": {}
     }
   },
   "flocker": {
