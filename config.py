@@ -814,7 +814,6 @@ EGG_HIT_POINTS = SETTINGS.egg.hitPoints
 EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin
 EGG_BABY_SPAWN_MAX = SETTINGS.egg.babySpawnMax
 
-STATIC_ENEMY_HIT_POINTS = dict(enemy_kinds.kind("static").traits)["takesHits"]["hitPoints"]  # until Enemy goes
 MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
 FRICTION_COEFFICIENT = SETTINGS.momentum.frictionCoefficient
 MIN_VELOCITY_THRESHOLD = SETTINGS.momentum.minVelocityThreshold

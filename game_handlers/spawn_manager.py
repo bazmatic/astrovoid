@@ -12,7 +12,6 @@ import enemy_kinds
 import level_rules
 import config as game_config
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
@@ -49,7 +48,6 @@ def make_enemy(kind, pos, level, command_recorder):
     Every spawn path makes its enemies here. Enemy hunters are not made here: they need a pilot and a view of the
     game, which Game provides.
     """
-    from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
@@ -63,8 +61,6 @@ def make_enemy(kind, pos, level, command_recorder):
     if enemy_kinds.kind(kind).body is not None:
         import creatures
         entity = creatures.build(kind, pos, level, command_recorder)
-    elif kind in ('static', 'patrol', 'aggressive'):
-        entity = Enemy(pos, kind, level)
     elif enemy_kinds.kind(kind).replays_player:
         entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss, 'baby': Baby}[kind](
             pos, command_recorder)
@@ -299,7 +295,7 @@ class SpawnManager:
         level: int,
         spawn_positions: List[Tuple[float, float]],
         enemy_counts: 'EnemyCounts'
-    ) -> List['Enemy']:
+    ) -> List:
         """Create enemies based on enemy_counts configuration.
         
         Args:
@@ -308,10 +304,9 @@ class SpawnManager:
             enemy_counts: Enemy count configuration.
             
         Returns:
-            List of Enemy instances.
+            The enemies made.
         """
-        from entities.enemy import Enemy
-        
+            
         enemies = []
         used_positions = []
         

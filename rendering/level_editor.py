@@ -392,10 +392,7 @@ class LevelEditor:
 
     def _draw_sprite(self, kind, sprite):
         try:
-            if kind in ('static', 'patrol', 'aggressive'):
-                sprite.draw(self.screen, None)
-            else:
-                sprite.draw(self.screen)
+            sprite.draw(self.screen)
         except Exception:      # a sprite that cannot draw out of play still shows where it is
             pygame.draw.circle(self.screen, CHIPS.get(kind, (255, 255, 255)),
                                (round(sprite.x), round(sprite.y)), max(6, round(getattr(sprite, 'radius', 10))))

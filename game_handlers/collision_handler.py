@@ -13,7 +13,6 @@ import enemy_kinds
 from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
@@ -87,7 +86,6 @@ class CollisionHandler:
     def handle_projectile_enemy_collisions(
         self,
         projectile: 'Projectile',
-        enemies: List['Enemy'],
         replay_enemies: List['ReplayEnemyShip'],
         flockers: List['FlockerEnemyShip'],
         flighthouses: List['FlighthouseEnemy'],
@@ -106,7 +104,6 @@ class CollisionHandler:
         
         Args:
             projectile: The projectile to check collisions for.
-            enemies: List of regular enemies.
             replay_enemies: List of replay enemies.
             flockers: List of flocker enemies.
             split_bosses: List of SplitBoss enemies.
@@ -128,36 +125,6 @@ class CollisionHandler:
         
         if not projectile.active:
             return False
-        
-        # Check projectile-enemy collision
-        for enemy in enemies:
-            if enemy.active and projectile.active:
-                if projectile.check_circle_collision(enemy.get_pos(), enemy.radius):
-                    enemy_pos = enemy.get_pos()
-                    
-                    # Handle static enemies with momentum system
-                    if enemy.type == "static":
-                        # Transfer momentum from projectile
-                        transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
-                        transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
-                        enemy.apply_momentum(transfer_vx, transfer_vy)
-                        
-                        # Take damage - returns True if destroyed
-                        if enemy.take_damage():
-                            enemy.die()
-                            self.sound_manager.play_enemy_destroy()
-                            self.record_kill(projectile, enemy)
-                            
-                            self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
-                    else:
-                        # Non-static enemies destroyed immediately (existing behavior)
-                        enemy.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, enemy)
-                        
-                        self.drop_pickup(enemy_pos, powerup_crystals, jev_beacon_allowed)
-                    
-                    return True  # Projectile destroyed
         
         # Check projectile-replay enemy collision
         for replay_enemy in replay_enemies:
@@ -312,14 +279,13 @@ class CollisionHandler:
         return False
     
     def shoot_into(self, projectile, roster, powerup_crystals, jev_beacon_allowed=False, maze=None) -> bool:
-        """A friendly shot against every enemy on the roster; a split boss's children join the roster.
+        """A friendly shot against every enemy on the roster that is not a Creature (the Encounter offers it to those);
+        a split boss's children join the roster.
 
         Returns True if it hit one (the shot is then spent).
         """
-        from creatures.creature import Creature   # the Encounter has already offered the shot to every Creature
-        lists = [[enemy for enemy in roster.of_kind(*kinds) if not isinstance(enemy, Creature)] for kinds in (
-            ('static', 'patrol', 'aggressive'), ('replay',), ('flocker',), ('flighthouse',), ('split_boss',),
-            ('mother_boss',), ('baby',), ('egg',))]
+        lists = [roster.of_kind(*kinds) for kinds in (
+            ('replay',), ('flocker',), ('flighthouse',), ('split_boss',), ('mother_boss',), ('baby',), ('egg',))]
         return self.handle_projectile_enemy_collisions(
             projectile, *lists, powerup_crystals, anemones=roster.of_kind('anemone'),
             jev_beacon_allowed=jev_beacon_allowed, enemy_hunters=roster.of_kind(*enemy_kinds.hunters()),

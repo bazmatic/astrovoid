@@ -16,7 +16,7 @@ def shoot(handler, squid, crystals=None):
     projectile = Projectile(POS, 0.0)
     projectile.source = 'player'
     hit = handler.handle_projectile_enemy_collisions(
-        projectile, [], [squid], [], [], [], [], [], [], crystals if crystals is not None else []
+        projectile, [squid], [], [], [], [], [], [], crystals if crystals is not None else []
     )
     return hit
 

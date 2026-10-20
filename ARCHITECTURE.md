@@ -9,7 +9,7 @@ ASTRO VOID is a skill-based space navigation game built with Pygame. The game co
 The codebase follows SOLID principles and DRY (Don't Repeat Yourself) practices:
 
 - **Single Responsibility Principle (SRP)**: Each class has a single, well-defined responsibility
-- **Open/Closed Principle (OCP)**: Enemy behaviors use the Strategy pattern, allowing new enemy types without modifying existing code
+- **Open/Closed Principle (OCP)**: An enemy built as a Creature is a catalogue entry naming a Body and Traits, so a new kind made of existing traits needs no new code
 - **Dependency Inversion Principle (DIP)**: Abstractions (interfaces) are used where appropriate
 - **DRY**: Common logic is extracted into reusable components
 
@@ -74,19 +74,10 @@ The entity system provides a foundation for all game objects:
   - Manages fuel, ammo, rotation, thrust, and collision responses
   - Zero-G physics with low friction
 
-- **`enemy.py`**: `Enemy` - Enemy entities
 - **`anemone.py`**: `Anemone` - rooted enemy that pulls the player's ship toward it; `pull_acceleration` is the pure pull maths
 
-  - Uses Strategy pattern for behaviors (see `enemy_strategies.py`)
-  - Supports static, patrol, and aggressive enemy types
-  - Follows OCP - new enemy types can be added without modifying `Enemy`
-
-- **`enemy_strategies.py`**: Enemy behavior strategies
-
-  - `StaticEnemyStrategy`: Enemies that don't move
-  - `PatrolEnemyStrategy`: Enemies that patrol in straight lines
-  - `AggressiveEnemyStrategy`: Enemies that chase the player
-  - Demonstrates Strategy pattern and OCP
+- **`urchin.py`**, **`patrol_crab.py`**, **`jellyfish.py`**: the `urchin`, `crab` and `jelly` Bodies of the Urchin,
+  Crab and Jelly Creatures (see `creatures/`): they animate and draw, and read only the creature's attributes
 
 - **`projectile.py`**: `Projectile` - Weapons fired by the ship
   - Inherits from `GameEntity`, `Collidable`, `Drawable`
@@ -99,6 +90,30 @@ The entity system provides a foundation for all game objects:
   - Generates wider corridors for better maneuverability
   - Provides spawn positions for enemies
   - Converts grid to wall segments for collision detection
+
+### Creatures (`creatures/`)
+
+An enemy whose `config/enemies.json` entry names a `body` is a **Creature**: a Body (how it looks) and a list of Traits
+(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`) and Jelly (`aggressive`) are Creatures;
+the other kinds keep their own classes until they move over (see
+`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`).
+
+- **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
+  `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
+  keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter.
+- **`trait.py`**: `Trait`, whose hooks all do nothing by default: `on_spawn`, `on_frame`, `on_shot`, `on_death`,
+  `on_event`, and `on_crowd` for a `CROWD` trait. A trait is stateless; `REQUIRES` names traits it needs, and
+  `from_params` builds it from its catalogue parameters.
+- **`traits/`**: `brains.py` (`still`, `patrol`, `chase`), `propulsion.py` (`coasts`, `drift`), `combat.py`
+  (`takesHits`, `shovedByShots`, `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`), `crowd.py` (`keepsApart`)
+- **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
+  bad parameters or a missing requirement when the game starts
+- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for a kind with a `body`
+- **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's traits in roster order and then
+  animates its Body, then each kind's crowd traits; `shoot(projectile)` offers a friendly shot to each live creature in
+  roster order and stops at the first it reaches, handing a shot no creature took to `CollisionHandler.shoot_into`.
+  Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
+  `add_shot`). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
 
 ### Enemy Roster (`game_handlers/enemy_roster.py`)
 
@@ -213,10 +228,11 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 
 ## Design Patterns
 
-### Strategy Pattern
+### Composition (Creatures)
 
-- **Enemy Behaviors**: `Enemy` uses composition with `EnemyStrategy` implementations
-- **Benefits**: New enemy types can be added without modifying `Enemy` class (OCP)
+- **Enemy Behaviours**: a `Creature` is composed from a Body and Traits named in its catalogue entry; Traits talk to
+  each other and to the Body through `Controls` and events (`fired`, `hit`, `hit_wall`, `rammed`)
+- **Benefits**: behaviour is shared by naming a trait in another kind's entry, without a new class
 
 ### Template Method Pattern
 
@@ -234,12 +250,15 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 1. Add an entry to `config/enemies.json`: its names, whether it is anchored or replays the player, its par weight,
    the room it needs, the layer it is drawn on and its own `tuning`. The editor palette, level files, exit policies,
    par, drawing and the names on screen all follow from the entry.
-2. Give its class a `type` naming the entry and make it in `make_enemy` (`game_handlers/spawn_manager.py`); the roster
-   keeps it with every other enemy
-3. Update it in `EnemyUpdater` and let shots hit it in `CollisionHandler.handle_projectile_enemy_collisions`, then
-   call both from `Game.update` (and `CollisionHandler.shoot_into`) with `roster.of_kind(...)`
+2. If it can be made of traits that exist, give the entry a `body` (one of `creatures/registry.BODIES`), an
+   `allegiance` and its `traits` with their parameters, in the order they should run. That is all: `make_enemy` builds
+   it, the Encounter runs it and offers it shots, and the roster keeps it with every other enemy. A new behaviour is a
+   new `Trait` subclass in `creatures/traits/`, added to `TRAITS`; a new look is a new Body added to `BODIES`.
+3. Otherwise (until every kind is a Creature): give its class a `type` naming the entry and make it in `make_enemy`
+   (`game_handlers/spawn_manager.py`), update it in `EnemyUpdater` and let shots hit it in
+   `CollisionHandler.handle_projectile_enemy_collisions`, then call both from `Game.update` (and
+   `CollisionHandler.shoot_into`) with `roster.of_kind(...)`
 4. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
-5. For movement, a new strategy class inheriting from `EnemyStrategy` needs no change to the `Enemy` class (OCP)
 
 ### Adding New Game States
 
@@ -272,10 +291,12 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   ├── collidable.py
 │   ├── drawable.py
 │   ├── ship.py
-│   ├── enemy.py
+│   ├── urchin.py           # the Bodies of the Urchin, Crab and Jelly
+│   ├── patrol_crab.py
+│   ├── jellyfish.py
 │   ├── anemone.py
-│   ├── enemy_strategies.py
 │   └── projectile.py
+├── creatures/               # Creature, Trait, Encounter, and the traits (see Creatures above)
 ├── maze/                    # Maze generation
 │   └── generator.py
 ├── scoring/                 # Scoring system

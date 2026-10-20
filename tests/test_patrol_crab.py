@@ -168,7 +168,7 @@ class TestDrawing:
         enemy.body.walk_phase = 0.0
         enemy.body.claw_angle = 0.0
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         bounds = pygame.mask.from_surface(screen, 254).get_bounding_rects()[0].unionall(
             pygame.mask.from_surface(screen, 254).get_bounding_rects())
         assert bounds.width > bounds.height
@@ -179,16 +179,16 @@ class TestDrawing:
         enemy = make_patrol(angle)
         screen = blank_screen()
         enemy.body.charge = 1.0
-        enemy.draw(screen, (100.0, 100.0))
+        enemy.draw(screen)
         enemy.body.fire_flash = 1.0
-        enemy.draw(screen, (100.0, 100.0))
+        enemy.draw(screen)
         assert solid_pixels(screen) > 0
 
     def test_inactive_draws_nothing(self):
         enemy = make_patrol()
         enemy.active = False
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         assert screen.get_bounding_rect().width == 0
 
 

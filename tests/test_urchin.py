@@ -154,7 +154,7 @@ class TestDrawing:
         enemy = make_urchin()
         settle(enemy, frames=5)
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         bounds = solid_bounds(screen)
         assert bounds.width > enemy.radius * 2
         assert bounds.height > enemy.radius * 2
@@ -162,21 +162,21 @@ class TestDrawing:
     def test_draws_in_every_state(self):
         enemy = make_urchin()
         screen = blank_screen()
-        enemy.draw(screen, None)  # Before any update
+        enemy.draw(screen)  # Before any update
         settle(enemy, (POS[0] + 30, POS[1]))
         enemy.hit_points -= 1
         enemy.vx, enemy.vy = enemy.vx + 2.0, enemy.vy + 1.0
         enc = encounter(enemy, world_=world(ship=target((POS[0] + 30, POS[1]))))
         for _ in range(5):
             enc.step(1.0)
-            enemy.draw(screen, None)
+            enemy.draw(screen)
         assert solid_bounds(screen).width > 0
 
     def test_inactive_draws_nothing(self):
         enemy = make_urchin()
         enemy.active = False
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         assert screen.get_bounding_rect().width == 0
 
 

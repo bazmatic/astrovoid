@@ -41,7 +41,7 @@ if getattr(sys, 'frozen', False):
         # Import exactly as game.py does - this ensures modules are in sys.modules
         from entities.ship import Ship
         from maze.generator import Maze
-        from entities.enemy import Enemy
+        import creatures
         import level_rules
         import level_config
         from entities.replay_enemy_ship import ReplayEnemyShip

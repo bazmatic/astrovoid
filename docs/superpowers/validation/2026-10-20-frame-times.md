@@ -35,3 +35,17 @@ and a Body that does nothing; the Encounter still finds each one's target every 
 
 With the skeleton in place and no kind moved yet, the four levels measure (medians of three) 0.176 / 1.426 / 2.001 /
 1.442 ms update and 3.188 / 3.455 / 4.682 / 8.018 ms draw on levels 1 / 8 / 9 / 40: within 3% of the baseline.
+
+## Second gate (Task 6): Urchin, Crab and Jelly are Creatures, `Enemy` deleted
+
+Same command as the baseline, three runs, medians.
+
+| level | update_ms_mean | update_ms_p95 | draw_ms_mean | frame (update + draw) | baseline frame | change |
+|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 0.168 | 0.182 | 3.100 | 3.268 | 3.292 | −0.7% |
+| 8 | 1.410 | 1.805 | 3.399 | 4.809 | 4.877 | −1.4% |
+| 9 | 2.115 | 2.856 | 4.571 | 6.686 | 6.586 | +1.5% |
+| 40 | 1.449 | 1.724 | 7.915 | 9.364 | 9.418 | −0.6% |
+
+**Passed**: every level is well inside the 20% limit. Level 9 (20 Jellies) is the only one slower: its update is 8%
+slower than the baseline (2.115 against 1.959 ms), about 0.16 ms a frame.

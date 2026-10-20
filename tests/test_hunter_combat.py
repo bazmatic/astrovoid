@@ -1,6 +1,7 @@
 from unittest.mock import Mock
 from entities.projectile import Projectile
 import creatures
+from tests.creature_parts import encounter, world
 from game_handlers.collision_handler import CollisionHandler
 from hunter.model import HunterSettings
 
@@ -17,7 +18,7 @@ def test_hunter_kill_does_not_award_player_points():
     for source in ('hunter', 'player'):
         enemy = creatures.build('patrol', (200,200), 1)
         bullet = Projectile((200,200), 0, source=source)
-        assert handler.handle_projectile_enemy_collisions(bullet, [enemy], [], [], [], [], [], [], [], [])
+        assert encounter(enemy, world_=world(collision_handler=handler, scoring=scoring)).shoot(bullet)
         assert not enemy.active
     assert scoring.record_enemy_destroyed.call_count == 1
 
@@ -47,7 +48,7 @@ def test_hunter_boss_kill_still_spawns_children():
     scoring = Mock()
     handler = CollisionHandler(Mock(),scoring,CommandRecorder())
     assert handler.handle_projectile_enemy_collisions(
-        Projectile((200,200),0,source='hunter'), [], babies, [], [], [boss], [], [], [], [])
+        Projectile((200,200),0,source='hunter'), babies, [], [], [boss], [], [], [], [])
     assert not boss.active
     assert len(babies) == config.SPLIT_BOSS_CHILD_COUNT
     scoring.record_enemy_destroyed.assert_not_called()

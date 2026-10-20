@@ -16,7 +16,7 @@ _Avoid_: ally ship, bot, AI ship
 
 **Pilot**:
 Whatever decides how the hunter turns, thrusts and fires. One of three: Jev (a remote model), rules (the same criteria written as plain code), or neural (a small trained policy).
-_Avoid_: brain, agent, controller
+_Avoid_: agent, controller; "brain" is the wider term for whatever decides a Creature's controls
 
 **Hunter flight**:
 One hunter in play with its pilot, from the moment it is summoned until it dies, is replaced, or the level ends.
@@ -113,6 +113,36 @@ _Code name_: boss_viber
 **Vibelet**:
 A Viber at half the size that one hit destroys; its shots are almost harmless.
 _Code name_: vibelet
+
+### Creatures
+
+How an enemy is built when its catalogue entry names a `body` (the Urchin, Crab and Jelly so far).
+
+**Creature**:
+One enemy assembled from its Enemy Kind's catalogue entry: a Body and a list of Traits. It holds what every enemy has
+(position, velocity, hit points, allegiance) and the state its traits keep.
+_Avoid_: enemy class, entity (for this sense)
+
+**Body**:
+How a creature looks: it animates and draws the creature, and plays its death. It never decides what the creature does.
+_Avoid_: sprite, skin, renderer
+
+**Trait**:
+One piece of a creature's behaviour, named and configured in its catalogue entry; its traits run in the entry's order.
+_Avoid_: component, behaviour, strategy
+
+**Brain**:
+A Trait that decides a creature's controls each frame: where it heads and when it fires (chase, patrol, still).
+_Avoid_: AI, strategy
+
+**Propulsion**:
+A Trait that turns a creature's controls into motion (drift steers toward a heading; coasts only keeps its momentum).
+_Avoid_: movement strategy, engine
+
+**Encounter**:
+What happens to the creatures on a level in one frame: it runs their traits in roster order, offers each friendly shot
+to them, and gives traits the ship, the hunter, the maze and the rest of what they act on.
+_Avoid_: enemy updater, world, scene
 
 ### Modes
 

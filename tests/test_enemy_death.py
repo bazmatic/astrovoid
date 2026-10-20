@@ -174,7 +174,7 @@ class TestGameIntegration:
         squid.hit_points = 1
         projectile = Projectile(POS, 0.0)
         hit = handler.handle_projectile_enemy_collisions(
-            projectile, [], [squid], [], [], [], [], [], [], []
+            projectile, [squid], [], [], [], [], [], [], []
         )
         assert hit
         assert not squid.active

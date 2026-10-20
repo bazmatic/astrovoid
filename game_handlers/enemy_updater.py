@@ -4,14 +4,12 @@ This module provides a unified interface for updating all enemy types,
 eliminating code duplication in the main game loop.
 """
 
-from creatures.traits.crowd import keep_apart
 from game_handlers.combat_targets import nearest_friendly_pos
 
 import math
 import config
 from typing import List, Optional, Tuple, TYPE_CHECKING
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
@@ -33,48 +31,6 @@ if TYPE_CHECKING:
 
 class EnemyUpdater:
     """Handles updating all enemy types with unified logic."""
-    
-    def update_enemies(
-        self,
-        enemies: List['Enemy'],
-        dt: float,
-        player_pos: Optional[Tuple[float, float]],
-        maze: 'Maze',
-        ship: 'Ship',
-        scoring: 'ScoringSystem',
-        projectiles: List['Projectile'],
-        hunter=None
-    ) -> None:
-        """Update regular enemies.
-        
-        Args:
-            enemies: List of Enemy instances.
-            dt: Delta time since last update.
-            player_pos: Current player position.
-            maze: Maze instance for wall collision.
-            ship: Player ship for collision detection.
-            scoring: Scoring system for recording collisions.
-            projectiles: List to add fired projectiles to.
-        """
-        from creatures.creature import Creature   # the Encounter runs these
-        enemies = [enemy for enemy in enemies if not isinstance(enemy, Creature)]
-        for enemy in enemies:
-            if not enemy.active:
-                continue
-            target_pos = nearest_friendly_pos(enemy, ship, hunter)
-            
-            enemy.update(dt, target_pos, maze.walls, maze.spatial_grid)
-            
-            # Check enemy-ship collision (skip if shield is active)
-            if not ship.is_shield_active():
-                if ship.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
-                    scoring.record_enemy_collision()
-            
-            # Check if enemy fired a projectile
-            fired_projectile = enemy.get_fired_projectile(target_pos)
-            if fired_projectile:
-                projectiles.append(fired_projectile)
-        keep_apart([enemy for enemy in enemies if enemy.active and enemy.type == 'aggressive'])
     
     def update_replay_enemies(
         self,
@@ -421,40 +377,3 @@ class EnemyUpdater:
             fired_projectile = mother_boss.get_fired_projectile(target_pos)
             if fired_projectile:
                 projectiles.append(fired_projectile)
-    
-    def handle_enemy_to_enemy_avoidance(
-        self,
-        replay_enemies: List['ReplayEnemyShip'],
-        flockers: List['FlockerEnemyShip'],
-        split_bosses: List['SplitBoss'],
-        mother_bosses: List['MotherBoss'],
-        babies: List['Baby']
-    ) -> None:
-        """Handle enemy-to-enemy avoidance for all enemy ships.
-        
-        Collects all enemy ships (RotatingThrusterShip instances that are enemies)
-        and calls avoid_enemy_ships() for each one to prevent collisions.
-        
-        Args:
-            replay_enemies: List of ReplayEnemyShip instances.
-            flockers: List of FlockerEnemyShip instances.
-            split_bosses: List of SplitBoss instances.
-            mother_bosses: List of MotherBoss instances.
-            babies: List of Baby instances.
-        """
-        # Collect all enemy ships (RotatingThrusterShip instances that are enemies)
-        all_enemy_ships: List['RotatingThrusterShip'] = []
-        all_enemy_ships.extend(replay_enemies)
-        all_enemy_ships.extend(flockers)
-        all_enemy_ships.extend(split_bosses)
-        all_enemy_ships.extend(mother_bosses)
-        all_enemy_ships.extend(babies)
-        
-        # Filter to only active enemy ships
-        active_enemy_ships = [ship for ship in all_enemy_ships if ship.active and ship.is_enemy_ship()]
-        
-        # For each enemy ship, avoid all other enemy ships
-        for enemy_ship in active_enemy_ships:
-            # Create list of other enemy ships (excluding self)
-            other_enemy_ships = [other for other in active_enemy_ships if other is not enemy_ship]
-            enemy_ship.avoid_enemy_ships(other_enemy_ships)

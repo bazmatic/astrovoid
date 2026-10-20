@@ -7,6 +7,7 @@ import pytest
 import config
 import level_config
 import creatures
+from tests.creature_parts import encounter, world
 from entities.jev_beacon import JevBeacon
 from entities.powerup_crystal import PowerupCrystal
 from entities.projectile import Projectile
@@ -24,8 +25,8 @@ def shoot(handler, pickups, allowed):
     """Kill one enemy with a player shot and return what it dropped."""
     enemy = creatures.build('patrol', (100, 100))
     shot = Projectile((100, 100), 0)
-    handler.handle_projectile_enemy_collisions(
-        shot, [enemy], [], [], [], [], [], [], [], pickups, jev_beacon_allowed=allowed)
+    stand_in = world(collision_handler=handler, powerup_crystals=pickups, jev_beacon_allowed=lambda: allowed)
+    encounter(enemy, world_=stand_in).shoot(shot)
     assert not enemy.active
     return pickups
 

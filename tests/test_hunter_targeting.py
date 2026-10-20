@@ -18,7 +18,7 @@ def test_nearest_living_ally_and_player_tiebreak():
 import pytest
 from unittest.mock import Mock
 from entities.command_recorder import CommandRecorder
-from entities.enemy import Enemy
+import creatures
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.split_boss import SplitBoss
@@ -29,14 +29,24 @@ from entities.hunter_ship import HunterShip
 from game_handlers.enemy_updater import EnemyUpdater
 
 
+def test_a_creature_aims_at_the_nearest_hunter():
+    from tests.creature_parts import encounter, world
+    crab = creatures.build('patrol', (300, 300), 1)
+    player = Ship((900, 800))
+    player.shield_active = True
+    hunter = HunterShip((320, 300))
+    enc = encounter(crab, world_=world(ship=player, hunter=hunter))
+    enc.step(1.0)
+    assert enc.target_for(crab) == hunter.get_pos()
+    assert crab.controls.aim == hunter.get_pos()
+
+
 @pytest.mark.parametrize('kind,method', [
-    (Enemy,'update_enemies'), (ReplayEnemyShip,'update_replay_enemies'),
+    (ReplayEnemyShip,'update_replay_enemies'),
     (FlockerEnemyShip,'update_flockers'), (SplitBoss,'update_split_bosses'),
     (MotherBoss,'update_mother_bosses'), (Baby,'update_babies')])
 def test_enemy_update_and_aim_use_nearest_hunter(kind,method):
-    if kind is Enemy:
-        enemy = Enemy((300,300),'patrol',1)
-    elif kind is FlockerEnemyShip:
+    if kind is FlockerEnemyShip:
         enemy = kind((300,300))
     else:
         enemy = kind((300,300),CommandRecorder())

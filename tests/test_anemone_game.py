@@ -40,7 +40,7 @@ def shoot(handler, anemone, crystals=None):
     projectile = Projectile(POS, 0.0)
     projectile.source = 'player'
     return handler.handle_projectile_enemy_collisions(
-        projectile, [], [], [], [], [], [], [], [], crystals if crystals is not None else [],
+        projectile, [], [], [], [], [], [], [], crystals if crystals is not None else [],
         anemones=[anemone])
 
 
@@ -192,7 +192,7 @@ class TestBeingShot:
     def test_callers_that_pass_no_anemones_still_work(self):
         handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
         assert handler.handle_projectile_enemy_collisions(
-            Projectile(POS, 0.0), [], [], [], [], [], [], [], [], []) is False
+            Projectile(POS, 0.0), [], [], [], [], [], [], [], []) is False
 
 
 class TestRealGame:

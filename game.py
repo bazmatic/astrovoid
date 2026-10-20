@@ -15,7 +15,6 @@ from entities.ship import Ship
 from maze.generator import Maze
 from physics.obstacle_world import ObstacleWorld
 from rendering.gates import draw_gate
-from entities.enemy import Enemy
 import level_rules
 import level_config
 from entities.replay_enemy_ship import ReplayEnemyShip
@@ -986,9 +985,6 @@ class Game:
             self.encounter.step(dt)
             # Update the enemies that are not Creatures yet using EnemyUpdater
             roster = self.roster
-            self.enemy_updater.update_enemies(
-                roster.of_kind('static', 'patrol', 'aggressive'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
-            )
             self.enemy_updater.update_replay_enemies(
                 roster.of_kind('replay'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )

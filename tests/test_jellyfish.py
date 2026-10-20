@@ -152,24 +152,24 @@ class TestDrawing:
         enemy = make_jelly(angle)
         settle(enemy, 20)
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         assert screen.get_bounding_rect().width > enemy.radius * 2
         enemy.body.agitation = 1.0
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         enemy.body.agitation = 0.0
         enemy.body.flutter = 1.0
-        enemy.draw(screen, None)
+        enemy.draw(screen)
 
     def test_draws_before_first_update(self):
         screen = blank_screen()
-        creatures.build("aggressive", POS).draw(screen, None)
+        creatures.build("aggressive", POS).draw(screen)
         assert screen.get_bounding_rect().width > 0
 
     def test_bell_is_translucent(self):
         enemy = make_jelly()
         settle(enemy, 20)
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         alpha = screen.get_at((int(enemy.x + enemy.radius * 0.75), int(enemy.y + enemy.radius * 0.45))).a
         assert 0 < alpha < 255
 
@@ -177,7 +177,7 @@ class TestDrawing:
         enemy = make_jelly()
         enemy.active = False
         screen = blank_screen()
-        enemy.draw(screen, None)
+        enemy.draw(screen)
         assert screen.get_bounding_rect().width == 0
 
 

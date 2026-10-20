@@ -65,7 +65,7 @@ class Creature(GameEntity):
         self.apply_friction_and_update_position(self.body.DEATH_FRICTION, dt)
         self.body.update_death(self, dt)
 
-    def draw(self, screen, player_pos=None) -> None:
+    def draw(self, screen) -> None:
         if not self.active:
             return
         if (self.x < -DRAW_MARGIN or self.x > config.SCREEN_WIDTH + DRAW_MARGIN or

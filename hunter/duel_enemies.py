@@ -99,8 +99,6 @@ class DuelEnemies:
         target = _Target(first)
         self.world.ship, self.world.hunter = target, second
         self.encounter.step(dt)
-        self.updater.update_enemies(roster.of_kind('static', 'patrol', 'aggressive'), dt, None, self.maze, target, self.scoring, self.bullets,
-                                    hunter=second)
         self.updater.update_flockers(roster.of_kind('flocker'), dt, None, self.maze, target, self.scoring, self.bullets,
                                      self.sound_manager, hunter=second)
         roster.update_dying(dt)

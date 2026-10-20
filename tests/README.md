@@ -59,13 +59,10 @@ Tests for ship physics:
 - Collision detection
 - Projectile firing
 
-### `test_enemy_strategies.py`
+### `test_encounter.py`, `test_traits_*.py`, `test_*_creature.py`
 
-Tests for enemy behaviors:
-
-- Static enemy (no movement)
-- Patrol enemy (movement and wall reversal)
-- Aggressive enemy (chasing player, alert state)
+Tests for Creatures: the Encounter's order of hooks and shots, each trait on its own (being hit, shoved, bounced,
+patrolling, chasing, the gun), and the Urchin, Crab and Jelly built from the catalogue.
 
 ### `test_projectile.py`
 
