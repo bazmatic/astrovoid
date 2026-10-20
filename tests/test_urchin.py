@@ -1,21 +1,27 @@
-"""Unit tests for the static enemy's sea urchin rendering and animation."""
+"""Unit tests for the Urchin's sea urchin Body: rendering and animation."""
 
 import math
 import pygame
 import pytest
-from entities.enemy import Enemy
+import creatures
 from entities.urchin import Urchin
+from tests.creature_parts import encounter, target, world
 
 POS = (400.0, 300.0)
 
 
 def make_urchin():
-    return Enemy(POS, "static")
+    """An urchin with its hit points set, as on its first frame."""
+    urchin = creatures.build("static", POS)
+    for trait in urchin.traits:
+        trait.on_spawn(urchin, None)
+    urchin.has_spawned = True
+    return urchin
 
 
 def settle(enemy, player=None, frames=60):
     for _ in range(frames):
-        enemy.urchin.update(enemy, 1.0, player)
+        enemy.body.update(enemy, 1.0, player)
 
 
 def blank_screen():
@@ -29,19 +35,10 @@ def solid_bounds(screen):
 
 
 class TestRig:
-    """Only static enemies are urchins."""
+    """The Urchin is drawn as a sea urchin."""
 
     def test_static_has_urchin(self):
-        assert isinstance(make_urchin().urchin, Urchin)
-
-    @pytest.mark.parametrize("enemy_type", ["patrol", "aggressive"])
-    def test_other_types_have_no_urchin(self, enemy_type):
-        assert Enemy(POS, enemy_type).urchin is None
-
-    def test_every_type_has_exactly_one_body(self):
-        for enemy_type in ("static", "patrol", "aggressive"):
-            enemy = Enemy(POS, enemy_type)
-            assert sum(body is not None for body in (enemy.urchin, enemy.crab, enemy.jellyfish)) == 1
+        assert isinstance(make_urchin().body, Urchin)
 
 
 class TestSpines:
@@ -50,33 +47,33 @@ class TestSpines:
     def test_all_spines_intact_at_full_health(self):
         enemy = make_urchin()
         settle(enemy, frames=1)
-        assert enemy.urchin.intact_spines == Urchin.SPINE_COUNT
+        assert enemy.body.intact_spines == Urchin.SPINE_COUNT
 
     def test_spines_snap_off_with_damage(self):
         enemy = make_urchin()
-        counts = [enemy.urchin.intact_spines]
+        counts = [enemy.body.intact_spines]
         while enemy.hit_points > 1:
-            enemy.take_damage()
+            enemy.hit_points -= 1
             settle(enemy, frames=1)
-            counts.append(enemy.urchin.intact_spines)
+            counts.append(enemy.body.intact_spines)
         assert counts == sorted(counts, reverse=True)
         assert len(set(counts)) == len(counts)
         assert counts[-1] > 0
 
     def test_snapped_spines_fly_off_then_vanish(self):
         enemy = make_urchin()
-        enemy.take_damage()
+        enemy.hit_points -= 1
         settle(enemy, frames=1)
-        lost = Urchin.SPINE_COUNT - enemy.urchin.intact_spines
-        assert len(enemy.urchin.shards) == lost > 0
+        lost = Urchin.SPINE_COUNT - enemy.body.intact_spines
+        assert len(enemy.body.shards) == lost > 0
         settle(enemy, frames=int(Urchin.SHARD_FRAMES) + 2)
-        assert enemy.urchin.shards == []
+        assert enemy.body.shards == []
 
     def test_broken_spines_are_stubs(self):
         enemy = make_urchin()
-        enemy.take_damage()
+        enemy.hit_points -= 1
         settle(enemy, frames=1)
-        urchin = enemy.urchin
+        urchin = enemy.body
         broken = [i for i in range(Urchin.SPINE_COUNT) if not urchin.spine_intact[i]]
         intact = [i for i in range(Urchin.SPINE_COUNT) if urchin.spine_intact[i]]
         assert max(urchin.spine_reach(i) for i in broken) < min(urchin.spine_reach(i) for i in intact)
@@ -88,20 +85,20 @@ class TestBristle:
     def test_calm_when_player_far(self):
         enemy = make_urchin()
         settle(enemy, (POS[0] + Urchin.ALARM_RANGE * 3, POS[1]))
-        assert enemy.urchin.alarm < 0.05
+        assert enemy.body.alarm < 0.05
 
     def test_alarmed_when_player_near(self):
         enemy = make_urchin()
         settle(enemy, (POS[0] + Urchin.ALARM_RANGE * 0.4, POS[1]))
-        assert enemy.urchin.alarm > 0.95
+        assert enemy.body.alarm > 0.95
 
     def test_spines_facing_player_reach_further(self):
         enemy = make_urchin()
-        enemy.urchin.roll = 0.0
-        calm = [enemy.urchin.spine_reach(i) for i in range(Urchin.SPINE_COUNT)]
+        enemy.body.roll = 0.0
+        calm = [enemy.body.spine_reach(i) for i in range(Urchin.SPINE_COUNT)]
         settle(enemy, (POS[0] + Urchin.ALARM_RANGE * 0.4, POS[1]))
-        enemy.urchin.roll = 0.0
-        alarmed = [enemy.urchin.spine_reach(i) for i in range(Urchin.SPINE_COUNT)]
+        enemy.body.roll = 0.0
+        alarmed = [enemy.body.spine_reach(i) for i in range(Urchin.SPINE_COUNT)]
         # Spine 0 points along +x at zero roll, straight at the player
         assert alarmed[0] > calm[0] * 1.15
         opposite = Urchin.SPINE_COUNT // 2
@@ -113,41 +110,41 @@ class TestKnocks:
 
     def test_still_urchin_does_not_roll(self):
         enemy = make_urchin()
-        roll = enemy.urchin.roll
+        roll = enemy.body.roll
         settle(enemy, frames=10)
-        assert enemy.urchin.roll == roll
+        assert enemy.body.roll == roll
 
     def test_rolls_with_distance_and_direction(self):
         enemy = make_urchin()
         settle(enemy, frames=1)
-        roll = enemy.urchin.roll
+        roll = enemy.body.roll
         enemy.x += 4.0
         settle(enemy, frames=1)
-        right = enemy.urchin.roll - roll
+        right = enemy.body.roll - roll
         enemy.x -= 4.0
         settle(enemy, frames=1)
         assert right != 0.0
-        assert enemy.urchin.roll == pytest.approx(roll)
+        assert enemy.body.roll == pytest.approx(roll)
 
     def test_squashes_when_velocity_jumps(self):
         enemy = make_urchin()
         settle(enemy, frames=2)
-        assert enemy.urchin.squash == 0.0
-        enemy.apply_momentum(3.0, 0.0)
+        assert enemy.body.squash == 0.0
+        enemy.vx += 3.0
         settle(enemy, frames=1)
-        assert enemy.urchin.squash > 0.3
+        assert enemy.body.squash > 0.3
         settle(enemy, frames=60)
-        assert enemy.urchin.squash < 0.01
+        assert enemy.body.squash < 0.01
 
     def test_friction_alone_does_not_squash(self):
         enemy = make_urchin()
         enemy.vx = 3.0
         settle(enemy, frames=1)
-        enemy.urchin.squash = 0.0
+        enemy.body.squash = 0.0
         for _ in range(30):
             enemy.vx *= 0.95
             settle(enemy, frames=1)
-        assert enemy.urchin.squash == 0.0
+        assert enemy.body.squash == 0.0
 
 
 class TestDrawing:
@@ -167,10 +164,11 @@ class TestDrawing:
         screen = blank_screen()
         enemy.draw(screen, None)  # Before any update
         settle(enemy, (POS[0] + 30, POS[1]))
-        enemy.take_damage()
-        enemy.apply_momentum(2.0, 1.0)
+        enemy.hit_points -= 1
+        enemy.vx, enemy.vy = enemy.vx + 2.0, enemy.vy + 1.0
+        enc = encounter(enemy, world_=world(ship=target((POS[0] + 30, POS[1]))))
         for _ in range(5):
-            enemy.update(1.0, (POS[0] + 30, POS[1]), None)
+            enc.step(1.0)
             enemy.draw(screen, None)
         assert solid_bounds(screen).width > 0
 
@@ -194,18 +192,18 @@ class TestDeath:
     def test_remaining_spines_burst_outward(self):
         enemy = make_urchin()
         settle(enemy, frames=1)
-        remaining = enemy.urchin.intact_spines
+        remaining = enemy.body.intact_spines
         enemy.die()
         enemy.update_death(1.0)
-        assert enemy.urchin.intact_spines == 0
-        assert len(enemy.urchin.shards) == remaining
-        before = [math.hypot(s.x - enemy.x, s.y - enemy.y) for s in enemy.urchin.shards]
+        assert enemy.body.intact_spines == 0
+        assert len(enemy.body.shards) == remaining
+        before = [math.hypot(s.x - enemy.x, s.y - enemy.y) for s in enemy.body.shards]
         enemy.update_death(1.0)
-        after = [math.hypot(s.x - enemy.x, s.y - enemy.y) for s in enemy.urchin.shards]
+        after = [math.hypot(s.x - enemy.x, s.y - enemy.y) for s in enemy.body.shards]
         assert all(b > a for a, b in zip(before, after))
 
     def test_shell_pieces_drift_apart(self):
-        urchin = make_urchin().urchin
+        urchin = make_urchin().body
         assert urchin.shell_spread(0.0) == 0.0
         assert urchin.shell_spread(1.0) > urchin.shell_spread(0.5) > 0.0
 

@@ -5,7 +5,7 @@ import numpy as np
 import pygame
 import pytest
 
-from entities.enemy import Enemy
+import creatures
 from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.model import ACTIONS, HunterSettings, PilotDecision, PilotResult
@@ -64,7 +64,7 @@ def decide(worker, action):
 
 def test_the_pilot_is_shown_the_surroundings_as_they_are_when_it_looks(maze):
     flight, worker, _ = rules_flight(maze)
-    enemy = Enemy(cell(maze, 4, 3), 'static')
+    enemy = creatures.build('static', cell(maze, 4, 3))
     flight.surroundings.enemy_list.append(enemy)          # arrives after the flight was built
     flight.fly(1.0)
     contacts = json.loads(worker.sent[-1].state_json)['visible_contacts']
@@ -81,7 +81,7 @@ def test_the_ship_flies_the_pilots_decision(maze):
 
 
 def test_a_burst_is_dropped_once_the_pilot_is_not_active_even_with_a_target_in_the_sights(maze):
-    flight, worker, _ = rules_flight(maze, enemies=[Enemy(cell(maze, 4, 3), 'static')])
+    flight, worker, _ = rules_flight(maze, enemies=[creatures.build('static', cell(maze, 4, 3))])
     flight.ship.angle = 0.0                              # nose on the enemy: the burst would carry on alone
     flight.ship.burst_remaining, flight.ship.fire_remaining = 3, 0.0
     assert flight.fly(1.0) == []                         # no decision yet: the pilot is not behind the trigger
@@ -117,7 +117,7 @@ def test_the_pilot_sees_as_far_as_the_flights_settings_allow(maze):
 
 def test_listeners_hear_every_senses_the_neural_pilot_is_shown_until_the_flight_closes(maze):
     flight = HunterFlight(HunterShip(cell(maze, 2, 3)), NeuralPilot(random_policy(1), decision_frames=3),
-                          Surroundings(maze, [Enemy(cell(maze, 4, 3), 'static')]))
+                          Surroundings(maze, [creatures.build('static', cell(maze, 4, 3))]))
     heard = []
     flight.on_observed(heard.append)
     for _ in range(6):
@@ -130,7 +130,7 @@ def test_listeners_hear_every_senses_the_neural_pilot_is_shown_until_the_flight_
 
 def test_fire_control_only_aims_at_live_enemies(maze):
     flight, worker, _ = rules_flight(maze)
-    ahead = Enemy(cell(maze, 4, 3), 'static')
+    ahead = creatures.build('static', cell(maze, 4, 3))
     flight.ship.angle = 0.0                              # nose towards the enemy
     flight.surroundings.enemy_list.append(ahead)
     flight.fly(1.0)

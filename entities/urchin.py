@@ -5,8 +5,8 @@ gets knocked across the floor by each one. This module draws it as a sea
 urchin: a dome covered in spines that bristle at a nearby player, roll with
 every knock and snap off as it takes damage.
 
-The urchin is purely visual. Momentum, hit points and collision stay with the
-Enemy and its strategy.
+The urchin is purely visual: it is the `urchin` Body of a Creature. Momentum,
+hit points and collision belong to the creature's traits.
 """
 
 import math
@@ -20,7 +20,7 @@ from rendering import visual_effects
 from utils import distance, get_angle_to_point
 
 if TYPE_CHECKING:
-    from entities.enemy import Enemy
+    from creatures.creature import Creature
 
 Point = Tuple[float, float]
 
@@ -74,7 +74,7 @@ class Urchin:
     SHELL_PIECES = 5
     SHELL_SPREAD = 0.9  # How far the shell pieces drift apart
 
-    def __init__(self, enemy: 'Enemy'):
+    def __init__(self, enemy: 'Creature'):
         """Initialize the urchin for an enemy."""
         self.roll = random.uniform(0, 360)
         self.sway_phase = random.uniform(0, 2 * math.pi)  # Random start to avoid sync
@@ -115,7 +115,10 @@ class Urchin:
         """How far the shell pieces have drifted from the centre on death."""
         return self.SHELL_SPREAD * death_progress * (2.0 - death_progress)
 
-    def update(self, enemy: 'Enemy', dt: float, player_pos: Optional[Point] = None) -> None:
+    def on_event(self, enemy: 'Creature', name: str) -> None:
+        """Its look follows its hit points and motion, so events change nothing."""
+
+    def update(self, enemy: 'Creature', dt: float, player_pos: Optional[Point] = None) -> None:
         """Advance rolling, bristling, impacts and broken spines.
 
         Args:
@@ -136,19 +139,19 @@ class Urchin:
         self._snap_spines(enemy, math.ceil(self.SPINE_COUNT * health), speed=(1.2, 2.4))
         self._update_shards(dt)
 
-    def update_death(self, enemy: 'Enemy', dt: float) -> None:
+    def update_death(self, enemy: 'Creature', dt: float) -> None:
         """Burst the remaining spines outward and let the pieces drift."""
         self._ensure_burst(enemy)
         self._roll_and_squash(enemy)
         self._update_shards(dt)
 
-    def _ensure_burst(self, enemy: 'Enemy') -> None:
+    def _ensure_burst(self, enemy: 'Creature') -> None:
         """Throw off every remaining spine, once, when the urchin dies."""
         if not self._burst:
             self._burst = True
             self._snap_spines(enemy, 0, speed=(2.0, 4.0))
 
-    def _roll_and_squash(self, enemy: 'Enemy') -> None:
+    def _roll_and_squash(self, enemy: 'Creature') -> None:
         """Turn with distance covered and flatten on a sudden change of velocity."""
         dx = enemy.x - self._last_pos[0]
         dy = enemy.y - self._last_pos[1]
@@ -171,7 +174,7 @@ class Urchin:
             if self.squash < 0.005:
                 self.squash = 0.0
 
-    def _snap_spines(self, enemy: 'Enemy', keep: int, speed: Tuple[float, float]) -> None:
+    def _snap_spines(self, enemy: 'Creature', keep: int, speed: Tuple[float, float]) -> None:
         """Snap spines off until only `keep` are left, sending each one flying."""
         for index in self._break_order:
             if self.intact_spines <= keep:
@@ -206,7 +209,7 @@ class Urchin:
             shard.life -= dt / self.SHARD_FRAMES
         self.shards = [shard for shard in self.shards if shard.life > 0.0]
 
-    def draw(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the living urchin.
 
         Args:
@@ -225,7 +228,7 @@ class Urchin:
         if self.shards:
             self._draw_shards(screen, enemy, 1.0)
 
-    def draw_death(self, screen: pygame.Surface, enemy: 'Enemy') -> None:
+    def draw_death(self, screen: pygame.Surface, enemy: 'Creature') -> None:
         """Draw the dying urchin: spines burst outward and the shell cracks apart.
 
         Args:
@@ -338,7 +341,7 @@ class Urchin:
             )
             target.set_at((int(origin[0] + offset[0]), int(origin[1] + offset[1])), dark)
 
-    def _draw_shards(self, screen: pygame.Surface, enemy: 'Enemy', visibility: float) -> None:
+    def _draw_shards(self, screen: pygame.Surface, enemy: 'Creature', visibility: float) -> None:
         """Draw snapped spines tumbling away and fading."""
         spine_color = visual_effects.interpolate_color(config.COLOR_ENEMY_STATIC, (255, 255, 255), 0.25)
         for shard in self.shards:

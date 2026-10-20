@@ -3,9 +3,15 @@ built."""
 from typing import Dict, Mapping, Type
 
 from creatures.trait import Trait
+from creatures.traits import brains, combat, propulsion
+from entities.urchin import Urchin
 
-TRAITS: Dict[str, Type[Trait]] = {}
-BODIES: Dict[str, type] = {}
+TRAITS: Dict[str, Type[Trait]] = {trait.NAME: trait for trait in (
+    brains.Still,
+    propulsion.Coasts,
+    combat.TakesHits, combat.ShovedByShots, combat.RamsShip, combat.DropsPickup, combat.BouncesOffWalls,
+)}
+BODIES: Dict[str, type] = {'urchin': Urchin}
 
 
 def validate(catalogue: Mapping) -> None:

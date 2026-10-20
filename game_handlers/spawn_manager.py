@@ -60,7 +60,10 @@ def make_enemy(kind, pos, level, command_recorder):
     from entities.baby import Baby
     if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
         raise ValueError(f'cannot make an enemy of type {kind!r}')
-    if kind in ('static', 'patrol', 'aggressive'):
+    if enemy_kinds.kind(kind).body is not None:
+        import creatures
+        entity = creatures.build(kind, pos, level, command_recorder)
+    elif kind in ('static', 'patrol', 'aggressive'):
         entity = Enemy(pos, kind, level)
     elif enemy_kinds.kind(kind).replays_player:
         entity = {'replay': ReplayEnemyShip, 'split_boss': SplitBoss, 'mother_boss': MotherBoss, 'baby': Baby}[kind](

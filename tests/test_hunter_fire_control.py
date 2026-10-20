@@ -1,18 +1,18 @@
 """The hunter's fire control: tracking a target's firing solution and holding fire until lined up."""
 import json
 import math
-from unittest.mock import Mock
 
 import pytest
 import config
-from entities.enemy import Enemy
+import creatures
+import enemy_kinds
 from entities.hunter_ship import HunterShip
-from game_handlers.collision_handler import CollisionHandler
 from hunter.fire_control import find_firing_solution
 from hunter.jev_pilot import PILOT_QUESTIONS
 from hunter.model import ACTIONS, FiringSolution, HunterSettings, PilotAction
 from hunter.perception import HunterPerception
 from hunter.pilot_sensors import pilot_state
+from tests.creature_parts import encounter as urchin_encounter
 from maze.wall_segment import WallSegment
 from tests.test_hunter_perception import maze
 
@@ -21,7 +21,7 @@ SETTINGS = HunterSettings()
 
 
 def urchin(pos):
-    return Enemy(pos, 'static')
+    return creatures.build('static', pos)
 
 
 def ship_at(pos=(500, 500), heading=0.0):
@@ -187,10 +187,10 @@ def test_tracking_hunter_kills_a_static_urchin(distance, bearing, monkeypatch):
     ship = ship_at((2000, 2000), heading=0.0)
     angle = math.radians(bearing)
     enemy = urchin((2000 + math.cos(angle) * distance, 2000 + math.sin(angle) * distance))
-    handler = CollisionHandler(Mock(), Mock(), Mock())
+    encounter = urchin_encounter(enemy)
     shots = []
     for frame in range(10 * config.FPS):
-        enemy.update(1.0, None, None)
+        encounter.step(1.0)
         solution = find_firing_solution(ship, [enemy], world, SETTINGS)
         shot = ship.step(1, ACTIONS['track_coast_fire'], solution)
         if shot:
@@ -198,11 +198,12 @@ def test_tracking_hunter_kills_a_static_urchin(distance, bearing, monkeypatch):
         for projectile in shots:
             if projectile.active:
                 projectile.update(1.0)
-                handler.handle_projectile_enemy_collisions(projectile, [enemy], [], [], [], [], [], [], [], [])
+                if encounter.shoot(projectile):
+                    projectile.active = False   # spent, as in the game
         if not enemy.active:
             break
     assert not enemy.active, f'urchin survived {len(shots)} shots'
-    assert len(shots) <= 4 * config.STATIC_ENEMY_HIT_POINTS
+    assert len(shots) <= 4 * dict(enemy_kinds.kind('static').traits)['takesHits']['hitPoints']
 
 
 @pytest.mark.parametrize('seed', range(12))

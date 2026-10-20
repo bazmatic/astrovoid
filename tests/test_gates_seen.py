@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from entities.anemone import Anemone
-from entities.enemy import Enemy
+import creatures
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.hunter_ship import HunterShip
 from hunter.fire_control import find_firing_solution
@@ -39,7 +39,7 @@ def hunter():
 
 
 def target():
-    return Enemy((500, 500), 'static')
+    return creatures.build('static', (500, 500))
 
 
 def test_the_hunter_cannot_see_through_a_gate():

@@ -5,7 +5,7 @@ import pytest
 
 import config
 from entities.hunter_ship import HunterShip
-from entities.enemy import Enemy
+import creatures
 from entities.powerup_crystal import PowerupCrystal
 from entities.ship import Ship
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
@@ -102,7 +102,7 @@ def test_braking_and_fighting_still_come_before_collecting():
     assert state['motion']['brake']['speed_state'] == 'too_fast'
     assert navigation_course(state)['burn_heading_degrees'] == state['motion']['brake']['burn_heading_degrees']
     still = ship_at((500, 500), heading=0.0)
-    fighting = reading(still, [PowerupCrystal((500, 600))], enemies=[Enemy((800, 500), 'static')])
+    fighting = reading(still, [PowerupCrystal((500, 600))], enemies=[creatures.build('static', (800, 500))])
     assert fighting['engage'] is not None
     assert worked_burn(fighting) == fighting['engage']
 

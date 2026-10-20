@@ -6,6 +6,7 @@ from unittest.mock import Mock
 import pygame
 import pytest
 from entities.enemy import Enemy
+import creatures
 from entities.replay_enemy_ship import ReplayEnemyShip
 from entities.baby import Baby
 from entities.split_boss import SplitBoss
@@ -26,7 +27,7 @@ SQUID_CLASSES = [ReplayEnemyShip, Baby, SplitBoss, MotherBoss]
 def make_all_enemies():
     recorder = CommandRecorder()
     return [
-        Enemy(POS, "static"),
+        creatures.build("static", POS),
         ReplayEnemyShip(POS, recorder),
         Baby(POS, recorder),
         SplitBoss(POS, recorder),

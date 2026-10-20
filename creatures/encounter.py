@@ -18,6 +18,26 @@ class Encounter:
         self.roster = roster
         self.world = world
 
+    @property
+    def ship(self):
+        return self.world.ship
+
+    @property
+    def hunter(self):
+        return self.world.hunter
+
+    @property
+    def maze(self):
+        return self.world.maze
+
+    @property
+    def scoring(self):
+        return self.world.scoring
+
+    @property
+    def command_recorder(self):
+        return self.world.command_recorder
+
     def creatures(self) -> List[Creature]:
         """Every creature on the roster, alive or not, in roster order."""
         return [enemy for enemy in self.roster.all() if isinstance(enemy, Creature)]
@@ -26,10 +46,7 @@ class Encounter:
         """One frame: spawn hooks for newcomers, every live creature's traits and Body, then the crowd traits."""
         creatures = self.creatures()
         for creature in creatures:
-            if not creature.has_spawned and creature.active:
-                creature.has_spawned = True
-                for trait in creature.traits:
-                    trait.on_spawn(creature, self)
+            self._spawn(creature)
         crowds: Dict[str, List[Creature]] = {}
         for creature in creatures:
             if not creature.active:
@@ -47,6 +64,13 @@ class Encounter:
                 if trait.CROWD and live:
                     trait.on_crowd(live, self, dt)
 
+    def _spawn(self, creature) -> None:
+        """Run a newcomer's spawn hooks, once."""
+        if not creature.has_spawned and creature.active:
+            creature.has_spawned = True
+            for trait in creature.traits:
+                trait.on_spawn(creature, self)
+
     def shoot(self, projectile) -> bool:
         """Offer a friendly shot to each live enemy creature in roster order; the first it reaches takes it, and the
         shot is spent (True). A shot no creature takes goes on to the enemies that are not creatures yet."""
@@ -54,6 +78,7 @@ class Encounter:
             for creature in self.creatures():
                 if (creature.active and creature.allegiance == 'enemy'
                         and projectile.check_circle_collision(creature.get_pos(), creature.radius)):
+                    self._spawn(creature)   # shot before its first frame
                     for trait in creature.traits:
                         trait.on_shot(creature, projectile, self)
                         if not creature.active:

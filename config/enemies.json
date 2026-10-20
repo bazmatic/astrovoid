@@ -7,8 +7,18 @@
     "spawnRadius": 0,
     "layer": 0,
     "tuning": {
-      "size": 10,
-      "hitPoints": 3
+      "size": 10
+    },
+    "allegiance": "enemy",
+    "body": "urchin",
+    "traits": {
+      "still": {},
+      "coasts": {},
+      "bouncesOffWalls": {},
+      "ramsShip": {},
+      "shovedByShots": {},
+      "takesHits": {"hitPoints": 3},
+      "dropsPickup": {}
     }
   },
   "patrol": {

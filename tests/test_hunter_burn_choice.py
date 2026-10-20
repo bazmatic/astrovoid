@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 import config
-from entities.enemy import Enemy
+import creatures
 from entities.hunter_ship import HunterShip
 from entities.ship import Ship
 from hunter.jev_pilot import PILOT_QUESTIONS, JevPilot, worked_burn
@@ -141,7 +141,7 @@ def test_no_engage_reading_without_an_enemy():
 
 
 def test_engage_reading_far_from_the_enemy_calls_for_a_closing_burn():
-    engage = reading(ship_at((500, 500)), enemies=[Enemy((850, 500), 'static')])['engage']
+    engage = reading(ship_at((500, 500)), enemies=[creatures.build('static', (850, 500))])['engage']
     assert engage['range_state'] == 'far'
     assert engage['distance_metres'] == pytest.approx(350)
     assert engage['burn_needed'] and engage['burn_seconds'] > scaled_seconds(0.2, HunterShip((0, 0)).thrust_force)
@@ -151,21 +151,21 @@ def test_engage_reading_far_from_the_enemy_calls_for_a_closing_burn():
 
 def test_engage_reading_in_range_calls_for_no_burn():
     world_cell = maze().cell_size_x
-    engage = reading(ship_at((500, 500)), enemies=[Enemy((500 + world_cell * 1.5, 500), 'static')])['engage']
+    engage = reading(ship_at((500, 500)), enemies=[creatures.build('static', (500 + world_cell * 1.5, 500))])['engage']
     assert engage['range_state'] == 'in_range'
     assert engage['standoff_metres'] == pytest.approx(world_cell * 1.5)
     assert not engage['burn_needed'] and engage['burn_seconds'] == 0
 
 
 def test_engage_reading_too_close():
-    engage = reading(ship_at((500, 500)), enemies=[Enemy((560, 500), 'static')])['engage']
+    engage = reading(ship_at((500, 500)), enemies=[creatures.build('static', (560, 500))])['engage']
     assert engage['range_state'] == 'too_close' and not engage['burn_needed']
 
 
 def test_already_closing_fast_enough_needs_no_burn():
-    slow = reading(ship_at((500, 500)), enemies=[Enemy((850, 500), 'static')])['engage']
+    slow = reading(ship_at((500, 500)), enemies=[creatures.build('static', (850, 500))])['engage']
     target = slow['target_closing_speed_metres_per_second'] / FPS
-    closing = reading(ship_at((500, 500), velocity=(target, 0.0)), enemies=[Enemy((850, 500), 'static')])['engage']
+    closing = reading(ship_at((500, 500), velocity=(target, 0.0)), enemies=[creatures.build('static', (850, 500))])['engage']
     assert closing['closing_speed_metres_per_second'] == pytest.approx(target * FPS, abs=0.5)
     assert not closing['burn_needed']
     assert not closing['holding_still']
@@ -173,7 +173,7 @@ def test_already_closing_fast_enough_needs_no_burn():
 
 def test_burn_while_tracking_flies_the_combat_burn():
     ship = ship_at((500, 500), heading=0.0)
-    observation = observe(ship, enemies=[Enemy((850, 500), 'static')])
+    observation = observe(ship, enemies=[creatures.build('static', (850, 500))])
     engage = pilot_state(json.loads(observation.state_json))['engage']
     action = decide(observation, 'track', 'burn', 'fire')
     assert action.burn_frames == pytest.approx(engage['burn_seconds'] * FPS)
@@ -188,7 +188,7 @@ def test_burn_while_tracking_flies_the_combat_burn():
 def test_combat_burn_waits_for_the_nose_to_come_round():
     """Thrust goes along the nose, so the combat burn holds off until the nose is near the enemy."""
     ship = ship_at((500, 500), heading=120.0)
-    observation = observe(ship, enemies=[Enemy((850, 500), 'static')])
+    observation = observe(ship, enemies=[creatures.build('static', (850, 500))])
     action = decide(observation, 'track', 'burn', 'fire')
     assert burned(ship, action, frames=10, solution=FiringSolution(-120.0, False)) == 0
     ship.angle = 5.0
@@ -197,7 +197,7 @@ def test_combat_burn_waits_for_the_nose_to_come_round():
 
 def test_worked_burn_priority_is_brake_then_enemy_then_course():
     ahead = [((700, 0), (700, 1000))]
-    enemy, player = Enemy((620, 560), 'static'), Ship((450, 800))
+    enemy, player = creatures.build('static', (620, 560)), Ship((450, 800))
     too_fast = reading(ship_at((500, 500), velocity=(3.0, 0.0)), enemies=[enemy], player=player, walls=ahead)
     assert worked_burn(too_fast)['burn_heading_degrees'] == too_fast['motion']['brake']['burn_heading_degrees']
     fighting = reading(ship_at((500, 500)), enemies=[enemy], player=player)
