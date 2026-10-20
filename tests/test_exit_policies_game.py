@@ -92,10 +92,10 @@ def test_all_cleared_holds_the_exit_until_every_enemy_is_dead(game, monkeypatch)
     monkeypatch.setattr(level_config, 'load_level_config', level_file(ALL_CLEARED, split_boss=1, replay=2))
     start(game, 3)
     assert not game.maze.exit.is_activated
-    kill(game.split_bosses)
+    kill(game.roster.of_kind('split_boss'))
     game.update(1.0)
     assert not game.maze.exit.is_activated
-    kill(game.replay_enemies)
+    kill(game.roster.of_kind('replay'))
     game.update(1.0)
     assert game.maze.exit.is_activated
 
@@ -105,10 +105,10 @@ def test_type_cleared_needs_only_its_types_dead(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(eggs_only, egg=2, static=2))
     start(game, 3)
     assert not game.maze.exit.is_activated
-    kill(game.eggs)
+    kill(game.roster.of_kind('egg'))
     game.update(1.0)
     assert game.maze.exit.is_activated
-    assert sum(enemy.active for enemy in game.enemies) == 2
+    assert sum(enemy.active for enemy in game.roster.of_kind('static', 'patrol', 'aggressive')) == 2
 
 
 def test_the_timer_waits_for_the_first_move(game, monkeypatch):
@@ -128,10 +128,10 @@ def test_the_exit_stays_open_once_opened(game, monkeypatch):
     from entities.replay_enemy_ship import ReplayEnemyShip
     monkeypatch.setattr(level_config, 'load_level_config', level_file(ALL_CLEARED, replay=1))
     start(game, 3)
-    kill(game.replay_enemies)
+    kill(game.roster.of_kind('replay'))
     game.update(1.0)
     assert game.maze.exit.is_activated
-    game.replay_enemies.append(ReplayEnemyShip((600.0, 400.0), game.command_recorder))
+    game.roster.add(ReplayEnemyShip((600.0, 400.0), game.command_recorder))
     game.update(1.0)
     assert game.maze.exit.is_activated
 
@@ -140,7 +140,7 @@ def test_restarting_a_level_shuts_the_exit_and_resets_the_timer(game, monkeypatc
     monkeypatch.setattr(level_config, 'load_level_config', level_file(ALL_CLEARED, replay=1))
     start(game, 3)
     game.player_has_moved = True
-    kill(game.replay_enemies)
+    kill(game.roster.of_kind('replay'))
     game.update(1.0)
     assert game.maze.exit.is_activated and game.play_seconds > 0
     start(game, 3)
@@ -197,10 +197,10 @@ def test_a_kill_adds_to_power_but_does_not_upgrade_the_gun(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=2))
     start(game, 3)
     game.player_has_moved = True
-    for enemy in game.enemies:
+    for enemy in game.roster.of_kind('static', 'patrol', 'aggressive'):
         game.projectiles.append(Projectile(enemy.get_pos(), 0.0))
     game.update(1.0)
-    assert not any(enemy.active for enemy in game.enemies)
+    assert not any(enemy.active for enemy in game.roster.of_kind('static', 'patrol', 'aggressive'))
     assert game.ship.gun_upgrade_level == 0
     assert game.scoring.enemies_destroyed == 2
 
@@ -211,6 +211,6 @@ def test_a_kill_counts_on_the_games_score(game, monkeypatch):
     game.reset_scoring_to_profile_state()
     start(game, 3)
     game.player_has_moved = True
-    game.projectiles.append(Projectile(game.enemies[0].get_pos(), 0.0))
+    game.projectiles.append(Projectile(game.roster.of_kind('static', 'patrol', 'aggressive')[0].get_pos(), 0.0))
     game.update(1.0)
     assert game.scoring.enemies_destroyed == 1

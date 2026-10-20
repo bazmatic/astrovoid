@@ -48,7 +48,7 @@ def test_thrusting_into_a_gate_turns_it_for_free(game, monkeypatch):
 def test_a_gate_shoves_an_enemy(game, monkeypatch):
     gate = begin(game, monkeypatch, [MOTOR], 'patrol')
     game.player_has_moved = True
-    enemy = game.enemies[0]
+    enemy = game.roster.of_kind('static', 'patrol', 'aggressive')[0]
     px, py = gate.pin
     enemy.x, enemy.y = px + gate.half_length * 0.7, py + enemy.radius + gate.thickness / 2
     enemy.vx = enemy.vy = 0.0
@@ -61,7 +61,7 @@ def test_a_gate_shoves_an_enemy(game, monkeypatch):
 def test_an_anemone_jams_a_motor_gate(game, monkeypatch):
     gate = begin(game, monkeypatch, [MOTOR], 'anemone')
     game.player_has_moved = True
-    anemone = game.anemones[0]
+    anemone = game.roster.of_kind('anemone')[0]
     px, py = gate.pin
     anemone.x, anemone.y = px + gate.half_length * 0.6, py + anemone.radius + gate.thickness / 2
     anemone.anchor = (anemone.x, anemone.y)
@@ -116,7 +116,7 @@ def test_only_an_active_hunter_is_pushed_by_a_gate(game, monkeypatch):
 
 
 def test_anemones_and_flighthouses_in_play_are_anchored_not_pushed(game, monkeypatch):
-    for kind, enemies in (('anemone', lambda: game.anemones), ('flighthouse', lambda: game.flighthouses)):
+    for kind, enemies in (('anemone', lambda: game.roster.of_kind('anemone')), ('flighthouse', lambda: game.roster.of_kind('flighthouse'))):
         begin(game, monkeypatch, [FREE], kind)
         enemy = enemies()[0]
         seen = []

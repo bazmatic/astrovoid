@@ -2,20 +2,15 @@ import math
 
 import pytest
 
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager, SpawnConfig
-
-
-class DummyEntityManager:
-    def __init__(self):
-        self.flockers = []
-
-    def clear_all(self):
-        pass
 
 
 def _make_flocker(pos, _cr):
     # Minimal placeholder object with get_pos support if needed later
     class Flocker:
+        type = 'flocker'
+
         def __init__(self, p):
             self.pos = p
 
@@ -32,8 +27,8 @@ def max_dist_from_centroid(points):
 
 
 def test_flocker_spawns_are_clustered():
-    entity_manager = DummyEntityManager()
-    spawn_manager = SpawnManager(entity_manager)
+    roster = EnemyRoster()
+    spawn_manager = SpawnManager(roster)
 
     # Two tight clusters with a far outlier; algorithm should pick the tightest grouping
     available_positions = [
@@ -56,7 +51,7 @@ def test_flocker_spawns_are_clustered():
     used = spawn_manager._spawn_entities(config, available_positions, command_recorder=None)
 
     # Should have spawned the requested count
-    assert len(entity_manager.flockers) == 4
+    assert len(roster.of_kind('flocker')) == 4
     assert len(used) == 4
 
     # The spawned positions should be the tight cluster near the origin, not the outliers

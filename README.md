@@ -387,7 +387,7 @@ asterdroids/
 │   ├── splash_screen.py  # Splash screen timing, fades and skipping
 │   └── state_machine.py  # State machine infrastructure
 ├── game_handlers/         # Game system handlers
-│   ├── entity_manager.py # Entity management
+│   ├── enemy_roster.py  # Every enemy on the level
 │   ├── spawn_manager.py  # Enemy spawning system
 │   ├── enemy_updater.py  # Enemy update logic
 │   ├── fire_rate_calculator.py # Fire rate and spread for each gun upgrade level

@@ -287,7 +287,7 @@ def test_a_kill_keeps_the_level_going(make_game, monkeypatch):
     game.autoplay.clock = lambda: now[0]
     game.update(1.0)
     now[0] += 15
-    next(iter(game.entity_manager.get_all_active_enemies())).active = False
+    next(iter(game.roster.alive())).active = False
     game.update(1.0)
     now[0] += 15
     game.update(1.0)

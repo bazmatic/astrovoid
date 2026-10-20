@@ -14,7 +14,7 @@ from entities.projectile import Projectile
 from entities.ship import Ship
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.enemy_updater import EnemyUpdater
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from level_rules import EnemyCounts
 
@@ -31,7 +31,7 @@ def counts(anemone):
 
 
 def spawn(anemone_count, positions):
-    manager = EntityManager()
+    manager = EnemyRoster()
     SpawnManager(manager).spawn_all_enemies(1, positions, CommandRecorder(), counts(anemone_count), 0, 0)
     return manager
 
@@ -47,42 +47,42 @@ def shoot(handler, anemone, crystals=None):
 class TestSpawning:
     def test_spawns_the_requested_number(self):
         manager = spawn(2, [(100.0, 100.0), (200.0, 200.0), (300.0, 300.0)])
-        assert len(manager.anemones) == 2
-        assert all(isinstance(a, Anemone) for a in manager.anemones)
+        assert len(manager.of_kind('anemone')) == 2
+        assert all(isinstance(a, Anemone) for a in manager.of_kind('anemone'))
 
     def test_spawns_only_as_many_as_fit(self):
-        assert len(spawn(3, [(100.0, 100.0)]).anemones) == 1
-        assert spawn(3, []).anemones == []
+        assert len(spawn(3, [(100.0, 100.0)]).of_kind('anemone')) == 1
+        assert spawn(3, []).of_kind('anemone') == []
 
     def test_none_spawn_where_they_could_reach_the_players_start(self):
-        manager = EntityManager()
+        manager = EnemyRoster()
         positions = [(100.0, 100.0), (150.0, 100.0), (400.0, 100.0), (500.0, 100.0)]
         SpawnManager(manager).spawn_all_enemies(
             1, positions, CommandRecorder(), counts(2), 0, 0, anemone_keep_clear=((90.0, 100.0), 200.0))
-        assert [a.get_pos() for a in manager.anemones] == [(400.0, 100.0), (500.0, 100.0)]
+        assert [a.get_pos() for a in manager.of_kind('anemone')] == [(400.0, 100.0), (500.0, 100.0)]
 
     def test_fewer_spawn_when_too_few_places_are_clear_of_the_start(self):
-        manager = EntityManager()
+        manager = EnemyRoster()
         SpawnManager(manager).spawn_all_enemies(
             1, [(100.0, 100.0), (400.0, 100.0)], CommandRecorder(), counts(2), 0, 0,
             anemone_keep_clear=((90.0, 100.0), 200.0))
-        assert [a.get_pos() for a in manager.anemones] == [(400.0, 100.0)]
+        assert [a.get_pos() for a in manager.of_kind('anemone')] == [(400.0, 100.0)]
 
     def test_none_requested_none_spawned(self):
-        assert spawn(0, [(100.0, 100.0)]).anemones == []
+        assert spawn(0, [(100.0, 100.0)]).of_kind('anemone') == []
 
 
 class TestEntityManager:
     def test_anemones_count_as_enemies(self):
-        manager = EntityManager()
+        manager = EnemyRoster()
         alive, dead = Anemone(POS), Anemone((10.0, 10.0))
-        manager.anemones.extend([alive, dead])
+        manager.extend([alive, dead])
         dead.active = False
-        assert list(manager.get_all_active_enemies()) == [alive]
-        assert set(manager.get_all_enemies()) == {alive, dead}
-        assert POS in manager.get_all_enemy_positions()
-        manager.clear_all()
-        assert manager.anemones == []
+        assert list(manager.alive()) == [alive]
+        assert set(manager.all()) == {alive, dead}
+        assert POS in manager.positions()
+        manager.clear()
+        assert manager.of_kind('anemone') == []
 
 
 class TestUpdating:
@@ -212,8 +212,7 @@ class TestRealGame:
         game.level = 26  # Past the level files, so the schedule decides
         game.start_level()
         game.state = config.STATE_PLAYING
-        assert len(game.anemones) == level_rules.get_anemone_count(26) > 0
-        assert game.anemones is game.entity_manager.anemones
+        assert len(game.roster.of_kind('anemone')) == level_rules.get_anemone_count(26) > 0
         game.player_has_moved = True
         for _ in range(5):
             game.update(1.0)
@@ -222,7 +221,7 @@ class TestRealGame:
     def test_level_one_has_none(self, game):
         game.level = 1
         game.start_level()
-        assert game.anemones == []
+        assert game.roster.of_kind('anemone') == []
 
 
 class TestRealGameWiring:
@@ -245,10 +244,10 @@ class TestRealGameWiring:
 
     def clear_space(self, game):
         """Leave only the anemone, an empty maze and a still, unshielded ship beside it."""
-        anemone = game.anemones[0]
-        for group in (game.enemies, game.replay_enemies, game.flockers, game.flighthouses,
-                      game.split_bosses, game.mother_bosses, game.babies, game.eggs):
-            group.clear()
+        anemones = game.roster.of_kind('anemone')
+        game.roster.clear()
+        game.roster.extend(anemones)
+        anemone = anemones[0]
         game.maze.walls = []
         game.maze.spatial_grid = None
         game.ship.deactivate_shield()
@@ -260,15 +259,15 @@ class TestRealGameWiring:
         # These two levels used to put one within reach of the start
         game.level = level
         game.start_level()
-        assert game.anemones
-        for anemone in game.anemones:
+        assert game.roster.of_kind('anemone')
+        for anemone in game.roster.of_kind('anemone'):
             gap = math.hypot(anemone.x - game.ship.x, anemone.y - game.ship.y)
             assert gap > anemone.reach(game.maze)
 
     def test_range_is_known_before_the_player_first_moves(self, game):
         assert not game.player_has_moved
-        assert game.anemones[0].reach_px == pytest.approx(game.anemones[0].reach(game.maze))
-        assert game.anemones[0].reach_px > 0
+        assert game.roster.of_kind('anemone')[0].reach_px == pytest.approx(game.roster.of_kind('anemone')[0].reach(game.maze))
+        assert game.roster.of_kind('anemone')[0].reach_px > 0
 
     def test_player_shots_hurt_it(self, game):
         anemone = self.clear_space(game)
@@ -282,4 +281,4 @@ class TestRealGameWiring:
         assert anemone.is_stunned
 
     def test_the_hunter_is_shown_anemones(self, game):
-        assert game.anemones[0] in game.hunter_surroundings.enemies()
+        assert game.roster.of_kind('anemone')[0] in game.hunter_surroundings.enemies()

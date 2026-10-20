@@ -91,11 +91,11 @@ def test_playing_the_loaded_layout_gives_the_same_level(game, monkeypatch, tmp_p
     files = {3: dict(plain)}
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: files.get(level))
     layout = generated_layout(game, 3)
-    before = (list(game.maze.grid), sorted(e.get_pos() for e in game.entity_manager.get_all_enemies()))
+    before = (list(game.maze.grid), sorted(e.get_pos() for e in game.roster.all()))
     files[3]['layout'] = layout.to_json()
     game.level = 3
     game.start_level()
-    after = (list(game.maze.grid), sorted(e.get_pos() for e in game.entity_manager.get_all_enemies()))
+    after = (list(game.maze.grid), sorted(e.get_pos() for e in game.roster.all()))
     assert after[0] == before[0]
     # positions are cell centres now, so compare cells
     calc = game.maze.position_calculator
@@ -119,7 +119,7 @@ def test_a_generated_level_with_crowded_enemies_keeps_every_one(game, monkeypatc
         'seed': 5, 'maze': {'complexity': 'normal', 'grid_size': 12},
         'enemies': {'static': 0, 'patrol': 0, 'aggressive': 0, 'flocker': 14}} if level == 3 else None)
     layout = generated_layout(game, 3)
-    made = len(list(game.entity_manager.get_all_enemies()))
+    made = len(list(game.roster.all()))
     assert made == 14 and len(layout.enemies) == made
     assert layout == parse_layout(layout.to_json(), 12)                      # distinct, open cells
 

@@ -83,7 +83,7 @@ def test_a_layout_places_a_neural_hunter_at_its_cell(played):
     calc = played.maze.position_calculator
     neural = [h for h in played.enemy_hunters if isinstance(h, NeuralHunter)]
     assert [calc.screen_to_grid(*h.get_pos()) for h in neural] == [(6, 2)]
-    assert neural[0] in list(played.entity_manager.get_all_active_enemies())
+    assert neural[0] in list(played.roster.alive())
 
 
 def test_it_hunts_only_the_player(played):
@@ -94,10 +94,7 @@ def test_it_hunts_only_the_player(played):
 def test_the_players_shots_wear_it_down(played):
     from entities.projectile import Projectile
     neural = next(h for h in played.enemy_hunters if isinstance(h, NeuralHunter))
-    played.collision_handler.handle_projectile_enemy_collisions(
-        Projectile(neural.get_pos(), 0.0, source='player'), played.enemies, played.replay_enemies, played.flockers,
-        played.flighthouses, played.split_bosses, played.mother_bosses, played.babies, played.eggs,
-        played.powerup_crystals, anemones=played.anemones, enemy_hunters=played.enemy_hunters)
+    played.collision_handler.shoot_into(Projectile(neural.get_pos(), 0.0, source='player'), played.roster, played.powerup_crystals)
     assert neural.hit_points == 11
 
 
@@ -105,7 +102,7 @@ def test_the_level_flies_and_draws_it(played):
     for _ in range(30):
         played._fly_enemy_hunters(1.0)
     pygame.init()
-    played.draw_enemy_hunters(pygame.Surface((3840, 2160)))
+    played.roster.draw(pygame.Surface((3840, 2160)))
     played._close_enemy_hunters()
 
 

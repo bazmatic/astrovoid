@@ -100,6 +100,14 @@ The entity system provides a foundation for all game objects:
   - Provides spawn positions for enemies
   - Converts grid to wall segments for collision detection
 
+### Enemy Roster (`game_handlers/enemy_roster.py`)
+
+- **`EnemyRoster`**: every enemy on the level, of every kind, in the order they were added
+  - `add` (also `append`/`extend`, so spawning enemies can add to it as to a list), `clear`
+  - `of_kind(*kinds)`: a new list of those kinds; `all()`, `alive()`, `positions()`, `counts()` (alive, by kind)
+  - `update_dying(dt)`; `draw(screen)` draws each kind on its catalogue layer, then the death animations
+- `Game`, `DuelEnemies` and `SpawnManager` hold one; `CollisionHandler.shoot_into` hits a shot against it
+
 ### Hunter System (`hunter/`)
 
 The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms).
@@ -224,12 +232,14 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 ### Adding New Enemy Types
 
 1. Add an entry to `config/enemies.json`: its names, whether it is anchored or replays the player, its par weight,
-   the room it needs and its own `tuning`. The editor palette, level files, exit policies, par and the names on screen
-   all follow from the entry.
-2. Give its class a `type` naming the entry, make it in `make_enemy` (`game_handlers/spawn_manager.py`) and give it a
-   list in `LIST_OF_KIND` (`game_handlers/entity_manager.py`)
-3. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
-4. For movement, a new strategy class inheriting from `EnemyStrategy` needs no change to the `Enemy` class (OCP)
+   the room it needs, the layer it is drawn on and its own `tuning`. The editor palette, level files, exit policies,
+   par, drawing and the names on screen all follow from the entry.
+2. Give its class a `type` naming the entry and make it in `make_enemy` (`game_handlers/spawn_manager.py`); the roster
+   keeps it with every other enemy
+3. Update it in `EnemyUpdater` and let shots hit it in `CollisionHandler.handle_projectile_enemy_collisions`, then
+   call both from `Game.update` (and `CollisionHandler.shoot_into`) with `roster.of_kind(...)`
+4. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
+5. For movement, a new strategy class inheriting from `EnemyStrategy` needs no change to the `Enemy` class (OCP)
 
 ### Adding New Game States
 

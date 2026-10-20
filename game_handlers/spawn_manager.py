@@ -11,7 +11,6 @@ import math
 import enemy_kinds
 import level_rules
 import config as game_config
-from game_handlers.entity_manager import LIST_OF_KIND
 if TYPE_CHECKING:
     from entities.enemy import Enemy
     from entities.replay_enemy_ship import ReplayEnemyShip
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.split_boss import SplitBoss
     from entities.command_recorder import CommandRecorder
-    from game_handlers.entity_manager import EntityManager
+    from game_handlers.enemy_roster import EnemyRoster
     from level_rules import EnemyCounts
 
 
@@ -76,13 +75,13 @@ def make_enemy(kind, pos, level, command_recorder):
 class SpawnManager:
     """Manages enemy spawning for levels."""
     
-    def __init__(self, entity_manager: 'EntityManager'):
+    def __init__(self, roster: 'EnemyRoster'):
         """Initialize spawn manager.
         
         Args:
-            entity_manager: Entity manager to add spawned enemies to.
+            roster: The roster to add spawned enemies to.
         """
-        self.entity_manager = entity_manager
+        self.roster = roster
         self._anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None
         self._maze = None
     
@@ -121,9 +120,6 @@ class SpawnManager:
         if config.count <= 0 or len(available_positions) == 0:
             return []
 
-        entity_list = getattr(self.entity_manager, LIST_OF_KIND[config.kind])
-        entity_list.clear()
-
         positions_to_use = self._select_positions(config, available_positions)
         used_positions: List[Tuple[float, float]] = []
         
@@ -131,7 +127,7 @@ class SpawnManager:
             entity = self._create_entity(config, pos, command_recorder)
             if config.post_create_hook:
                 config.post_create_hook(entity)
-            entity_list.append(entity)
+            self.roster.add(entity)
             used_positions.append(pos)
         
         return used_positions
@@ -229,16 +225,16 @@ class SpawnManager:
         self._maze = maze
         
         # Clear existing enemies
-        self.entity_manager.clear_all()
+        self.roster.clear()
         
         # Create regular enemies based on enemy_counts
         new_enemies = self._create_enemies_from_counts(
             level, spawn_positions, enemy_counts
         )
-        self.entity_manager.enemies.extend(new_enemies)
+        self.roster.extend(new_enemies)
         
         # Track used positions
-        used_positions = [e.get_pos() for e in self.entity_manager.enemies]
+        used_positions = [e.get_pos() for e in new_enemies]
         available_positions = self._update_available_positions(used_positions, spawn_positions)
         
         # Define spawn configurations for all enemy types
@@ -258,14 +254,14 @@ class SpawnManager:
         Returns (kind, pixel position) for each of its enemy hunters, which the game makes and flies itself.
         """
         self._anemone_keep_clear = None
-        self.entity_manager.clear_all()
+        self.roster.clear()
         hunters = []
         for kind, cell in layout.enemies:
             pos = maze.position_calculator.grid_center_to_screen(*cell)
             if kind in enemy_kinds.hunters():
                 hunters.append((kind, pos))
                 continue
-            self.entity_manager.add(make_enemy(kind, pos, level, command_recorder))
+            self.roster.add(make_enemy(kind, pos, level, command_recorder))
         return hunters
 
     def _create_spawn_configs(

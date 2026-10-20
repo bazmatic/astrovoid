@@ -9,6 +9,7 @@ import math
 import random
 from typing import List, Optional, Tuple, TYPE_CHECKING
 import config
+import enemy_kinds
 from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
 if TYPE_CHECKING:
@@ -98,7 +99,8 @@ class CollisionHandler:
         anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
         enemy_hunters: Optional[List['EnemyHunter']] = None,
-        maze: Optional['Maze'] = None
+        maze: Optional['Maze'] = None,
+        spawn_into=None
     ) -> bool:
         """Handle collisions between a projectile and enemies.
         
@@ -115,6 +117,8 @@ class CollisionHandler:
             anemones: List of anemone enemies (optional).
             jev_beacon_allowed: Whether a kill may drop a Jev beacon.
             enemy_hunters: List of enemy hunters, Rules and Neural (optional).
+            spawn_into: Where a split boss's children go (anything with append: the roster); by default the
+                replay_enemies list.
             
         Returns:
             True if collision occurred and projectile should be deactivated, False otherwise.
@@ -231,7 +235,8 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed, maze
+                            boss_pos, boss_velocity, replay_enemies if spawn_into is None else spawn_into,
+                            powerup_crystals, jev_beacon_allowed, maze
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -253,7 +258,8 @@ class CollisionHandler:
                         
                         # Spawn two ReplayEnemyShip instances at random nearby positions
                         self._spawn_split_boss_children(
-                            boss_pos, boss_velocity, replay_enemies, powerup_crystals, jev_beacon_allowed, maze
+                            boss_pos, boss_velocity, replay_enemies if spawn_into is None else spawn_into,
+                            powerup_crystals, jev_beacon_allowed, maze
                         )
                     # Note: If not destroyed, projectile still hits but boss survives
                     
@@ -305,6 +311,19 @@ class CollisionHandler:
         
         return False
     
+    def shoot_into(self, projectile, roster, powerup_crystals, jev_beacon_allowed=False, maze=None) -> bool:
+        """A friendly shot against every enemy on the roster; a split boss's children join the roster.
+
+        Returns True if it hit one (the shot is then spent).
+        """
+        lists = [roster.of_kind(*kinds) for kinds in (
+            ('static', 'patrol', 'aggressive'), ('replay',), ('flocker',), ('flighthouse',), ('split_boss',),
+            ('mother_boss',), ('baby',), ('egg',))]
+        return self.handle_projectile_enemy_collisions(
+            projectile, *lists, powerup_crystals, anemones=roster.of_kind('anemone'),
+            jev_beacon_allowed=jev_beacon_allowed, enemy_hunters=roster.of_kind(*enemy_kinds.hunters()),
+            maze=maze, spawn_into=roster)
+
     def _spawn_split_boss_children(
         self,
         boss_pos: Tuple[float, float],

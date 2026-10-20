@@ -10,7 +10,7 @@ import random
 import config
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.enemy_updater import EnemyUpdater
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from entities.command_recorder import CommandRecorder
 from level_rules import EnemyCounts
@@ -45,8 +45,8 @@ class _Target:
 class DuelEnemies:
     def __init__(self, maze, sound_manager):
         self.maze, self.sound_manager = maze, sound_manager
-        self.entity_manager = EntityManager()
-        self.spawner = SpawnManager(self.entity_manager)
+        self.roster = EnemyRoster()
+        self.spawner = SpawnManager(self.roster)
         self.updater = EnemyUpdater()
         self.scoring = ScoringSystem()              # the enemy code reports to one; it is thrown away with the duel
         self.recorder = CommandRecorder()
@@ -67,30 +67,26 @@ class DuelEnemies:
         self.spawner.spawn_all_enemies(DUEL_ENEMY_LEVEL, positions, self.recorder, counts, 0, 0)
 
     def active(self):
-        return list(self.entity_manager.get_all_active_enemies())
+        return self.roster.alive()
 
     def update(self, dt, hunters):
         """Move and fire every enemy, then let any that touch a hunter hurt it."""
         first, second = hunters
-        manager = self.entity_manager
+        roster = self.roster
         target = _Target(first)
-        self.updater.update_enemies(manager.enemies, dt, None, self.maze, target, self.scoring, self.bullets,
+        self.updater.update_enemies(roster.of_kind('static', 'patrol', 'aggressive'), dt, None, self.maze, target, self.scoring, self.bullets,
                                     hunter=second)
-        self.updater.update_flockers(manager.flockers, dt, None, self.maze, target, self.scoring, self.bullets,
+        self.updater.update_flockers(roster.of_kind('flocker'), dt, None, self.maze, target, self.scoring, self.bullets,
                                      self.sound_manager, hunter=second)
-        manager.update_dying(dt)
+        roster.update_dying(dt)
         for hunter in hunters:
             self.collisions.handle_hunter_contacts(hunter, None, self.active())
 
     def shot_hits(self, shot):
         """Whether a hunter's shot struck an enemy (it is then spent). The enemy code only lets friendly shots hit."""
-        manager = self.entity_manager
         was_enemy, shot.is_enemy = shot.is_enemy, False
         try:
-            return self.collisions.handle_projectile_enemy_collisions(
-                shot, manager.enemies, manager.replay_enemies, manager.flockers, manager.flighthouses,
-                manager.split_bosses, manager.mother_bosses, manager.babies, manager.eggs, [],
-                anemones=manager.anemones, jev_beacon_allowed=False, maze=self.maze)
+            return self.collisions.shoot_into(shot, self.roster, [], maze=self.maze)
         finally:
             shot.is_enemy = was_enemy
 

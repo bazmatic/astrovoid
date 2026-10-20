@@ -37,7 +37,7 @@ def trial_controls(game, hunter, action, frames):
             solution = None
             if action.track or action.fire or hunter.burst_remaining:
                 solution = find_firing_solution(
-                    hunter, list(game.entity_manager.get_all_active_enemies()), game.maze, hunter.settings)
+                    hunter, game.roster.alive(), game.maze, hunter.settings)
             before = hunter.angle
             # The class method, not hunter.step: the lab wraps the instance's step to count frames, and a
             # trial must not be counted.

@@ -5,7 +5,6 @@ import pytest
 
 import enemy_kinds
 from entities.command_recorder import CommandRecorder
-from game_handlers.entity_manager import LIST_OF_KIND
 from game_handlers.spawn_manager import make_enemy
 
 ORDER = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone', 'split_boss',
@@ -36,8 +35,8 @@ def test_what_each_kind_is():
         'rules_hunter': 'rules', 'neural_hunter': 'neural', 'boss_viber': 'neural', 'vibelet': 'neural'}
 
 
-def test_every_kind_has_a_list_to_live_in():
-    assert set(LIST_OF_KIND) == set(enemy_kinds.kinds())
+def test_every_kind_has_a_drawing_layer():
+    assert [enemy_kinds.kind(k).layer for k in ORDER] == [0, 0, 0, 1, 2, 4, 9, 3, 5, 6, 7, 7, 7, 7, 8]
 
 
 @pytest.mark.parametrize('kind', [k for k in ORDER if k not in enemy_kinds.hunters()])

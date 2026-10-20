@@ -42,7 +42,7 @@ class RolloutRecorder:
 
     # --- called by the harness ---
     def begin(self, game, hunter, settings):
-        self._start_enemies = len(list(game.entity_manager.get_all_active_enemies()))
+        self._start_enemies = len(game.roster.alive())
         game.hunter_flight.on_observed(self._observed)
 
     def _observed(self, sense):

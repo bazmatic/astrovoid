@@ -40,7 +40,7 @@ def test_the_game_feeds_the_live_stars_and_chimes_a_kill(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=2))
     start(game, 3)
     assert game.star_indicator.flags == (True, False, False, True, True)
-    enemy = game.enemies[0]
+    enemy = game.roster.of_kind('static', 'patrol', 'aggressive')[0]
     game.projectiles.append(Projectile((enemy.x, enemy.y), 0.0, source='player'))
     game.update(1.0)
     assert game.star_indicator.flags[1]

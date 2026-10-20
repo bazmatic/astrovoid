@@ -46,7 +46,7 @@ from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
 from game_handlers.autoplay import AutoplayDirector
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
@@ -117,17 +117,8 @@ class Game:
         self.hunter_surroundings = GameSurroundings(self)
         self.jev_beacon_level = False
         
-        # Entity management
-        self.entity_manager = EntityManager()
-        self.enemies = self.entity_manager.enemies
-        self.replay_enemies = self.entity_manager.replay_enemies
-        self.flockers = self.entity_manager.flockers
-        self.flighthouses = self.entity_manager.flighthouses
-        self.anemones = self.entity_manager.anemones
-        self.split_bosses = self.entity_manager.split_bosses
-        self.mother_bosses = self.entity_manager.mother_bosses
-        self.babies = self.entity_manager.babies
-        self.eggs = self.entity_manager.eggs
+        # Every enemy on the level
+        self.roster = EnemyRoster()
         
         self.projectiles: List[Projectile] = []
         self.powerup_crystals: List[PowerupCrystal] = []
@@ -141,7 +132,7 @@ class Game:
         }
         
         # Game handlers
-        self.spawn_manager = SpawnManager(self.entity_manager)
+        self.spawn_manager = SpawnManager(self.roster)
         self.enemy_updater = EnemyUpdater()
         self.collision_handler = CollisionHandler(
             self.sound_manager,
@@ -223,7 +214,7 @@ class Game:
         self.ship.game_started = True
         self._summon_hunter((self.ship.x, self.ship.y))
         self.autoplay.start_level(
-            len(list(self.entity_manager.get_all_active_enemies())),
+            len(self.roster.alive()),
             hunter_present=self.hunter is not None)
 
     def _hunter_sees_player(self) -> bool:
@@ -235,7 +226,7 @@ class Game:
     def _autoplay_level_over(self) -> bool:
         """Move on to the next level when the director says this one is over."""
         reason = self.autoplay.end_reason(
-            enemies_left=sum(1 for _ in self.entity_manager.get_all_active_enemies()),
+            enemies_left=len(self.roster.alive()),
             hunter_alive=self.hunter is not None and self.hunter.active)
         if reason is None:
             return False
@@ -392,7 +383,7 @@ class Game:
             self._spawn_enemy_hunters_at(
                 self.spawn_manager.spawn_from_layout(layout, self.maze, self.level, self.command_recorder))
         # Anemones show their reach from the start, before the first update works it out
-        for anemone in self.anemones:
+        for anemone in self.roster.of_kind('anemone'):
             anemone.reach_px = anemone.reach(self.maze)
         self.base_par_seconds = self._base_par_seconds()
         
@@ -484,7 +475,7 @@ class Game:
         cells = route_cells(self.maze.grid, to_grid(*start), to_grid(*end))
         route_px = cells * self.maze.cell_size if cells is not None else math.dist(start, end)
         timer = self.exit_policy.seconds if isinstance(self.exit_policy, OpenAfterTime) else None
-        return par_seconds(route_px, self.entity_manager.active_counts(), 0, timer)
+        return par_seconds(route_px, self.roster.counts(), 0, timer)
 
     def star_tally(self) -> StarTally:
         """The stars as they stand: what the player would get by reaching the exit now."""
@@ -492,7 +483,7 @@ class Game:
         left = sum(1 for crystal in self.powerup_crystals
                    if crystal.active and not isinstance(crystal, JevBeacon))
         par = self.base_par_seconds + config.SETTINGS.game.parSecondsPerCrystal * (collected + left)
-        return StarTally(self.collision_handler.level_kills, sum(self.entity_manager.active_counts().values()),
+        return StarTally(self.collision_handler.level_kills, sum(self.roster.counts().values()),
                          collected, left, self.play_seconds, par, self.scoring.hits_taken())
 
     def par_pulse(self) -> float:
@@ -504,7 +495,7 @@ class Game:
 
     def exit_state(self) -> ExitState:
         """What the exit policy may look at this frame."""
-        return ExitState(self.play_seconds, self.entity_manager.active_counts())
+        return ExitState(self.play_seconds, self.roster.counts())
 
     def _jev_beacon_drop_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -545,19 +536,9 @@ class Game:
     _rules_worker_factory = None
 
     @property
-    def rules_hunters(self):
-        """The level's Rules hunters (the entity manager's list)."""
-        return self.entity_manager.rules_hunters
-
-    @property
-    def neural_hunters(self):
-        """The level's Neural hunters (the entity manager's list)."""
-        return self.entity_manager.neural_hunters
-
-    @property
     def enemy_hunters(self):
         """Every enemy hunter on the level, Rules and Neural."""
-        return [*self.entity_manager.rules_hunters, *self.entity_manager.neural_hunters]
+        return self.roster.of_kind(*enemy_kinds.hunters())
 
     def protagonist(self):
         """Whom the enemy hunters hunt: the player's ship. (The lab replaces this with the hunter.)"""
@@ -583,7 +564,7 @@ class Game:
                   ('vibelet', level_config.get_level_vibelet_count(self.level))]
         if not any(count for _, count in wanted) or self.ship is None:
             return
-        taken = list(self.entity_manager.get_all_enemy_positions())
+        taken = self.roster.positions()
         start = (self.ship.x, self.ship.y)
         clear = 2.0 * config.SHIP_SIZE * 2
         candidates = sorted(
@@ -601,13 +582,13 @@ class Game:
         any size flown by the neural pilot. Without an installed neural model a Viber is left out (and said so)."""
         for kind, pos in placements:
             if enemy_kinds.kind(kind).pilot == 'rules':
-                self.rules_hunters.append(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
+                self.roster.add(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
                 continue
             policy = self._load_enemy_policy()
             if policy is None:
                 logging.getLogger(__name__).warning('Level %d: no neural model, so no Neural hunter', self.level)
                 continue
-            self.neural_hunters.append(VIBERS[kind](pos, policy, ProtagonistSurroundings(self)))
+            self.roster.add(VIBERS[kind](pos, policy, ProtagonistSurroundings(self)))
 
     def _fly_enemy_hunters(self, dt):
         """Each enemy hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
@@ -626,7 +607,7 @@ class Game:
             movers.append(self.hunter)
         movers.extend(h for h in self.enemy_hunters if h.active)
         seen.update(id(m) for m in movers)
-        for enemy in self.entity_manager.get_all_enemies():
+        for enemy in self.roster.all():
             if not enemy.active or id(enemy) in seen:
                 continue
             seen.add(id(enemy))
@@ -641,11 +622,6 @@ class Game:
         """Stop every enemy hunter's pilot and worker (a level ends, restarts, or the game closes)."""
         for hunter in self.enemy_hunters:
             hunter.close()
-
-    def draw_enemy_hunters(self, screen):
-        for hunter in self.enemy_hunters:
-            if hunter.active:
-                hunter.draw(screen)
 
     def _make_duel_worker(self):
         """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""
@@ -1006,42 +982,43 @@ class Game:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
             # Update all enemy types using EnemyUpdater
+            roster = self.roster
             self.enemy_updater.update_enemies(
-                self.enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
+                roster.of_kind('static', 'patrol', 'aggressive'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_replay_enemies(
-                self.replay_enemies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
+                roster.of_kind('replay'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_flighthouses(
-                self.flighthouses, dt, player_pos, self.maze, self.ship, self.scoring, self.flockers
+                roster.of_kind('flighthouse'), dt, player_pos, self.maze, self.ship, self.scoring, roster
             )
             self.enemy_updater.update_anemones(
-                self.anemones, dt, self.maze, self.ship, self.scoring
+                roster.of_kind('anemone'), dt, self.maze, self.ship, self.scoring
             )
             self.enemy_updater.update_flockers(
-                self.flockers, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
+                roster.of_kind('flocker'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
             )
             self.enemy_updater.update_split_bosses(
-                self.split_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
+                roster.of_kind('split_boss'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_mother_bosses(
-                self.mother_bosses, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.eggs, hunter=self.hunter
+                roster.of_kind('mother_boss'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, roster, hunter=self.hunter
             )
             self.enemy_updater.update_babies(
-                self.babies, dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
+                roster.of_kind('baby'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, hunter=self.hunter
             )
             self.enemy_updater.update_eggs(
-                self.eggs, dt, self.maze, self.ship, self.scoring, self.command_recorder, self.babies
+                roster.of_kind('egg'), dt, self.maze, self.ship, self.scoring, self.command_recorder, roster
             )
             self._fly_enemy_hunters(dt)
-            self.entity_manager.update_dying(dt)
+            roster.update_dying(dt)
 
         if self.obstacles:
             self._step_gates(dt)
 
         if self.player_has_moved:
             self.collision_handler.handle_hunter_contacts(
-                self.hunter, self.ship, self.entity_manager.get_all_active_enemies())
+                self.hunter, self.ship, self.roster.alive())
             self._stop_dead_hunter()
 
         # Update projectiles and handle collisions
@@ -1076,11 +1053,8 @@ class Game:
                 continue
 
             # Friendly projectile-enemy collisions share normal destruction effects.
-            if self.collision_handler.handle_projectile_enemy_collisions(
-                projectile, self.enemies, self.replay_enemies, self.flockers, self.flighthouses, self.split_bosses, self.mother_bosses, self.babies, self.eggs, self.powerup_crystals, anemones=self.anemones,
-                jev_beacon_allowed=self._jev_beacon_drop_allowed(), enemy_hunters=self.enemy_hunters,
-                maze=self.maze
-            ):
+            if self.collision_handler.shoot_into(projectile, self.roster, self.powerup_crystals,
+                                                 jev_beacon_allowed=self._jev_beacon_drop_allowed(), maze=self.maze):
                 continue  # Projectile destroyed, skip adding to active list
             
             # Only add to active list if projectile is still active after all collision checks
@@ -1320,56 +1294,8 @@ class Game:
             for gate in self.obstacles.gates:
                 draw_gate(self.screen, gate.pin, gate.angle, gate.half_length, gate.thickness, gate.motor)
         
-        # Draw enemies
-        player_pos = (self.ship.x, self.ship.y) if self.ship else None
-        for enemy in self.enemies:
-            enemy.draw(self.screen, player_pos)
-        
-        # Draw replay enemies
-        for replay_enemy in self.replay_enemies:
-            if replay_enemy.active:
-                replay_enemy.draw(self.screen)
-        
-        # Draw flocker enemies
-        for flocker in self.flockers:
-            if flocker.active:
-                flocker.draw(self.screen)
-
-        # Draw anemones (under the things that fly over them)
-        for anemone in self.anemones:
-            if anemone.active:
-                anemone.draw(self.screen)
-        
-        
-        # Draw flighthouse enemies
-        for flighthouse in self.flighthouses:
-            if flighthouse.active:
-                flighthouse.draw(self.screen)
-        
-        # Draw SplitBoss enemies
-        for split_boss in self.split_bosses:
-            if split_boss.active:
-                split_boss.draw(self.screen)
-        
-        # Draw Mother Boss enemies
-        for mother_boss in self.mother_bosses:
-            if mother_boss.active:
-                mother_boss.draw(self.screen)
-
-        self.draw_enemy_hunters(self.screen)
-        
-        # Draw Baby enemies
-        for baby in self.babies:
-            if baby.active:
-                baby.draw(self.screen)
-        
-        # Draw egg enemies
-        for egg in self.eggs:
-            if egg.active:
-                egg.draw(self.screen)
-        
-        # Draw death animations of enemies that were just killed
-        self.entity_manager.draw_dying(self.screen)
+        # Draw enemies, each kind on its layer, then the death animations of those just killed
+        self.roster.draw(self.screen)
         
         if self.hunter is not None and self.hunter.active:
             self.hunter.draw(self.screen)

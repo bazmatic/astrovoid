@@ -6,7 +6,7 @@ from entities.command_recorder import CommandRecorder
 from entities.egg import Egg
 from entities.mother_boss import MotherBoss
 from game_handlers.collision_handler import CollisionHandler
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from level_rules import EnemyCounts
 from maze.config import MazeComplexity
@@ -75,8 +75,8 @@ def test_big_enemies_take_the_positions_with_room_for_them():
     roomy = maze.position_calculator.grid_center_to_screen(2, 5)
     boss_radius = config.REPLAY_ENEMY_SIZE * config.MOTHER_BOSS_SIZE_MULTIPLIER
     assert maze.is_open(roomy, boss_radius) and not maze.is_open(cramped, boss_radius)
-    entity_manager = EntityManager()
+    roster = EnemyRoster()
     counts = EnemyCounts(total=0, static=0, patrol=0, aggressive=0, replay=0, flocker=0, flighthouse=0, egg=0)
-    SpawnManager(entity_manager).spawn_all_enemies(
+    SpawnManager(roster).spawn_all_enemies(
         1, [cramped, roomy], CommandRecorder(), counts, 0, 1, maze=maze)
-    assert entity_manager.mother_bosses[0].get_pos() == roomy
+    assert roster.of_kind('mother_boss')[0].get_pos() == roomy

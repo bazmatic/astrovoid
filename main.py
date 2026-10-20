@@ -62,7 +62,7 @@ if getattr(sys, 'frozen', False):
         from rendering.quit_confirmation_menu import QuitConfirmationMenu
         from sounds import SoundManager
         from states.splash_screen import SplashScreenState
-        from game_handlers.entity_manager import EntityManager
+        from game_handlers.enemy_roster import EnemyRoster
         from game_handlers.spawn_manager import SpawnManager
         from game_handlers.enemy_updater import EnemyUpdater
         from game_handlers.collision_handler import CollisionHandler

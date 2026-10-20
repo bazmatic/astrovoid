@@ -10,7 +10,7 @@ def generated_layout(game, level):
     maze = game.maze
     cell = lambda pos: maze.position_calculator.screen_to_grid(*pos)
     enemies = []
-    for enemy in game.entity_manager.get_all_enemies():
+    for enemy in game.roster.all():
         enemies.append((enemy.type, cell(enemy.get_pos())))
     walls = frozenset((col, row) for row in range(1, maze.grid_height - 1)
                       for col in range(1, maze.grid_width - 1) if maze.grid[row][col])

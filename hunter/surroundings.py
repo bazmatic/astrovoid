@@ -26,7 +26,7 @@ class GameSurroundings:
         return self._game.maze
 
     def enemies(self):
-        return list(self._game.entity_manager.get_all_enemies())
+        return self._game.roster.all()
 
     def threats(self):
         return self._game.projectiles

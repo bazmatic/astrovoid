@@ -20,7 +20,7 @@ def reach_exit(game):
 def test_player_kills_are_counted(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=2))
     start(game, 3)
-    for enemy in game.enemies:
+    for enemy in game.roster.of_kind('static', 'patrol', 'aggressive'):
         shoot(game, enemy)
     game.update(1.0)
     assert game.star_tally().kills == 2
@@ -32,7 +32,7 @@ def test_hunter_kills_and_pickups_count(game, monkeypatch):
     from entities.powerup_crystal import PowerupCrystal
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=1))
     start(game, 3)
-    shoot(game, game.enemies[0], source='hunter')
+    shoot(game, game.roster.of_kind('static', 'patrol', 'aggressive')[0], source='hunter')
     game.update(1.0)
     assert game.star_tally().kills == 1
     crystal = PowerupCrystal((300.0, 300.0))
@@ -54,7 +54,7 @@ def test_enemies_that_appear_are_counted_but_do_not_extend_par(game, monkeypatch
     monkeypatch.setattr(level_config, 'load_level_config', level_file(egg=1))
     start(game, 3)
     par, alive = game.base_par_seconds, game.star_tally().alive
-    game.babies.extend(Baby((300.0, 300.0), game.command_recorder) for _ in range(2))
+    game.roster.extend(Baby((300.0, 300.0), game.command_recorder) for _ in range(2))
     assert game.star_tally().alive == alive + 2
     assert game.base_par_seconds == par
 
@@ -85,7 +85,7 @@ def test_the_tally_is_frozen_when_the_exit_is_reached(game, monkeypatch):
     reach_exit(game)
     assert game.finish_tally is not None
     # What appears during the exit explosion doesn't take stars away
-    game.babies.append(Baby((300.0, 300.0), game.command_recorder))
+    game.roster.add(Baby((300.0, 300.0), game.command_recorder))
     game.powerup_crystals.append(PowerupCrystal((300.0, 300.0)))
     for _ in range(200):
         if game.state == config.STATE_LEVEL_COMPLETE:
@@ -99,7 +99,7 @@ def test_the_tally_is_frozen_when_the_exit_is_reached(game, monkeypatch):
 def test_restarting_resets_the_tally(game, monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=1))
     start(game, 3)
-    shoot(game, game.enemies[0])
+    shoot(game, game.roster.of_kind('static', 'patrol', 'aggressive')[0])
     game.update(1.0)
     assert game.star_tally().kills == 1
     start(game, 3)

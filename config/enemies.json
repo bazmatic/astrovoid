@@ -5,6 +5,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 0,
     "tuning": {
       "size": 10,
       "hitPoints": 3
@@ -16,6 +17,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 0,
     "tuning": {
       "size": 8,
       "speed": 1
@@ -27,6 +29,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 0,
     "tuning": {
       "size": 8,
       "speed": 1.0
@@ -38,6 +41,7 @@
     "replaysPlayer": true,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 1,
     "tuning": {
       "windowSize": 100,
       "size": 15,
@@ -51,6 +55,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 2,
     "tuning": {
       "size": 12,
       "color": [255, 180, 50],
@@ -74,6 +79,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 4,
     "tuning": {
       "size": 14,
       "color": [120, 240, 200],
@@ -93,6 +99,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 24,
+    "layer": 9,
     "tuning": {
       "initialSize": 8,
       "maxSize": 24,
@@ -111,6 +118,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 3,
     "tuning": {
       "size": 14,
       "hitPoints": 4,
@@ -131,6 +139,7 @@
     "replaysPlayer": true,
     "parWeight": "spawningBoss",
     "spawnRadius": 30.0,
+    "layer": 5,
     "tuning": {
       "sizeMultiplier": 2.0,
       "hitPoints": 8,
@@ -145,6 +154,7 @@
     "replaysPlayer": true,
     "parWeight": "spawningBoss",
     "spawnRadius": 45.0,
+    "layer": 6,
     "tuning": {
       "sizeMultiplier": 3.0,
       "hitPoints": 20,
@@ -165,6 +175,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 7,
     "pilot": "rules",
     "hitPoints": 12,
     "sizeScale": 1.0,
@@ -177,6 +188,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 7,
     "pilot": "neural",
     "hitPoints": 12,
     "sizeScale": 1.0,
@@ -189,6 +201,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 7,
     "pilot": "neural",
     "hitPoints": 24,
     "sizeScale": 2.0,
@@ -201,6 +214,7 @@
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 7,
     "pilot": "neural",
     "hitPoints": 1,
     "sizeScale": 0.5,
@@ -213,6 +227,7 @@
     "replaysPlayer": true,
     "parWeight": "enemy",
     "spawnRadius": 0,
+    "layer": 8,
     "tuning": {
       "size": 10,
       "speedMultiplier": 0.1

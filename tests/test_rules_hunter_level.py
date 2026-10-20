@@ -6,22 +6,22 @@ import level_config
 import level_rules
 from policies.ammo import UnlimitedAmmo
 from policies.exit import AllCleared
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 
 
 def fake_hunter(active=True):
-    return SimpleNamespace(active=active, get_pos=lambda: (5.0, 6.0), is_dying=False)
+    return SimpleNamespace(type='rules_hunter', active=active, get_pos=lambda: (5.0, 6.0), is_dying=False)
 
 
 def test_the_entity_manager_tracks_rules_hunters_with_the_other_enemies():
-    manager = EntityManager()
+    manager = EnemyRoster()
     alive, dead = fake_hunter(), fake_hunter(active=False)
-    manager.rules_hunters.extend([alive, dead])
-    assert list(manager.get_all_active_enemies()) == [alive]
-    assert alive in manager.get_all_enemies() and dead in manager.get_all_enemies()
-    assert (5.0, 6.0) in manager.get_all_enemy_positions()
-    manager.clear_all()
-    assert manager.rules_hunters == []
+    manager.extend([alive, dead])
+    assert list(manager.alive()) == [alive]
+    assert alive in manager.all() and dead in manager.all()
+    assert (5.0, 6.0) in manager.positions()
+    manager.clear()
+    assert manager.of_kind('rules_hunter') == []
 
 
 def test_level_25_has_one_rules_hunter_and_no_other_level_does():

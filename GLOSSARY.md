@@ -42,6 +42,10 @@ _Avoid_: item, loot
 
 ### Enemies
 
+**Roster**:
+Every enemy on the level, of every kind, alive or dying, until the level is cleared.
+_Avoid_: entity manager, enemy lists
+
 **Enemy Kind**:
 One kind of enemy as `config/enemies.json` describes it: its code name, the names the player reads, how it behaves in
 the maze (anchored, replays the player, its par allowance, the room it needs) and its own tuning. Every kind can be

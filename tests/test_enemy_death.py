@@ -17,7 +17,7 @@ from entities.anemone import Anemone
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 
 POS = (400.0, 300.0)
 SQUID_CLASSES = [ReplayEnemyShip, Baby, SplitBoss, MotherBoss]
@@ -181,11 +181,11 @@ class TestGameIntegration:
         assert squid.is_dying
 
     def test_entity_manager_updates_and_draws_dying(self):
-        manager = EntityManager()
+        manager = EnemyRoster()
         dying = make_squid()
         alive = make_squid(Baby)
-        manager.replay_enemies.append(dying)
-        manager.babies.append(alive)
+        manager.add(dying)
+        manager.add(alive)
         dying.die()
 
         manager.update_dying(1.0)
@@ -193,14 +193,15 @@ class TestGameIntegration:
         assert alive.death_progress == 0.0
 
         screen = blank_screen()
-        manager.draw_dying(screen)
+        manager.draw(screen)
         assert screen.get_bounding_rect().width > 0
 
         for _ in range(int(dying.DEATH_DURATION) + 1):
             manager.update_dying(1.0)
-        screen = blank_screen()
-        manager.draw_dying(screen)
-        assert screen.get_bounding_rect().width == 0
+        screen, only_alive = blank_screen(), blank_screen()
+        manager.draw(screen)
+        alive.draw(only_alive)
+        assert screen.get_bounding_rect() == only_alive.get_bounding_rect()
 
 
 class TestBirdAndFlighthouseDeath:
@@ -242,15 +243,15 @@ class TestBirdAndFlighthouseDeath:
         assert enemy.get_fired_projectile((420, 300)) is None
 
     def test_entity_manager_advances_both_deaths(self):
-        manager = EntityManager()
-        manager.flockers.append(FlockerEnemyShip(POS))
-        manager.flighthouses.append(FlighthouseEnemy(POS))
-        for enemy in manager.get_all_enemies():
+        manager = EnemyRoster()
+        manager.add(FlockerEnemyShip(POS))
+        manager.add(FlighthouseEnemy(POS))
+        for enemy in manager.all():
             enemy.die()
         manager.update_dying(10)
-        assert all(enemy.death_progress > 0 for enemy in manager.get_all_enemies())
+        assert all(enemy.death_progress > 0 for enemy in manager.all())
         screen = blank_screen()
-        manager.draw_dying(screen)
+        manager.draw(screen)
         assert screen.get_bounding_rect().width > 0
 
 

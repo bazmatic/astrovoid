@@ -104,16 +104,16 @@ def game(tmp_path, monkeypatch):
 def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level):
     counts = level_config.get_level_enemy_counts(level) or level_rules.get_enemy_counts(level)
     asked_for = {
-        'enemies': counts.static + counts.patrol + counts.aggressive,
-        'replay_enemies': counts.replay, 'flockers': counts.flocker, 'flighthouses': counts.flighthouse,
-        'eggs': counts.egg, 'anemones': level_config.get_level_anemone_count(level),
-        'split_bosses': level_config.get_level_split_boss_count(level),
-        'mother_bosses': level_config.get_level_mother_boss_count(level)}
+        'static': counts.static, 'patrol': counts.patrol, 'aggressive': counts.aggressive,
+        'replay': counts.replay, 'flocker': counts.flocker, 'flighthouse': counts.flighthouse,
+        'egg': counts.egg, 'anemone': level_config.get_level_anemone_count(level),
+        'split_boss': level_config.get_level_split_boss_count(level),
+        'mother_boss': level_config.get_level_mother_boss_count(level)}
     game.level = level
 
     game.start_level()
 
-    placed = {name: len(getattr(game.entity_manager, name)) for name in asked_for}
+    placed = {kind: len(game.roster.of_kind(kind)) for kind in asked_for}
     assert placed == asked_for
-    for enemy in game.entity_manager.get_all_enemies():
+    for enemy in game.roster.all():
         assert math.dist(enemy.get_pos(), game.maze.start_pos) >= config.ENEMY_START_CLEARANCE

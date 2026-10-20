@@ -72,12 +72,12 @@ def test_start_and_exit_and_rock_are_where_the_layout_says(played):
 
 
 def test_each_enemy_is_at_its_cell_and_only_those_exist(played):
-    assert cells(played, played.enemies) == [(5, 5)]
-    assert cells(played, played.flockers) == [(2, 6)]
-    assert cells(played, played.replay_enemies) == [(6, 4)]
-    assert cells(played, played.rules_hunters) == [(6, 2)] and isinstance(played.rules_hunters[0], RulesHunter)
-    assert len(list(played.entity_manager.get_all_enemies())) == 4
-    assert played.enemies[0].type == 'static'
+    assert cells(played, played.roster.of_kind('static', 'patrol', 'aggressive')) == [(5, 5)]
+    assert cells(played, played.roster.of_kind('flocker')) == [(2, 6)]
+    assert cells(played, played.roster.of_kind('replay')) == [(6, 4)]
+    assert cells(played, played.roster.of_kind('rules_hunter')) == [(6, 2)] and isinstance(played.roster.of_kind('rules_hunter')[0], RulesHunter)
+    assert len(list(played.roster.all())) == 4
+    assert played.roster.of_kind('static', 'patrol', 'aggressive')[0].type == 'static'
 
 
 def test_the_beacon_lies_at_its_cell(played):
@@ -91,7 +91,7 @@ def test_the_rules_hunter_on_it_is_counted(played):
 
 def test_restarting_does_not_pile_up_enemies(played):
     played.start_level()
-    assert len(list(played.entity_manager.get_all_enemies())) == 4
+    assert len(list(played.roster.all())) == 4
 
 
 def test_a_broken_layout_falls_back_to_the_generated_level(game, monkeypatch, caplog):  # noqa: F811
@@ -102,7 +102,7 @@ def test_a_broken_layout_falls_back_to_the_generated_level(game, monkeypatch, ca
     game.level = 3
     game.start_level()
     assert game.maze.grid != parse_layout(LAYOUT, 9).grid()
-    assert sum(e.type == 'static' for e in game.enemies) == 5               # the file's own `static: 5`
+    assert sum(e.type == 'static' for e in game.roster.of_kind('static', 'patrol', 'aggressive')) == 5               # the file's own `static: 5`
     assert 'ignoring its layout' in caplog.text
 
 

@@ -190,7 +190,7 @@ def _loose_crystals(game):
 
 
 def _active_enemies(game):
-    return list(game.entity_manager.get_all_active_enemies())
+    return game.roster.alive()
 
 
 _OVERRIDDEN = ('_summon_hunter', '_jev_beacon_drop_allowed', '_hunter_sees_player', '_rules_worker_factory',
@@ -323,7 +323,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     end = 'horizon'
     elapsed = 0.0
     cleared_at = None
-    rules_total = len(game.rules_hunters)
+    rules_total = len(game.roster.of_kind('rules_hunter'))
     for frame in range(int((horizon + after_clear) * FPS)):
         now[0] += 1 / FPS
         elapsed += 1 / FPS
@@ -341,7 +341,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         counter.tick(elapsed)
         if health > 0 and not hunter.active:
             counter.died = True
-        if rules_total and not counter.rules_beaten and not any(r.active for r in game.rules_hunters):
+        if rules_total and not counter.rules_beaten and not any(r.active for r in game.roster.of_kind('rules_hunter')):
             counter.rules_beaten = True
         if recorder is not None and hasattr(recorder, 'counted'):
             recorder.counted(counter, elapsed)

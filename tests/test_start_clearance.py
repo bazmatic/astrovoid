@@ -94,6 +94,6 @@ def test_a_late_level_starts_with_no_enemy_inside_the_start_clearance(game, leve
 
     game.start_level()
 
-    enemies = list(game.entity_manager.get_all_enemies())
+    enemies = list(game.roster.all())
     nearest = min(math.dist(enemy.get_pos(), game.maze.start_pos) for enemy in enemies)
     assert nearest >= config.ENEMY_START_CLEARANCE

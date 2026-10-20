@@ -5,7 +5,7 @@ import config
 import level_config
 from game import Game
 from profiles import ProfileManager
-from game_handlers.entity_manager import EntityManager
+from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
@@ -25,10 +25,8 @@ def game(monkeypatch, tmp_path):
     g.scoring = ScoringSystem()
     g.sound_manager = Mock()
     g.command_recorder = CommandRecorder()
-    g.entity_manager = EntityManager()
-    for name in ('enemies','replay_enemies','flockers','flighthouses','split_bosses','mother_bosses','babies','eggs','anemones'):
-        setattr(g,name,getattr(g.entity_manager,name))
-    g.spawn_manager = SpawnManager(g.entity_manager)
+    g.roster = EnemyRoster()
+    g.spawn_manager = SpawnManager(g.roster)
     g.enemy_updater = EnemyUpdater()
     g.collision_handler = CollisionHandler(g.sound_manager,g.scoring,g.command_recorder)
     g.star_indicator = Mock()

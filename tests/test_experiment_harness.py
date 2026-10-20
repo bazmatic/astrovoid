@@ -69,7 +69,7 @@ def _clear_enemies_after(monkeypatch, frames):
         original(self, dt)
         state['frames'] += 1
         if state['frames'] == frames:
-            for enemy in list(self.entity_manager.get_all_active_enemies()):
+            for enemy in list(self.roster.alive()):
                 enemy.active = False
     monkeypatch.setattr(Game, 'update', clear)
 
@@ -91,7 +91,7 @@ def test_the_extra_phase_waits_for_a_crystal_up_to_after_clear(monkeypatch):
         original(self, dt)
         state['frames'] += 1
         if state['frames'] == 10:
-            for enemy in list(self.entity_manager.get_all_active_enemies()):
+            for enemy in list(self.roster.alive()):
                 enemy.active = False
             far = PowerupCrystal((-5000.0, -5000.0))     # never reached
             self.powerup_crystals.append(far)
@@ -107,7 +107,7 @@ def test_with_pursue_hunter_every_enemy_targets_the_hunter_not_the_parked_player
     seen = []
 
     def trace(t, game, hunter):
-        for enemy in game.entity_manager.get_all_active_enemies():
+        for enemy in game.roster.alive():
             seen.append(nearest_friendly(enemy, game.ship, game.hunter) is game.hunter)
     run_episode(13, 0, horizon=3.0, pursue_hunter=True, trace=trace)
     assert seen and all(seen)
@@ -158,7 +158,7 @@ def test_a_cleared_level_ends_the_episode_as_cleared(monkeypatch):
         original(self, dt)
         state['frames'] += 1
         if state['frames'] == 10:
-            for enemy in list(self.entity_manager.get_all_active_enemies()):
+            for enemy in list(self.roster.alive()):
                 enemy.active = False
     monkeypatch.setattr(Game, 'update', clear_after_ten_frames)
     result = run_episode(13, 0, horizon=5.0)

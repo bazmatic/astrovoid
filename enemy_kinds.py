@@ -36,12 +36,13 @@ class EnemyKind:
     replays_player: bool   # flies the player's recorded moves, so it needs the command recorder
     par_weight: str        # the par allowance it earns: an ordinary enemy's or a spawning boss's
     spawn_radius: float    # how far it reaches at its largest: where it is placed must be that open (0: its centre)
+    layer: int             # drawing order: kinds on a higher layer are drawn over those on a lower one
     pilot: Optional[str] = None             # an enemy hunter's pilot; None for every other kind
     hunter: Optional[HunterStats] = None    # an enemy hunter's own numbers
     tuning: Mapping[str, Any] = field(default_factory=dict)   # settings only this kind's own code reads
 
 
-_COMMON = {'name', 'anchored', 'replaysPlayer', 'parWeight', 'spawnRadius'}
+_COMMON = {'name', 'anchored', 'replaysPlayer', 'parWeight', 'spawnRadius', 'layer'}
 _HUNTER = {'pilot', 'hitPoints', 'sizeScale', 'shotStrength', 'showsHitPoints'}
 
 
@@ -61,7 +62,7 @@ def _parse(key: str, raw: Dict[str, Any]) -> EnemyKind:
         hunter = HunterStats(raw['hitPoints'], raw['sizeScale'], raw['shotStrength'], raw['showsHitPoints'])
     return EnemyKind(key=key, name=singular, plural=plural, anchored=raw['anchored'],
                      replays_player=raw['replaysPlayer'], par_weight=raw['parWeight'],
-                     spawn_radius=float(raw['spawnRadius']), pilot=raw.get('pilot'), hunter=hunter,
+                     spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=raw.get('pilot'), hunter=hunter,
                      tuning=raw.get('tuning', {}))
 
 

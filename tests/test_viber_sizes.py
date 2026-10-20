@@ -99,7 +99,7 @@ def played(game, monkeypatch):  # noqa: F811
 def test_a_layout_places_them_and_the_exit_counts_them_by_kind(played):
     assert level_config.get_level_boss_viber_count(3) == 1 and level_config.get_level_vibelet_count(3) == 2
     assert sorted(type(h).__name__ for h in played.enemy_hunters) == ['BossViber', 'Vibelet', 'Vibelet']
-    counts = played.entity_manager.active_counts()
+    counts = played.roster.counts()
     assert counts.get('boss_viber') == 1 and counts.get('vibelet') == 2 and 'neural_hunter' not in counts
 
 

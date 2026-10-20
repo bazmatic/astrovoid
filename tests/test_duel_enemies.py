@@ -32,10 +32,10 @@ def world():
 def test_a_random_handful_of_ordinary_enemies_spawns_well_clear_of_both_hunters(world):
     maze, a, b, enemies = world
     enemies.spawn([a.get_pos(), b.get_pos()], rng=random.Random(1))
-    manager = enemies.entity_manager
-    assert 3 <= len(manager.enemies) + len(manager.flockers) <= 7
-    assert not (manager.replay_enemies or manager.split_bosses or manager.mother_bosses or manager.eggs
-                or manager.anemones or manager.flighthouses)
+    manager = enemies.roster
+    assert 3 <= len(manager.of_kind('static', 'patrol', 'aggressive')) + len(manager.of_kind('flocker')) <= 7
+    assert not (manager.of_kind('replay') or manager.of_kind('split_boss') or manager.of_kind('mother_boss') or manager.of_kind('egg')
+                or manager.of_kind('anemone') or manager.of_kind('flighthouse'))
     for foe in enemies.active():
         assert min(math.dist(foe.get_pos(), a.get_pos()), math.dist(foe.get_pos(), b.get_pos())) >= KEEP_CLEAR_OF_HUNTERS
 
