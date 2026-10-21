@@ -1006,9 +1006,6 @@ class Game:
             self.enemy_updater.update_flockers(
                 roster.of_kind('flocker'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
             )
-            self.enemy_updater.update_eggs(
-                roster.of_kind('egg'), dt, self.maze, self.ship, self.scoring, self.command_recorder, roster
-            )
             self._fly_enemy_hunters(dt)
             roster.update_dying(dt)
 

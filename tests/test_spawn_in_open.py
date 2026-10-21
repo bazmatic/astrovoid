@@ -3,7 +3,6 @@ import random
 
 import config
 from entities.command_recorder import CommandRecorder
-from entities.egg import Egg
 import creatures
 import enemy_kinds
 from creatures.traits.spawning import LaysEggs
@@ -45,7 +44,12 @@ def test_hatched_babies_are_never_inside_a_wall():
     random.seed(1)
     babies = []
     for _ in range(200):
-        Egg(beside_wall(maze)).pop(CommandRecorder(), babies, maze)
+        egg = creatures.build('egg', beside_wall(maze), 1, CommandRecorder())
+        enc = encounter(egg, world_=world(maze=maze, command_recorder=CommandRecorder()))
+        enc.step(1.0)
+        egg.radius = config.EGG_MAX_SIZE
+        enc.step(1.0)
+        babies += [e for e in enc.roster.all() if e is not egg]
     assert babies
     assert all(maze.is_open(baby.get_pos(), config.BABY_SIZE) for baby in babies)
 

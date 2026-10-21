@@ -17,7 +17,6 @@ from entities.projectile import Projectile
 if TYPE_CHECKING:
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.egg import Egg
     from entities.anemone import Anemone
     from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
@@ -92,7 +91,7 @@ class CollisionHandler:
         projectile: 'Projectile',
         flockers: List['FlockerEnemyShip'],
         flighthouses: List['FlighthouseEnemy'],
-        eggs: List['Egg'],
+        eggs: List,
         powerup_crystals: List['PowerupCrystal'],
         anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
@@ -200,7 +199,7 @@ class CollisionHandler:
         Returns True if it hit one (the shot is then spent).
         """
         return self.handle_projectile_enemy_collisions(
-            projectile, roster.of_kind('flocker'), roster.of_kind('flighthouse'), roster.of_kind('egg'),
+            projectile, roster.of_kind('flocker'), roster.of_kind('flighthouse'), [],
             powerup_crystals, anemones=roster.of_kind('anemone'), jev_beacon_allowed=jev_beacon_allowed,
             enemy_hunters=roster.of_kind(*enemy_kinds.hunters()), maze=maze)
 

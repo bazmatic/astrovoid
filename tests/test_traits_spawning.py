@@ -8,7 +8,6 @@ import creatures
 from creatures.traits.spawning import LaysEggs, SplitsOnDeath
 from creatures.creature import Creature
 from entities.command_recorder import CommandRecorder
-from entities.egg import Egg
 from tests.creature_parts import creature, encounter, target, world
 
 POS = (400.0, 300.0)
@@ -59,7 +58,7 @@ def test_a_mother_lays_on_her_first_frame_and_then_every_interval():
         if len(enc.roster.all()) > before:
             laid_on.append(frame)
     assert laid_on == [1, 181]
-    assert all(isinstance(e, Egg) for e in children_of(enc, mother))
+    assert all(isinstance(e, Creature) and e.type == 'egg' for e in children_of(enc, mother))
 
 
 def test_a_dead_mother_lays_no_more():

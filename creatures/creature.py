@@ -59,6 +59,11 @@ class Creature(GameEntity):
     def update(self, dt: float) -> None:
         """Nothing: the Encounter drives creatures."""
 
+    def die(self) -> None:
+        """It is gone; its Body hears `died` so it can start its death."""
+        super().die()
+        self.body.on_event(self, 'died')
+
     def update_death(self, dt: float) -> None:
         """The remains slide to a stop while the Body plays its death."""
         super().update_death(dt)

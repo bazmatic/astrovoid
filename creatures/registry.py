@@ -3,8 +3,9 @@ built."""
 from typing import Dict, Mapping, Type
 
 from creatures.trait import Trait
-from creatures.traits import brains, combat, crowd, propulsion, spawning
+from creatures.traits import brains, combat, crowd, growth, propulsion, spawning
 from entities.belemnite import BelemniteBody
+from entities.egg import EggBody
 from entities.jellyfish import Jellyfish
 from entities.squid import Squid
 from entities.patrol_crab import PatrolCrab
@@ -16,8 +17,9 @@ TRAITS: Dict[str, Type[Trait]] = {trait.NAME: trait for trait in (
     combat.TakesHits, combat.ShovedByShots, combat.RamsShip, combat.DropsPickup, combat.BouncesOffWalls, combat.Gun, combat.Explodes, combat.BlinksWhenHit,
     crowd.KeepsApart,
     spawning.SplitsOnDeath, spawning.LaysEggs,
+    growth.Grows, growth.Hatches,
 )}
-BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody, 'squid': Squid}
+BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody, 'squid': Squid, 'egg': EggBody}
 
 
 def validate(catalogue: Mapping) -> None:

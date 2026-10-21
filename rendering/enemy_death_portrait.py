@@ -22,7 +22,7 @@ class EnemyDeathPortrait:
         self.enemy.vx = self.enemy.vy = 0.0
         self.enemy.active = False
         self.enemy.death_timer = float(self.enemy.DEATH_DURATION)
-        # Scale world-space appendages and egg fragments with the creature, whether it or its Body keeps them.
+        # Scale world-space appendages and jelly blobs with the creature, whether it or its Body keeps them.
         owners = (self.enemy, getattr(self.enemy, 'body', None))
         for owner in owners:
             for chain in getattr(owner, 'tentacles', ()):
@@ -34,9 +34,6 @@ class EnemyDeathPortrait:
                 blob.radius *= scale
                 blob.vx *= scale
                 blob.vy *= scale
-        for name in ('initial_radius', 'current_radius', 'max_radius'):
-            if hasattr(self.enemy, name):
-                setattr(self.enemy, name, getattr(self.enemy, name) * scale)
         self.surface = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
 
     def update(self, dt: float) -> None:

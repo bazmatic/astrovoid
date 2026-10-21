@@ -52,7 +52,7 @@ class LaysEggs(Trait):
             c.egg_cooldown -= dt
             if c.egg_cooldown > 0:
                 return
-        egg_size = enemy_kinds.kind('egg').tuning['maxSize']
+        egg_size = dict(enemy_kinds.kind('egg').traits)['grows']['to']   # room for it to grow
         bearing = random.uniform(0, 2 * math.pi)
         reach = random.uniform(0, c.radius * 0.5)
         pos = (c.x + math.cos(bearing) * reach, c.y + math.sin(bearing) * reach)

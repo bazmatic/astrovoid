@@ -45,7 +45,7 @@ def test_every_kind_but_the_hunters_is_made_by_the_factory_and_says_its_kind(kin
     enemy = make_enemy(kind, (400.0, 400.0), 5, CommandRecorder())
     assert enemy.type == kind
     # Where it is placed has room for all of it
-    largest = enemy_kinds.kind('egg').tuning['maxSize'] if kind == 'egg' else enemy.radius
+    largest = dict(enemy_kinds.kind('egg').traits)['grows']['to'] if kind == 'egg' else enemy.radius
     assert enemy_kinds.kind(kind).spawn_radius == 0 or enemy_kinds.kind(kind).spawn_radius >= largest
 
 

@@ -176,15 +176,8 @@ class MotherBossSettings:
 
 @dataclass
 class EggSettings:
-    initialSize: int
-    maxSize: int
-    growthRateMin: float
-    growthRateMax: float
-    spawnOffsetRange: int
+    size: int
     color: Tuple[int, int, int]
-    hitPoints: int
-    babySpawnMin: int
-    babySpawnMax: int
 
 
 @dataclass
@@ -560,17 +553,7 @@ def load_settings() -> Settings:
         }),
         baby=BabySettings(**raw["baby"]),
         motherBoss=MotherBossSettings(**raw["motherBoss"]),
-        egg=EggSettings(
-            initialSize=raw["egg"]["initialSize"],
-            maxSize=raw["egg"]["maxSize"],
-            growthRateMin=raw["egg"]["growthRateMin"],
-            growthRateMax=raw["egg"]["growthRateMax"],
-            spawnOffsetRange=raw["egg"]["spawnOffsetRange"],
-            color=_as_color(tuple(raw["egg"]["color"])),
-            hitPoints=raw["egg"]["hitPoints"],
-            babySpawnMin=raw["egg"]["babySpawnMin"],
-            babySpawnMax=raw["egg"]["babySpawnMax"]
-        ),
+        egg=EggSettings(size=raw["egg"]["size"], color=_as_color(tuple(raw["egg"]["color"]))),
         momentum=MomentumSettings(**raw["momentum"]),
         projectile=ProjectileSettings(
             **{
@@ -763,15 +746,10 @@ MOTHER_BOSS_BLINK_FREQUENCY_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkFrequencyM
 MOTHER_BOSS_BLINK_DURATION_MULTIPLIER_MAX = SETTINGS.motherBoss.blinkDurationMultiplierMax
 
 
-EGG_INITIAL_SIZE = SETTINGS.egg.initialSize
-EGG_MAX_SIZE = SETTINGS.egg.maxSize
-EGG_GROWTH_RATE_MIN = SETTINGS.egg.growthRateMin
-EGG_GROWTH_RATE_MAX = SETTINGS.egg.growthRateMax
-EGG_SPAWN_OFFSET_RANGE = SETTINGS.egg.spawnOffsetRange
+# The sizes an egg is laid at and grows to; the hunter's spawn checks read them
+EGG_INITIAL_SIZE = SETTINGS.egg.size
+EGG_MAX_SIZE = dict(enemy_kinds.kind('egg').traits)['grows']['to']
 COLOR_EGG = SETTINGS.egg.color
-EGG_HIT_POINTS = SETTINGS.egg.hitPoints
-EGG_BABY_SPAWN_MIN = SETTINGS.egg.babySpawnMin
-EGG_BABY_SPAWN_MAX = SETTINGS.egg.babySpawnMax
 
 MOMENTUM_TRANSFER_FACTOR = SETTINGS.momentum.transferFactor
 FRICTION_COEFFICIENT = SETTINGS.momentum.frictionCoefficient

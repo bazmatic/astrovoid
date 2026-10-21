@@ -48,7 +48,6 @@ def make_enemy(kind, pos, level, command_recorder):
     """
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.egg import Egg
     from entities.anemone import Anemone
     if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
         raise ValueError(f'cannot make an enemy of type {kind!r}')
@@ -57,7 +56,7 @@ def make_enemy(kind, pos, level, command_recorder):
         entity = creatures.build(kind, pos, level, command_recorder)
     else:
         entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level),
-                  'egg': lambda: Egg(pos), 'anemone': lambda: Anemone(pos)}[kind]()
+                  'anemone': lambda: Anemone(pos)}[kind]()
     return entity
 
 

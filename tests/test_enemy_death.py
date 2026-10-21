@@ -8,7 +8,6 @@ import pytest
 import creatures
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.flighthouse_enemy import FlighthouseEnemy
-from entities.egg import Egg
 from entities.anemone import Anemone
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
@@ -28,7 +27,7 @@ def make_all_enemies():
         FlockerEnemyShip(POS),
         FlighthouseEnemy(POS),
         Anemone(POS),
-        Egg(POS),
+        creatures.build('egg', POS),
     ]
 
 

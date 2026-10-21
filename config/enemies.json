@@ -143,15 +143,20 @@
     "spawnRadius": 24,
     "layer": 9,
     "tuning": {
-      "initialSize": 8,
-      "maxSize": 24,
-      "growthRateMin": 0.01,
-      "growthRateMax": 0.04,
-      "spawnOffsetRange": 60,
-      "color": [255, 200, 100],
-      "hitPoints": 2,
-      "babySpawnMin": 1,
-      "babySpawnMax": 3
+      "size": 8,
+      "color": [255, 200, 100]
+    },
+    "allegiance": "enemy",
+    "body": "egg",
+    "traits": {
+      "coasts": {},
+      "bouncesOffWalls": {},
+      "ramsShip": {},
+      "shovedByShots": {},
+      "takesHits": {"hitPoints": 2},
+      "grows": {"to": 24, "rateMin": 0.01, "rateMax": 0.04, "hitPointsGrown": 4},
+      "hatches": {"into": "baby", "countMin": 1, "countMax": 3, "spread": 60},
+      "dropsPickup": {}
     }
   },
   "anemone": {

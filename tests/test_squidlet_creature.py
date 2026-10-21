@@ -8,9 +8,7 @@ import config
 import creatures
 from creatures.creature import Creature
 from entities.command_recorder import CommandRecorder, CommandType
-from entities.egg import Egg
 from entities.squid import Squid
-from game_handlers.enemy_roster import EnemyRoster
 from tests.creature_parts import encounter, target, world
 
 POS = (200.0, 300.0)
@@ -41,10 +39,13 @@ def test_a_squidlet_flies_faster_than_a_squiddler(kind, share):
 
 
 def test_a_hatching_egg_puts_squidlet_creatures_on_the_roster():
-    roster = EnemyRoster()
-    egg = Egg(POS)
-    egg.pop(CommandRecorder(), roster, None)
-    assert roster.all() and all(isinstance(e, Creature) and e.type == 'baby' for e in roster.all())
+    egg = creatures.build('egg', POS, 1, CommandRecorder())
+    enc = encounter(egg, world_=world(command_recorder=CommandRecorder()))
+    enc.step(1.0)
+    egg.radius = dict(egg.kind.traits)['grows']['to']
+    enc.step(1.0)
+    babies = [e for e in enc.roster.all() if e is not egg]
+    assert babies and all(isinstance(e, Creature) and e.type == 'baby' for e in babies)
 
 
 def test_a_squidlet_does_not_blink_when_rammed():

@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.flocker_neighbor_cache import FlockerNeighborCache
-    from entities.egg import Egg
     from entities.anemone import Anemone
     from entities.ship import Ship
     from entities.projectile import Projectile
@@ -154,44 +153,3 @@ class EnemyUpdater:
                 if ship.check_circle_collision(anemone.get_pos(), anemone.radius, anemone):
                     scoring.record_enemy_collision()
                     anemone.fling(ship)
-    
-    
-    def update_eggs(
-        self,
-        eggs: List['Egg'],
-        dt: float,
-        maze: 'Maze',
-        ship: 'Ship',
-        scoring: 'ScoringSystem',
-        command_recorder: 'CommandRecorder',
-        babies
-    ) -> None:
-        """Update egg enemies.
-        
-        Args:
-            eggs: List of Egg instances.
-            dt: Delta time since last update.
-            maze: Maze instance for wall collision.
-            ship: Player ship for collision detection.
-            scoring: Scoring system for recording collisions.
-            command_recorder: Command recorder for spawning Baby enemies.
-            babies: List to add spawned Baby enemies to.
-        """
-        for egg in eggs:
-            if not egg.active:
-                continue
-            
-            egg.update(dt)
-            
-            # Check if egg should pop
-            if egg.should_pop():
-                egg.pop(command_recorder, babies, maze)
-                continue
-            
-            # Check egg-wall collision (eggs are stationary, but check for consistency)
-            egg.check_wall_collision(maze.walls, maze.spatial_grid)
-            
-            # Check egg-ship collision (skip if shield is active)
-            if not ship.is_shield_active():
-                if ship.check_circle_collision(egg.get_pos(), egg.radius, egg):
-                    scoring.record_enemy_collision()
