@@ -95,7 +95,8 @@ class Gun(Trait):
     """Fires at where its brain aims when its brain says fire and it has reloaded. Numbers left out come from the
     strength of level `strengthLevel` (by default the creature's own). `startsLoaded` lets it fire on its first frame.
     The shot can be styled: `shotSpeed` scales its speed; `impact`, `glowColor`, `glowRadius` and `glowIntensity` are
-    the projectile's. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show."""
+    the projectile's. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show, and
+    `just_fired`, true on the frame it fires, for its neighbours."""
     NAME = 'gun'
 
     def __init__(self, intervalMin: Optional[int] = None, intervalMax: Optional[int] = None,
@@ -119,11 +120,13 @@ class Gun(Trait):
         self._reload(c, strength)
         if self.starts_loaded:
             c.gun_cooldown = 0.0
+        c.just_fired = False
 
     def on_frame(self, c, enc, dt):
         c.gun_cooldown = max(0.0, c.gun_cooldown - dt)
         controls = c.controls
-        if controls.fire and controls.aim is not None and c.gun_cooldown <= 0:
+        c.just_fired = controls.fire and controls.aim is not None and c.gun_cooldown <= 0
+        if c.just_fired:
             pos = c.get_pos()
             shot = Projectile(pos, get_angle_to_point(pos, controls.aim), is_enemy=c.allegiance == 'enemy',
                               **self.styling)

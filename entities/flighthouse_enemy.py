@@ -14,7 +14,6 @@ if TYPE_CHECKING:
 from entities.base import GameEntity
 from entities.collidable import Collidable
 from entities.drawable import Drawable
-from entities.flocker_enemy_ship import FlockerEnemyShip
 from rendering import visual_effects
 from utils import (
     angle_to_radians,
@@ -95,7 +94,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         walls: Optional[List] = None,
         spatial_grid = None,
         gates = ()
-    ) -> List[FlockerEnemyShip]:
+    ) -> List:
         """Update scanning/tracking and spawn flockers if the player is visible.
         
         Args:
@@ -111,7 +110,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         dt_seconds = dt / float(config.FPS)
         self._spawn_cooldown = max(0.0, self._spawn_cooldown - dt_seconds)
 
-        spawned: List[FlockerEnemyShip] = []
+        spawned: List = []
         player_visible = False
 
         if player_pos is not None:
@@ -215,13 +214,15 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         max_rotate = config.FLIGHTHOUSE_ENEMY_SCAN_SPEED_DEGREES_PER_SECOND * dt_seconds * self._scan_dir
         self.angle = normalize_angle(self.angle + max_rotate)
 
-    def _spawn_flocker(self, player_pos: Tuple[float, float]) -> FlockerEnemyShip:
-        flocker = FlockerEnemyShip((self.x, self.y))
+    def _spawn_flocker(self, player_pos: Tuple[float, float]):
+        import creatures
+        import enemy_kinds
+        flocker = creatures.build('flocker', (self.x, self.y), self.level)
         angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
         flocker.angle = angle_to_player
 
         # Give flocker an initial push toward the player
-        base_speed = config.SHIP_MAX_SPEED * config.FLOCKER_ENEMY_SPEED_MULTIPLIER
+        base_speed = config.SHIP_MAX_SPEED * dict(enemy_kinds.kind('flocker').traits)['thrusters']['speedShare']
         initial_speed = base_speed * config.FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER
         angle_rad = angle_to_radians(angle_to_player)
         flocker.vx = math.cos(angle_rad) * initial_speed

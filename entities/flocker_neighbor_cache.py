@@ -1,7 +1,8 @@
-"""Shared neighbor cache for efficient flocker flocking calculations.
+"""Shared neighbor cache for efficient flocking calculations.
 
 This module provides a shared data structure that pre-computes neighbor relationships
-for all flockers once per frame, reducing computational complexity from O(n²) to O(n).
+for a flock once per frame, reducing computational complexity from O(n²) to O(n).
+It works on anything with `x`, `y` and `active`.
 """
 
 from typing import List, Dict, Tuple, TYPE_CHECKING
@@ -9,7 +10,7 @@ import math
 import config
 
 if TYPE_CHECKING:
-    from entities.flocker_enemy_ship import FlockerEnemyShip
+    from creatures.creature import Creature
 
 
 class FlockerNeighborCache:
@@ -19,18 +20,18 @@ class FlockerNeighborCache:
     Uses spatial hashing for efficient neighbor queries.
     """
     
-    def __init__(self):
-        """Initialize the neighbor cache."""
-        self.cache: Dict[int, List[Tuple['FlockerEnemyShip', float]]] = {}
-        self.max_radius: float = max(
-            config.FLOCKER_ENEMY_SEPARATION_RADIUS,
-            config.FLOCKER_ENEMY_ALIGNMENT_RADIUS,
-            config.FLOCKER_ENEMY_COHESION_RADIUS
-        )
+    def __init__(self, max_radius: float):
+        """Initialize the neighbor cache.
+
+        Args:
+            max_radius: The widest radius neighbours will be asked for.
+        """
+        self.cache: Dict[int, List[Tuple['Creature', float]]] = {}
+        self.max_radius: float = max_radius
         # Use cell size based on max radius for spatial hashing
         self.cell_size: float = self.max_radius * 2.0
     
-    def update(self, flockers: List['FlockerEnemyShip']) -> None:
+    def update(self, flockers: List['Creature']) -> None:
         """Update the neighbor cache for all active flockers.
         
         Args:
@@ -45,13 +46,13 @@ class FlockerNeighborCache:
         grid_rows = int(config.SCREEN_HEIGHT / self.cell_size) + 1
         
         # Create grid: each cell contains list of (flocker, index) tuples
-        grid: List[List[List[Tuple['FlockerEnemyShip', int]]]] = [
+        grid: List[List[List[Tuple['Creature', int]]]] = [
             [[] for _ in range(grid_cols)]
             for _ in range(grid_rows)
         ]
         
         # Place flockers in grid cells
-        active_flockers: List[Tuple['FlockerEnemyShip', int]] = []
+        active_flockers: List[Tuple['Creature', int]] = []
         for idx, flocker in enumerate(flockers):
             if not flocker.active:
                 continue
@@ -67,7 +68,7 @@ class FlockerNeighborCache:
         
         # For each flocker, find neighbors by checking nearby grid cells
         for flocker, idx in active_flockers:
-            neighbors: List[Tuple['FlockerEnemyShip', float]] = []
+            neighbors: List[Tuple['Creature', float]] = []
             
             # Calculate which grid cells to check (3x3 area around flocker's cell)
             col = max(0, min(grid_cols - 1, int(flocker.x / self.cell_size)))
@@ -99,7 +100,7 @@ class FlockerNeighborCache:
         self,
         flocker_idx: int,
         radius: float
-    ) -> List[Tuple['FlockerEnemyShip', float]]:
+    ) -> List[Tuple['Creature', float]]:
         """Get neighbors within specified radius for a flocker.
         
         Args:

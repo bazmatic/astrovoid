@@ -6,7 +6,6 @@ from unittest.mock import Mock
 import pygame
 import pytest
 import creatures
-from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
@@ -23,7 +22,7 @@ def make_all_enemies():
     return [
         creatures.build("static", POS),
         *(creatures.build(kind, POS, 1, recorder) for kind in SQUID_KINDS),
-        FlockerEnemyShip(POS),
+        creatures.build('flocker', POS),
         FlighthouseEnemy(POS),
         creatures.build('anemone', POS),
         creatures.build('egg', POS),
@@ -198,9 +197,10 @@ class TestGameIntegration:
 
 
 class TestBirdAndFlighthouseDeath:
-    @pytest.mark.parametrize('cls', [FlockerEnemyShip, FlighthouseEnemy])
-    def test_death_changes_shape_then_disappears(self, cls):
-        enemy = cls(POS)
+    @pytest.mark.parametrize('make', [lambda: creatures.build('flocker', POS), lambda: FlighthouseEnemy(POS)],
+                             ids=['flocker', 'flighthouse'])
+    def test_death_changes_shape_then_disappears(self, make):
+        enemy = make()
         enemy.radius = 40
         enemy.angle = 0
         enemy.die()
@@ -227,17 +227,22 @@ class TestBirdAndFlighthouseDeath:
         assert enemy.angle == angle
 
     def test_dead_flocker_coasts_and_cannot_fire(self):
-        enemy = FlockerEnemyShip(POS)
-        enemy.vx = 4
+        enemy = creatures.build('flocker', POS)
+        stand_in = world(ship=target((420, 300)))
+        enc = encounter(enemy, world_=stand_in)
+        enc.step(1.0)
+        enemy.gun_cooldown = 0.0
+        enemy.x, enemy.y, enemy.vx = POS[0], POS[1], 4
         enemy.die()
         enemy.update_death(1)
+        enc.step(1.0)
         assert POS[0] < enemy.x < POS[0] + 4
         assert 0 < enemy.vx < 4
-        assert enemy.get_fired_projectile((420, 300)) is None
+        assert stand_in.projectiles == []
 
     def test_entity_manager_advances_both_deaths(self):
         manager = EnemyRoster()
-        manager.add(FlockerEnemyShip(POS))
+        manager.add(creatures.build('flocker', POS))
         manager.add(FlighthouseEnemy(POS))
         for enemy in manager.all():
             enemy.die()

@@ -12,7 +12,6 @@ import enemy_kinds
 import level_rules
 import config as game_config
 if TYPE_CHECKING:
-    from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.command_recorder import CommandRecorder
     from game_handlers.enemy_roster import EnemyRoster
@@ -46,7 +45,6 @@ def make_enemy(kind, pos, level, command_recorder):
     Every spawn path makes its enemies here. Enemy hunters are not made here: they need a pilot and a view of the
     game, which Game provides.
     """
-    from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
     if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
         raise ValueError(f'cannot make an enemy of type {kind!r}')
@@ -54,7 +52,7 @@ def make_enemy(kind, pos, level, command_recorder):
         import creatures
         entity = creatures.build(kind, pos, level, command_recorder)
     else:
-        entity = {'flocker': lambda: FlockerEnemyShip(pos), 'flighthouse': lambda: FlighthouseEnemy(pos, level)}[kind]()
+        entity = FlighthouseEnemy(pos, level)
     return entity
 
 

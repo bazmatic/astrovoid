@@ -118,18 +118,7 @@ class ReplayEnemySettings:
 class FlockerEnemySettings:
     size: int
     color: Tuple[int, int, int]
-    speedMultiplier: float
-    separationRadius: float
-    alignmentRadius: float
-    cohesionRadius: float
-    separationWeight: float
-    alignmentWeight: float
-    cohesionWeight: float
-    seekWeight: float
-    closeRangeFireDistance: float
-    closeRangeFireAngleTolerance: float
-    clusterRadius: float
-    fireCooldownSeconds: float
+    clusterRadius: float   # a spawn rule: how closely a level's flockers start together
 
 
 @dataclass
@@ -515,18 +504,7 @@ def load_settings() -> Settings:
         flockerEnemy=FlockerEnemySettings(
             size=raw["flockerEnemy"]["size"],
             color=_as_color(tuple(raw["flockerEnemy"]["color"])),
-            speedMultiplier=raw["flockerEnemy"]["speedMultiplier"],
-            separationRadius=raw["flockerEnemy"]["separationRadius"],
-            alignmentRadius=raw["flockerEnemy"]["alignmentRadius"],
-            cohesionRadius=raw["flockerEnemy"]["cohesionRadius"],
-            separationWeight=raw["flockerEnemy"]["separationWeight"],
-            alignmentWeight=raw["flockerEnemy"]["alignmentWeight"],
-            cohesionWeight=raw["flockerEnemy"]["cohesionWeight"],
-            seekWeight=raw["flockerEnemy"]["seekWeight"],
-            closeRangeFireDistance=raw["flockerEnemy"]["closeRangeFireDistance"],
-            closeRangeFireAngleTolerance=raw["flockerEnemy"]["closeRangeFireAngleTolerance"],
-            clusterRadius=raw["flockerEnemy"]["clusterRadius"],
-            fireCooldownSeconds=raw["flockerEnemy"]["fireCooldownSeconds"]
+            clusterRadius=raw["flockerEnemy"]["clusterRadius"]
         ),
         flighthouseEnemy=FlighthouseEnemySettings(
             size=raw["flighthouseEnemy"]["size"],
@@ -695,18 +673,7 @@ REPLAY_ENEMY_COLOR = SETTINGS.replayEnemy.color
 
 FLOCKER_ENEMY_SIZE = SETTINGS.flockerEnemy.size
 FLOCKER_ENEMY_COLOR = SETTINGS.flockerEnemy.color
-FLOCKER_ENEMY_SPEED_MULTIPLIER = SETTINGS.flockerEnemy.speedMultiplier
-FLOCKER_ENEMY_SEPARATION_RADIUS = SETTINGS.flockerEnemy.separationRadius
-FLOCKER_ENEMY_ALIGNMENT_RADIUS = SETTINGS.flockerEnemy.alignmentRadius
-FLOCKER_ENEMY_COHESION_RADIUS = SETTINGS.flockerEnemy.cohesionRadius
-FLOCKER_ENEMY_SEPARATION_WEIGHT = SETTINGS.flockerEnemy.separationWeight
-FLOCKER_ENEMY_ALIGNMENT_WEIGHT = SETTINGS.flockerEnemy.alignmentWeight
-FLOCKER_ENEMY_COHESION_WEIGHT = SETTINGS.flockerEnemy.cohesionWeight
-FLOCKER_ENEMY_SEEK_WEIGHT = SETTINGS.flockerEnemy.seekWeight
-FLOCKER_ENEMY_CLOSE_RANGE_FIRE_DISTANCE = SETTINGS.flockerEnemy.closeRangeFireDistance
-FLOCKER_ENEMY_CLOSE_RANGE_FIRE_ANGLE_TOLERANCE = SETTINGS.flockerEnemy.closeRangeFireAngleTolerance
 FLOCKER_ENEMY_CLUSTER_RADIUS = SETTINGS.flockerEnemy.clusterRadius
-FLOCKER_ENEMY_FIRE_COOLDOWN_SECONDS = SETTINGS.flockerEnemy.fireCooldownSeconds
 
 FLIGHTHOUSE_ENEMY_SIZE = SETTINGS.flighthouseEnemy.size
 FLIGHTHOUSE_ENEMY_COLOR = SETTINGS.flighthouseEnemy.color

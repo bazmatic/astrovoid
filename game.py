@@ -999,9 +999,6 @@ class Game:
             self.enemy_updater.update_flighthouses(
                 roster.of_kind('flighthouse'), dt, player_pos, self.maze, self.ship, self.scoring, roster
             )
-            self.enemy_updater.update_flockers(
-                roster.of_kind('flocker'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter
-            )
             self._fly_enemy_hunters(dt)
             roster.update_dying(dt)
 
