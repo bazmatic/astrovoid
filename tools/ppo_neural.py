@@ -113,7 +113,8 @@ def improve(net, ref, optimiser, episodes, mean, scale, kl_coef, rng, clip=0.2, 
             index = torch.as_tensor(chunk, dtype=torch.long)
             m = mask[index]
             logits, values = net(x[index])
-            ratio = torch.exp(joint_logp(logits, controls[index]) - old_logp[index])
+            # Clamped so a policy that has moved far within one update cannot overflow the ratio's gradient.
+            ratio = torch.exp(torch.clamp(joint_logp(logits, controls[index]) - old_logp[index], -20.0, 20.0))
             a = advantages[index]
             surrogate = torch.minimum(ratio * a, torch.clamp(ratio, 1 - clip, 1 + clip) * a)
             policy_loss = -surrogate[m].mean()
@@ -125,7 +126,10 @@ def improve(net, ref, optimiser, episodes, mean, scale, kl_coef, rng, clip=0.2, 
                 continue
             optimiser.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
+            # A finite loss can still have an infinite gradient, which clipping turns into NaN weights: skip it.
+            if not torch.isfinite(torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)):
+                optimiser.zero_grad()
+                continue
             optimiser.step()
             for key, value in (('policy_loss', policy_loss), ('value_loss', value_loss), ('kl', kl[m].mean()),
                                ('entropy', entropy[m].mean()),
@@ -151,12 +155,14 @@ DEFAULT_HORIZON = 90.0        # seconds of game time per training episode unless
 RULES_LEVEL = 25          # the level with a Rules hunter on it (levels/25.json)
 
 
-def make_jobs(iteration, count, weights, decision_frames, turn_rate, rules_share=0.0):
-    """One job per episode: the training levels in turn, with `rules_share` of the episodes (spread evenly through
-    the batch) flown on the Rules hunter's level and the other levels never including it."""
+def make_jobs(iteration, count, weights, decision_frames, turn_rate, rules_share=0.0, levels=None):
+    """One job per episode: the training levels (`levels`, default the tune set) in turn, with `rules_share` of the
+    episodes (spread evenly through the batch) flown on the Rules hunter's level and the other levels never
+    including it."""
     from experiments.run import TUNE_LEVELS
     from experiments.student import StudentSpec
-    others = tuple(level for level in TUNE_LEVELS if level != RULES_LEVEL)
+    levels = tuple(levels or TUNE_LEVELS)
+    others = tuple(level for level in levels if level != RULES_LEVEL)
     jobs = []
     for i in range(count):
         n = iteration * count + i
@@ -166,7 +172,7 @@ def make_jobs(iteration, count, weights, decision_frames, turn_rate, rules_share
             rules_episode = int((n + 1) * rules_share + 1e-9) > int(n * rules_share + 1e-9)
             level = RULES_LEVEL if rules_episode else others[n % len(others)]
         else:
-            level = TUNE_LEVELS[n % len(TUNE_LEVELS)]
+            level = levels[n % len(levels)]
         jobs.append((level, 300 + n % TRAIN_SEEDS, spec))
     return jobs
 
@@ -240,7 +246,8 @@ def log_line(*parts):
 
 
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=0, decision_frames=6,
-             turn_rate=1.0, rollout=None, log=log_line, shaping=None, rules_share=0.0):
+             turn_rate=1.0, rollout=None, log=log_line, shaping=None, rules_share=0.0,
+             levels=None):
     """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint."""
     import torch
     from experiments.score import mean_components
@@ -260,7 +267,8 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
     history = []
     try:
         for iteration in range(iterations):
-            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, rules_share)
+            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, rules_share,
+                             levels)
             t0 = time.perf_counter()
             flown = rollout(jobs, workers)
             t1 = time.perf_counter()
@@ -280,6 +288,10 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             stats.update(rules_episodes=len(arena),
                          rules_beaten=float(np.mean([1.0 if e.get('rules_beaten') else 0.0 for e in arena]))
                          if arena else 0.0)
+            blind = sum(e.get('blind_steps', 0) for e in flown)
+            stats.update(compass_follow=sum(e.get('following_steps', 0) for e in flown) / blind if blind else 0.0)
+            unseen = sum(e.get('unseen_steps', 0) for e in flown)
+            stats.update(bored_fraction=sum(e.get('bored_steps', 0) for e in flown) / unseen if unseen else 0.0)
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
             history.append(stats)
@@ -311,13 +323,26 @@ def reward_summary(args):
             ('Starting or reversing a turn', '-', args.turn_change_penalty, 'points each'),
             ('Reversing a turn directly', '-', args.reversal_penalty, 'extra points each, left to right or back'),
             ('Death', '-', args.death_penalty, f'points when the hunter is destroyed (it survives {args.health} hits)'),
-            ('Rules hunter destroyed', '+', args.rules_bounty, 'points, on top of its share of the kill reward')]
+            ('Rules hunter destroyed', '+', args.rules_bounty, 'points, on top of its share of the kill reward'),
+            ('Following the enemy compass', '+', getattr(args, 'compass_reward', 0.0),
+             'points per maze width the route to the nearest enemy shortens while none is in sight'),
+            ('Boredom', '-', getattr(args, 'boredom_penalty', 0.0),
+             f'points per second with no enemy in sight in a cell visited in the last {getattr(args, "boredom_window", 10.0):g} s')]
     return [{'name': n, 'sign': s, 'value': round(v, 4), 'unit': u} for n, s, v, u in rows if v]
 
 
 def _wall_energy():
     import config
     return config.SETTINGS.game.neuralWallEnergy
+
+
+def parse_levels(text):
+    """'1-20' or '4,7,13' (or a mix) as a tuple of level numbers."""
+    levels = []
+    for part in text.split(','):
+        low, _, high = part.strip().partition('-')
+        levels.extend(range(int(low), int(high or low) + 1))
+    return tuple(levels)
 
 
 def write_run_config(args):
@@ -330,7 +355,7 @@ def write_run_config(args):
         'episode': {'horizon_seconds': args.horizon, 'after_clear_seconds': args.after_clear,
                     'episodes_per_iteration': args.episodes, 'learning_rate': args.lr,
                     'health': args.health, 'wall_energy': _wall_energy() if args.health else 0,
-                    'rules_share': args.rules_share},
+                    'rules_share': args.rules_share, 'levels': args.levels},
         'start': str(args.start)}, indent=1))
 
 
@@ -376,6 +401,14 @@ def main(argv=None):
                         help='share of episodes flown on the Rules hunter level (25); 0 keeps the old level cycle')
     parser.add_argument('--rules-bounty', type=float, default=50.0,
                         help='points gained for destroying the Rules hunter in the training reward')
+    parser.add_argument('--compass-reward', type=float, default=0.0,
+                        help='points per maze width the enemy compass route shortens while no enemy is in sight')
+    parser.add_argument('--boredom-penalty', type=float, default=0.0,
+                        help='points lost per second with no enemy in sight in a recently visited maze cell')
+    parser.add_argument('--boredom-window', type=float, default=10.0,
+                        help='seconds before a visited maze cell counts as new again')
+    parser.add_argument('--levels', type=parse_levels, default=None,
+                        help='levels to train on, e.g. 1-20 or 4,7,13 (default: the tune set)')
     args = parser.parse_args(argv)
     write_run_config(args)
     from experiments import run
@@ -391,8 +424,9 @@ def main(argv=None):
                                'speed_penalty': args.speed_penalty,
                                'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
                                'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player,
-                               'rules_bounty': args.rules_bounty},
-                      rules_share=args.rules_share)
+                               'rules_bounty': args.rules_bounty, 'compass_reward': args.compass_reward,
+                               'boredom_penalty': args.boredom_penalty, 'boredom_window': args.boredom_window},
+                      rules_share=args.rules_share, levels=args.levels)
     print('done | last checkpoint:', result['last'])
 
 

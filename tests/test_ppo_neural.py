@@ -118,3 +118,14 @@ def test_an_exported_checkpoint_loads_in_the_game_and_has_no_value_head(tmp_path
         out, state = loaded.step(senses[t], state)
         for head in ppo.HEADS:
             assert np.allclose(out[head], logits[head][0, t].numpy(), atol=1e-4)
+
+
+def test_a_non_finite_gradient_skips_the_step_even_when_the_loss_is_finite():
+    policy = random_policy(3, hidden=8, embed=4)
+    net, ref = ppo.build_net(policy), ppo.build_net(policy)
+    optimiser = torch.optim.Adam(net.parameters(), lr=1e-3)
+    net.heads['turn'].bias.register_hook(lambda g: g * float('inf'))   # an overflowing gradient, a finite loss
+    rng = np.random.default_rng(0)
+    before = [p.detach().clone() for p in net.parameters()]
+    ppo.improve(net, ref, optimiser, toy_episodes(net, policy, rng, count=4), policy.mean, policy.scale, 0.0, rng)
+    assert all(torch.equal(a, b) for a, b in zip(before, net.parameters()))
