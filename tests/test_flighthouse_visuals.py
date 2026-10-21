@@ -3,15 +3,32 @@
 import math
 import pygame
 import pytest
-import config
-from entities.flighthouse_enemy import FlighthouseEnemy
+import creatures
+import enemy_kinds
+from entities.flighthouse import FlighthouseBody
+from tests.creature_parts import encounter, target, world
+
+SCANS = dict(enemy_kinds.kind('flighthouse').traits)['scans']
+_ENCOUNTERS = {}
 
 
 def make_flighthouse(angle=0.0, pos=(400.0, 300.0)):
-    """Create a flighthouse facing a known direction."""
-    flighthouse = FlighthouseEnemy(pos)
+    """Create a flighthouse facing a known direction, set up on a level of its own."""
+    flighthouse = creatures.build('flighthouse', pos)
+    enc = encounter(flighthouse, world_=world())
+    enc.ready()
     flighthouse.angle = angle
+    _ENCOUNTERS[id(flighthouse)] = enc
     return flighthouse
+
+
+def step(flighthouse, player_pos):
+    """One frame with the player at a position (or nowhere); returns what it launched."""
+    enc = _ENCOUNTERS[id(flighthouse)]
+    enc.world.ship = target(player_pos) if player_pos is not None else None
+    before = set(map(id, enc.roster.all()))
+    enc.step(1.0)
+    return [e for e in enc.roster.all() if id(e) not in before]
 
 
 def in_view(flighthouse, dist=100.0):
@@ -24,29 +41,29 @@ class TestAlertLevel:
     """Tests for the eased calm-to-alert transition."""
 
     def test_starts_calm(self):
-        assert make_flighthouse().alert_level == 0.0
+        assert make_flighthouse().body.alert_level == 0.0
 
     def test_rises_while_player_visible(self):
         flighthouse = make_flighthouse()
         for _ in range(30):
-            flighthouse.update(1.0, in_view(flighthouse))
-        assert flighthouse.alert_level == pytest.approx(1.0)
+            step(flighthouse, in_view(flighthouse))
+        assert flighthouse.body.alert_level == pytest.approx(1.0)
 
     def test_falls_after_player_lost(self):
         flighthouse = make_flighthouse()
         for _ in range(30):
-            flighthouse.update(1.0, in_view(flighthouse))
+            step(flighthouse, in_view(flighthouse))
         for _ in range(120):
-            flighthouse.update(1.0, None)
-        assert flighthouse.alert_level == 0.0
+            step(flighthouse, None)
+        assert flighthouse.body.alert_level == 0.0
 
     def test_alert_snaps_on_faster_than_it_fades(self):
         flighthouse = make_flighthouse()
-        flighthouse.update(1.0, in_view(flighthouse))
-        rise = flighthouse.alert_level
-        flighthouse.alert_level = 1.0
-        flighthouse.update(1.0, None)
-        assert rise > 1.0 - flighthouse.alert_level
+        step(flighthouse, in_view(flighthouse))
+        rise = flighthouse.body.alert_level
+        flighthouse.body.alert_level = 1.0
+        step(flighthouse, None)
+        assert rise > 1.0 - flighthouse.body.alert_level
 
 
 class TestLaunchFlash:
@@ -54,21 +71,21 @@ class TestLaunchFlash:
 
     def test_no_flash_while_scanning(self):
         flighthouse = make_flighthouse()
-        flighthouse.update(1.0, None)
-        assert flighthouse.launch_flash == 0.0
+        step(flighthouse, None)
+        assert flighthouse.body.launch_flash == 0.0
 
     def test_flash_starts_on_spawn(self):
         flighthouse = make_flighthouse()
-        spawned = flighthouse.update(1.0, in_view(flighthouse))
+        spawned = step(flighthouse, in_view(flighthouse))
         assert len(spawned) == 1
-        assert flighthouse.launch_flash == pytest.approx(1.0)
+        assert flighthouse.body.launch_flash == pytest.approx(1.0)
 
     def test_flash_decays(self):
         flighthouse = make_flighthouse()
-        flighthouse.update(1.0, in_view(flighthouse))
+        step(flighthouse, in_view(flighthouse))
         for _ in range(60):
-            flighthouse.update(1.0, None)
-        assert flighthouse.launch_flash == 0.0
+            step(flighthouse, None)
+        assert flighthouse.body.launch_flash == 0.0
 
 
 class TestBeamSurface:
@@ -76,7 +93,7 @@ class TestBeamSurface:
 
     @pytest.fixture
     def beam(self):
-        return make_flighthouse()._get_beam_surface((120, 240, 200))
+        return make_flighthouse().body._get_beam_surface((120, 240, 200))
 
     def alpha_at(self, beam, dist, degrees):
         angle = math.radians(degrees)
@@ -86,20 +103,20 @@ class TestBeamSurface:
 
     def test_is_cached(self):
         flighthouse = make_flighthouse()
-        assert flighthouse._get_beam_surface((1, 2, 3)) is flighthouse._get_beam_surface((1, 2, 3))
+        assert flighthouse.body._get_beam_surface((1, 2, 3)) is flighthouse.body._get_beam_surface((1, 2, 3))
 
     def test_length_follows_vision_range(self, beam):
-        expected = config.FLIGHTHOUSE_ENEMY_VISION_RANGE * FlighthouseEnemy.BEAM_LENGTH_FRACTION
+        expected = SCANS['range'] * FlighthouseBody.BEAM_LENGTH_FRACTION
         assert beam.get_width() == pytest.approx(expected, abs=2)
 
     def test_lit_inside_vision_cone(self, beam):
-        half = config.FLIGHTHOUSE_ENEMY_VISION_CONE_DEGREES * 0.5
+        half = SCANS['coneDegrees'] * 0.5
         assert self.alpha_at(beam, 80, 0) > 0
         assert self.alpha_at(beam, 80, half - 3) > 0
         assert self.alpha_at(beam, 80, -(half - 3)) > 0
 
     def test_dark_outside_vision_cone(self, beam):
-        half = config.FLIGHTHOUSE_ENEMY_VISION_CONE_DEGREES * 0.5
+        half = SCANS['coneDegrees'] * 0.5
         assert self.alpha_at(beam, 80, half + 3) == 0
         assert self.alpha_at(beam, 80, -(half + 3)) == 0
 
@@ -135,10 +152,10 @@ class TestDrawing:
 
     def test_draws_alert_launch_and_damage_states(self, screen):
         flighthouse = make_flighthouse(33.0)
-        flighthouse.update(1.0, in_view(flighthouse))
+        step(flighthouse, in_view(flighthouse))
         flighthouse.draw(screen)
-        flighthouse.alert_level = 0.5
-        flighthouse.take_damage()
+        flighthouse.body.alert_level = 0.5
+        flighthouse.hit_points -= 1
         flighthouse.draw(screen)
         assert screen.get_bounding_rect().width > 0
 
@@ -155,7 +172,7 @@ class TestBaseShape:
     def outline_reach(self, anim_time, pos=(400.4, 300.7)):
         """Distance from the centre to the outer wall, right/left/down, in pixels."""
         flighthouse = make_flighthouse(angle=270.0, pos=pos)  # Hood and beam point up, out of the way
-        flighthouse._anim_time = anim_time
+        flighthouse.body._anim_time = anim_time
         screen = pygame.Surface((800, 600), pygame.SRCALPHA)
         flighthouse.draw(screen)
         solid = pygame.mask.from_surface(screen, 254)
@@ -175,8 +192,8 @@ class TestBaseShape:
 
     def test_outline_points_are_mirror_symmetric(self):
         flighthouse = make_flighthouse()
-        points = flighthouse._base_outline((400, 300), flighthouse.radius)
+        points = flighthouse.body._base_outline((400, 300), flighthouse.radius)
         offsets = {(x - 400, y - 300) for x, y in points}
-        assert len(offsets) == FlighthouseEnemy.BASE_SIDES
+        assert len(offsets) == FlighthouseBody.BASE_SIDES
         assert offsets == {(-x, y) for x, y in offsets} == {(x, -y) for x, y in offsets}
         assert offsets == {(y, x) for x, y in offsets}

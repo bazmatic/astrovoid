@@ -5,7 +5,6 @@ import numpy as np
 
 from creatures.traits.rooted import wall_between
 import creatures
-from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.hunter_ship import HunterShip
 from hunter.fire_control import find_firing_solution
 from hunter.model import NEUTRAL, HunterSettings
@@ -70,9 +69,15 @@ def test_an_anemone_cannot_see_through_a_gate():
 
 
 def test_a_flighthouse_cannot_see_through_a_gate():
+    from tests import creature_parts
+
     def sees(gates):
-        lighthouse = FlighthouseEnemy((100, 500))
+        lighthouse = creatures.build('flighthouse', (100, 500))
+        enc = creature_parts.encounter(lighthouse, world_=creature_parts.world(
+            ship=creature_parts.target((500, 500)), maze=world(gates)))
+        enc.ready()
         lighthouse.angle = 0.0
-        return lighthouse._player_in_fov((500, 500), [], Grid(), gates)
+        enc.step(1.0)
+        return lighthouse.sees_target
     assert sees([])
     assert not sees([PLANK])

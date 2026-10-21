@@ -989,18 +989,12 @@ class Game:
                 self.scoring.record_wall_collision()
         
         # Only update enemies after player has made their first move
-        player_pos = (self.ship.x, self.ship.y) if self.ship and not self.ship.observer else None
         if self.player_has_moved:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
             self.encounter.step(dt)
-            # Update the enemies that are not Creatures yet using EnemyUpdater
-            roster = self.roster
-            self.enemy_updater.update_flighthouses(
-                roster.of_kind('flighthouse'), dt, player_pos, self.maze, self.ship, self.scoring, roster
-            )
             self._fly_enemy_hunters(dt)
-            roster.update_dying(dt)
+            self.roster.update_dying(dt)
 
         if self.obstacles:
             self._step_gates(dt)

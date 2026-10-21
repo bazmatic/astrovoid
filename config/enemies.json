@@ -126,15 +126,17 @@
     "layer": 4,
     "tuning": {
       "size": 14,
-      "color": [120, 240, 200],
-      "visionConeDegrees": 45,
-      "visionRange": 600,
-      "scanHalfAngleDegrees": 45,
-      "scanSpeedDegreesPerSecond": 90,
-      "trackSpeedDegreesPerSecond": 240,
-      "spawnIntervalSeconds": 0.5,
-      "hitPoints": 5,
-      "initialFlockerSpeedMultiplier": 0.8
+      "color": [120, 240, 200]
+    },
+    "allegiance": "enemy",
+    "body": "flighthouse",
+    "traits": {
+      "anchored": {},
+      "scans": {"coneDegrees": 45, "range": 600, "scanSpeed": 90, "trackSpeed": 240},
+      "launchesFlock": {"into": "flocker", "speed": 0.8},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 5},
+      "dropsPickup": {}
     }
   },
   "egg": {

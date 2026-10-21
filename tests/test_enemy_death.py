@@ -6,7 +6,6 @@ from unittest.mock import Mock
 import pygame
 import pytest
 import creatures
-from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
@@ -23,7 +22,7 @@ def make_all_enemies():
         creatures.build("static", POS),
         *(creatures.build(kind, POS, 1, recorder) for kind in SQUID_KINDS),
         creatures.build('flocker', POS),
-        FlighthouseEnemy(POS),
+        creatures.build('flighthouse', POS),
         creatures.build('anemone', POS),
         creatures.build('egg', POS),
     ]
@@ -197,7 +196,7 @@ class TestGameIntegration:
 
 
 class TestBirdAndFlighthouseDeath:
-    @pytest.mark.parametrize('make', [lambda: creatures.build('flocker', POS), lambda: FlighthouseEnemy(POS)],
+    @pytest.mark.parametrize('make', [lambda: creatures.build('flocker', POS), lambda: creatures.build('flighthouse', POS)],
                              ids=['flocker', 'flighthouse'])
     def test_death_changes_shape_then_disappears(self, make):
         enemy = make()
@@ -218,11 +217,14 @@ class TestBirdAndFlighthouseDeath:
         assert last.get_bounding_rect().width == 0
 
     def test_dead_flighthouse_stays_anchored_and_cannot_spawn(self):
-        enemy = FlighthouseEnemy(POS)
+        enemy = creatures.build('flighthouse', POS)
+        enc = encounter(enemy, world_=world(ship=target((420, 300))))
+        enc.ready()
         enemy.die()
         angle = enemy.angle
-        assert enemy.update(10, (420, 300)) == []
+        enc.step(10)
         enemy.update_death(10)
+        assert enc.roster.all() == [enemy]
         assert enemy.get_pos() == POS
         assert enemy.angle == angle
 
@@ -243,7 +245,7 @@ class TestBirdAndFlighthouseDeath:
     def test_entity_manager_advances_both_deaths(self):
         manager = EnemyRoster()
         manager.add(creatures.build('flocker', POS))
-        manager.add(FlighthouseEnemy(POS))
+        manager.add(creatures.build('flighthouse', POS))
         for enemy in manager.all():
             enemy.die()
         manager.update_dying(10)
@@ -300,5 +302,5 @@ class TestLastKillPortrait:
         assert recorded is not squid and recorded.type == 'replay'
         squid.update_death(10)
         assert recorded.death_progress == 0
-        handler.record_kill(Mock(source='hunter'), FlighthouseEnemy(POS))
+        handler.record_kill(Mock(source='hunter'), creatures.build('flighthouse', POS))
         assert handler.last_player_kill is recorded

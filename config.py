@@ -125,14 +125,6 @@ class FlockerEnemySettings:
 class FlighthouseEnemySettings:
     size: int
     color: Tuple[int, int, int]
-    visionConeDegrees: float
-    visionRange: float
-    scanHalfAngleDegrees: float
-    scanSpeedDegreesPerSecond: float
-    trackSpeedDegreesPerSecond: float
-    spawnIntervalSeconds: float
-    hitPoints: int
-    initialFlockerSpeedMultiplier: float
 
 
 @dataclass
@@ -508,15 +500,7 @@ def load_settings() -> Settings:
         ),
         flighthouseEnemy=FlighthouseEnemySettings(
             size=raw["flighthouseEnemy"]["size"],
-            color=_as_color(tuple(raw["flighthouseEnemy"]["color"])),
-            visionConeDegrees=raw["flighthouseEnemy"]["visionConeDegrees"],
-            visionRange=raw["flighthouseEnemy"]["visionRange"],
-            scanHalfAngleDegrees=raw["flighthouseEnemy"]["scanHalfAngleDegrees"],
-            scanSpeedDegreesPerSecond=raw["flighthouseEnemy"]["scanSpeedDegreesPerSecond"],
-            trackSpeedDegreesPerSecond=raw["flighthouseEnemy"]["trackSpeedDegreesPerSecond"],
-            spawnIntervalSeconds=raw["flighthouseEnemy"]["spawnIntervalSeconds"],
-            hitPoints=raw["flighthouseEnemy"]["hitPoints"],
-            initialFlockerSpeedMultiplier=raw["flighthouseEnemy"]["initialFlockerSpeedMultiplier"]
+            color=_as_color(tuple(raw["flighthouseEnemy"]["color"]))
         ),
         anemone=AnemoneSettings(**{
             **raw["anemone"],
@@ -677,14 +661,6 @@ FLOCKER_ENEMY_CLUSTER_RADIUS = SETTINGS.flockerEnemy.clusterRadius
 
 FLIGHTHOUSE_ENEMY_SIZE = SETTINGS.flighthouseEnemy.size
 FLIGHTHOUSE_ENEMY_COLOR = SETTINGS.flighthouseEnemy.color
-FLIGHTHOUSE_ENEMY_VISION_CONE_DEGREES = SETTINGS.flighthouseEnemy.visionConeDegrees
-FLIGHTHOUSE_ENEMY_VISION_RANGE = SETTINGS.flighthouseEnemy.visionRange
-FLIGHTHOUSE_ENEMY_SCAN_HALF_ANGLE_DEGREES = SETTINGS.flighthouseEnemy.scanHalfAngleDegrees
-FLIGHTHOUSE_ENEMY_SCAN_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.scanSpeedDegreesPerSecond
-FLIGHTHOUSE_ENEMY_TRACK_SPEED_DEGREES_PER_SECOND = SETTINGS.flighthouseEnemy.trackSpeedDegreesPerSecond
-FLIGHTHOUSE_ENEMY_SPAWN_INTERVAL_SECONDS = SETTINGS.flighthouseEnemy.spawnIntervalSeconds
-FLIGHTHOUSE_ENEMY_HIT_POINTS = SETTINGS.flighthouseEnemy.hitPoints
-FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER = SETTINGS.flighthouseEnemy.initialFlockerSpeedMultiplier
 
 # The level rules read these: where anemones first appear, how much of a maze their pull may cover, and how far it
 # reaches (for that coverage, and to keep them clear of the player's start)

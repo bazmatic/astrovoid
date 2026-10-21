@@ -15,7 +15,6 @@ from entities.jev_beacon import JevBeacon
 from entities.explosion import Explosions, push, reaches
 from entities.projectile import Projectile
 if TYPE_CHECKING:
-    from entities.flighthouse_enemy import FlighthouseEnemy
     from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
     from entities.explosion import Blast
@@ -88,7 +87,7 @@ class CollisionHandler:
         self,
         projectile: 'Projectile',
         flockers: List,
-        flighthouses: List['FlighthouseEnemy'],
+        flighthouses: List,
         eggs: List,
         powerup_crystals: List['PowerupCrystal'],
         jev_beacon_allowed: bool = False,
@@ -180,7 +179,7 @@ class CollisionHandler:
         Returns True if it hit one (the shot is then spent).
         """
         return self.handle_projectile_enemy_collisions(
-            projectile, [], roster.of_kind('flighthouse'), [],
+            projectile, [], [], [],
             powerup_crystals, jev_beacon_allowed=jev_beacon_allowed,
             enemy_hunters=roster.of_kind(*enemy_kinds.hunters()), maze=maze)
 

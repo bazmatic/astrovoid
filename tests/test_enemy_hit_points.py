@@ -5,7 +5,6 @@ import config
 import creatures
 import enemy_kinds
 from entities.command_recorder import CommandRecorder
-from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.projectile import Projectile
 from game_handlers.collision_handler import CollisionHandler
 from tests.creature_parts import encounter, world
@@ -88,6 +87,9 @@ def test_baby_among_the_squids_still_dies_in_one_hit():
 
 
 def test_flighthouse_takes_five_hits():
-    assert config.FLIGHTHOUSE_ENEMY_HIT_POINTS == 5
-    flighthouse = FlighthouseEnemy(POS)
-    assert [flighthouse.take_damage() for _ in range(5)] == [False, False, False, False, True]
+    handler, flighthouse = make_handler(), creatures.build('flighthouse', POS)
+    alive = []
+    for _ in range(5):
+        shoot(handler, flighthouse)
+        alive.append(flighthouse.active)
+    assert flighthouse.max_hit_points == 5 and alive == [True, True, True, True, False]

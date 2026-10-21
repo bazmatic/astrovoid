@@ -1,34 +1,30 @@
-"""Flighthouse enemy that scans and spawns flockers toward the player."""
+"""The Flighthouse's Body: a lighthouse seen from above.
+
+A faceted base with hit point lights round its rim, a lamp in a rotating hood, and a searchlight beam the size of what
+it can see (its `scans` trait keeps `scan_range` and `scan_cone`; before its first frame it has no beam). The beam
+turns red and throbs while it sees the player (`sees_target`), and a ring bursts out when it launches (`launched`).
+When it dies the beam sputters, the masonry breaks apart and the lamp goes out.
+"""
 
 from __future__ import annotations
 
 import math
-import random
-from typing import List, Optional, Tuple, TYPE_CHECKING
+from typing import List, Tuple
 
 import pygame
+
 import config
-
-if TYPE_CHECKING:
-    from entities.base import GameEntity
-from entities.base import GameEntity
-from entities.collidable import Collidable
-from entities.drawable import Drawable
 from rendering import visual_effects
-from utils import (
-    angle_to_radians,
-    distance,
-    get_angle_to_point,
-    line_line_collision,
-    normalize_angle,
-    circle_circle_collision,
-)
-from utils.math_utils import apply_circle_collision_physics
+from utils import angle_to_radians
 
 
-class FlighthouseEnemy(GameEntity, Collidable, Drawable):
-    """Stationary scanner that spawns flockers when the player is seen."""
-    type = 'flighthouse'  # the enemy kind a level file names
+class FlighthouseBody:
+    """The look of a Flighthouse.
+
+    Attributes:
+        alert_level: 0.0 calm, 1.0 locked on to the player.
+        launch_flash: 1.0 when a flocker launches, fading to 0.0.
+    """
 
     # Drawing constants (lengths are multiples of the radius unless noted)
     BEAM_LENGTH_FRACTION = 0.5  # Visible beam length as a fraction of the vision range
@@ -53,226 +49,50 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
 
     DEATH_DURATION = 54.0  # Frames: beam sputters, masonry breaks, lamp goes out
 
+    DEATH_DURATION = 54.0  # Frames: beam sputters, masonry breaks, lamp goes out
+    DEATH_FRICTION = 0.0   # Rooted even in death
+
     _beam_cache: dict = {}
 
-    def __init__(self, pos: Tuple[float, float], level: int = 1):
-        super().__init__(pos, config.FLIGHTHOUSE_ENEMY_SIZE)
-        self.angle = random.uniform(0, 360)
-        self._scan_dir = 1.0  # 1 = clockwise, -1 = counter-clockwise
-        self._spawn_cooldown = 0.0  # seconds
-        self._had_target_last_frame = False
-        self.hit_points = config.FLIGHTHOUSE_ENEMY_HIT_POINTS
-        self.vision_cone_half = config.FLIGHTHOUSE_ENEMY_VISION_CONE_DEGREES * 0.5
-        self.level = level
-        # Get level-based spawn interval
-        import level_rules
-        self._spawn_interval = level_rules.get_flighthouse_spawn_interval(level)
-        self._player_visible = False  # Track if player is currently visible
-        self.max_hit_points = self.hit_points
-        self.alert_level = 0.0  # 0.0 calm, 1.0 locked on to the player
-        self.launch_flash = 0.0  # 1.0 when a flocker launches, fading to 0.0
-        self._anim_time = 0.0  # seconds
+    def __init__(self, creature):
+        self._creature = creature
+        self.alert_level = 0.0
+        self.launch_flash = 0.0
+        self._launched = False   # launched this frame: the flash starts at full
+        self._anim_time = 0.0   # seconds
 
-    def get_pos(self) -> Tuple[float, float]:
-        return (self.x, self.y)
+    x = property(lambda self: self._creature.x)
+    y = property(lambda self: self._creature.y)
+    radius = property(lambda self: self._creature.radius)
+    angle = property(lambda self: self._creature.angle)
+    hit_points = property(lambda self: self._creature.hit_points)
+    max_hit_points = property(lambda self: self._creature.max_hit_points)
+    scan_range = property(lambda self: getattr(self._creature, 'scan_range', 0.0))
 
-    def get_radius(self) -> float:
-        return self.radius
+    @property
+    def vision_cone_half(self) -> float:
+        return getattr(self._creature, 'scan_cone', 0.0) * 0.5
 
-    def take_damage(self) -> bool:
-        self.hit_points -= 1
-        return self.hit_points <= 0
-
-    def apply_momentum(self, _vx: float, _vy: float) -> None:
-        """Flighthouses are anchored; momentum does not move them."""
-        return
-
-    def update(
-        self,
-        dt: float,
-        player_pos: Optional[Tuple[float, float]] = None,
-        walls: Optional[List] = None,
-        spatial_grid = None,
-        gates = ()
-    ) -> List:
-        """Update scanning/tracking and spawn flockers if the player is visible.
-        
-        Args:
-            dt: Delta time since last update.
-            player_pos: Current player position, if available.
-            walls: List of wall segments for line-of-sight checking.
-            spatial_grid: Optional spatial grid for optimized wall queries.
-            gates: Gate segments, which block sight like walls but are not in the grid.
-        """
-        if not self.active:
-            return []
-
-        dt_seconds = dt / float(config.FPS)
-        self._spawn_cooldown = max(0.0, self._spawn_cooldown - dt_seconds)
-
-        spawned: List = []
-        player_visible = False
-
-        if player_pos is not None:
-            player_visible = self._player_in_fov(player_pos, walls, spatial_grid, gates)
-            if player_visible:
-                self._track_player(player_pos, dt_seconds)
-                if not self._had_target_last_frame:
-                    # First frame of sight: force immediate spawn
-                    self._spawn_cooldown = 0.0
-            else:
-                self._scan(dt_seconds)
-        else:
-            self._scan(dt_seconds)
-
-        if player_visible and player_pos is not None and self._spawn_cooldown <= 0.0:
-            spawned.append(self._spawn_flocker(player_pos))
-            self._spawn_cooldown = self._spawn_interval
+    def on_event(self, creature, name: str) -> None:
+        """A launch flashes the lamp and sends a ring out."""
+        if name == 'launched':
             self.launch_flash = 1.0
-        else:
-            self.launch_flash = max(0.0, self.launch_flash - dt_seconds / self.LAUNCH_FLASH_SECONDS)
+            self._launched = True
 
+    def update(self, creature, dt: float, target=None) -> None:
+        """The alert rises while it sees the player and falls when it does not; a launch flash fades."""
+        dt_seconds = dt / float(config.FPS)
+        if not self._launched:
+            self.launch_flash = max(0.0, self.launch_flash - dt_seconds / self.LAUNCH_FLASH_SECONDS)
+        self._launched = False
         self._anim_time += dt_seconds
-        if player_visible:
+        if getattr(creature, 'sees_target', False):
             self.alert_level = min(1.0, self.alert_level + dt_seconds / self.ALERT_RISE_SECONDS)
         else:
             self.alert_level = max(0.0, self.alert_level - dt_seconds / self.ALERT_FALL_SECONDS)
 
-        self._had_target_last_frame = player_visible
-        self._player_visible = player_visible  # Store visibility state for drawing
-        return spawned
-
-    def _player_in_fov(
-        self,
-        player_pos: Tuple[float, float],
-        walls: Optional[List] = None,
-        spatial_grid = None,
-        gates = ()
-    ) -> bool:
-        """Check if player is in field of view with line-of-sight.
-        
-        Args:
-            player_pos: Player position.
-            walls: List of wall segments for line-of-sight checking.
-            spatial_grid: Optional spatial grid for optimized wall queries.
-            gates: Gate segments, which block sight like walls but are not in the grid.
-            
-        Returns:
-            True if player is visible (in range, in cone, and line-of-sight clear).
-        """
-        dist = distance((self.x, self.y), player_pos)
-        if dist > config.FLIGHTHOUSE_ENEMY_VISION_RANGE:
-            return False
-
-        angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
-        angle_diff = self._angle_diff(angle_to_player - self.angle)
-        if abs(angle_diff) > self.vision_cone_half:
-            return False
-        
-        # Check line-of-sight: line from flighthouse to player must not intersect walls
-        if walls is not None:
-            # Use spatial grid if available for optimization
-            walls_to_check = walls
-            if spatial_grid is not None:
-                walls_to_check = spatial_grid.get_walls_along_path(
-                    (self.x, self.y), player_pos, 0.0
-                )
-            
-            # Check if line from flighthouse to player intersects any wall
-            for wall in walls_to_check:
-                # Handle both WallSegment and tuple formats
-                if hasattr(wall, 'get_segment'):
-                    if not wall.active:
-                        continue
-                    segment = wall.get_segment()
-                else:
-                    segment = wall
-                
-                # Check if line from flighthouse to player intersects this wall segment
-                if line_line_collision(
-                    (self.x, self.y), player_pos,
-                    segment[0], segment[1]
-                ):
-                    return False  # Wall blocks line-of-sight
-
-        for gate in gates:
-            if gate.active and line_line_collision((self.x, self.y), player_pos, gate.start, gate.end):
-                return False
-        
-        return True
-
-    def _track_player(self, player_pos: Tuple[float, float], dt_seconds: float) -> None:
-        angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
-        angle_diff = self._angle_diff(angle_to_player - self.angle)
-
-        max_rotate = config.FLIGHTHOUSE_ENEMY_TRACK_SPEED_DEGREES_PER_SECOND * dt_seconds
-        clamped = max(-max_rotate, min(max_rotate, angle_diff))
-        self.angle = normalize_angle(self.angle + clamped)
-
-    def _scan(self, dt_seconds: float) -> None:
-        """Continuously rotate 360 degrees while scanning for player."""
-        max_rotate = config.FLIGHTHOUSE_ENEMY_SCAN_SPEED_DEGREES_PER_SECOND * dt_seconds * self._scan_dir
-        self.angle = normalize_angle(self.angle + max_rotate)
-
-    def _spawn_flocker(self, player_pos: Tuple[float, float]):
-        import creatures
-        import enemy_kinds
-        flocker = creatures.build('flocker', (self.x, self.y), self.level)
-        angle_to_player = get_angle_to_point((self.x, self.y), player_pos)
-        flocker.angle = angle_to_player
-
-        # Give flocker an initial push toward the player
-        base_speed = config.SHIP_MAX_SPEED * dict(enemy_kinds.kind('flocker').traits)['thrusters']['speedShare']
-        initial_speed = base_speed * config.FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER
-        angle_rad = angle_to_radians(angle_to_player)
-        flocker.vx = math.cos(angle_rad) * initial_speed
-        flocker.vy = math.sin(angle_rad) * initial_speed
-        return flocker
-
-    @staticmethod
-    def _angle_diff(angle: float) -> float:
-        """Normalize to -180..180 for comparison."""
-        angle = (angle + 180) % 360 - 180
-        return angle
-
-    def check_wall_collision(self, walls, spatial_grid=None) -> bool:
-        # Flighthouses are stationary; ignore wall collisions
-        return False
-
-    def check_circle_collision(
-        self,
-        other_pos: Tuple[float, float],
-        other_radius: float,
-        other_entity: Optional['GameEntity'] = None
-    ) -> bool:
-        """Check collision with another circular entity.
-        
-        Uses proper elastic collision physics when other_entity is provided,
-        otherwise falls back to simple collision detection for backward compatibility.
-        
-        Note: Flighthouses are stationary (zero velocity) but still participate in physics.
-        
-        Args:
-            other_pos: Position of the other entity (x, y).
-            other_radius: Radius of the other entity.
-            other_entity: Optional GameEntity object. If provided, both objects'
-                         velocities will be updated using conservation of momentum.
-            
-        Returns:
-            True if collision occurred, False otherwise.
-        """
-        if not circle_circle_collision(
-            (self.x, self.y), self.radius,
-            other_pos, other_radius
-        ):
-            return False
-        
-        if other_entity is not None:
-            # Use proper physics with conservation of momentum
-            # Flighthouses are stationary (vx=0, vy=0) but still participate
-            apply_circle_collision_physics(self, other_entity, config.COLLISION_RESTITUTION)
-        
-        return True
+    def update_death(self, creature, dt: float) -> None:
+        """It breaks up as death_progress runs; nothing else moves."""
 
     def _get_beam_surface(self, color: Tuple[int, int, int]) -> pygame.Surface:
         """Get the searchlight cone for a color (cached).
@@ -280,7 +100,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         The cone has its apex at the left centre and points along +x. Its
         angle is the real vision cone; it fades out along its length.
         """
-        length = int(config.FLIGHTHOUSE_ENEMY_VISION_RANGE * self.BEAM_LENGTH_FRACTION)
+        length = int(self.scan_range * self.BEAM_LENGTH_FRACTION)
         key = (color, length, self.vision_cone_half)
         surf = self._beam_cache.get(key)
         if surf is not None:
@@ -312,7 +132,7 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
 
     def _draw_beam(self, screen: pygame.Surface, color: Tuple[int, int, int], strength: float) -> None:
         """Draw the searchlight cone along the facing direction."""
-        if strength <= 0.0:
+        if strength <= 0.0 or int(self.scan_range * self.BEAM_LENGTH_FRACTION) <= 0:
             return
         beam = pygame.transform.rotate(self._get_beam_surface(color), -self.angle)
         beam.set_alpha(int(255 * min(1.0, strength)))
@@ -352,14 +172,12 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
             ))
         return points
 
-    def draw(self, screen) -> None:
+    def draw(self, screen, creature) -> None:
         """Draw the flighthouse as a lighthouse seen from above.
         
         A searchlight sweeps with the real vision cone and turns red when the
         player is spotted. Lights on the base show remaining hit points.
         """
-        if not self.active:
-            return
 
         alert = self.alert_level
         base_color = config.FLIGHTHOUSE_ENEMY_COLOR
@@ -416,11 +234,9 @@ class FlighthouseEnemy(GameEntity, Collidable, Drawable):
         if self.launch_flash > 0.0:
             self._draw_launch_flash(screen, center)
 
-    def draw_death(self, screen: pygame.Surface) -> None:
+    def draw_death(self, screen: pygame.Surface, creature) -> None:
         """Sputter out the beam, scatter the base and collapse the lamp."""
-        if not self.is_dying:
-            return
-        progress = self.death_progress
+        progress = creature.death_progress
         color = config.FLIGHTHOUSE_ENEMY_COLOR
         # A short, flickering last sweep; the dead scanner never tracks or spawns.
         beam_strength = max(0.0, 1.0 - progress / 0.3)
