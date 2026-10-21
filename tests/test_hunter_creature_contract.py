@@ -1,0 +1,53 @@
+"""Flight traces captured at ffc8d91: refactoring must preserve the trained simulation."""
+from dataclasses import replace
+from pathlib import Path
+import random
+
+import numpy as np
+
+from entities.hunter_ship import HunterShip
+from hunter.model import ACTIONS, FiringSolution, HunterSettings, NEUTRAL, PilotAction
+from maze.wall_segment import WallSegment
+from hunter.senses import FEATURE_NAMES
+from tests.test_senses import sense, world
+
+FIXTURE = Path(__file__).with_name('fixtures') / 'hunter-stage6-baseline.npz'
+
+
+def contract_trace():
+    states, shots, observations = [], [], []
+    extra = [PilotAction(0, True, False, course=True, burn_heading=90, burn_frames=6),
+             PilotAction(0, True, True, track=True, burn_heading=0, burn_frames=6, burn_reference=0)]
+    actions = list(ACTIONS.values()) + extra
+    for dt in (0.5, 1.0, 2.0):
+        for mortal in (False, True):
+            for action in actions:
+                random.seed(42)
+                ship = HunterShip((500.0, 500.0), replace(HunterSettings(), indestructible=not mortal))
+                ship.gun_upgrade_level = 2
+                ship.upgrade_remaining = 0.3
+                ship.vx = 0.25
+                maze = world([WallSegment((510, 400), (510, 600), 3)])
+                for frame in range(24):
+                    held = action if frame < 12 else NEUTRAL
+                    solution = FiringSolution(3.0, frame % 4 != 0)
+                    fired = ship.step(dt, held, solution) or []
+                    ship.check_wall_collision(maze.walls, maze.spatial_grid)
+                    if frame in (3, 10, 20):
+                        ship.take_damage()
+                    states.append([ship.x, ship.y, ship.vx, ship.vy, ship.angle, ship.health,
+                                   ship.immunity_remaining, ship.thrust_frames, ship.burst_remaining,
+                                   ship.fire_remaining, ship.gun_upgrade_level, ship.shots_fired, ship.active])
+                    shots.append([len(fired), sum(s.x for s in fired), sum(s.y for s in fired),
+                                  sum(s.vx for s in fired), sum(s.vy for s in fired)])
+                observations.append(sense(ship, maze))
+    return np.asarray(states), np.asarray(shots), np.asarray(observations)
+
+
+def test_the_trained_flight_and_observation_contract_is_preserved():
+    states, shots, observations = contract_trace()
+    with np.load(FIXTURE) as baseline:
+        np.testing.assert_allclose(states, baseline['states'], rtol=0, atol=1e-10)
+        np.testing.assert_allclose(shots, baseline['shots'], rtol=0, atol=1e-10)
+        np.testing.assert_array_equal(observations, baseline['observations'])
+        assert tuple(baseline['features']) == FEATURE_NAMES
