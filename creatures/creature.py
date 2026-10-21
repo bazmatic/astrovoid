@@ -24,6 +24,8 @@ class Controls:
     fire: bool = False
     heading: Optional[float] = None           # degrees: the way it wants to go
     aim: Optional[Tuple[float, float]] = None  # where it wants to shoot
+    on_target: bool = False
+    gun_enabled: bool = True
 
 
 class Creature(GameEntity):

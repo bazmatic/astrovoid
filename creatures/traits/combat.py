@@ -6,6 +6,7 @@ from typing import Optional
 import config
 import level_rules
 from creatures.trait import Trait
+from game_handlers.fire_rate_calculator import cooldown_for_upgrade, shots_per_volley
 from entities.explosion import Blast
 from entities.projectile import Projectile
 from utils import circle_line_collision, get_angle_to_point
@@ -97,13 +98,22 @@ class Gun(Trait):
     strength of level `strengthLevel` (by default the creature's own). `startsLoaded` lets it fire on its first frame.
     The shot can be styled: `shotSpeed` scales its speed; `impact`, `glowColor`, `glowRadius` and `glowIntensity` are
     the projectile's. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show, and
-    `just_fired`, true on the frame it fires, for its neighbours."""
+    `just_fired`, true on the frame it fires, for its neighbours. `cadence='burst'` takes its firing times from
+    burstFire instead of reloading itself; `aimMode='nose'` emits a volley from the nose along the heading.
+    `upgrades` enables crystal upgrades and expiry, including spread volleys and their fire-rate adjustment."""
     NAME = 'gun'
 
     def __init__(self, intervalMin: Optional[int] = None, intervalMax: Optional[int] = None,
                  range: Optional[float] = None, strengthLevel: Optional[int] = None, startsLoaded: bool = False,
                  shotSpeed: float = 1.0, impact: float = 1.0, glowColor: Optional[list] = None,
-                 glowRadius: float = 1.0, glowIntensity: float = 0.0):
+                 glowRadius: float = 1.0, glowIntensity: float = 0.0,
+                 cadence: str = 'reload', aimMode: str = 'target', shotStrength: float = 1.0,
+                 upgrades: bool = False):
+        if cadence not in ('reload', 'burst') or aimMode not in ('target', 'nose'):
+            raise ValueError('gun: unknown cadence or aimMode')
+        self.cadence, self.aim_mode, self.shot_strength = cadence, aimMode, shotStrength
+        self.upgrades = upgrades
+        self.REQUIRES = ('burstFire',) if cadence == 'burst' else ()
         self.interval_min, self.interval_max, self.range = intervalMin, intervalMax, range
         self.strength_level, self.starts_loaded = strengthLevel, startsLoaded
         self.shot_speed = shotSpeed
@@ -118,25 +128,69 @@ class Gun(Trait):
     def on_spawn(self, c, enc):
         strength = self._strength(c)
         c.gun_range = strength.fire_range if self.range is None else self.range
-        self._reload(c, strength)
+        if self.cadence == 'reload':
+            self._reload(c, strength)
         if self.starts_loaded:
             c.gun_cooldown = 0.0
         c.just_fired = False
+        c.shots_fired = 0
+        if self.upgrades:
+            c.gun_upgrade_level = 0
+            c.upgrade_remaining = 0.0
 
     def on_frame(self, c, enc, dt):
-        c.gun_cooldown = max(0.0, c.gun_cooldown - dt)
         controls = c.controls
-        c.just_fired = controls.fire and controls.aim is not None and c.gun_cooldown <= 0
+        if self.upgrades:
+            if c.gun_upgrade_level:
+                c.upgrade_remaining -= dt / config.FPS
+                if c.upgrade_remaining <= 0:
+                    c.gun_upgrade_level = 0
+            if self.cadence == 'burst':
+                c.fire_interval = (c.base_fire_interval * cooldown_for_upgrade(c.gun_upgrade_level)
+                                   / config.SETTINGS.powerups.fireRateBaseCooldown)
+        if self.cadence == 'reload':
+            c.gun_cooldown = max(0.0, c.gun_cooldown - dt)
+            ready = controls.fire and c.gun_cooldown <= 0
+        else:
+            ready = c.burst_round_due
+        c.just_fired = bool(ready and (self.aim_mode == 'nose' or controls.aim is not None))
         if c.just_fired:
-            pos = c.get_pos()
-            shot = Projectile(pos, get_angle_to_point(pos, controls.aim), is_enemy=c.allegiance == 'enemy',
-                              **self.styling)
-            shot.vx *= self.shot_speed
-            shot.vy *= self.shot_speed
-            enc.add_shot(shot)
-            self._reload(c, self._strength(c))
+            if self.aim_mode == 'nose':
+                angle = c.angle
+                rad = math.radians(angle)
+                pos = (c.x + math.cos(rad) * (c.radius + 5), c.y + math.sin(rad) * (c.radius + 5))
+            else:
+                pos = c.get_pos()
+                angle = get_angle_to_point(pos, controls.aim)
+            level = c.gun_upgrade_level if self.upgrades else 0
+            angles = [angle]
+            if shots_per_volley(level) > 1:
+                spread = config.UPGRADED_PROJECTILE_SPREAD_ANGLE
+                angles.extend((angle - spread, angle + spread))
+            extra = max(0, level - 3)
+            colour = (tuple(c.kind.tuning['color']) if self.aim_mode == 'nose'
+                      and 'color' in c.kind.tuning else None)
+            for heading in angles:
+                shot = Projectile(pos, heading, is_enemy=c.allegiance == 'enemy',
+                                  source='enemy' if c.allegiance == 'enemy' else 'hunter',
+                                  strength=self.shot_strength, dynamic_color=colour, is_upgraded=level >= 1,
+                                  enhanced_size_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SIZE_INCREMENT,
+                                  enhanced_speed_multiplier=1.0 + extra * config.POWERUP_BEYOND_LEVEL_3_SPEED_INCREMENT,
+                                  **self.styling)
+                shot.vx *= self.shot_speed
+                shot.vy *= self.shot_speed
+                enc.add_shot(shot)
+            c.shots_fired += 1
+            if self.cadence == 'reload':
+                self._reload(c, self._strength(c))
             c.emit('fired', enc)
-        c.gun_charge = 1.0 - c.gun_cooldown / c.gun_interval
+        if self.cadence == 'reload':
+            c.gun_charge = 1.0 - c.gun_cooldown / c.gun_interval
+
+    def on_event(self, c, name, enc):
+        if name == 'pickup' and self.upgrades:
+            c.gun_upgrade_level += 1
+            c.upgrade_remaining = config.POWERUP_DURATION_SECONDS
 
     def _reload(self, c, strength):
         low = strength.fire_interval_min if self.interval_min is None else self.interval_min

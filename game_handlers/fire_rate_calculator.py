@@ -33,9 +33,13 @@ def calculate_fire_cooldown(ship: 'Ship') -> int:
     Returns:
         Fire cooldown in milliseconds.
     """
+    return cooldown_for_upgrade(ship.get_gun_upgrade_level())
+
+
+def cooldown_for_upgrade(upgrade_level: int) -> int:
+    """The cooldown for a gun's upgrade level, shared by ships and creature guns."""
     powerups = config.SETTINGS.powerups
     base_cooldown = powerups.fireRateBaseCooldown
-    upgrade_level = ship.get_gun_upgrade_level()
     if upgrade_level <= 0:
         return base_cooldown
     

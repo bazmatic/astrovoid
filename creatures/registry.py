@@ -3,7 +3,7 @@ built."""
 from typing import Dict, Mapping, Type
 
 from creatures.trait import Trait
-from creatures.traits import brains, combat, crowd, flock, growth, lighthouse, piloted, propulsion, rooted, spawning
+from creatures.traits import brains, burst_fire, combat, crowd, flock, growth, lighthouse, piloted, propulsion, rooted, spawning
 from entities.anemone import AnemoneBody
 from entities.belemnite import BelemniteBody
 from entities.egg import EggBody
@@ -25,7 +25,7 @@ TRAITS: Dict[str, Type[Trait]] = {trait.NAME: trait for trait in (
     rooted.Anchored, rooted.PullsShip, rooted.FlingsShip,
     flock.Flocks, flock.Tweets,
     lighthouse.Scans, lighthouse.LaunchesFlock,
-    piloted.Pilot,
+    piloted.Pilot, burst_fire.BurstFire,
 )}
 BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody, 'squid': Squid, 'egg': EggBody, 'anemone': AnemoneBody, 'flocker': FlockerBody, 'flighthouse': FlighthouseBody, 'hunterShip': HunterShipBody}
 
@@ -42,9 +42,9 @@ def validate(catalogue: Mapping) -> None:
             if name not in TRAITS:
                 raise ValueError(f'enemy kind {key!r}: unknown trait {name!r}')
             try:
-                TRAITS[name].from_params(params)
+                trait = TRAITS[name].from_params(params)
             except ValueError as error:
                 raise ValueError(f'enemy kind {key!r}: {error}') from None
-            missing = [needed for needed in TRAITS[name].REQUIRES if needed not in names]
+            missing = [needed for needed in trait.REQUIRES if needed not in names]
             if missing:
                 raise ValueError(f'enemy kind {key!r}: trait {name!r} requires {missing}')

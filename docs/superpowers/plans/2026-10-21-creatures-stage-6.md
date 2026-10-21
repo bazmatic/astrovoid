@@ -221,12 +221,12 @@ plume code from RotatingThrusterShip if needed to share drawing without copying 
 **Files:** Create `tests/test_hunter_creature_contract.py`; create
 `docs/superpowers/validation/2026-10-21-creatures-stage-6.md`.
 
-- [ ] Record integrated base SHA, protected-file ownership, full-suite baseline and test failures before editing shared files.
-- [ ] Capture deterministic traces from the old implementation with a fake monotonic clock and SyncWorker. Record
+- [x] Record integrated base SHA, protected-file ownership, full-suite baseline and test failures before editing shared files.
+- [x] Capture deterministic traces from the old implementation with a fake monotonic clock and SyncWorker. Record
   x/y/vx/vy/angle, health, immunity, thrust_frames, burst_remaining, fire_remaining, shots and observation vectors.
   Fixtures cover all ACTIONS, held/replaced decisions, worked burns, absent targets, tracking, wall sweeps, mortal
   and indestructible settings, upgrades and dt=0.5/1/2. Compare against the same trace after migration.
-- [ ] Preserve these existing assertions as the minimum firing contract:
+- [x] Preserve these existing assertions as the minimum firing contract:
 
 ```python
 # Tests use existing ACTIONS and settings; retain equivalent assertions when replacing HunterShip setup.
@@ -236,7 +236,7 @@ assert volley_sources == ['hunter']
 assert enemy_shot_strengths == [1.0, 1.0, 0.1]  # Viber, Boss Viber, Vibelet
 ```
 
-- [ ] Run `tests/test_hunter_ship.py`, `tests/test_hunter_course.py`, `tests/test_hunter_powerups.py`,
+- [x] Run `tests/test_hunter_ship.py`, `tests/test_hunter_course.py`, `tests/test_hunter_powerups.py`,
   `tests/test_hunter_wall_energy.py`, `tests/test_hunter_flight.py` and the full suite. Commit the baseline tests
   and measurements by name; do not commit another session's work as part of this task.
 
@@ -245,17 +245,17 @@ assert enemy_shot_strengths == [1.0, 1.0, 0.1]  # Viber, Boss Viber, Vibelet
 **Files:** Create `creatures/traits/burst_fire.py`, `tests/test_burst_fire_trait.py`; modify
 `creatures/traits/combat.py`, `creatures/registry.py`, `tests/test_traits_combat.py`.
 
-- [ ] Write failing tests against a real Creature/Encounter using tests.creature_parts. Give it a non-pilot test
+- [x] Write failing tests against a real Creature/Encounter using tests.creature_parts. Give it a non-pilot test
   brain that sets fire/on_target/gun_enabled, BurstFire(rounds=3, spacing=0.05, interval=0.25), and nose Gun with
   cadence='burst'. Test frame numbers above, release while aligned, release while unaligned, held unaligned,
   disabled gun cancellation, cooldown, single-round profile, spread as one round and independent state of two
   creatures sharing one trait. Parameterize dt and invalid constructor arguments.
-- [ ] Run the new file with the standard SDL command; expect missing BurstFire/Gun parameters to fail.
-- [ ] Implement the public BurstFire contract above; consume a round in on_event('fired'), after Gun succeeds.
+- [x] Run the new file with the standard SDL command; expect missing BurstFire/Gun parameters to fail.
+- [x] Implement the public BurstFire contract above; consume a round in on_event('fired'), after Gun succeeds.
   Implement the two Gun options without changing default Gun reload behavior. Reject missing conditional
   requirements and invalid cadence/aimMode values through registry validation.
-- [ ] Verify bursts on a non-pilot Creature and regression-test the existing crab/squid guns. Run the full suite.
-- [ ] Commit only this trait, gun extension and their tests.
+- [x] Verify bursts on a non-pilot Creature and regression-test the existing crab/squid guns. Run the full suite.
+- [x] Commit only this trait, gun extension and their tests.
 
 A minimal non-pilot firing regression for this task:
 

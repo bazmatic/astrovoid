@@ -35,8 +35,13 @@ was corrected before the fixture was captured.
 ## Progress
 
 - Task 1 complete: ownership resolved, full baseline recorded, deterministic contract captured.
-- Task 2 in progress: `burstFire` owns queue and timers; `gun` emits volleys. Verified without a pilot; full-suite
-  result will be recorded after the task finishes.
+- Task 2 complete: `burstFire` owns queue and timers; `gun` emits volleys, including spread/upgraded shots.
+  Full suite: **2296 passed, 1 failed in 267.19 seconds**, with only the same baseline test_senses failure.
+  This run collected the first 16 burst tests. Five additional burst cases (invalid modes, missing gun,
+  target-aimed bursts and upgrade expiry) passed afterward in the 37-test focused run, alongside combat,
+  shared cooldown and frozen flight-contract checks. There are 21 passing burst cases in the final test file.
+  Red checks confirmed the missing burst module and missing upgrade support before implementing them.
+  The frozen flight contract still passes. Existing catalogue kinds do not yet select burst cadence.
 - Tasks 3–7 pending. No claim of stage 6 completion or speed-gate approval.
 
 ## Rulings
