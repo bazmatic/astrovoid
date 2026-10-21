@@ -94,3 +94,24 @@ mostly in drawing (+0.9 ms). Timing each kind's draw alone on that level shows n
 (7.4 against 7.1 ms over all its enemies, and a whole `draw_game` 10.3 against 9.0 to 10.0), so the gap is the game
 playing out differently: every Creature draws its starting angle, which shifts the random stream and with it what is
 on screen.
+
+## Stage 5 gate: every enemy is a Creature
+
+Measured on 2026-10-21 in CPU time (`time.process_time`), as stage 4: two clean worktrees alternating, five
+rounds, seed 1, 60 warm-up frames and 600 measured frames on levels 1, 8, 21, 24, 25 and 40. Baseline `743d4d3`
+against `5f87271` plus Task 4 cleanup and the inactive-player contact guard. Other-session changes were excluded.
+The scratch timer is the stage 4 timer with its timestamps changed to `time.process_time`. Values below are
+medians of update + draw, in ms/frame. The first two preliminary rounds were excluded because the review fix
+was not yet included; five complete alternating rounds followed with the fixed code. Raw samples:
+[2026-10-21-stage5-speed.csv](2026-10-21-stage5-speed.csv).
+
+| level | enemies | stage 4 (743d4d3) | stage 5 | change | stage 5 spread |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 10 | 4.126 | 4.227 | +2.4% | 4.037–4.397 |
+| 8 | 33 | 6.380 | 6.260 | -1.9% | 5.658–6.567 |
+| 21 | 13 | 9.903 | 10.098 | +2.0% | 9.235–10.532 |
+| 24 | 3 | 2.733 | 2.661 | -2.6% | 2.366–2.914 |
+| 25 | 1 | 2.141 | 2.173 | +1.5% | 1.883–2.307 |
+| 40 | 32 | 12.871 | 13.089 | +1.7% | 12.317–13.356 |
+
+**Passed**: every level is within the 20% limit.

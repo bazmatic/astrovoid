@@ -588,7 +588,6 @@ class Game:
         movers, anchored, seen = [self.ship], [], set()
         if self.hunter is not None and self.hunter.active:
             movers.append(self.hunter)
-        movers.extend(h for h in self.enemy_hunters if h.active)
         seen.update(id(m) for m in movers)
         for enemy in self.roster.all():
             if not enemy.active or id(enemy) in seen:

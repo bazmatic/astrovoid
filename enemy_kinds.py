@@ -31,7 +31,7 @@ class EnemyKind:
     pilot: Optional[str] = None             # an enemy hunter's pilot (its pilot trait's mode); None for other kinds
     tuning: Mapping[str, Any] = field(default_factory=dict)   # settings only this kind's own code reads
     allegiance: str = 'enemy'              # whom it targets and whose shots hurt it: 'friend' or 'enemy'
-    body: Optional[str] = None             # the Body a Creature of this kind is drawn with; None: not a Creature yet
+    body: Optional[str] = None             # the Body a Creature of this kind is drawn with; None for a kind without a Body
     traits: Tuple[Tuple[str, Mapping[str, Any]], ...] = ()   # (trait name, its parameters), in the order they run
 
 

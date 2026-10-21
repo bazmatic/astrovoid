@@ -92,6 +92,18 @@ def test_a_kill_drops_one_pickup_roll():
     stand_in.sound_manager.play_enemy_destroy.assert_called_once()
 
 
+def test_ramming_ignores_an_inactive_player():
+    ship = Mock(active=False)
+    ship.is_shield_active.return_value = False
+    ship.check_circle_collision.return_value = True
+    stand_in = world(ship=ship)
+    rammer = creature([RamsShip()])
+    encounter(rammer, world_=stand_in).step(1.0)
+    ship.check_circle_collision.assert_not_called()
+    stand_in.scoring.record_enemy_collision.assert_not_called()
+    assert rammer.body.events == []
+
+
 def test_a_flinch_lasts_its_frames_and_a_new_one_never_shortens_it():
     jelly = creature([FlinchesWhenHit(frames=90), TakesHits(hitPoints=9)])
     enc = encounter(jelly)

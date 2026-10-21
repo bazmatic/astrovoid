@@ -4,7 +4,7 @@ It runs every live creature's traits in roster order, then each kind's crowd tra
 the creatures in roster order. It also gives traits what they act on, read live from its world (a Game, or the duel's
 stand-in): the ship, the hunter, the maze, the scoring, the shots, the pickups and the collision handler.
 
-The enemy hunters are not Creatures: a shot no creature takes goes on to them.
+Every enemy is a Creature; a shot no creature takes remains available to the rest of the level.
 """
 from typing import Dict, List, Optional, Tuple
 
@@ -86,7 +86,7 @@ class Encounter:
 
     def shoot(self, projectile) -> bool:
         """Offer a friendly shot to each live enemy creature in roster order; the first it reaches takes it, and the
-        shot is spent (True). A shot no creature takes goes on to the enemy hunters."""
+        shot is spent (True). Return False when no creature takes it."""
         if not projectile.is_enemy and projectile.active:
             for creature in self.creatures():
                 if (creature.active and creature.allegiance == 'enemy'
@@ -97,7 +97,7 @@ class Encounter:
                         if not creature.active:
                             break
                     return True
-        return self.world.collision_handler.shoot_into(projectile, self.roster)
+        return False
 
     def target_for(self, creature) -> Optional[Tuple[float, float]]:
         """Where the creature's target is: the nearest friend, or None."""

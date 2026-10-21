@@ -49,7 +49,6 @@ def world(**overrides):
         ship=None, hunter=None, maze=open_maze(), scoring=Mock(),
         sound_manager=Mock(), command_recorder=Mock(), collision_handler=Mock(), projectiles=[], powerup_crystals=[],
         jev_beacon_allowed=lambda: False)
-    stand_in.collision_handler.shoot_into.return_value = False
     for key, value in overrides.items():
         setattr(stand_in, key, value)
     return stand_in

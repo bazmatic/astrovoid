@@ -15,8 +15,12 @@ The allied ship that flies itself, summoned by collecting a Jev beacon. Its kill
 _Avoid_: ally ship, bot, AI ship
 
 **Pilot**:
-Whatever decides how the hunter turns, thrusts and fires. One of three: Jev (a remote model), rules (the same criteria written as plain code), or neural (a small trained policy).
+Whatever decides how the hunter turns, thrusts and fires. One of three: Jev (a remote model), rules (the same criteria written as plain code), or neural (a small trained policy). It also flies the Terminator, the Vibers and any creature given the `pilot` trait.
 _Avoid_: agent, controller; "brain" is the wider term for whatever decides a Creature's controls
+
+**Craft**:
+The hunter ship a pilot flies inside a creature, which the creature follows.
+_Avoid_: vessel, inner ship
 
 **Hunter flight**:
 One hunter in play with its pilot, from the moment it is summoned until it dies, is replaced, or the level ends.
@@ -128,7 +132,7 @@ _Avoid_: explosion (that is what the player sees of it), splash damage
 
 ### Creatures
 
-How every enemy but the enemy hunters is built: from its catalogue entry's `body` and `traits`.
+How every enemy is built: from its catalogue entry's `body` and `traits`.
 
 **Creature**:
 One enemy assembled from its Enemy Kind's catalogue entry: a Body and a list of Traits. It holds what every enemy has

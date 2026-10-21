@@ -9,13 +9,11 @@ import math
 import random
 from typing import List, Optional, Tuple, TYPE_CHECKING
 import config
-import enemy_kinds
 from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
 from entities.explosion import Explosions, push, reaches
 from entities.projectile import Projectile
 if TYPE_CHECKING:
-    from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
     from entities.explosion import Blast
     from maze.generator import Maze
@@ -82,27 +80,6 @@ class CollisionHandler:
             powerup_crystals.append(JevBeacon(pos))
         elif random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
             powerup_crystals.append(PowerupCrystal(pos))
-
-    def shoot_enemy_hunters(self, projectile: 'Projectile', enemy_hunters) -> bool:
-        """A friendly shot against the enemy hunters, Rules and Neural: one it reaches takes a hit, as a boss does, and
-        leaves no pickup when it dies. True when one took it (the shot is then spent)."""
-        if projectile.is_enemy or not projectile.active:
-            return False
-        for hunter in enemy_hunters:
-            if hunter.active and projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
-                if hunter.take_damage():
-                    hunter.die()
-                    self.sound_manager.play_enemy_destroy()
-                    self.record_kill(projectile, hunter)
-                return True
-        return False
-
-    def shoot_into(self, projectile, roster) -> bool:
-        """A friendly shot against the enemies on the roster that are not Creatures (the Encounter offers it to those
-        first): the enemy hunters. True when one took it."""
-        from creatures.creature import Creature
-        return self.shoot_enemy_hunters(
-            projectile, [h for h in roster.of_kind(*enemy_kinds.hunters()) if not isinstance(h, Creature)])
 
     def handle_projectile_ship_collision(
         self,

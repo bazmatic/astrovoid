@@ -67,7 +67,6 @@ def _world(**overrides):
     world = SimpleNamespace(
         ship=None, hunter=None, maze=None, scoring=Mock(), sound_manager=Mock(), command_recorder=Mock(),
         collision_handler=Mock(), projectiles=[], powerup_crystals=[], jev_beacon_allowed=lambda: False)
-    world.collision_handler.shoot_into.return_value = False
     for key, value in overrides.items():
         setattr(world, key, value)
     return world
@@ -101,16 +100,15 @@ def test_a_shot_hits_only_the_first_creature_it_reaches():
     encounter = _encounter(first, second, world=world)
     assert encounter.shoot(Projectile((100.0, 100.0), 0))
     assert [entry for entry in log if entry[1] == 'shot'] == [('a', 'shot', id(first))]
-    world.collision_handler.shoot_into.assert_not_called()
 
 
-def test_a_shot_that_misses_every_creature_goes_to_the_old_code():
+def test_a_shot_that_misses_every_creature_is_not_consumed():
     world = _world()
     encounter = _encounter(_creature([], pos=(500.0, 500.0)), world=world)
     shot = Projectile((100.0, 100.0), 0)
-    assert not encounter.shoot(shot)
-    world.collision_handler.shoot_into.assert_called_once()
-    assert world.collision_handler.shoot_into.call_args.args[0] is shot
+    assert encounter.shoot(shot) is False
+    assert shot.active
+    assert not world.collision_handler.mock_calls
 
 
 def test_enemy_shots_are_not_offered_to_creatures():

@@ -47,7 +47,8 @@ class RamsShip(Trait):
 
     def on_frame(self, c, enc, dt):
         ship = enc.ship
-        if ship is not None and not ship.is_shield_active() and ship.check_circle_collision(c.get_pos(), c.radius, c):
+        if (ship is not None and ship.active and not ship.is_shield_active()
+                and ship.check_circle_collision(c.get_pos(), c.radius, c)):
             enc.scoring.record_enemy_collision()
             c.emit('rammed', enc)
 

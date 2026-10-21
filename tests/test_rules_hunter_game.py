@@ -14,7 +14,7 @@ from entities.projectile import Projectile
 from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_rules_hunter import SilentWorker
 
-RULES_HUNTER_HIT_POINTS = 12
+TERMINATOR_HIT_POINTS = 12
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
     crystals_before = len(arena.powerup_crystals)
     destroyed = 0
-    for hit in range(RULES_HUNTER_HIT_POINTS):
+    for hit in range(TERMINATOR_HIT_POINTS):
         projectile = shot_at(hunter)
         used = arena.encounter.shoot(projectile)
         assert used
@@ -89,13 +89,13 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
 def test_the_hunters_shots_hurt_it_too(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
     arena.encounter.shoot(shot_at(hunter, 'hunter'))
-    assert hunter.hit_points == RULES_HUNTER_HIT_POINTS - 1
+    assert hunter.hit_points == TERMINATOR_HIT_POINTS - 1
 
 
 def test_its_own_shots_do_not_hurt_it(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
     assert not arena.encounter.shoot(shot_at(hunter, 'enemy'))
-    assert hunter.hit_points == RULES_HUNTER_HIT_POINTS
+    assert hunter.hit_points == TERMINATOR_HIT_POINTS
 
 
 def test_killing_it_with_a_player_shot_feeds_the_level_complete_portrait(arena):
@@ -179,7 +179,7 @@ def test_its_own_shots_never_hit_it(arena):
     crab = creatures.build('patrol', (100.0, 100.0))
     crab_shot = Projectile((hunter.x, hunter.y), 0.0, source='enemy')
     assert not arena.encounter.shoot(own) and not arena.encounter.shoot(crab_shot)
-    assert hunter.hit_points == RULES_HUNTER_HIT_POINTS and crab.active
+    assert hunter.hit_points == TERMINATOR_HIT_POINTS and crab.active
 
 
 def test_restarting_the_level_stops_every_terminator_thread(game, monkeypatch):

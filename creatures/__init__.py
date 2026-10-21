@@ -1,6 +1,6 @@
 """Creatures: enemies assembled from config/enemies.json, a Body and a list of Traits.
 
-A kind whose catalogue entry names a `body` is built here; the rest keep their own classes until they move over.
+Every enemy kind is built here from its catalogue Body and Traits.
 """
 import enemy_kinds
 from creatures import registry

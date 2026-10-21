@@ -29,7 +29,7 @@ Main game coordinator class. Manages game state, level progression, and coordina
 
 The Enemy Kind catalogue, read from `config/enemies.json`: one entry per kind, in the order the editor palette and the
 level counts use. `kind(key)` gives an `EnemyKind` (names, `anchored`, `replays_player`, `par_weight`, `spawn_radius`,
-an enemy hunter's `pilot` and `hunter` numbers, and its own `tuning`); `kinds()`, `anchored()` and `hunters()` list
+its `pilot` mode, Body, Traits and its own `tuning`); `kinds()`, `anchored()` and `hunters()` list
 keys; `name()` and `plural()` give what the player reads. A missing or unknown field stops the game at startup.
 
 #### `config.py`
@@ -108,17 +108,17 @@ The entity system provides a foundation for all game objects:
 
 ### Creatures (`creatures/`)
 
-Every enemy but the enemy hunters is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
+Every enemy is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
 its `config/enemies.json` entry and run in the entry's order (see
-`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). The enemy hunters, which fly with a pilot, keep
-their own classes.
+`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). The allied hunter still uses its own ship and flight.
 
 - **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
   `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
-  keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter.
+  keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter and the live state
+  named by each trait in `LIVE` (a pilot’s flight and worker).
 - **`trait.py`**: `Trait`, whose hooks all do nothing by default: `on_spawn`, `on_frame`, `on_shot`, `on_death`,
-  `on_event`, and `on_crowd` for a `CROWD` trait (once a frame per crowd: a kind, or a crowd the trait names, as
-  Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
+  `on_event`, `on_close` when the encounter ends, and `on_crowd` for a `CROWD` trait (once a frame per crowd:
+  a kind, or a crowd the trait names, as Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
   `from_params` builds it from its catalogue parameters.
 - **`traits/`**: `brains.py` (`still`, `patrol`, `chase`, `replaysPlayer`), `propulsion.py` (`coasts`, `drift`,
   `thrusters`, which flies like a ship through `physics/thrust.py`), `combat.py` (`takesHits`, `shovedByShots`,
@@ -126,19 +126,24 @@ their own classes.
   draws: a squid blinks, an anemone clamps shut), `crowd.py` (`keepsApart`, which also keeps a crowd out of the walls),
   `spawning.py` (`splitsOnDeath`, `laysEggs`), `growth.py` (`grows`, `hatches`: hatching is a plain death, not a
   kill), `rooted.py` (`anchored`, `pullsShip`, a crowd trait whose pulls together never exceed one at full strength,
-  `flingsShip`), `flock.py` (`flocks`, a crowd brain that decides the whole flock's next frame, `tweets`) and
-  `lighthouse.py` (`scans`, which watches the player's ship only, and `launchesFlock`)
+  `flingsShip`), `flock.py` (`flocks`, a crowd brain that decides the whole flock's next frame, `tweets`),
+  `lighthouse.py` (`scans`, which watches the player's ship only, and `launchesFlock`), and
+  `piloted.py` (`pilot`, rules or neural): a pilot flies a private **craft**, a `HunterShip` with its own
+  `HunterFlight`; each frame pushes reach the craft, it flies and places its shots, and the creature follows its
+  position, velocity and heading. Death and encounter closing stop its flight and worker
 - **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
   bad parameters or a missing requirement when the game starts
-- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every kind but the
-  enemy hunters
+- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every enemy kind
 - **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's traits in roster order and then
   animates its Body, then each kind's crowd traits; `shoot(projectile)` offers a friendly shot to each live creature in
-  roster order and stops at the first it reaches, handing a shot no creature took to `CollisionHandler.shoot_into`
-  (the enemy hunters). `ready()` runs every newcomer's spawn hooks without a frame passing; the game calls it at level
-  start, so creatures show their state (an anemone its reach) before the player moves.
+  roster order and stops at the first it reaches; a miss returns False. `close()` runs every creature’s
+  `on_close` hooks, including dead creatures, and is safe to repeat. `ready()` runs every newcomer's spawn hooks
+  without a frame passing; the game calls it at level start, so creatures show their state (an anemone its reach) before the player moves.
   Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
   `add_shot`, `explode`, and `spawn`, which puts a new enemy of any kind on the roster). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
+
+`entities/hunter_ship_body.py` supplies `HunterShipBody` (`hunterShip`): an arrowhead drawn through a puppet
+`HunterShip`, using the kind’s colours, the craft’s plume, an optional hit-point bar and an expanding death ring.
 
 ### Enemy Roster (`game_handlers/enemy_roster.py`)
 
@@ -281,6 +286,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
    it, the Encounter runs it and offers it shots, and the roster keeps it with every other enemy. A new behaviour is a
    new `Trait` subclass in `creatures/traits/`, added to `TRAITS`; a new look is a new Body added to `BODIES`. Name
    a trait for what it does, not for one kind, so other kinds can take it too.
+   A piloted kind uses the `pilot` trait with `mode` set to `rules` or `neural`; `hunterShip` supplies its look.
 3. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
 
 ### Adding New Game States
