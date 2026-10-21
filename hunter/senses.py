@@ -93,7 +93,6 @@ class Senses:
         self._memory = weakref.WeakKeyDictionary()    # enemy -> (x, y, seen_at)
         self._crystal_memory = {}    # id -> (crystal, x, y, seen_at); held strongly so an id is not reused
         self._routes = MazeRoutes()
-        self.breach = None    # the wall block the enemy compass route goes through first, for fire control
 
     def reset(self):
         self._memory = weakref.WeakKeyDictionary()
@@ -258,7 +257,6 @@ class Senses:
         """Point the way to the nearest live enemy by route, wherever it is: at the furthest point of the cell route
         in plain sight, with the route's length in maze widths. The route may go through breakable wall blocks,
         each costing HIT_POINT_CELLS cells per hit point left. An enemy no route reaches is pointed at directly."""
-        self.breach = None
         alive = [e for e in enemies if e.active]
         if not alive:
             return
@@ -267,7 +265,7 @@ class Senses:
             target = min(((e.x, e.y) for e in alive), key=lambda p: math.dist(origin, p))
             waypoint, length = target, math.dist(origin, target)
         else:
-            index, route, extra, self.breach = found
+            index, route, extra = found
             target = (alive[index].x, alive[index].y)
             points = [target] + route                                  # from the target back toward the hunter
             hidden = blocked(origin, points, starts, ends)

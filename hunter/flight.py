@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from hunter.controller import HunterController
-from hunter.fire_control import find_firing_solution, nose_on_block
+from hunter.fire_control import find_firing_solution
 from hunter.model import FiringSolution
 from hunter.neural.controller import NeuralController
 from hunter.perception import HunterPerception
@@ -88,11 +88,8 @@ class HunterFlight:
         solution = None
         if action.track or action.fire or ship.burst_remaining:
             solution = find_firing_solution(ship, self.surroundings.enemies(), maze, ship.settings)
-            # With no enemy to aim at, the neural pilot may shoot its way out: through the wall block its enemy
-            # compass routes through, and no other.
-            breach = getattr(self._observer, 'breach', None) if self._neural else None
-            if (solution is None and breach is not None
-                    and nose_on_block(ship, maze, breach, ship.settings.sensor_range(maze))):
+            # With no enemy to aim at, the neural pilot's trigger fires along the nose, at walls or anything else.
+            if self._neural and solution is None and action.fire:
                 solution = FiringSolution(0.0, True)
         shots = ship.step(dt, action, solution) or []
         ship.check_wall_collision(maze.walls, maze.spatial_grid)

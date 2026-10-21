@@ -378,3 +378,15 @@ def test_strong_walls_are_never_shot_through():
     enemy = creatures.build('patrol', (850, 550), 1)
     v = sense(ship, boxed_world(strong=[(6, 5)]), enemies=[enemy])
     assert value(v, 'enemy_compass_cos') < 0.5                    # out through the north or south block instead
+
+
+def test_each_enemy_in_sight_shows_how_many_hits_it_has_left():
+    ship = HunterShip((500, 500))
+    tough = creatures.build('patrol', (600, 500), 1)
+    tough.hit_points = 20
+    weak = creatures.build('patrol', (500, 700), 1)
+    weak.hit_points = 1
+    v = sense(ship, world(), enemies=[tough, weak])
+    assert value(v, 'enemy0_hits') == pytest.approx(1.0)                          # the nearer, at the cap
+    assert value(v, 'enemy1_hits') == pytest.approx(math.log(2) / math.log(21), abs=1e-6)
+    assert value(v, 'enemy2_hits') == 0.0                                         # an empty slot

@@ -160,11 +160,25 @@ def sealed_neural_flight(maze, angle):
     return flight, fly
 
 
-def test_a_sealed_in_neural_hunter_fires_at_the_wall_the_compass_points_through(maze):
-    _, fly = sealed_neural_flight(maze, angle=0.0)           # nose east, on the block between it and the enemy
+def test_with_no_enemy_in_sight_the_neural_hunter_fires_along_its_nose(maze):
+    _, fly = sealed_neural_flight(maze, angle=180.0)         # nose west, on a wall, the enemy out of sight
     assert any(fly() for _ in range(3))
 
 
-def test_it_holds_fire_at_any_other_wall(maze):
-    _, fly = sealed_neural_flight(maze, angle=180.0)         # nose west, on a block that leads nowhere nearer
-    assert not any(fly() for _ in range(3))
+def test_with_an_enemy_in_sight_fire_control_still_holds_the_shot_until_lined_up(maze):
+    from hunter.model import PilotAction
+    ship = HunterShip(cell(maze, 2, 3))
+    ship.angle, ship.fire_remaining = 90.0, 0.0              # nose south, the enemy due east in plain sight and reach
+    flight = HunterFlight(ship, NeuralPilot(random_policy(1), decision_frames=1),
+                          Surroundings(maze, [creatures.build('static', cell(maze, 4, 3))]))
+    shots = []
+    for _ in range(3):
+        flight.controller.override = PilotAction(0, False, True)
+        shots.append(flight.fly(1.0))
+    assert not any(shots)
+
+
+def test_the_ship_counts_its_shots(maze):
+    flight, fly = sealed_neural_flight(maze, angle=180.0)
+    fired = sum(len(fly() or []) > 0 for _ in range(3))
+    assert flight.ship.shots_fired == fired > 0

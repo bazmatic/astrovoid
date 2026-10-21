@@ -12,36 +12,6 @@ from hunter.pilot_sensors import firing_solution, nose_miss_distance, off_nose
 from hunter.visibility import visible_point
 
 
-def nose_on_block(hunter, maze, block, reach):
-    """Whether the first wall along the hunter's nose, within `reach`, is a face of the wall block `block`."""
-    heading = math.radians(hunter.angle)
-    origin = hunter.get_pos()
-    end = (origin[0] + math.cos(heading) * reach, origin[1] + math.sin(heading) * reach)
-    nearest, hit = float('inf'), None
-    for wall in maze.spatial_grid.get_walls_along_path(origin, end, 1):
-        if not wall.active:
-            continue
-        point = segment_intersection(origin, end, wall.start, wall.end)
-        if point is not None:
-            distance = math.dist(origin, point)
-            if distance < nearest:
-                nearest, hit = distance, wall
-    return hit is not None and hit.cell == block
-
-
-def segment_intersection(a, b, c, d):
-    """Where segment a-b crosses segment c-d, or None."""
-    rx, ry, sx, sy = b[0] - a[0], b[1] - a[1], d[0] - c[0], d[1] - c[1]
-    denom = rx * sy - ry * sx
-    if abs(denom) < 1e-9:
-        return None
-    t = ((c[0] - a[0]) * sy - (c[1] - a[1]) * sx) / denom
-    u = ((c[0] - a[0]) * ry - (c[1] - a[1]) * rx) / denom
-    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
-        return (a[0] + t * rx, a[1] + t * ry)
-    return None
-
-
 def find_firing_solution(hunter, enemies, maze, settings):
     """The firing solution for the nearest enemy the hunter can see and reach, or None.
 

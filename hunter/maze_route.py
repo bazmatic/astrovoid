@@ -40,9 +40,8 @@ class MazeRoutes:
     def cheapest_route(self, maze, origin, targets, hit_point_cells):
         """Like `route`, but breakable wall blocks may be shot through: entering one costs a cell plus
         `hit_point_cells` cells for each hit point it has left. Strong walls and the outer ring stay closed.
-        Returns (index, route, extra, breach): `extra` is what the blocks on the route add to its length, in
-        pixels, and `breach` the first block on the route from the start (None if it has none). None when no target
-        can be reached even through the breakable blocks."""
+        Returns (index, route, extra): `extra` is what the blocks on the route add to its length, in pixels.
+        None when no target can be reached even through the breakable blocks."""
         cell, centre, linked = self._geometry(maze)
         blocks = getattr(maze, 'blocks', None) or {}
         strong = getattr(maze, 'strong_cells', ()) or ()
@@ -81,14 +80,13 @@ class MazeRoutes:
                     heapq.heappush(queue, (cost + step, there))
         if reached is None:
             return None
-        route, extra, breach, step = [], 0.0, None, reached
+        route, extra, step = [], 0.0, reached
         while step != start:
             route.append(centre(step))
             if step in blocks:
                 extra += blocks[step] * hit_point
-                breach = step                                   # walking back, the last block met is the first
             step = came[step]
-        return goals[reached], route, extra, breach
+        return goals[reached], route, extra
 
     def route(self, maze, origin, targets):
         """The shortest cell route from `origin` to the nearest of `targets` (by route), as (index, route): the

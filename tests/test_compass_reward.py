@@ -107,3 +107,15 @@ def test_a_hit_on_the_compass_wall_pays_but_an_equal_jump_away_does_not():
         return recorder.arrays()[2]
     assert paid([0.6, 0.5]).tolist() == pytest.approx([1.0, 0.0], abs=1e-5)
     assert not paid([0.5, 0.6]).any()
+
+
+def test_shots_fired_with_no_enemy_in_sight_cost_the_shot_price():
+    recorder = rollout.RolloutRecorder(6, shot_price=2.0)
+    recorder._start_enemies = 1
+    for step, (seen, shots) in enumerate([(False, 1), (True, 2), (False, 0), (False, 3)]):
+        recorder.senses.append(sense(0.5, seen=seen))
+        recorder.controls.append((1, 0, 0))
+        recorder._events.append([0, 0, 0, 0.0, 0.0, 0.0, 0, 0.0, 0, 0])
+        recorder._shots.append(shots)
+        recorder.counted(_Counter(), step / 10.0)
+    assert recorder.arrays()[2].tolist() == pytest.approx([-2.0, 0.0, 0.0, -6.0])

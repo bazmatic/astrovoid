@@ -291,6 +291,7 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             blind = sum(e.get('blind_steps', 0) for e in flown)
             stats.update(compass_follow=sum(e.get('following_steps', 0) for e in flown) / blind if blind else 0.0)
             unseen = sum(e.get('unseen_steps', 0) for e in flown)
+            stats.update(unaimed_shots_per_episode=float(np.mean([e.get('unaimed_shots', 0) for e in flown])))
             stats.update(bored_fraction=sum(e.get('bored_steps', 0) for e in flown) / unseen if unseen else 0.0)
             current = out_dir / f'iter{iteration:04d}.npz'
             export(net, policy, current)
@@ -326,6 +327,7 @@ def reward_summary(args):
             ('Rules hunter destroyed', '+', args.rules_bounty, 'points, on top of its share of the kill reward'),
             ('Following the enemy compass', '+', getattr(args, 'compass_reward', 0.0),
              'points per maze width the route to the nearest enemy shortens while none is in sight'),
+            ('Shot with no enemy in sight', '-', getattr(args, 'shot_price', 0.0), 'points each'),
             ('Boredom', '-', getattr(args, 'boredom_penalty', 0.0),
              f'points per second with no enemy in sight in a cell visited in the last {getattr(args, "boredom_window", 10.0):g} s')]
     return [{'name': n, 'sign': s, 'value': round(v, 4), 'unit': u} for n, s, v, u in rows if v]
@@ -407,6 +409,8 @@ def main(argv=None):
                         help='points lost per second with no enemy in sight in a recently visited maze cell')
     parser.add_argument('--boredom-window', type=float, default=10.0,
                         help='seconds before a visited maze cell counts as new again')
+    parser.add_argument('--shot-price', type=float, default=0.0,
+                        help='points lost per shot fired with no enemy in sight (the neural hunter fires unaimed then)')
     parser.add_argument('--levels', type=parse_levels, default=None,
                         help='levels to train on, e.g. 1-20 or 4,7,13 (default: the tune set)')
     args = parser.parse_args(argv)
@@ -425,7 +429,8 @@ def main(argv=None):
                                'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
                                'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player,
                                'rules_bounty': args.rules_bounty, 'compass_reward': args.compass_reward,
-                               'boredom_penalty': args.boredom_penalty, 'boredom_window': args.boredom_window},
+                               'boredom_penalty': args.boredom_penalty, 'boredom_window': args.boredom_window,
+                               'shot_price': args.shot_price},
                       rules_share=args.rules_share, levels=args.levels)
     print('done | last checkpoint:', result['last'])
 

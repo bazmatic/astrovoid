@@ -38,6 +38,7 @@ class HunterShip(RotatingThrusterShip):
         self.health = settings.health
         self.fire_remaining = 0.0
         self.burst_remaining = 0
+        self.shots_fired = 0          # shots released over the ship's life, for training
         self.gun_upgrade_level = 0  # Powerups in effect: they upgrade the guns as the player's do
         self.upgrade_remaining = 0.0  # Seconds until the powerups wear off
         self._hit = None  # strongest collision push since the senses last read it
@@ -157,6 +158,7 @@ class HunterShip(RotatingThrusterShip):
             self.burst_remaining = 0
         if self.burst_remaining and ready and lined_up:
             shots = self._shots()
+            self.shots_fired += 1
             self.burst_remaining -= 1
             self.fire_remaining = (self.settings.burst_spacing if self.burst_remaining
                                    else self.fire_interval)
