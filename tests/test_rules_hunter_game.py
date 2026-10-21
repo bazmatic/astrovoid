@@ -75,7 +75,7 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
     destroyed = 0
     for hit in range(RULES_HUNTER_HIT_POINTS):
         projectile = shot_at(hunter)
-        used = arena.collision_handler.shoot_into(projectile, arena.roster, arena.powerup_crystals)
+        used = arena.collision_handler.shoot_into(projectile, arena.roster)
         assert used
         destroyed += not hunter.active
     assert destroyed == 1 and not hunter.active and hunter.hit_points == 0
@@ -84,13 +84,13 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
 
 def test_the_hunters_shots_hurt_it_too(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    arena.collision_handler.shoot_into(shot_at(hunter, 'hunter'), arena.roster, arena.powerup_crystals)
+    arena.collision_handler.shoot_into(shot_at(hunter, 'hunter'), arena.roster)
     assert hunter.hit_points == RULES_HUNTER_HIT_POINTS - 1
 
 
 def test_its_own_shots_do_not_hurt_it(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    assert not arena.collision_handler.shoot_into(shot_at(hunter, 'enemy'), arena.roster, arena.powerup_crystals)
+    assert not arena.collision_handler.shoot_into(shot_at(hunter, 'enemy'), arena.roster)
     assert hunter.hit_points == RULES_HUNTER_HIT_POINTS
 
 
@@ -98,7 +98,7 @@ def test_killing_it_with_a_player_shot_feeds_the_level_complete_portrait(arena):
     from rendering.enemy_death_portrait import EnemyDeathPortrait
     hunter = arena.roster.of_kind('rules_hunter')[0]
     hunter.hit_points = 1
-    arena.collision_handler.shoot_into(shot_at(hunter), arena.roster, arena.powerup_crystals)
+    arena.collision_handler.shoot_into(shot_at(hunter), arena.roster)
     assert arena.scoring.enemies_destroyed >= 1
     portrait = EnemyDeathPortrait(arena.collision_handler.last_player_kill, 20)
     portrait.update(5.0)

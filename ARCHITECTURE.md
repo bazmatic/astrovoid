@@ -74,12 +74,17 @@ The entity system provides a foundation for all game objects:
   - Manages fuel, ammo, rotation, thrust, and collision responses
   - Zero-G physics with low friction
 
-- **`anemone.py`**: `Anemone` - rooted enemy that pulls the player's ship toward it; `pull_acceleration` is the pure pull maths
-
 - **`urchin.py`**, **`patrol_crab.py`**, **`jellyfish.py`**: the `urchin`, `crab` and `jelly` Bodies of the Urchin,
   Crab and Jelly Creatures (see `creatures/`): they animate and draw, and read only the creature's attributes
 - **`squid.py`**: `Squid`, the `squid` Body of the Squiddler, Squidlet, Squiddler Boss and Mother: mantle, blinking
-  eyes, trailing tentacles, the jet (on the `thrust` event) and the withdrawal on death
+  eyes (a blink on the `flinch` event), trailing tentacles, the jet (on the `thrust` event) and the withdrawal on death
+- **`egg.py`**: `EggBody`, the jelly sac with its embryos developing as the egg grows; it splits open when the egg
+  hatches and bursts into blobs when it is shot (it hears `died`)
+- **`anemone.py`**: `AnemoneBody`, the rooted anemone with its reach streaks, tentacles leaning toward a ship it is
+  pulling and folding shut while it flinches; `pull_acceleration` and `apply_pull` are the pull maths `pullsShip` uses
+- **`flocker.py`**: `FlockerBody`, the swallow; **`flocker_neighbor_cache.py`** is the spatial hash `flocks` uses
+- **`flighthouse.py`**: `FlighthouseBody`, the lighthouse seen from above, its beam the size of what it can see,
+  turning red while it sees the player and flashing when it launches
 
 - **`explosion.py`**: `Blast`, `Explosions`, `Fireball` - reusable explosions (Belemnites now, bombs later)
   - A `Blast` is a reach, damage, push, wall hits and whom its kills count for; `fuse` delays it so chains ripple
@@ -103,11 +108,10 @@ The entity system provides a foundation for all game objects:
 
 ### Creatures (`creatures/`)
 
-An enemy whose `config/enemies.json` entry names a `body` is a **Creature**: a Body (how it looks) and a list of Traits
-(what it does), in the entry's order. The Urchin (`static`), Crab (`patrol`), Jelly (`aggressive`), Belemnite and
-the four squids (Squiddler `replay`, Squidlet `baby`, Squiddler Boss `split_boss`, Mother `mother_boss`) are Creatures;
-the other kinds keep their own classes until they move over (see
-`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`).
+Every enemy but the enemy hunters is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
+its `config/enemies.json` entry and run in the entry's order (see
+`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). The enemy hunters, which fly with a pilot, keep
+their own classes.
 
 - **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
   `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
@@ -118,14 +122,21 @@ the other kinds keep their own classes until they move over (see
   `from_params` builds it from its catalogue parameters.
 - **`traits/`**: `brains.py` (`still`, `patrol`, `chase`, `replaysPlayer`), `propulsion.py` (`coasts`, `drift`,
   `thrusters`, which flies like a ship through `physics/thrust.py`), `combat.py` (`takesHits`, `shovedByShots`,
-  `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`, `blinksWhenHit`), `crowd.py` (`keepsApart`, which
-  also keeps a crowd out of the walls), `spawning.py` (`splitsOnDeath`, `laysEggs`)
+  `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`, `flinchesWhenHit`, which times a flinch its Body
+  draws: a squid blinks, an anemone clamps shut), `crowd.py` (`keepsApart`, which also keeps a crowd out of the walls),
+  `spawning.py` (`splitsOnDeath`, `laysEggs`), `growth.py` (`grows`, `hatches`: hatching is a plain death, not a
+  kill), `rooted.py` (`anchored`, `pullsShip`, a crowd trait whose pulls together never exceed one at full strength,
+  `flingsShip`), `flock.py` (`flocks`, a crowd brain that decides the whole flock's next frame, `tweets`) and
+  `lighthouse.py` (`scans`, which watches the player's ship only, and `launchesFlock`)
 - **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
   bad parameters or a missing requirement when the game starts
-- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for a kind with a `body`
+- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every kind but the
+  enemy hunters
 - **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's traits in roster order and then
   animates its Body, then each kind's crowd traits; `shoot(projectile)` offers a friendly shot to each live creature in
-  roster order and stops at the first it reaches, handing a shot no creature took to `CollisionHandler.shoot_into`.
+  roster order and stops at the first it reaches, handing a shot no creature took to `CollisionHandler.shoot_into`
+  (the enemy hunters). `ready()` runs every newcomer's spawn hooks without a frame passing; the game calls it at level
+  start, so creatures show their state (an anemone its reach) before the player moves.
   Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
   `add_shot`, `explode`, and `spawn`, which puts a new enemy of any kind on the roster). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
 
@@ -245,7 +256,8 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 ### Composition (Creatures)
 
 - **Enemy Behaviours**: a `Creature` is composed from a Body and Traits named in its catalogue entry; Traits talk to
-  each other and to the Body through `Controls` and events (`fired`, `hit`, `hit_wall`, `rammed`)
+  each other and to the Body through `Controls` and events (`fired`, `hit`, `hit_wall`, `rammed`, `flinch`, `thrust`,
+  `sighted`, `launched`; the Body alone also hears `died`)
 - **Benefits**: behaviour is shared by naming a trait in another kind's entry, without a new class
 
 ### Template Method Pattern
@@ -267,12 +279,9 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 2. If it can be made of traits that exist, give the entry a `body` (one of `creatures/registry.BODIES`), an
    `allegiance` and its `traits` with their parameters, in the order they should run. That is all: `make_enemy` builds
    it, the Encounter runs it and offers it shots, and the roster keeps it with every other enemy. A new behaviour is a
-   new `Trait` subclass in `creatures/traits/`, added to `TRAITS`; a new look is a new Body added to `BODIES`.
-3. Otherwise (until every kind is a Creature): give its class a `type` naming the entry and make it in `make_enemy`
-   (`game_handlers/spawn_manager.py`), update it in `EnemyUpdater` and let shots hit it in
-   `CollisionHandler.handle_projectile_enemy_collisions`, then call both from `Game.update` (and
-   `CollisionHandler.shoot_into`) with `roster.of_kind(...)`
-4. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
+   new `Trait` subclass in `creatures/traits/`, added to `TRAITS`; a new look is a new Body added to `BODIES`. Name
+   a trait for what it does, not for one kind, so other kinds can take it too.
+3. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
 
 ### Adding New Game States
 
@@ -308,7 +317,10 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   ├── urchin.py           # the Bodies of the Urchin, Crab and Jelly; squid.py the squids'
 │   ├── patrol_crab.py
 │   ├── jellyfish.py
+│   ├── egg.py              # ... and of the Egg, Anemone, Flocker and Flighthouse
 │   ├── anemone.py
+│   ├── flocker.py
+│   ├── flighthouse.py
 │   └── projectile.py
 ├── creatures/               # Creature, Trait, Encounter, and the traits (see Creatures above)
 ├── maze/                    # Maze generation

@@ -10,7 +10,6 @@ import random
 import config
 from creatures.encounter import Encounter
 from game_handlers.collision_handler import CollisionHandler
-from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from entities.command_recorder import CommandRecorder
@@ -68,7 +67,6 @@ class DuelEnemies:
         self.maze, self.sound_manager = maze, sound_manager
         self.roster = EnemyRoster()
         self.spawner = SpawnManager(self.roster)
-        self.updater = EnemyUpdater()
         self.scoring = ScoringSystem()              # the enemy code reports to one; it is thrown away with the duel
         self.recorder = CommandRecorder()
         self.collisions = CollisionHandler(sound_manager, self.scoring, self.recorder)

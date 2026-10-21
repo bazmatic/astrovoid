@@ -346,18 +346,23 @@ asterdroids/
 ├── entities/               # Game entities
 │   ├── base.py            # Base entity class
 │   ├── ship.py            # Player ship
-│   ├── enemy.py           # Enemy entities
-│   ├── enemy_strategies.py # Enemy behavior strategies
-│   ├── replay_enemy_ship.py # Replay enemy implementation
+│   ├── urchin.py          # Bodies (how each enemy looks): Urchin, Crab, Jelly,
+│   ├── patrol_crab.py     #   Belemnite, the squids, Egg, Anemone, Flocker, Flighthouse
+│   ├── jellyfish.py
+│   ├── belemnite.py
+│   ├── squid.py
+│   ├── egg.py
+│   ├── anemone.py
+│   ├── flocker.py
+│   ├── flighthouse.py
+│   ├── rules_hunter.py    # The enemy hunters, which fly with a pilot
+│   ├── neural_hunter.py
 │   ├── rotating_thruster_ship.py # Ship with rotating thrusters
 │   ├── projectile.py      # Projectiles
 │   ├── command_recorder.py # Command recording for replay
-│   ├── egg.py             # Egg enemy that grows and spawns babies
-│   ├── anemone.py         # Anemone enemy that pulls the ship toward it
-│   ├── baby.py            # Baby enemy (small, fast replay enemy)
-│   ├── split_boss.py      # Split Boss enemy
-│   ├── mother_boss.py     # Mother Boss enemy that lays eggs
 │   └── exit.py            # Exit portal with activation system
+├── creatures/              # Enemies built from a Body and Traits, and the Encounter that runs them
+│   └── traits/            # Brains, propulsion, combat, crowds, spawning, growth, rooted, flocking, lighthouse
 ├── maze/                   # Maze generation
 │   ├── generator.py       # Procedural maze generation, wall blocks and their destruction
 │   ├── converter.py       # Turns the grid into the exposed faces of each block
@@ -389,7 +394,6 @@ asterdroids/
 ├── game_handlers/         # Game system handlers
 │   ├── enemy_roster.py  # Every enemy on the level
 │   ├── spawn_manager.py  # Enemy spawning system
-│   ├── enemy_updater.py  # Enemy update logic
 │   ├── fire_rate_calculator.py # Fire rate and spread for each gun upgrade level
 │   └── collision_handler.py # Collision detection and response
 ├── utils/                 # Utilities

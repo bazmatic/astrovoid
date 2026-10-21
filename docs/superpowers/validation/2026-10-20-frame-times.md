@@ -71,3 +71,26 @@ deletes the old squid classes (this stage's end). Medians of five, update + draw
 **Passed**: every level is inside 20% of both baselines; the largest change, +13.4%, is inside the run-to-run spread
 (about 20% under this load). Level 9 has no squids: its +10% against `420b0e2` came with `main` (the crowd is now also
 pushed out of walls each round). Re-measure on an idle machine to confirm.
+
+## Stage 4 gate: the Egg, Anemone, Flocker and Flighthouse are Creatures
+
+Measured on 2026-10-21, again under another job's training load (load average about 24), in **CPU time** as in stage 3.
+Two clean worktrees ran alternately, five rounds each: `6f5eff6` (this stage's start) and `1e89c76` plus the commit
+that deletes `EnemyUpdater` (this stage's end). Neither had the other session's uncommitted hunter work. Medians of
+five, update + draw, ms per frame, 600 frames after 60 to warm up, seed 1.
+
+| level | enemies | 6f5eff6 | stage 4 | change | stage 4 spread |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 10 | 4.20 | 4.32 | +2.8% | 3.96–4.40 |
+| 7 | 21 | 7.60 | 7.67 | +0.9% | 7.33–8.24 |
+| 8 | 33 | 5.66 | 5.90 | +4.1% | 5.39–6.25 |
+| 9 | 22 | 8.96 | 8.38 | −6.6% | 7.48–9.04 |
+| 15 | 25 | 6.60 | 6.95 | +5.3% | 6.70–7.52 |
+| 18 | 5 | 4.28 | 4.58 | +7.0% | 4.15–4.77 |
+| 40 | 32 | 11.36 | 12.82 | +12.8% | 12.09–13.26 |
+
+**Passed**: every level is inside the 20% limit. Level 40 (all eight kinds moved so far, 32 enemies) is the largest,
+mostly in drawing (+0.9 ms). Timing each kind's draw alone on that level shows no difference between the trees
+(7.4 against 7.1 ms over all its enemies, and a whole `draw_game` 10.3 against 9.0 to 10.0), so the gap is the game
+playing out differently: every Creature draws its starting angle, which shifts the random stream and with it what is
+on screen.

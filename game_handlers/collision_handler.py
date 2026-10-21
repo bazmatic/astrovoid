@@ -83,105 +83,24 @@ class CollisionHandler:
         elif random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
             powerup_crystals.append(PowerupCrystal(pos))
 
-    def handle_projectile_enemy_collisions(
-        self,
-        projectile: 'Projectile',
-        flockers: List,
-        flighthouses: List,
-        eggs: List,
-        powerup_crystals: List['PowerupCrystal'],
-        jev_beacon_allowed: bool = False,
-        enemy_hunters: Optional[List['EnemyHunter']] = None,
-        maze: Optional['Maze'] = None
-    ) -> bool:
-        """Handle collisions between a projectile and the enemies that are not Creatures.
-        
-        Args:
-            projectile: The projectile to check collisions for.
-            flockers: List of flocker enemies.
-            flighthouses: List of flighthouse enemies.
-            eggs: List of egg enemies.
-            powerup_crystals: List to add spawned crystals to.
-            jev_beacon_allowed: Whether a kill may drop a Jev beacon.
-            enemy_hunters: List of enemy hunters, Rules and Neural (optional).
-            
-        Returns:
-            True if collision occurred and projectile should be deactivated, False otherwise.
-        """
-        if projectile.is_enemy:
-            return False  # Enemy projectiles don't hit enemies
-        
-        if not projectile.active:
+    def shoot_enemy_hunters(self, projectile: 'Projectile', enemy_hunters) -> bool:
+        """A friendly shot against the enemy hunters, Rules and Neural: one it reaches takes a hit, as a boss does, and
+        leaves no pickup when it dies. True when one took it (the shot is then spent)."""
+        if projectile.is_enemy or not projectile.active:
             return False
-        
-        # Check projectile-flocker collision
-        for flocker in flockers:
-            if flocker.active and projectile.active:
-                if projectile.check_circle_collision(flocker.get_pos(), flocker.radius):
-                    flocker_pos = flocker.get_pos()
-                    flocker.die()
+        for hunter in enemy_hunters:
+            if hunter.active and projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
+                if hunter.take_damage():
+                    hunter.die()
                     self.sound_manager.play_enemy_destroy()
-                    self.record_kill(projectile, flocker)
-                    
-                    self.drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
-                    
-                    return True  # Projectile destroyed
-
-
-        # Check projectile-flighthouse collision
-        for flighthouse in flighthouses:
-            if flighthouse.active and projectile.active:
-                if projectile.check_circle_collision(flighthouse.get_pos(), flighthouse.radius):
-                    fh_pos = flighthouse.get_pos()
-                    if flighthouse.take_damage():
-                        flighthouse.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, flighthouse)
-                        self.drop_pickup(fh_pos, powerup_crystals, jev_beacon_allowed)
-                    return True
-        
-        # Check projectile-enemy hunter collision: it takes hits like a boss and leaves no crystal
-        for hunter in enemy_hunters or ():
-            if hunter.active and projectile.active:
-                if projectile.check_circle_collision(hunter.get_pos(), hunter.radius):
-                    if hunter.take_damage():
-                        hunter.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, hunter)
-                    return True  # Projectile destroyed
-
-        # Check projectile-egg collision
-        for egg in eggs:
-            if egg.active and projectile.active:
-                if projectile.check_circle_collision(egg.get_pos(), egg.radius):
-                    egg_pos = egg.get_pos()
-                    
-                    # Transfer momentum from projectile
-                    transfer_vx = projectile.vx * config.MOMENTUM_TRANSFER_FACTOR
-                    transfer_vy = projectile.vy * config.MOMENTUM_TRANSFER_FACTOR
-                    egg.apply_momentum(transfer_vx, transfer_vy)
-                    
-                    # Take damage - returns True if destroyed
-                    if egg.take_damage():
-                        egg.die()  # Destroy egg without spawning Replay Enemies
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, egg)
-                        
-                        self.drop_pickup(egg_pos, powerup_crystals, jev_beacon_allowed)
-                    
-                    return True  # Projectile destroyed
-        
+                    self.record_kill(projectile, hunter)
+                return True
         return False
-    
-    def shoot_into(self, projectile, roster, powerup_crystals, jev_beacon_allowed=False, maze=None) -> bool:
-        """A friendly shot against every enemy on the roster that is not a Creature (the Encounter offers it to those).
 
-        Returns True if it hit one (the shot is then spent).
-        """
-        return self.handle_projectile_enemy_collisions(
-            projectile, [], [], [],
-            powerup_crystals, jev_beacon_allowed=jev_beacon_allowed,
-            enemy_hunters=roster.of_kind(*enemy_kinds.hunters()), maze=maze)
+    def shoot_into(self, projectile, roster) -> bool:
+        """A friendly shot against the enemies on the roster that are not Creatures (the Encounter offers it to those
+        first): the enemy hunters. True when one took it."""
+        return self.shoot_enemy_hunters(projectile, roster.of_kind(*enemy_kinds.hunters()))
 
     def handle_projectile_ship_collision(
         self,

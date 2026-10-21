@@ -170,11 +170,6 @@ class TestBeingShot:
         assert handler.scoring.record_enemy_destroyed.call_count == 1
         assert len(crystals) == 1
 
-    def test_callers_that_pass_no_anemones_still_work(self):
-        handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
-        assert handler.handle_projectile_enemy_collisions(
-            Projectile(POS, 0.0), [], [], [], []) is False
-
 
 class TestRealGame:
     @pytest.fixture

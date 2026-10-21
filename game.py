@@ -45,7 +45,6 @@ from states.splash_screen import SplashScreenState
 from game_handlers.autoplay import AutoplayDirector
 from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
-from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.collision_handler import CollisionHandler
 from creatures.encounter import Encounter
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
@@ -131,7 +130,6 @@ class Game:
         
         # Game handlers
         self.spawn_manager = SpawnManager(self.roster)
-        self.enemy_updater = EnemyUpdater()
         self.collision_handler = CollisionHandler(
             self.sound_manager,
             self.scoring,

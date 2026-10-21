@@ -94,7 +94,7 @@ def test_it_hunts_only_the_player(played):
 def test_the_players_shots_wear_it_down(played):
     from entities.projectile import Projectile
     neural = next(h for h in played.enemy_hunters if isinstance(h, NeuralHunter))
-    played.collision_handler.shoot_into(Projectile(neural.get_pos(), 0.0, source='player'), played.roster, played.powerup_crystals)
+    played.collision_handler.shoot_into(Projectile(neural.get_pos(), 0.0, source='player'), played.roster)
     assert neural.hit_points == 11
 
 
