@@ -14,7 +14,7 @@ from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
 from game_handlers.enemy_roster import EnemyRoster
-from tests.creature_parts import encounter, world
+from tests.creature_parts import encounter, target, world
 
 POS = (400.0, 300.0)
 SQUID_KINDS = ['replay', 'baby', 'split_boss', 'mother_boss']
@@ -274,6 +274,19 @@ class TestLastKillPortrait:
         assert screen.get_bounding_rect().width == 0
         assert enemy.get_pos() == snapshot.get_pos() == (4000, 3000)
         assert snapshot.death_progress == 0
+
+    @pytest.mark.parametrize('kind', ['aggressive', 'replay'])
+    def test_a_portrait_draws_its_squids_and_jellies_tentacles_on_its_own_surface(self, kind):
+        from copy import deepcopy
+        from rendering.enemy_death_portrait import EnemyDeathPortrait
+        enemy = creatures.build(kind, (4000, 3000), 1, CommandRecorder())
+        enc = encounter(enemy, world_=world(ship=target((4300, 3000))))
+        for _ in range(60):
+            enc.step(1.0)
+        enemy.die()
+        portrait = EnemyDeathPortrait(deepcopy(enemy), 40)
+        points = [p for chain in portrait.enemy.body.tentacles for p in chain]
+        assert points and all(0 < x < portrait.size and 0 < y < portrait.size for x, y in points)
 
     def test_only_player_kills_replace_the_snapshot(self):
         handler = CollisionHandler(Mock(), Mock(), CommandRecorder())
