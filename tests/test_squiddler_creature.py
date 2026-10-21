@@ -11,7 +11,7 @@ import pytest
 import config
 import creatures
 import level_rules
-from creatures.traits.combat import BlinksWhenHit
+from creatures.traits.combat import FlinchesWhenHit
 from entities.command_recorder import CommandRecorder, CommandType
 from entities.projectile import Projectile
 from entities.squid import Squid
@@ -124,7 +124,7 @@ def test_a_squiddler_blinks_when_hit_rammed_or_bounced():
     assert bounced.body.is_blinking and bounced.x < POS[0] + 20.0
 
     plain = squiddler()
-    plain.traits = tuple(t for t in plain.traits if not isinstance(t, BlinksWhenHit))
+    plain.traits = tuple(t for t in plain.traits if not isinstance(t, FlinchesWhenHit))
     enc = encounter(plain, world_=world(ship=far_away()))
     enc.step(1.0)
     enc.shoot(Projectile(plain.get_pos(), 0, source='player'))

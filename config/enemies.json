@@ -86,7 +86,7 @@
       "thrusters": {"speedShare": 0.3},
       "ramsShip": {},
       "gun": {"strengthLevel": 1, "startsLoaded": true},
-      "blinksWhenHit": {},
+      "flinchesWhenHit": {"frames": 30, "on": ["hit", "hit_wall", "rammed"]},
       "takesHits": {"hitPoints": 3},
       "dropsPickup": {}
     }
@@ -168,16 +168,21 @@
     "layer": 3,
     "tuning": {
       "size": 14,
-      "hitPoints": 4,
-      "reachCells": 3.5,
-      "pullThrustFraction": 0.8,
-      "flingSpeed": 5.0,
-      "releaseFrames": 60,
-      "flinchFrames": 90,
       "firstLevel": 7,
       "maxCoverage": 0.4,
       "color": [255, 110, 170],
       "tipColor": [90, 230, 210]
+    },
+    "allegiance": "enemy",
+    "body": "anemone",
+    "traits": {
+      "anchored": {},
+      "flinchesWhenHit": {"frames": 90},
+      "ramsShip": {},
+      "flingsShip": {"speed": 5.0, "releaseFrames": 60},
+      "pullsShip": {"reachCells": 3.5, "strength": 0.8},
+      "takesHits": {"hitPoints": 4},
+      "dropsPickup": {}
     }
   },
   "split_boss": {

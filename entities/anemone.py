@@ -1,8 +1,9 @@
-"""Anemone enemy that pulls the player's ship toward it.
+"""The Anemone's Body, and the pull it puts on the player's ship.
 
-An anemone is rooted to one spot. It draws the ship in whenever it has a clear
-line to it, stings and flings the ship on contact, and clamps shut for a
-moment when shot, which stops the pull.
+An anemone is rooted to one spot (`anchored`). It draws the ship in whenever it has a clear line to it (`pullsShip`),
+flings the ship out on contact (`flingsShip`), and clamps shut for a moment when shot (`flinchesWhenHit`), which stops
+the pull. The Body draws its reach as faint streaks, leans its tentacles toward a ship it is pulling, and folds shut
+while it flinches; it reads that state from the creature, counting any its traits have not set yet as nothing.
 """
 
 import math
@@ -10,11 +11,7 @@ from typing import Optional, Tuple
 
 import pygame
 import config
-from entities.base import GameEntity
-from entities.collidable import Collidable
-from entities.drawable import Drawable
 from rendering import visual_effects
-from utils import circle_circle_collision, line_line_collision
 
 
 def pull_acceleration(
@@ -64,20 +61,16 @@ def apply_pull(ship, ax: float, ay: float) -> None:
         ship.vy *= scale
 
 
-class Anemone(GameEntity, Collidable, Drawable):
-    """Rooted enemy that pulls the player's ship toward it.
+class AnemoneBody:
+    """The look of an anemone.
 
     Attributes:
-        hit_points: Hits it can still take.
-        stun_timer: Frames left clamped shut, during which it does not pull.
-        stun_total: Length of the stun now running (for the reopening animation).
-        pull_fraction: Strength of the pull applied this frame (0.0 to 1.0 of the peak).
-        pull_angle: Direction from the anemone to the ship it is pulling, in radians.
-        reach_px: Reach in pixels, known once it has been asked to pull.
+        sway_phase: Phase of the tentacles' idle sway.
+        streak_phase: How far the reach streaks have drifted in (0.0 to 1.0).
     """
-    type = 'anemone'  # the enemy kind a level file names
 
     DEATH_DURATION = 30.0  # Frames (0.5 seconds at 60 FPS)
+    DEATH_FRICTION = 0.0   # Rooted even in death
 
     # Drawing constants (lengths are multiples of the radius unless noted)
     TENTACLES = 12
@@ -93,161 +86,44 @@ class Anemone(GameEntity, Collidable, Drawable):
     STREAKS = 10
     STREAK_SPEED = 0.006  # Fraction of the reach a streak drifts inward per frame
     STREAK_STRENGTH = 0.22  # How far streaks stand out from the background (0 to 1)
-    REOPEN_FRACTION = 1 / 3  # Share of a stun spent reopening
+    REOPEN_FRACTION = 1 / 3  # Share of a flinch spent reopening
 
-    def __init__(self, pos: Tuple[float, float]):
-        """Initialize an anemone rooted at a position.
-
-        Args:
-            pos: Position as (x, y) tuple.
-        """
-        super().__init__(pos, config.ANEMONE_SIZE)
-        self.anchor = (float(pos[0]), float(pos[1]))
-        self.hit_points = config.ANEMONE_HIT_POINTS
-        self.max_hit_points = config.ANEMONE_HIT_POINTS
-        self.stun_timer = 0.0
-        self.stun_total = 0.0
-        self.pull_fraction = 0.0
-        self.pull_angle = 0.0
-        self.reach_px = 0.0
+    def __init__(self, creature):
+        self._creature = creature
         self.sway_phase = 0.0
         self.streak_phase = 0.0
 
+    x = property(lambda self: self._creature.x)
+    y = property(lambda self: self._creature.y)
+    radius = property(lambda self: self._creature.radius)
+    pull_fraction = property(lambda self: getattr(self._creature, 'pull_fraction', 0.0))
+    pull_angle = property(lambda self: getattr(self._creature, 'pull_angle', 0.0))
+    reach_px = property(lambda self: getattr(self._creature, 'reach_px', 0.0))
+
     @property
-    def is_stunned(self) -> bool:
+    def is_flinching(self) -> bool:
         """Whether it is clamped shut and not pulling."""
-        return self.stun_timer > 0.0
+        return getattr(self._creature, 'flinch_timer', 0.0) > 0.0
 
     @property
     def closed_fraction(self) -> float:
-        """How tightly it is clamped shut: 1.0 while stunned, easing to 0.0 as the stun ends."""
-        if self.stun_timer <= 0.0 or self.stun_total <= 0.0:
+        """How tightly it is clamped shut: 1.0 while flinching, easing to 0.0 as the flinch ends."""
+        timer = getattr(self._creature, 'flinch_timer', 0.0)
+        total = getattr(self._creature, 'flinch_total', 0.0)
+        if timer <= 0.0 or total <= 0.0:
             return 0.0
-        return min(1.0, self.stun_timer / (self.stun_total * self.REOPEN_FRACTION))
+        return min(1.0, timer / (total * self.REOPEN_FRACTION))
 
-    def stun(self, frames: float) -> None:
-        """Clamp shut for a number of frames. Never shortens a stun already running."""
-        if frames > self.stun_timer:
-            self.stun_timer = float(frames)
-            self.stun_total = float(frames)
+    def on_event(self, creature, name: str) -> None:
+        """Its look follows its pull and its flinch, so events change nothing."""
 
-    def take_damage(self) -> bool:
-        """Take damage from a projectile hit.
-
-        Returns:
-            True if hit points reached 0, False otherwise.
-        """
-        self.hit_points -= 1
-        return self.hit_points <= 0
-
-    def apply_momentum(self, _vx: float, _vy: float) -> None:
-        """Anemones are rooted; momentum does not move them."""
-        return
-
-    def reach(self, maze) -> float:
-        """Distance from its centre at which the pull ends, for a maze's cell size."""
-        return config.ANEMONE_REACH_CELLS * (maze.cell_size_x + maze.cell_size_y) / 2
-
-    def _wall_between(self, pos: Tuple[float, float], maze) -> bool:
-        """Whether an active wall crosses the line from the anemone to a position."""
-        walls = maze.walls
-        if maze.spatial_grid is not None:
-            walls = maze.spatial_grid.get_walls_along_path(self.get_pos(), pos, 0.0)
-        return any(
-            wall.active and line_line_collision(self.get_pos(), pos, wall.start, wall.end)
-            for wall in list(walls) + list(getattr(maze, 'gate_segments', ()))
-        )
-
-    def pull_on(self, ship, maze) -> Tuple[float, float]:
-        """Acceleration this anemone gives the ship right now.
-
-        Returns:
-            (ax, ay), or (0.0, 0.0) when it is dead or stunned, the ship is
-            inactive or shielded, out of reach, or behind a wall.
-        """
-        self.reach_px = self.reach(maze)
-        if not self.active or self.is_stunned or not ship.active or ship.is_shield_active():
-            return (0.0, 0.0)
-        pull = pull_acceleration(
-            self.get_pos(), self.radius, ship.get_pos(), ship.radius, self.reach_px,
-            config.ANEMONE_PULL_THRUST_FRACTION * config.SHIP_THRUST_FORCE
-        )
-        if pull == (0.0, 0.0) or self._wall_between(ship.get_pos(), maze):
-            return (0.0, 0.0)
-        return pull
-
-    def reach_for(self, ship, maze) -> Tuple[float, float]:
-        """Work out this frame's pull on the ship and remember it for drawing, without applying it.
-
-        Returns:
-            The (ax, ay) this anemone wants to give the ship.
-        """
-        ax, ay = self.pull_on(ship, maze)
-        peak = config.ANEMONE_PULL_THRUST_FRACTION * config.SHIP_THRUST_FORCE
-        self.pull_fraction = math.hypot(ax, ay) / peak if peak > 0 else 0.0
-        if self.pull_fraction <= 0.0:
-            return (0.0, 0.0)
-        self.pull_angle = math.atan2(ship.y - self.y, ship.x - self.x)
-        return (ax, ay)
-
-    def pull_ship(self, ship, maze) -> Tuple[float, float]:
-        """Apply this frame's pull to the ship and remember it for drawing.
-
-        Returns:
-            The (ax, ay) that was applied.
-        """
-        ax, ay = self.reach_for(ship, maze)
-        if (ax, ay) != (0.0, 0.0):
-            apply_pull(ship, ax, ay)
-        return (ax, ay)
-
-    def fling(self, ship) -> None:
-        """Throw a ship that has touched it straight back out, then let go for a moment."""
-        dx, dy = ship.x - self.anchor[0], ship.y - self.anchor[1]
-        dist = math.hypot(dx, dy)
-        if not math.isfinite(dist) or dist <= 1e-6:
-            # Dead centre (where the bounce itself has no direction to work with):
-            # throw it back the way it came, or to the right if it was still
-            speed = math.hypot(ship.vx, ship.vy)
-            moving = math.isfinite(speed) and speed > 1e-6
-            dx, dy = (-ship.vx / speed, -ship.vy / speed) if moving else (1.0, 0.0)
-        else:
-            dx, dy = dx / dist, dy / dist
-        clear = self.radius + ship.radius + 1.0
-        ship.x, ship.y = self.anchor[0] + dx * clear, self.anchor[1] + dy * clear
-        ship.vx, ship.vy = dx * config.ANEMONE_FLING_SPEED, dy * config.ANEMONE_FLING_SPEED
-        self._hold_position()
-        self.pull_fraction = 0.0
-        self.stun(config.ANEMONE_RELEASE_FRAMES)
-
-    def _hold_position(self) -> None:
-        """Undo anything a collision did to its position or velocity."""
-        self.x, self.y = self.anchor
-        self.vx = self.vy = 0.0
-
-    def update(self, dt: float) -> None:
-        """Advance the stun timer and animation.
-
-        Args:
-            dt: Delta time since last update (normalized to 60fps).
-        """
-        self._hold_position()
-        self.stun_timer = max(0.0, self.stun_timer - dt)
+    def update(self, creature, dt: float, target=None) -> None:
+        """The tentacles sway and the reach streaks drift in."""
         self.sway_phase = (self.sway_phase + 0.05 * dt) % (2 * math.pi)
         self.streak_phase = (self.streak_phase + self.STREAK_SPEED * dt) % 1.0
 
-    def check_wall_collision(self, walls, spatial_grid=None) -> bool:
-        # Anemones are rooted; ignore wall collisions
-        return False
-
-    def check_circle_collision(
-        self,
-        other_pos: Tuple[float, float],
-        other_radius: float,
-        other_entity: Optional[GameEntity] = None
-    ) -> bool:
-        """Check collision with another circular entity. The anemone itself never moves."""
-        return circle_circle_collision((self.x, self.y), self.radius, other_pos, other_radius)
+    def update_death(self, creature, dt: float) -> None:
+        """It wilts as death_progress runs; nothing else moves."""
 
     def _draw_streaks(self, screen: pygame.Surface) -> None:
         """Draw faint marks drifting inward across its reach, to show how far the pull extends."""
@@ -322,25 +198,13 @@ class Anemone(GameEntity, Collidable, Drawable):
             surface = visual_effects.create_soft_glow_surface(radius * 0.9, config.ANEMONE_TIP_COLOR, alpha)
             screen.blit(surface, surface.get_rect(center=(int(center[0]), int(center[1]))))
 
-    def draw(self, screen: pygame.Surface) -> None:
-        """Draw the anemone.
-
-        Args:
-            screen: The pygame Surface to draw on.
-        """
-        if not self.active:
-            return
-        if not self.is_stunned:
+    def draw(self, screen: pygame.Surface, creature) -> None:
+        """Draw the anemone, with its reach unless it is clamped shut."""
+        if not self.is_flinching:
             self._draw_streaks(screen)
         self._draw_body(screen, 1.0, 0.0, self.closed_fraction)
 
-    def draw_death(self, screen: pygame.Surface) -> None:
-        """Draw it wilting: folding shut, shrinking and fading out.
-
-        Args:
-            screen: The pygame Surface to draw on.
-        """
-        if not self.is_dying:
-            return
-        progress = self.death_progress
+    def draw_death(self, screen: pygame.Surface, creature) -> None:
+        """Draw it wilting: folding shut, shrinking and fading out."""
+        progress = creature.death_progress
         self._draw_body(screen, 1.0 - 0.6 * progress, progress, min(1.0, progress * 2.5))

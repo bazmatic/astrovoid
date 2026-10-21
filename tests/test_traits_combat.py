@@ -3,7 +3,8 @@ from unittest.mock import Mock
 
 import config
 from creatures.traits.brains import Still
-from creatures.traits.combat import BouncesOffWalls, DropsPickup, RamsShip, ShovedByShots, TakesHits
+from creatures.traits.combat import (BouncesOffWalls, DropsPickup, FlinchesWhenHit, RamsShip, ShovedByShots, TakesHits,
+                                     flinch)
 from creatures.traits.propulsion import Coasts
 from entities.projectile import Projectile
 from tests.creature_parts import creature, encounter, world
@@ -89,3 +90,42 @@ def test_a_kill_drops_one_pickup_roll():
     assert stand_in.collision_handler.drop_pickup.call_args.args[0] == crab.get_pos()
     stand_in.collision_handler.record_kill.assert_called_once()
     stand_in.sound_manager.play_enemy_destroy.assert_called_once()
+
+
+def test_a_flinch_lasts_its_frames_and_a_new_one_never_shortens_it():
+    jelly = creature([FlinchesWhenHit(frames=90), TakesHits(hitPoints=9)])
+    enc = encounter(jelly)
+    enc.step(1.0)
+    enc.shoot(shot_at(jelly))
+    for _ in range(60):
+        enc.step(1.0)
+    flinch(jelly, 10, enc)
+    assert jelly.flinch_timer == 30
+    for _ in range(30):
+        enc.step(1.0)
+    assert jelly.flinch_timer == 0
+
+
+def test_it_flinches_only_on_its_events():
+    urchin = creature([FlinchesWhenHit(frames=30, on=['hit_wall']), TakesHits(hitPoints=9)])
+    enc = encounter(urchin)
+    enc.step(1.0)
+    enc.shoot(shot_at(urchin))
+    assert 'flinch' not in urchin.body.events and urchin.flinch_timer == 0
+    urchin.emit('hit_wall', enc)
+    assert urchin.body.events[-1] == 'flinch' and urchin.flinch_timer == 30
+
+
+def test_a_squid_blinks_when_it_flinches():
+    import creatures
+    from entities.command_recorder import CommandRecorder
+    blinks = {}
+    for kind in ('replay', 'baby'):
+        squid = creatures.build(kind, (100.0, 100.0), 1, CommandRecorder())
+        ship = Mock(active=True, x=100.0, y=100.0, observer=False)
+        ship.get_pos.return_value = (100.0, 100.0)
+        ship.is_shield_active.return_value = False
+        ship.check_circle_collision.return_value = True
+        encounter(squid, world_=world(ship=ship)).step(1.0)
+        blinks[kind] = squid.body.is_blinking
+    assert blinks == {'replay': True, 'baby': False}

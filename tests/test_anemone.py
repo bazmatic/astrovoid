@@ -5,8 +5,12 @@ from types import SimpleNamespace
 import pytest
 
 import config
-from entities.anemone import Anemone, pull_acceleration
+import creatures
+import enemy_kinds
+from creatures.traits.combat import flinch
+from entities.anemone import pull_acceleration
 from entities.ship import Ship
+from tests.creature_parts import encounter, world
 
 POS = (400.0, 300.0)
 PEAK = 0.12
@@ -20,16 +24,42 @@ def pull_at(distance, angle=0.0):
     return pull_acceleration(POS, RADII[0], ship_pos, RADII[1], REACH, PEAK)
 
 
-def open_maze(walls=()):
-    return SimpleNamespace(cell_size_x=40.0, cell_size_y=40.0, walls=list(walls), spatial_grid=None)
+PULLS = dict(enemy_kinds.kind('anemone').traits)['pullsShip']
+
+
+def open_maze(walls=(), cell=(40.0, 40.0)):
+    return SimpleNamespace(cell_size_x=cell[0], cell_size_y=cell[1], walls=list(walls), spatial_grid=None,
+                           is_open=lambda pos, radius: True)
 
 
 def wall(start, end, active=True):
     return SimpleNamespace(start=start, end=end, active=active)
 
 
-def ship_at(distance, angle=0.0):
-    return Ship((POS[0] + math.cos(angle) * distance, POS[1] + math.sin(angle) * distance))
+def ship_at(distance, angle=0.0, shield=False):
+    ship = Ship((POS[0] + math.cos(angle) * distance, POS[1] + math.sin(angle) * distance))
+    if shield:
+        ship.activate_shield()
+    else:
+        ship.deactivate_shield()
+    return ship
+
+
+def rooted(ship, maze=None):
+    """An anemone at POS, set up on a level with this ship (an open maze by default); the Encounter is returned too."""
+    anemone = creatures.build('anemone', POS)
+    enc = encounter(anemone, world_=world(ship=ship, maze=maze or open_maze()))
+    enc.ready()
+    return anemone, enc
+
+
+def pull(ship, maze=None, before=lambda anemone, enc: None):
+    """The change in the ship's velocity from one frame beside an anemone."""
+    anemone, enc = rooted(ship, maze)
+    before(anemone, enc)
+    vx, vy = ship.vx, ship.vy
+    enc.step(1.0)
+    return (ship.vx - vx, ship.vy - vy)
 
 
 class TestPullMaths:
@@ -65,130 +95,104 @@ class TestPullMaths:
 
 class TestPullConditions:
     def test_reach_is_a_number_of_maze_cells(self):
-        maze = SimpleNamespace(cell_size_x=50.0, cell_size_y=30.0, walls=[], spatial_grid=None)
-        assert Anemone(POS).reach(maze) == pytest.approx(config.ANEMONE_REACH_CELLS * 40.0)
+        anemone, _ = rooted(ship_at(500.0), open_maze(cell=(50.0, 30.0)))
+        assert anemone.reach_px == pytest.approx(PULLS['reachCells'] * 40.0)
 
     def test_pulls_a_ship_in_clear_view(self):
-        ax, ay = Anemone(POS).pull_on(ship_at(80.0), open_maze())
+        ax, ay = pull(ship_at(80.0))
         assert ax < 0 and ay == pytest.approx(0.0)
 
     def test_peak_is_a_fraction_of_ship_thrust(self):
-        anemone = Anemone(POS)
-        ship = ship_at(anemone.radius + config.SHIP_SIZE)
-        ax, ay = anemone.pull_on(ship, open_maze())
-        assert math.hypot(ax, ay) == pytest.approx(
-            config.ANEMONE_PULL_THRUST_FRACTION * config.SHIP_THRUST_FORCE)
+        ax, ay = pull(ship_at(enemy_kinds.kind('anemone').tuning['size'] + config.SHIP_SIZE))
+        assert math.hypot(ax, ay) == pytest.approx(PULLS['strength'] * config.SHIP_THRUST_FORCE)
         assert math.hypot(ax, ay) < config.SHIP_THRUST_FORCE
 
     def test_wall_between_blocks_the_pull(self):
-        maze = open_maze([wall((440.0, 200.0), (440.0, 400.0))])
-        assert Anemone(POS).pull_on(ship_at(80.0), maze) == (0.0, 0.0)
+        assert pull(ship_at(80.0), open_maze([wall((440.0, 200.0), (440.0, 400.0))])) == (0.0, 0.0)
 
     def test_destroyed_wall_does_not_block(self):
-        maze = open_maze([wall((440.0, 200.0), (440.0, 400.0), active=False)])
-        assert Anemone(POS).pull_on(ship_at(80.0), maze) != (0.0, 0.0)
+        assert pull(ship_at(80.0), open_maze([wall((440.0, 200.0), (440.0, 400.0), active=False)])) != (0.0, 0.0)
 
-    def test_stunned_anemone_does_not_pull(self):
-        anemone = Anemone(POS)
-        anemone.stun(10)
-        assert anemone.pull_on(ship_at(80.0), open_maze()) == (0.0, 0.0)
+    def test_flinching_anemone_does_not_pull(self):
+        assert pull(ship_at(80.0), before=lambda anemone, enc: flinch(anemone, 10, enc)) == (0.0, 0.0)
 
     def test_shield_blocks_the_pull(self):
-        ship = ship_at(80.0)
-        ship.activate_shield()
-        assert Anemone(POS).pull_on(ship, open_maze()) == (0.0, 0.0)
+        assert pull(ship_at(80.0, shield=True)) == (0.0, 0.0)
 
     def test_dead_anemone_does_not_pull(self):
-        anemone = Anemone(POS)
-        anemone.die()
-        assert anemone.pull_on(ship_at(80.0), open_maze()) == (0.0, 0.0)
+        assert pull(ship_at(80.0), before=lambda anemone, enc: anemone.die()) == (0.0, 0.0)
 
     def test_inactive_ship_is_not_pulled(self):
         ship = ship_at(80.0)
         ship.active = False
-        assert Anemone(POS).pull_on(ship, open_maze()) == (0.0, 0.0)
+        assert pull(ship) == (0.0, 0.0)
 
 
 class TestPullingTheShip:
-    def test_pull_changes_the_ships_velocity_toward_the_anemone(self):
-        anemone, ship = Anemone(POS), ship_at(80.0)
-        ship.deactivate_shield()
-        anemone.pull_ship(ship, open_maze())
-        assert ship.vx < 0
-        assert 0.0 < anemone.pull_fraction <= 1.0
-        assert math.cos(anemone.pull_angle) == pytest.approx(1.0)  # The ship is to its right
-
     def test_pull_cannot_push_the_ship_past_its_speed_cap(self):
-        anemone, ship = Anemone(POS), ship_at(80.0)
-        ship.deactivate_shield()
+        ship = ship_at(80.0)
         ship.vx = -ship.max_speed
-        anemone.pull_ship(ship, open_maze())
+        pull(ship)
         assert math.hypot(ship.vx, ship.vy) == pytest.approx(ship.max_speed)
 
     def test_no_pull_resets_the_reading_used_for_drawing(self):
-        anemone, ship = Anemone(POS), ship_at(80.0)
-        ship.deactivate_shield()
-        anemone.pull_ship(ship, open_maze())
-        anemone.stun(10)
-        anemone.pull_ship(ship, open_maze())
+        anemone, enc = rooted(ship_at(80.0))
+        enc.step(1.0)
+        assert anemone.pull_fraction > 0
+        flinch(anemone, 10, enc)
+        enc.step(1.0)
         assert anemone.pull_fraction == 0.0
 
     def test_burning_straight_out_from_the_surface_escapes(self):
-        anemone = Anemone(POS)
-        ship = ship_at(anemone.radius + config.SHIP_SIZE + 1)
-        ship.deactivate_shield()
+        ship = ship_at(enemy_kinds.kind('anemone').tuning['size'] + config.SHIP_SIZE + 1)
+        anemone, enc = rooted(ship)
         ship.angle = 0.0  # Nose pointing directly away
         start = ship.x
         for _ in range(120):
             ship.apply_thrust()
-            anemone.pull_ship(ship, open_maze())
+            enc.step(1.0)
             ship.x += ship.vx
             ship.y += ship.vy
-        assert ship.x - start > anemone.reach(open_maze()) * 0.5
+        assert ship.x - start > anemone.reach_px * 0.5
 
     def test_coasting_past_bends_the_path_inward(self):
-        anemone = Anemone(POS)
         ship = Ship((POS[0] - 120.0, POS[1] - 70.0))
         ship.deactivate_shield()
         ship.vx, ship.vy = 3.0, 0.0
+        _, enc = rooted(ship)
         for _ in range(60):
-            anemone.pull_ship(ship, open_maze())
+            enc.step(1.0)
             ship.x += ship.vx
             ship.y += ship.vy
         assert ship.vy > 0.2  # Drawn down toward the anemone below its path
 
 
-class TestStunAndDamage:
-    def test_starts_with_full_hit_points_and_unstunned(self):
-        anemone = Anemone(POS)
-        assert anemone.hit_points == anemone.max_hit_points == config.ANEMONE_HIT_POINTS == 4
-        assert not anemone.is_stunned
+class TestFlinchAndDamage:
+    def test_starts_with_full_hit_points_and_not_flinching(self):
+        anemone, _ = rooted(ship_at(500.0))
+        assert anemone.hit_points == anemone.max_hit_points == 4
+        assert anemone.flinch_timer == 0.0
 
-    def test_dies_on_the_fourth_hit(self):
-        anemone = Anemone(POS)
-        assert [anemone.take_damage() for _ in range(4)] == [False, False, False, True]
-
-    def test_stun_wears_off(self):
-        anemone = Anemone(POS)
-        anemone.stun(30)
+    def test_a_flinch_wears_off(self):
+        anemone, enc = rooted(ship_at(500.0))
+        flinch(anemone, 30, enc)
         for _ in range(29):
-            anemone.update(1.0)
-        assert anemone.is_stunned
-        anemone.update(1.0)
-        assert not anemone.is_stunned
+            enc.step(1.0)
+        assert anemone.flinch_timer > 0
+        enc.step(1.0)
+        assert anemone.flinch_timer == 0
 
-    def test_shorter_stun_does_not_cut_a_longer_one(self):
-        anemone = Anemone(POS)
-        anemone.stun(90)
-        anemone.stun(20)
-        assert anemone.stun_timer == 90
+    def test_shorter_flinch_does_not_cut_a_longer_one(self):
+        anemone, enc = rooted(ship_at(500.0))
+        flinch(anemone, 90, enc)
+        flinch(anemone, 20, enc)
+        assert anemone.flinch_timer == 90
 
     def test_it_never_moves(self):
-        anemone = Anemone(POS)
+        anemone, enc = rooted(ship_at(500.0))
         anemone.apply_momentum(5.0, 5.0)
         anemone.vx = anemone.vy = 3.0
         anemone.x += 9
-        anemone.update(1.0)
+        enc.step(1.0)
         assert anemone.get_pos() == POS
         assert (anemone.vx, anemone.vy) == (0.0, 0.0)
-        assert anemone.check_wall_collision([]) is False

@@ -66,6 +66,11 @@ class Encounter:
             if live:
                 trait.on_crowd(live, self, dt)
 
+    def ready(self) -> None:
+        """Set up every creature on the roster that is not yet (its spawn hooks), without a frame passing."""
+        for creature in self.creatures():
+            self._spawn(creature)
+
     def _spawn(self, creature) -> None:
         """Run a newcomer's spawn hooks, once."""
         if not creature.has_spawned and creature.active:

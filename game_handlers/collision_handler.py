@@ -17,7 +17,6 @@ from entities.projectile import Projectile
 if TYPE_CHECKING:
     from entities.flocker_enemy_ship import FlockerEnemyShip
     from entities.flighthouse_enemy import FlighthouseEnemy
-    from entities.anemone import Anemone
     from entities.enemy_hunter import EnemyHunter
     from entities.ship import Ship
     from entities.explosion import Blast
@@ -93,7 +92,6 @@ class CollisionHandler:
         flighthouses: List['FlighthouseEnemy'],
         eggs: List,
         powerup_crystals: List['PowerupCrystal'],
-        anemones: Optional[List['Anemone']] = None,
         jev_beacon_allowed: bool = False,
         enemy_hunters: Optional[List['EnemyHunter']] = None,
         maze: Optional['Maze'] = None
@@ -106,7 +104,6 @@ class CollisionHandler:
             flighthouses: List of flighthouse enemies.
             eggs: List of egg enemies.
             powerup_crystals: List to add spawned crystals to.
-            anemones: List of anemone enemies (optional).
             jev_beacon_allowed: Whether a kill may drop a Jev beacon.
             enemy_hunters: List of enemy hunters, Rules and Neural (optional).
             
@@ -130,21 +127,6 @@ class CollisionHandler:
                     
                     self.drop_pickup(flocker_pos, powerup_crystals, jev_beacon_allowed)
                     
-                    return True  # Projectile destroyed
-
-        # Check projectile-anemone collision
-        for anemone in anemones or ():
-            if anemone.active and projectile.active:
-                if projectile.check_circle_collision(anemone.get_pos(), anemone.radius):
-                    anemone_pos = anemone.get_pos()
-                    if anemone.take_damage():
-                        anemone.die()
-                        self.sound_manager.play_enemy_destroy()
-                        self.record_kill(projectile, anemone)
-                        self.drop_pickup(anemone_pos, powerup_crystals, jev_beacon_allowed)
-                    else:
-                        # Clamp shut so the hit buys a moment without the pull
-                        anemone.stun(config.ANEMONE_FLINCH_FRAMES)
                     return True  # Projectile destroyed
 
 
@@ -200,7 +182,7 @@ class CollisionHandler:
         """
         return self.handle_projectile_enemy_collisions(
             projectile, roster.of_kind('flocker'), roster.of_kind('flighthouse'), [],
-            powerup_crystals, anemones=roster.of_kind('anemone'), jev_beacon_allowed=jev_beacon_allowed,
+            powerup_crystals, jev_beacon_allowed=jev_beacon_allowed,
             enemy_hunters=roster.of_kind(*enemy_kinds.hunters()), maze=maze)
 
     def handle_projectile_ship_collision(

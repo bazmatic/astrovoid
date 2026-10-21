@@ -162,10 +162,28 @@ class Explodes(Trait):
         enc.explode(self.blast(c, c.killed_by))
 
 
-class BlinksWhenHit(Trait):
-    """It blinks when a shot hits it, when it rams the ship and when it bounces off a wall."""
-    NAME = 'blinksWhenHit'
+def flinch(c, frames: float, enc) -> None:
+    """The creature flinches for `frames`, unless a longer flinch is already running, and its Body hears `flinch`."""
+    if frames > getattr(c, 'flinch_timer', 0.0):
+        c.flinch_timer = c.flinch_total = float(frames)
+    c.emit('flinch', enc)
+
+
+class FlinchesWhenHit(Trait):
+    """It flinches for `frames` on each of the events `on` (by default, a shot's hit). Its Body decides how a flinch
+    looks, a blink or clamping shut; other traits can hold back while `flinch_timer` runs. `flinch_total` is how long
+    the flinch now running lasts."""
+    NAME = 'flinchesWhenHit'
+
+    def __init__(self, frames: float, on=('hit',)):
+        self.frames, self.on = frames, tuple(on)
+
+    def on_spawn(self, c, enc):
+        c.flinch_timer = c.flinch_total = 0.0
+
+    def on_frame(self, c, enc, dt):
+        c.flinch_timer = max(0.0, c.flinch_timer - dt)
 
     def on_event(self, c, name, enc):
-        if name in ('hit', 'hit_wall', 'rammed'):
-            c.emit('blink', enc)
+        if name in self.on:
+            flinch(c, self.frames, enc)

@@ -59,6 +59,11 @@ class Creature(GameEntity):
     def update(self, dt: float) -> None:
         """Nothing: the Encounter drives creatures."""
 
+    def apply_momentum(self, vx: float, vy: float) -> None:
+        """Something shoved it: add to its velocity (an anchored creature is put back on its next frame)."""
+        self.vx += vx
+        self.vy += vy
+
     def die(self) -> None:
         """It is gone; its Body hears `died` so it can start its death."""
         super().die()

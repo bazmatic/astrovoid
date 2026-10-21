@@ -1,11 +1,14 @@
-"""The anemone shows its reach, reaches for the ship while pulling, and clamps shut when stunned."""
+"""The anemone shows its reach, reaches for the ship while pulling, and clamps shut while it flinches."""
 import math
 
 import pygame
 import pytest
 
 import config
-from entities.anemone import Anemone
+import creatures
+from creatures.traits.combat import flinch
+from entities.anemone import AnemoneBody
+from tests.creature_parts import encounter, world
 
 POS = (200.0, 200.0)
 SIZE = (400, 400)
@@ -16,6 +19,14 @@ def draw(anemone, death=False):
     screen.fill((*config.COLOR_BACKGROUND, 255))
     (anemone.draw_death if death else anemone.draw)(screen)
     return screen
+
+
+def rooted():
+    """An anemone at POS, set up on a level with no ship; the Encounter is returned too."""
+    anemone = creatures.build('anemone', POS)
+    enc = encounter(anemone, world_=world(maze=None))
+    enc.ready()
+    return anemone, enc
 
 
 def drawn_pixels(screen):
@@ -38,7 +49,7 @@ def brightness(screen, radius):
 
 
 def pulling(fraction=1.0, angle=0.0):
-    anemone = Anemone(POS)
+    anemone, _ = rooted()
     anemone.reach_px = 140.0
     anemone.pull_fraction = fraction
     anemone.pull_angle = angle
@@ -46,16 +57,16 @@ def pulling(fraction=1.0, angle=0.0):
 
 
 def test_idle_anemone_is_drawn_around_its_position_with_tentacles_past_its_body():
-    anemone = Anemone(POS)
+    anemone = rooted()[0]
     screen = draw(anemone)
     assert extent(screen, anemone.radius * 3) > anemone.radius * 1.2
     assert screen.get_at((int(POS[0]), int(POS[1])))[:3] != config.COLOR_BACKGROUND
 
 
 def test_mouth_glows_brighter_the_harder_it_pulls():
-    idle = brightness(draw(pulling(0.0)), Anemone(POS).radius * 0.5)
-    half = brightness(draw(pulling(0.5)), Anemone(POS).radius * 0.5)
-    full = brightness(draw(pulling(1.0)), Anemone(POS).radius * 0.5)
+    idle = brightness(draw(pulling(0.0)), rooted()[0].radius * 0.5)
+    half = brightness(draw(pulling(0.5)), rooted()[0].radius * 0.5)
+    full = brightness(draw(pulling(1.0)), rooted()[0].radius * 0.5)
     assert idle < half < full
 
 
@@ -64,7 +75,7 @@ def test_tentacles_lean_toward_the_ship_it_is_pulling():
         points = [(x, y) for x, y in drawn_pixels(screen) if math.hypot(x - POS[0], y - POS[1]) <= radius]
         return sum(x for x, _ in points) / len(points)
 
-    radius = Anemone(POS).radius * 3
+    radius = rooted()[0].radius * 3
     right = centre_of_mass_x(draw(pulling(1.0, 0.0)), radius)
     left = centre_of_mass_x(draw(pulling(1.0, math.pi)), radius)
     assert right > POS[0] + 0.5 > POS[0] - 0.5 > left
@@ -87,41 +98,41 @@ def test_range_streaks_are_faint():
     assert max(sum(color) for color in streaks) < sum(config.ANEMONE_TIP_COLOR) * 0.5
 
 
-def test_stunned_anemone_folds_in_and_shows_no_streaks():
+def test_a_flinching_anemone_folds_in_and_shows_no_streaks():
     open_one = pulling(0.0)
     shut = pulling(0.0)
-    shut.stun(90)
-    assert shut.closed_fraction == pytest.approx(1.0)
-    assert open_one.closed_fraction == 0.0
+    flinch(shut, 90, None)
+    assert shut.body.closed_fraction == pytest.approx(1.0)
+    assert open_one.body.closed_fraction == 0.0
     limit = open_one.radius * 3
     assert extent(draw(shut), limit) < extent(draw(open_one), limit)
     far = [1 for x, y in drawn_pixels(draw(shut)) if math.hypot(x - POS[0], y - POS[1]) > limit]
     assert far == []
 
 
-def test_it_reopens_over_the_last_third_of_a_stun():
-    anemone = Anemone(POS)
-    anemone.stun(90)
+def test_it_reopens_over_the_last_third_of_a_flinch():
+    anemone, enc = rooted()
+    flinch(anemone, 90, enc)
     for _ in range(60):
-        anemone.update(1.0)
-    assert anemone.closed_fraction == pytest.approx(1.0)
+        enc.step(1.0)
+    assert anemone.body.closed_fraction == pytest.approx(1.0)
     for _ in range(15):
-        anemone.update(1.0)
-    assert 0.0 < anemone.closed_fraction < 1.0
+        enc.step(1.0)
+    assert 0.0 < anemone.body.closed_fraction < 1.0
     for _ in range(15):
-        anemone.update(1.0)
-    assert anemone.closed_fraction == 0.0
+        enc.step(1.0)
+    assert anemone.body.closed_fraction == 0.0
 
 
 def test_dead_anemone_is_not_drawn_by_draw():
-    anemone = Anemone(POS)
+    anemone = rooted()[0]
     anemone.die()
     assert drawn_pixels(draw(anemone)) == []
 
 
 def test_death_wilts_and_fades_to_nothing():
-    anemone = Anemone(POS)
-    assert Anemone.DEATH_DURATION == 30.0
+    anemone = rooted()[0]
+    assert AnemoneBody.DEATH_DURATION == 30.0
     anemone.die()
     early = len(drawn_pixels(draw(anemone, death=True)))
     for _ in range(20):
@@ -133,11 +144,11 @@ def test_death_wilts_and_fades_to_nothing():
     assert drawn_pixels(draw(anemone, death=True)) == []
 
 
-@pytest.mark.parametrize('state', ['idle', 'pulling', 'stunned', 'dying'])
+@pytest.mark.parametrize('state', ['idle', 'pulling', 'flinching', 'dying'])
 def test_drawing_leaves_the_screen_opaque(state):
     anemone = pulling(1.0 if state == 'pulling' else 0.0)
-    if state == 'stunned':
-        anemone.stun(90)
+    if state == 'flinching':
+        flinch(anemone, 90, None)
     if state == 'dying':
         anemone.die()
         anemone.update_death(5.0)

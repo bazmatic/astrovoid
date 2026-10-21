@@ -4,7 +4,7 @@ A finned mantle with a head, eyes that blink, and eight trailing arms (two of th
 clubs) that stream behind as it jets. It reads the creature's position, heading, size, hit points and death; its own
 state is the animation. When it dies it withdraws into its mantle like a snail into its shell.
 
-Events: `thrust` kicks the jet; `blink` starts a blink.
+Events: `thrust` kicks the jet; `flinch` starts a blink.
 """
 import pygame
 import math
@@ -111,10 +111,10 @@ class Squid:
     is_dying = property(lambda self: self._creature.is_dying)
 
     def on_event(self, creature, name: str) -> None:
-        """Thrust kicks the jet; a blink event starts a blink."""
+        """Thrust kicks the jet; a flinch starts a blink."""
         if name == 'thrust':
             self.jet = min(1.0, self.jet + self.JET_GAIN)
-        elif name == 'blink':
+        elif name == 'flinch':
             self.trigger_blink()
 
     def update(self, creature, dt: float, target=None) -> None:

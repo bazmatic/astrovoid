@@ -3,7 +3,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from entities.anemone import Anemone
+from creatures.traits.rooted import wall_between
 import creatures
 from entities.flighthouse_enemy import FlighthouseEnemy
 from entities.hunter_ship import HunterShip
@@ -65,9 +65,8 @@ def test_fire_control_will_not_shoot_through_a_gate():
 
 
 def test_an_anemone_cannot_see_through_a_gate():
-    anemone = Anemone((100, 500))
-    assert not anemone._wall_between((500, 500), world([]))
-    assert anemone._wall_between((500, 500), world([PLANK]))
+    assert not wall_between((100, 500), (500, 500), world([]))
+    assert wall_between((100, 500), (500, 500), world([PLANK]))
 
 
 def test_a_flighthouse_cannot_see_through_a_gate():

@@ -8,7 +8,6 @@ import pytest
 import creatures
 from entities.flocker_enemy_ship import FlockerEnemyShip
 from entities.flighthouse_enemy import FlighthouseEnemy
-from entities.anemone import Anemone
 from entities.projectile import Projectile
 from entities.command_recorder import CommandRecorder
 from game_handlers.collision_handler import CollisionHandler
@@ -26,7 +25,7 @@ def make_all_enemies():
         *(creatures.build(kind, POS, 1, recorder) for kind in SQUID_KINDS),
         FlockerEnemyShip(POS),
         FlighthouseEnemy(POS),
-        Anemone(POS),
+        creatures.build('anemone', POS),
         creatures.build('egg', POS),
     ]
 

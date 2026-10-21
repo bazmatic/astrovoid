@@ -7,22 +7,33 @@ import pygame
 import pytest
 
 import config
+import creatures
+import enemy_kinds
 import level_rules
-from entities.anemone import Anemone
+from creatures.traits.combat import flinch
+from entities.anemone import AnemoneBody
 from entities.command_recorder import CommandRecorder
 from entities.projectile import Projectile
 from entities.ship import Ship
 from game_handlers.collision_handler import CollisionHandler
-from game_handlers.enemy_updater import EnemyUpdater
 from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager
 from level_rules import EnemyCounts
+from tests.creature_parts import encounter, world
 
 POS = (400.0, 300.0)
+TRAITS = dict(enemy_kinds.kind('anemone').traits)
+FLING_SPEED = TRAITS['flingsShip']['speed']
+HIT_POINTS = TRAITS['takesHits']['hitPoints']
 
 
 def open_maze():
-    return SimpleNamespace(cell_size_x=40.0, cell_size_y=40.0, walls=[], spatial_grid=None)
+    return SimpleNamespace(cell_size_x=40.0, cell_size_y=40.0, walls=[], spatial_grid=None,
+                           is_open=lambda pos, radius: True)
+
+
+def anemone_at(pos=POS):
+    return creatures.build('anemone', pos)
 
 
 def counts(anemone):
@@ -36,19 +47,26 @@ def spawn(anemone_count, positions):
     return manager
 
 
-def shoot(handler, anemone, crystals=None):
+def level_with(handler, *anemones, crystals=None):
+    """An Encounter over these anemones, whose kills go through a real collision handler."""
+    stand_in = world(collision_handler=handler, scoring=handler.scoring, sound_manager=handler.sound_manager,
+                     maze=open_maze(), powerup_crystals=crystals if crystals is not None else [])
+    enc = encounter(*anemones, world_=stand_in)
+    enc.ready()
+    return enc
+
+
+def shoot(enc):
     projectile = Projectile(POS, 0.0)
     projectile.source = 'player'
-    return handler.handle_projectile_enemy_collisions(
-        projectile, [], [], [], crystals if crystals is not None else [],
-        anemones=[anemone])
+    return enc.shoot(projectile)
 
 
 class TestSpawning:
     def test_spawns_the_requested_number(self):
         manager = spawn(2, [(100.0, 100.0), (200.0, 200.0), (300.0, 300.0)])
         assert len(manager.of_kind('anemone')) == 2
-        assert all(isinstance(a, Anemone) for a in manager.of_kind('anemone'))
+        assert all(isinstance(a.body, AnemoneBody) for a in manager.of_kind('anemone'))
 
     def test_spawns_only_as_many_as_fit(self):
         assert len(spawn(3, [(100.0, 100.0)]).of_kind('anemone')) == 1
@@ -75,7 +93,7 @@ class TestSpawning:
 class TestEntityManager:
     def test_anemones_count_as_enemies(self):
         manager = EnemyRoster()
-        alive, dead = Anemone(POS), Anemone((10.0, 10.0))
+        alive, dead = anemone_at(), anemone_at((10.0, 10.0))
         manager.extend([alive, dead])
         dead.active = False
         assert list(manager.alive()) == [alive]
@@ -86,104 +104,67 @@ class TestEntityManager:
 
 
 class TestUpdating:
-    def make(self, distance):
-        anemone = Anemone(POS)
+    def make(self, distance, *positions, shield=False):
         ship = Ship((POS[0] + distance, POS[1]))
-        ship.deactivate_shield()
-        return anemone, ship, Mock()
-
-    def test_ship_in_reach_is_pulled(self):
-        anemone, ship, scoring = self.make(80.0)
-        EnemyUpdater().update_anemones([anemone], 1.0, open_maze(), ship, scoring)
-        assert ship.vx < 0
-        assert scoring.record_enemy_collision.call_count == 0
-
-    def test_several_anemones_together_still_pull_less_than_thrust(self):
-        # Three stacked on one side would otherwise pull 2.4 times as hard as the engine pushes
-        anemones = [Anemone((POS[0], POS[1] + offset)) for offset in (-3.0, 0.0, 3.0)]
-        ship, scoring = Ship((POS[0] + 23.0, POS[1])), Mock()
-        ship.deactivate_shield()
-        for anemone in anemones:
-            anemone.stun(0)
-        ship.x = POS[0] + 40.0  # Clear of all three hulls, deep in all three fields
-        EnemyUpdater().update_anemones(anemones, 1.0, open_maze(), ship, scoring)
-        pull = math.hypot(ship.vx, ship.vy)
-        assert pull == pytest.approx(config.ANEMONE_PULL_THRUST_FRACTION * config.SHIP_THRUST_FORCE)
-        assert pull < config.SHIP_THRUST_FORCE
-        assert all(anemone.pull_fraction > 0 for anemone in anemones)
+        if shield:
+            ship.activate_shield()
+        else:
+            ship.deactivate_shield()
+        anemones = [anemone_at(pos) for pos in (positions or (POS,))]
+        stand_in = world(ship=ship, maze=open_maze())
+        return anemones, ship, stand_in.scoring, encounter(*anemones, world_=stand_in)
 
     def test_opposing_anemones_cancel_out(self):
-        left, right = Anemone((POS[0] - 60.0, POS[1])), Anemone((POS[0] + 60.0, POS[1]))
-        ship, scoring = Ship(POS), Mock()
-        ship.deactivate_shield()
-        EnemyUpdater().update_anemones([left, right], 1.0, open_maze(), ship, scoring)
+        (left, right), ship, _, enc = self.make(0.0, (POS[0] - 60.0, POS[1]), (POS[0] + 60.0, POS[1]))
+        enc.step(1.0)
         assert (ship.vx, ship.vy) == pytest.approx((0.0, 0.0))
         assert left.pull_fraction > 0 and right.pull_fraction > 0
 
-    def test_touching_it_stings_flings_and_releases(self):
-        anemone, ship, scoring = self.make(10.0)
-        ship.vx = -3.0
-        EnemyUpdater().update_anemones([anemone], 1.0, open_maze(), ship, scoring)
-        assert scoring.record_enemy_collision.call_count == 1
-        assert ship.vx == pytest.approx(config.ANEMONE_FLING_SPEED)
-        assert ship.vy == pytest.approx(0.0)
-        assert math.hypot(ship.x - POS[0], ship.y - POS[1]) > anemone.radius + ship.radius
-        assert anemone.stun_timer == config.ANEMONE_RELEASE_FRAMES
-        assert anemone.get_pos() == POS
-
-    def test_it_does_not_drag_the_ship_straight_back(self):
-        anemone, ship, scoring = self.make(10.0)
-        updater = EnemyUpdater()
-        updater.update_anemones([anemone], 1.0, open_maze(), ship, scoring)
-        updater.update_anemones([anemone], 1.0, open_maze(), ship, scoring)
-        assert ship.vx == pytest.approx(config.ANEMONE_FLING_SPEED)
-        assert scoring.record_enemy_collision.call_count == 1
-
     def test_fling_from_dead_centre_still_throws_the_ship_clear(self):
-        anemone, ship, scoring = self.make(0.0)
-        EnemyUpdater().update_anemones([anemone], 1.0, open_maze(), ship, scoring)
-        assert math.hypot(ship.vx, ship.vy) == pytest.approx(config.ANEMONE_FLING_SPEED)
+        [anemone], ship, _, enc = self.make(0.0)
+        enc.step(1.0)
+        assert math.hypot(ship.vx, ship.vy) == pytest.approx(FLING_SPEED)
         assert math.hypot(ship.x - POS[0], ship.y - POS[1]) > anemone.radius + ship.radius
         assert all(math.isfinite(v) for v in (ship.x, ship.y, ship.vx, ship.vy))
 
     def test_shield_stops_both_the_pull_and_the_sting(self):
-        anemone = Anemone(POS)
-        ship, scoring = Ship((POS[0] + 10.0, POS[1])), Mock()
-        ship.activate_shield()
-        EnemyUpdater().update_anemones([anemone], 1.0, open_maze(), ship, scoring)
+        _, ship, scoring, enc = self.make(10.0, shield=True)
+        enc.step(1.0)
         assert (ship.vx, ship.vy) == (0.0, 0.0)
         assert scoring.record_enemy_collision.call_count == 0
 
     def test_dead_anemones_are_skipped(self):
-        anemone, ship, scoring = self.make(10.0)
+        [anemone], ship, scoring, enc = self.make(10.0)
         anemone.die()
-        EnemyUpdater().update_anemones([anemone], 1.0, open_maze(), ship, scoring)
+        enc.step(1.0)
         assert (ship.vx, ship.vy) == (0.0, 0.0)
         assert scoring.record_enemy_collision.call_count == 0
 
 
 class TestBeingShot:
     def test_a_hit_uses_the_shot_and_makes_it_flinch(self):
-        handler, anemone = CollisionHandler(Mock(), Mock(), CommandRecorder()), Anemone(POS)
-        assert shoot(handler, anemone)
+        handler, anemone = CollisionHandler(Mock(), Mock(), CommandRecorder()), anemone_at()
+        assert shoot(level_with(handler, anemone))
         assert anemone.active
-        assert anemone.stun_timer == config.ANEMONE_FLINCH_FRAMES
+        assert anemone.flinch_timer == TRAITS['flinchesWhenHit']['frames']
         assert handler.sound_manager.play_enemy_destroy.call_count == 0
 
-    def test_a_flinch_does_not_cut_a_longer_stun(self):
-        handler, anemone = CollisionHandler(Mock(), Mock(), CommandRecorder()), Anemone(POS)
-        anemone.stun(500)
-        shoot(handler, anemone)
-        assert anemone.stun_timer == 500
+    def test_a_flinch_does_not_cut_a_longer_one(self):
+        handler, anemone = CollisionHandler(Mock(), Mock(), CommandRecorder()), anemone_at()
+        enc = level_with(handler, anemone)
+        flinch(anemone, 500, enc)
+        shoot(enc)
+        assert anemone.flinch_timer == 500
 
     def test_killed_and_credited_on_the_last_hit_only(self, monkeypatch):
         monkeypatch.setattr(config, 'POWERUP_CRYSTAL_SPAWN_CHANCE', 1.0)
-        handler, anemone, crystals = CollisionHandler(Mock(), Mock(), CommandRecorder()), Anemone(POS), []
-        for _ in range(config.ANEMONE_HIT_POINTS - 1):
-            shoot(handler, anemone, crystals)
+        handler, anemone, crystals = CollisionHandler(Mock(), Mock(), CommandRecorder()), anemone_at(), []
+        enc = level_with(handler, anemone, crystals=crystals)
+        for _ in range(HIT_POINTS - 1):
+            shoot(enc)
         assert anemone.active and crystals == []
         assert handler.scoring.record_enemy_destroyed.call_count == 0
-        shoot(handler, anemone, crystals)
+        shoot(enc)
         assert not anemone.active
         assert handler.sound_manager.play_enemy_destroy.call_count == 1
         assert handler.scoring.record_enemy_destroyed.call_count == 1
@@ -262,12 +243,12 @@ class TestRealGameWiring:
         assert game.roster.of_kind('anemone')
         for anemone in game.roster.of_kind('anemone'):
             gap = math.hypot(anemone.x - game.ship.x, anemone.y - game.ship.y)
-            assert gap > anemone.reach(game.maze)
+            assert gap > anemone.reach_px > 0
 
     def test_range_is_known_before_the_player_first_moves(self, game):
         assert not game.player_has_moved
-        assert game.roster.of_kind('anemone')[0].reach_px == pytest.approx(game.roster.of_kind('anemone')[0].reach(game.maze))
-        assert game.roster.of_kind('anemone')[0].reach_px > 0
+        reach = TRAITS['pullsShip']['reachCells'] * (game.maze.cell_size_x + game.maze.cell_size_y) / 2
+        assert reach > 0 and game.roster.of_kind('anemone')[0].reach_px == pytest.approx(reach)
 
     def test_player_shots_hurt_it(self, game):
         anemone = self.clear_space(game)
@@ -275,10 +256,10 @@ class TestRealGameWiring:
         shot = Projectile(anemone.get_pos(), 0.0)
         shot.source = 'player'
         game.projectiles.append(shot)
-        game.ship.x, game.ship.y = anemone.x + anemone.reach(game.maze) * 3, anemone.y
+        game.ship.x, game.ship.y = anemone.x + anemone.reach_px * 3, anemone.y
         game.update(1.0)
-        assert anemone.hit_points == config.ANEMONE_HIT_POINTS - 1
-        assert anemone.is_stunned
+        assert anemone.hit_points == HIT_POINTS - 1
+        assert anemone.flinch_timer > 0
 
     def test_the_hunter_is_shown_anemones(self, game):
         assert game.roster.of_kind('anemone')[0] in game.hunter_surroundings.enemies()

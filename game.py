@@ -383,9 +383,8 @@ class Game:
         else:
             self._spawn_enemy_hunters_at(
                 self.spawn_manager.spawn_from_layout(layout, self.maze, self.level, self.command_recorder))
-        # Anemones show their reach from the start, before the first update works it out
-        for anemone in self.roster.of_kind('anemone'):
-            anemone.reach_px = anemone.reach(self.maze)
+        # Creatures are set up before the player first moves, so they show it from the start (an anemone its reach)
+        self.encounter.ready()
         self.base_par_seconds = self._base_par_seconds()
         
         # Clear projectiles and crystals
@@ -999,9 +998,6 @@ class Game:
             roster = self.roster
             self.enemy_updater.update_flighthouses(
                 roster.of_kind('flighthouse'), dt, player_pos, self.maze, self.ship, self.scoring, roster
-            )
-            self.enemy_updater.update_anemones(
-                roster.of_kind('anemone'), dt, self.maze, self.ship, self.scoring
             )
             self.enemy_updater.update_flockers(
                 roster.of_kind('flocker'), dt, player_pos, self.maze, self.ship, self.scoring, self.projectiles, self.sound_manager, hunter=self.hunter

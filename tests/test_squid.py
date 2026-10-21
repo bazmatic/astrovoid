@@ -148,7 +148,7 @@ class TestDrawing:
         squid.draw(screen)  # Before any update
         squid.emit('thrust', None)
         animate(squid)
-        squid.emit('blink', None)
+        squid.emit('flinch', None)
         for _ in range(8):
             animate(squid)
             squid.draw(screen)

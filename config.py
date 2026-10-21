@@ -149,12 +149,6 @@ class FlighthouseEnemySettings:
 @dataclass
 class AnemoneSettings:
     size: int
-    hitPoints: int
-    reachCells: float
-    pullThrustFraction: float
-    flingSpeed: float
-    releaseFrames: int
-    flinchFrames: int
     firstLevel: int
     maxCoverage: float
     color: Tuple[int, int, int]
@@ -725,13 +719,9 @@ FLIGHTHOUSE_ENEMY_SPAWN_INTERVAL_SECONDS = SETTINGS.flighthouseEnemy.spawnInterv
 FLIGHTHOUSE_ENEMY_HIT_POINTS = SETTINGS.flighthouseEnemy.hitPoints
 FLIGHTHOUSE_ENEMY_INITIAL_FLOCKER_SPEED_MULTIPLIER = SETTINGS.flighthouseEnemy.initialFlockerSpeedMultiplier
 
-ANEMONE_SIZE = SETTINGS.anemone.size
-ANEMONE_HIT_POINTS = SETTINGS.anemone.hitPoints
-ANEMONE_REACH_CELLS = SETTINGS.anemone.reachCells
-ANEMONE_PULL_THRUST_FRACTION = SETTINGS.anemone.pullThrustFraction
-ANEMONE_FLING_SPEED = SETTINGS.anemone.flingSpeed
-ANEMONE_RELEASE_FRAMES = SETTINGS.anemone.releaseFrames
-ANEMONE_FLINCH_FRAMES = SETTINGS.anemone.flinchFrames
+# The level rules read these: where anemones first appear, how much of a maze their pull may cover, and how far it
+# reaches (for that coverage, and to keep them clear of the player's start)
+ANEMONE_REACH_CELLS = dict(enemy_kinds.kind('anemone').traits)['pullsShip']['reachCells']
 ANEMONE_FIRST_LEVEL = SETTINGS.anemone.firstLevel
 ANEMONE_MAX_COVERAGE = SETTINGS.anemone.maxCoverage
 ANEMONE_COLOR = SETTINGS.anemone.color
