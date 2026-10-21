@@ -71,6 +71,12 @@ class Encounter:
         for creature in self.creatures():
             self._spawn(creature)
 
+    def close(self) -> None:
+        """The encounter is over: every creature's traits let go of what they hold. Safe to call again."""
+        for creature in self.creatures():
+            for trait in creature.traits:
+                trait.on_close(creature, self)
+
     def _spawn(self, creature) -> None:
         """Run a newcomer's spawn hooks, once."""
         if not creature.has_spawned and creature.active:

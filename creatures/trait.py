@@ -10,6 +10,7 @@ class Trait:
     NAME: str = ''                   # its name in config/enemies.json
     REQUIRES: Tuple[str, ...] = ()   # traits a creature must also have for this one to work
     CROWD: bool = False              # has on_crowd, run once a frame for all live creatures of the kind
+    LIVE: Tuple[str, ...] = ()       # creature attributes it keeps that a copy (a death portrait) must not carry
 
     @classmethod
     def from_params(cls, params: Mapping) -> 'Trait':
@@ -33,6 +34,9 @@ class Trait:
 
     def on_event(self, c, name: str, enc) -> None:
         """Another trait emitted an event on the creature."""
+
+    def on_close(self, c, enc) -> None:
+        """The encounter is over (the level ends or restarts, or the game closes), for every creature, alive or not."""
 
     def on_crowd(self, creatures, enc, dt: float) -> None:
         """Once a frame, with every live creature of a crowd that has this trait (CROWD traits only)."""

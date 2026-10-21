@@ -96,10 +96,11 @@ class Creature(GameEntity):
         return True
 
     def __deepcopy__(self, memo):
-        """A copy for a death portrait: everything but the Encounter it was in."""
+        """A copy for a death portrait: everything but the Encounter it was in and what its traits keep live."""
         from creatures.encounter import Encounter
+        live = {name for trait in self.traits for name in trait.LIVE}
         clone = self.__class__.__new__(self.__class__)
         memo[id(self)] = clone
         for name, value in self.__dict__.items():
-            setattr(clone, name, None if isinstance(value, Encounter) else copy.deepcopy(value, memo))
+            setattr(clone, name, None if name in live or isinstance(value, Encounter) else copy.deepcopy(value, memo))
         return clone
