@@ -46,7 +46,6 @@ from game_handlers.autoplay import AutoplayDirector
 from game_handlers.enemy_roster import EnemyRoster
 from game_handlers.spawn_manager import SpawnManager, make_enemy
 from game_handlers.collision_handler import CollisionHandler
-from creatures.creature import Creature
 from creatures.encounter import Encounter
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
 from game_handlers.state_handlers import StateHandlerRegistry
@@ -57,8 +56,7 @@ from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
-from hunter.surroundings import GameSurroundings, ProtagonistSurroundings
-from entities.neural_hunter import VIBERS
+from hunter.surroundings import GameSurroundings
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
@@ -577,27 +575,13 @@ class Game:
                 'Level %d: room for %d of %d enemy hunters', self.level, len(candidates), len(placements))
 
     def _spawn_enemy_hunters_at(self, placements):
-        """Make an enemy hunter of each (kind, position): a Rules hunter with its own pilot worker, or a Viber of
-        any size flown by the neural pilot. Without an installed neural model a Viber is left out (and said so)."""
+        """Make an enemy hunter of each (kind, position). Without an installed neural model a kind with a neural
+        pilot is left out (and said so)."""
         for kind, pos in placements:
-            if enemy_kinds.kind(kind).body is not None:
-                self.roster.add(make_enemy(kind, pos, self.level, self.command_recorder))
-                continue
-            policy = self.enemy_policy()
-            if policy is None:
+            if enemy_kinds.kind(kind).pilot == 'neural' and self.enemy_policy() is None:
                 logging.getLogger(__name__).warning('Level %d: no neural model, so no Neural hunter', self.level)
                 continue
-            self.roster.add(VIBERS[kind](pos, policy, ProtagonistSurroundings(self)))
-
-    def _fly_enemy_hunters(self, dt):
-        """Each enemy hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
-        for hunter in self.enemy_hunters:
-            if not hunter.active or isinstance(hunter, Creature):    # the Encounter flies the Creatures
-                continue
-            self.projectiles.extend(hunter.fly(dt))
-            if self.ship is not None and self.ship.active and not self.ship.is_shield_active():
-                if self.ship.check_circle_collision(hunter.get_pos(), hunter.radius, hunter):
-                    self.scoring.record_enemy_collision()
+            self.roster.add(make_enemy(kind, pos, self.level, self.command_recorder))
 
     def _step_gates(self, dt):
         """Let the gates turn and push back on whatever flies into them; anemones and flighthouses jam them."""
@@ -632,9 +616,6 @@ class Game:
     def _close_enemy_hunters(self):
         """Stop every enemy hunter's pilot and worker (a level ends, restarts, or the game closes)."""
         self.encounter.close()
-        for hunter in self.enemy_hunters:
-            if not isinstance(hunter, Creature):
-                hunter.close()
 
     def _make_duel_worker(self):
         """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""
@@ -994,7 +975,6 @@ class Game:
             if not self.exit_explosion_active and not self.game_frozen and not self.game_over_active:
                 self._update_hunter(dt)
             self.encounter.step(dt)
-            self._fly_enemy_hunters(dt)
             self.roster.update_dying(dt)
 
         if self.obstacles:

@@ -270,11 +270,23 @@
     "parWeight": "enemy",
     "spawnRadius": 0,
     "layer": 7,
-    "pilot": "neural",
-    "hitPoints": 12,
-    "sizeScale": 1.0,
-    "shotStrength": 1.0,
-    "showsHitPoints": false
+    "tuning": {
+      "size": 8,
+      "color": [255, 90, 230],
+      "fill": [100, 20, 95],
+      "noseColor": [255, 210, 245],
+      "cockpitColor": [55, 10, 50],
+      "engineColor": [170, 50, 140],
+      "engineLitColor": [255, 140, 230],
+      "showsHitPoints": false
+    },
+    "allegiance": "enemy",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {"mode": "neural"},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 12}
+    }
   },
   "boss_viber": {
     "name": ["Boss Viber", "Boss Vibers"],
@@ -283,11 +295,23 @@
     "parWeight": "enemy",
     "spawnRadius": 0,
     "layer": 7,
-    "pilot": "neural",
-    "hitPoints": 24,
-    "sizeScale": 2.0,
-    "shotStrength": 1.0,
-    "showsHitPoints": true
+    "tuning": {
+      "size": 16,
+      "color": [255, 90, 230],
+      "fill": [100, 20, 95],
+      "noseColor": [255, 210, 245],
+      "cockpitColor": [55, 10, 50],
+      "engineColor": [170, 50, 140],
+      "engineLitColor": [255, 140, 230],
+      "showsHitPoints": true
+    },
+    "allegiance": "enemy",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {"mode": "neural"},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 24}
+    }
   },
   "vibelet": {
     "name": ["Vibelet", "Vibelets"],
@@ -296,11 +320,23 @@
     "parWeight": "enemy",
     "spawnRadius": 0,
     "layer": 7,
-    "pilot": "neural",
-    "hitPoints": 1,
-    "sizeScale": 0.5,
-    "shotStrength": 0.1,
-    "showsHitPoints": false
+    "tuning": {
+      "size": 4,
+      "color": [255, 90, 230],
+      "fill": [100, 20, 95],
+      "noseColor": [255, 210, 245],
+      "cockpitColor": [55, 10, 50],
+      "engineColor": [170, 50, 140],
+      "engineLitColor": [255, 140, 230],
+      "showsHitPoints": false
+    },
+    "allegiance": "enemy",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {"mode": "neural", "shotStrength": 0.1},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 1}
+    }
   },
   "baby": {
     "name": ["Squidlet", "Squidlets"],

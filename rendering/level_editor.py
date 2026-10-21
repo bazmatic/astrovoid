@@ -17,7 +17,6 @@ from editor.generated import generated_layout
 from editor.model import PALETTE, TIMER_STEP, EditorModel
 from entities.command_recorder import CommandRecorder
 from entities.jev_beacon import JevBeacon
-from entities.neural_hunter import VIBERS
 from entities.ship import Ship
 from game_handlers.spawn_manager import make_enemy
 from maze.config import MazeComplexity
@@ -49,23 +48,6 @@ CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
 CONFIRM_KEYS = (pygame.K_y, pygame.K_RETURN)
 CANCEL_KEYS = (pygame.K_n, pygame.K_ESCAPE)
-
-
-class _NoView:
-    """Nothing to perceive: the editor's Rules hunter never flies."""
-    maze = None
-
-    def enemies(self):
-        return []
-
-    def threats(self):
-        return []
-
-    def pickups(self):
-        return []
-
-    def friend(self):
-        return None
 
 
 class LevelEditor:
@@ -355,10 +337,7 @@ class LevelEditor:
         recorder = CommandRecorder()
         sprites = []
         for kind, cell in layout.enemies:
-            if kind in VIBERS:
-                sprites.append((kind, VIBERS[kind](centre(*cell), None, _NoView())))      # drawn, never flown
-            else:
-                sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)))
+            sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)))
         ship = Ship(centre(*model.start))
         exit_pos = centre(*model.exit)
         ship.angle = math.degrees(math.atan2(exit_pos[1] - ship.y, exit_pos[0] - ship.x)) % 360

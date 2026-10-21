@@ -15,17 +15,7 @@ from typing import Any, Dict, Mapping, Optional, Tuple
 from utils.resource_path import resource_path
 
 PAR_WEIGHTS = ('enemy', 'spawningBoss')
-PILOTS = ('rules', 'neural')
 ALLEGIANCES = ('friend', 'enemy')
-
-
-@dataclass(frozen=True)
-class HunterStats:
-    """What sets one enemy hunter apart from another flown by the same pilot."""
-    hit_points: int
-    size_scale: float      # its radius (and so its drawing and collisions) as a share of a normal ship's
-    shot_strength: float   # what its shots cost the player, as a share of a full shot
-    shows_hit_points: bool  # whether it carries a bar above it of the hits it has left
 
 
 @dataclass(frozen=True)
@@ -39,7 +29,6 @@ class EnemyKind:
     spawn_radius: float    # how far it reaches at its largest: where it is placed must be that open (0: its centre)
     layer: int             # drawing order: kinds on a higher layer are drawn over those on a lower one
     pilot: Optional[str] = None             # an enemy hunter's pilot (its pilot trait's mode); None for other kinds
-    hunter: Optional[HunterStats] = None    # an enemy hunter's own numbers
     tuning: Mapping[str, Any] = field(default_factory=dict)   # settings only this kind's own code reads
     allegiance: str = 'enemy'              # whom it targets and whose shots hurt it: 'friend' or 'enemy'
     body: Optional[str] = None             # the Body a Creature of this kind is drawn with; None: not a Creature yet
@@ -47,32 +36,25 @@ class EnemyKind:
 
 
 _COMMON = {'name', 'anchored', 'replaysPlayer', 'parWeight', 'spawnRadius', 'layer'}
-_HUNTER = {'pilot', 'hitPoints', 'sizeScale', 'shotStrength', 'showsHitPoints'}
-_CREATURE = {'allegiance', 'body', 'traits'}   # optional while the kinds move onto Creatures one by one
+_CREATURE = {'allegiance', 'body', 'traits'}   # optional: a kind that is not a Creature has none
 
 
 def _parse(key: str, raw: Dict[str, Any]) -> EnemyKind:
-    is_hunter = 'pilot' in raw
-    required = _COMMON | (_HUNTER if is_hunter else {'tuning'})
+    required = _COMMON | {'tuning'}
     missing, unknown = required - set(raw), set(raw) - required - _CREATURE
     if missing or unknown:
         raise ValueError(f'enemy kind {key!r}: missing {sorted(missing)}, unknown {sorted(unknown)}')
     singular, plural = raw['name']
     if raw['parWeight'] not in PAR_WEIGHTS:
         raise ValueError(f'enemy kind {key!r}: parWeight must be one of {PAR_WEIGHTS}')
-    hunter = None
-    if is_hunter:
-        if raw['pilot'] not in PILOTS:
-            raise ValueError(f'enemy kind {key!r}: pilot must be one of {PILOTS}')
-        hunter = HunterStats(raw['hitPoints'], raw['sizeScale'], raw['shotStrength'], raw['showsHitPoints'])
     allegiance = raw.get('allegiance', 'enemy')
     if allegiance not in ALLEGIANCES:
         raise ValueError(f'enemy kind {key!r}: allegiance must be one of {ALLEGIANCES}')
     traits = raw.get('traits', {})
-    pilot = traits['pilot'].get('mode') if 'pilot' in traits else raw.get('pilot')
+    pilot = traits['pilot'].get('mode') if 'pilot' in traits else None
     return EnemyKind(key=key, name=singular, plural=plural, anchored=raw['anchored'],
                      replays_player=raw['replaysPlayer'], par_weight=raw['parWeight'],
-                     spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=pilot, hunter=hunter,
+                     spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=pilot,
                      tuning=raw.get('tuning', {}), allegiance=allegiance, body=raw.get('body'),
                      traits=tuple(traits.items()))
 
