@@ -109,7 +109,7 @@ Each stage after the first gets its own plan when it starts.
    more than ~20% slower stops the work for a rethink with the user.
 2. **Urchin, Crab, Jelly** (`static`, `patrol`, `aggressive`). Deletes `Enemy` and `enemy_strategies.py`. Second
    speed gate on the real levels.
-3. **The squids**: Squiddler, Squidlet, Squiddler Boss, Mother (ReplaysPlayer brain, Thrusters, BlinksWhenHit,
+3. **The squids**: Squiddler, Squidlet, Squiddler Boss, Mother (ReplaysPlayer brain, Thrusters, FlinchesWhenHit,
    SplitsOnDeath, LaysEggs).
 4. **Egg** (Hatches, grows), **Anemone** (PullsShip crowd trait, FlinchesWhenHit, Anchored), **Flocker** (Flocks crowd
    trait with the neighbour cache), **Flighthouse** (LaunchesFlock).
