@@ -187,6 +187,47 @@ def test_the_compass_is_empty_when_no_crystal_is_left():
     assert value(sense(ship, world()), 'crystal_compass_present') == 0.0
 
 
+def test_the_enemy_compass_points_along_the_corridors_to_an_enemy_behind_a_wall():
+    ship = HunterShip((550, 450))
+    ship.angle = 0.0
+    wall = WallSegment((600, 0), (600, 800), 3)                  # open only below y=800
+    enemy = creatures.build('patrol', (650, 450), 1)              # just the other side, due east
+    v = sense(ship, world([wall]), enemies=[enemy])
+    assert value(v, 'enemy0_present') == 0.0                     # not seen
+    assert value(v, 'enemy_compass_present') == 1.0
+    assert value(v, 'enemy_compass_sin') == pytest.approx(1.0, abs=1e-3)   # round the end of the wall: due south
+    assert value(v, 'enemy_compass_dist') > 100 / 1000          # the route, longer than the straight line
+
+
+def test_the_enemy_compass_points_straight_at_an_enemy_in_sight():
+    ship = HunterShip((500, 500))
+    ship.angle = 0.0
+    enemy = creatures.build('patrol', (700, 500), 1)
+    v = sense(ship, world(), enemies=[enemy])
+    assert value(v, 'enemy_compass_present') == 1.0
+    assert value(v, 'enemy_compass_cos') == pytest.approx(1.0, abs=1e-4)
+    assert value(v, 'enemy_compass_dist') == pytest.approx(200 / 1000, abs=1e-3)
+
+
+def test_the_enemy_compass_picks_the_nearest_enemy_by_route_not_straight_line():
+    ship = HunterShip((150, 150))
+    ship.angle = 0.0
+    wall = WallSegment((250, 0), (250, 900), 3)
+    behind = creatures.build('patrol', (350, 150), 1)            # 200 away in a line, but round a long wall
+    open_ = creatures.build('patrol', (150, 650), 1)             # 500 away, in the open
+    v = sense(ship, world([wall]), enemies=[behind, open_])
+    assert value(v, 'enemy_compass_sin') == pytest.approx(1.0, abs=1e-3)   # due south, to the open one
+    assert value(v, 'enemy_compass_dist') == pytest.approx(500 / 1000, abs=1e-3)
+
+
+def test_the_enemy_compass_is_empty_when_no_enemy_is_left():
+    ship = HunterShip((500, 500))
+    gone = creatures.build('patrol', (700, 500), 1)
+    gone.active = False
+    assert value(sense(ship, world(), enemies=[gone]), 'enemy_compass_present') == 0.0
+    assert value(sense(ship, world()), 'enemy_compass_present') == 0.0
+
+
 def test_a_hit_is_sensed_once_with_its_force_in_the_hunters_frame():
     ship = HunterShip((500, 500))
     ship.angle = 0.0
@@ -300,3 +341,40 @@ def test_senses_are_cheap():
     for k in range(200):
         senses.observe(ship, w, enemies, [], [], None, IDLE, k / 10)
     assert (time.perf_counter() - start) / 200 < 0.004      # generous: the target is 1 ms on a quiet machine
+
+
+def boxed_world(strong=(), hit_points=4):
+    """The hunter's cell (5, 5) walled in on all four sides by single blocks, with faces all round each block."""
+    blocks = {(4, 5): hit_points, (6, 5): hit_points, (5, 4): hit_points, (5, 6): hit_points}
+    walls = []
+    for x, y in blocks:
+        l, t, r, b = x * 100, y * 100, x * 100 + 100, y * 100 + 100
+        walls += [WallSegment((l, t), (r, t), 3), WallSegment((r, t), (r, b), 3),
+                  WallSegment((r, b), (l, b), 3), WallSegment((l, b), (l, t), 3)]
+    w = world(walls)
+    w.blocks, w.strong_cells = blocks, frozenset(strong)
+    return w
+
+
+def test_a_sealed_in_hunter_is_pointed_at_the_wall_to_shoot_through():
+    ship = HunterShip((550, 550))
+    ship.angle = 0.0
+    enemy = creatures.build('patrol', (850, 550), 1)              # due east, beyond the east block
+    v = sense(ship, boxed_world(), enemies=[enemy])
+    assert value(v, 'enemy_compass_cos') == pytest.approx(1.0, abs=1e-3)
+
+
+def test_each_hit_on_that_wall_shortens_the_compass_distance():
+    ship = HunterShip((550, 550))
+    enemy = creatures.build('patrol', (850, 550), 1)
+    full = value(sense(ship, boxed_world(hit_points=3), enemies=[enemy]), 'enemy_compass_dist')   # 900 px: under the cap
+    worn = value(sense(ship, boxed_world(hit_points=2), enemies=[enemy]), 'enemy_compass_dist')
+    assert worn == pytest.approx(full - 2 * 100 / 1000, abs=1e-3)   # two cells of route per hit point
+
+
+def test_strong_walls_are_never_shot_through():
+    ship = HunterShip((550, 550))
+    ship.angle = 0.0
+    enemy = creatures.build('patrol', (850, 550), 1)
+    v = sense(ship, boxed_world(strong=[(6, 5)]), enemies=[enemy])
+    assert value(v, 'enemy_compass_cos') < 0.5                    # out through the north or south block instead

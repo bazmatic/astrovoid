@@ -140,3 +140,31 @@ def test_fire_control_only_aims_at_live_enemies(maze):
     ahead.active = True
     flight.ship.fire_remaining = 0.0
     assert flight.fly(1.0)
+
+
+def sealed_neural_flight(maze, angle):
+    """A neural hunter at (2, 3) walled in by blocks on all four sides, an enemy at (5, 3), its trigger held."""
+    from hunter.model import PilotAction
+    for col, row in ((1, 3), (3, 3), (2, 2), (2, 4)):
+        maze.grid[row][col] = 1
+    maze.rebuild_walls()
+    ship = HunterShip(cell(maze, 2, 3))
+    ship.angle, ship.fire_remaining = angle, 0.0
+    flight = HunterFlight(ship, NeuralPilot(random_policy(1), decision_frames=1),
+                          Surroundings(maze, [creatures.build('static', cell(maze, 5, 3))]))
+    fire = PilotAction(0, False, True)
+
+    def fly():
+        flight.controller.override = fire
+        return flight.fly(1.0)
+    return flight, fly
+
+
+def test_a_sealed_in_neural_hunter_fires_at_the_wall_the_compass_points_through(maze):
+    _, fly = sealed_neural_flight(maze, angle=0.0)           # nose east, on the block between it and the enemy
+    assert any(fly() for _ in range(3))
+
+
+def test_it_holds_fire_at_any_other_wall(maze):
+    _, fly = sealed_neural_flight(maze, angle=180.0)         # nose west, on a block that leads nowhere nearer
+    assert not any(fly() for _ in range(3))

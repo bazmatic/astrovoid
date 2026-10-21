@@ -7,7 +7,7 @@ from hunter.pilot_sensors import pilot_state
 from dataclasses import asdict
 import config
 from hunter.model import HunterSettings, PilotObservation
-from utils.math_utils import line_line_collision
+from hunter.maze_route import MazeRoutes
 from hunter.visibility import local_segments, visible_point, visible_wall_portions
 
 
@@ -22,8 +22,7 @@ class HunterPerception:
         self.contacts = {}
         self._history = deque(maxlen=3)
         self._history_generation = None
-        self._links = {}
-        self._links_walls = None
+        self._routes = MazeRoutes()
 
     def _id(self, entity):
         if entity not in self._ids:
@@ -121,49 +120,9 @@ class HunterPerception:
 
     def _route_to_player(self, origin, player, maze, walls, radius):
         """The player guides the hunter in: a cell route through the maze and its next waypoint."""
-        sx,sy,ox,oy = maze.cell_size_x,maze.cell_size_y,maze.offset_x,maze.offset_y
-        active = [w for w in maze.walls if w.active]
-        # A destroyed block can expose as many faces as it loses, so count alone is not enough
-        walls_key = (len(active),getattr(maze,'wall_generation',0))
-        if self._links_walls != walls_key:
-            self._links,self._links_walls = {},walls_key
-
-        def cell(pos):
-            return (min(maze.grid_width-1,max(0,int((pos[0]-ox)//sx))),
-                    min(maze.grid_height-1,max(0,int((pos[1]-oy)//sy))))
-
-        def centre(c):
-            return (ox+(c[0]+.5)*sx,oy+(c[1]+.5)*sy)
-
-        def linked(a, b):
-            # Judged by live wall segments, which follow the blocks as they are destroyed.
-            key = (a,b) if a < b else (b,a)
-            if key not in self._links:
-                near = active
-                if getattr(maze,'spatial_grid',None) is not None:
-                    near = maze.spatial_grid.get_walls_along_path(centre(a),centre(b),1)
-                self._links[key] = not any(
-                    w.active and line_line_collision(centre(a),centre(b),w.start,w.end)
-                    for w in near)
-            return self._links[key]
-
-        start,goal = cell(origin),cell(player.get_pos())
-        came,frontier = {start:None},deque([start])
-        while frontier and goal not in came:
-            here = frontier.popleft()
-            for dx,dy in ((1,0),(-1,0),(0,1),(0,-1)):
-                there = (here[0]+dx,here[1]+dy)
-                if (0 <= there[0] < maze.grid_width and 0 <= there[1] < maze.grid_height
-                        and there not in came and linked(here,there)):
-                    came[there] = here
-                    frontier.append(there)
         target = tuple(player.get_pos())
-        route = []
-        if goal in came:
-            step = goal
-            while step != start:
-                route.append(centre(step))
-                step = came[step]
+        found = self._routes.route(maze, origin, [target])
+        route = found[1] if found else []
         # Head for the furthest point of the route that is in plain sight.
         points = [target]+route
         waypoint = next((p for p in points if visible_point(origin,p,walls,radius)),
@@ -173,7 +132,7 @@ class HunterPerception:
         return {'waypoint':list(waypoint), 'bearing':math.degrees(math.atan2(dy,dx)) % 360,
                 'waypoint_distance':math.hypot(dx,dy),
                 'route_distance':(sum(math.dist(a,b) for a,b in zip(legs,legs[1:]))
-                                  if goal in came else None),
+                                  if found else None),
                 'player_distance':math.dist(origin,target),
                 'player_visible':waypoint == target}
 

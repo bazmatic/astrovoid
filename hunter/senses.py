@@ -6,6 +6,7 @@ own motion. None of the rules pilot's solved quantities (lead angles, burn headi
 import math
 import weakref
 import numpy as np
+from hunter.maze_route import MazeRoutes
 
 RAYS = 16
 MAX_ENEMIES, MAX_BULLETS, MAX_POWERUPS, MAX_MEMORY = 6, 4, 2, 2
@@ -13,6 +14,7 @@ MAX_POWERUP_MEMORY = 2
 POWERUP_MEMORY_TTL = 90.0   # seconds a crystal seen and then lost from view is remembered (they do not expire)
 MEMORY_TTL = 10.0          # seconds an out-of-sight enemy is remembered
 UPGRADE_CAP = 6.0
+HIT_POINT_CELLS = 2.0      # the enemy compass routes through a wall block at this many cells of route per hit point
 
 _RAY_ANGLES = np.arange(RAYS) * (2 * math.pi / RAYS)
 _RAY_COS, _RAY_SIN = np.cos(_RAY_ANGLES), np.sin(_RAY_ANGLES)
@@ -36,6 +38,7 @@ def _names():
         names += [f'powerup_memory{i}_{part}' for part in ('present', 'sin', 'cos', 'dist', 'age')]
     names += [f'crystal_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
     names += ['hit_present', 'hit_fwd', 'hit_side']
+    names += [f'enemy_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
     return tuple(names)
 
 
@@ -89,10 +92,13 @@ class Senses:
         self.settings = settings
         self._memory = weakref.WeakKeyDictionary()    # enemy -> (x, y, seen_at)
         self._crystal_memory = {}    # id -> (crystal, x, y, seen_at); held strongly so an id is not reused
+        self._routes = MazeRoutes()
+        self.breach = None    # the wall block the enemy compass route goes through first, for fire control
 
     def reset(self):
         self._memory = weakref.WeakKeyDictionary()
         self._crystal_memory = {}
+        self._routes = MazeRoutes()
 
     def perceive(self, hunter, surroundings, last_controls, now):
         """The senses of `surroundings` (see hunter.surroundings) as they are now."""
@@ -192,6 +198,7 @@ class Senses:
             out[_INDEX['crystal_compass_cos']] = math.cos(rel)
             out[_INDEX['crystal_compass_dist']] = min(
                 1.0, math.hypot(nearest.x - origin[0], nearest.y - origin[1]) / max(maze.grid_width * maze.cell_size_x, 1.0))
+        self._enemy_compass(out, origin, h, reach, starts, ends, maze, enemies)
         turn, thrust, fire = last_controls
         out[_INDEX[('last_turn_left', 'last_turn_none', 'last_turn_right')[turn]]] = 1.0
         out[_INDEX['last_thrust']] = 1.0 if thrust else 0.0
@@ -246,3 +253,33 @@ class Senses:
             out[_INDEX[f'memory{i}_cos']] = math.cos(rel)
             out[_INDEX[f'memory{i}_dist']] = min(1.0, d / reach)
             out[_INDEX[f'memory{i}_age']] = (now - seen_at) / MEMORY_TTL
+
+    def _enemy_compass(self, out, origin, h, reach, starts, ends, maze, enemies):
+        """Point the way to the nearest live enemy by route, wherever it is: at the furthest point of the cell route
+        in plain sight, with the route's length in maze widths. The route may go through breakable wall blocks,
+        each costing HIT_POINT_CELLS cells per hit point left. An enemy no route reaches is pointed at directly."""
+        self.breach = None
+        alive = [e for e in enemies if e.active]
+        if not alive:
+            return
+        found = self._routes.cheapest_route(maze, origin, [(e.x, e.y) for e in alive], HIT_POINT_CELLS)
+        if found is None:
+            target = min(((e.x, e.y) for e in alive), key=lambda p: math.dist(origin, p))
+            waypoint, length = target, math.dist(origin, target)
+        else:
+            index, route, extra, self.breach = found
+            target = (alive[index].x, alive[index].y)
+            points = [target] + route                                  # from the target back toward the hunter
+            hidden = blocked(origin, points, starts, ends)
+            k = next((i for i, (p, hid) in enumerate(zip(points, hidden)) if not hid and math.dist(origin, p) <= reach),
+                     len(points) - 1)
+            waypoint = points[k]
+            # Straight to the waypoint, then along the rest of the route.
+            legs = [tuple(origin)] + points[k::-1]
+            # Each hit point left in a block on the route counts as HIT_POINT_CELLS cells more to go.
+            length = sum(math.dist(a, b) for a, b in zip(legs, legs[1:])) + extra
+        rel = math.atan2(waypoint[1] - origin[1], waypoint[0] - origin[0]) - h
+        out[_INDEX['enemy_compass_present']] = 1.0
+        out[_INDEX['enemy_compass_sin']] = math.sin(rel)
+        out[_INDEX['enemy_compass_cos']] = math.cos(rel)
+        out[_INDEX['enemy_compass_dist']] = min(1.0, length / max(maze.grid_width * maze.cell_size_x, 1.0))
