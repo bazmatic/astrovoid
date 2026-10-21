@@ -41,10 +41,10 @@ class SpawnConfig:
 def make_enemy(kind, pos, level, command_recorder):
     """One enemy of a kind at a position.
 
-    Every spawn path makes its enemies here. Enemy hunters are not made here: they need a pilot and a view of the
-    game, which Game provides.
+    Every spawn path makes its enemies here. Enemy hunters that are not yet Creatures are not made here: they need a
+    pilot and a view of the game, which Game provides.
     """
-    if kind not in enemy_kinds.kinds() or kind in enemy_kinds.hunters():
+    if kind not in enemy_kinds.kinds() or enemy_kinds.kind(kind).body is None:
         raise ValueError(f'cannot make an enemy of type {kind!r}')
     import creatures
     return creatures.build(kind, pos, level, command_recorder)

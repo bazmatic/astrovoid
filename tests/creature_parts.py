@@ -55,6 +55,17 @@ def world(**overrides):
     return stand_in
 
 
+def pilot_world(protagonist=None, worker_factory=None, policy=None, **overrides):
+    """A world a pilot can fly in: a maze it can sense, the protagonist it hunts, its rules worker and neural policy."""
+    from tests.test_rules_hunter import SilentWorker
+    from tests.test_senses import world as senses_maze
+    stand_in = world(maze=senses_maze(), **overrides)
+    stand_in.protagonist = lambda: protagonist
+    stand_in.enemy_policy = lambda: policy
+    stand_in.rules_worker = worker_factory or SilentWorker
+    return stand_in
+
+
 def encounter(*creatures, world_=None):
     roster = EnemyRoster()
     roster.extend(creatures)

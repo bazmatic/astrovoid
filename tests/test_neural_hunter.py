@@ -8,7 +8,6 @@ import pytest
 import level_config
 from entities.hunter_ship import HunterShip
 from entities.neural_hunter import NeuralHunter
-from entities.rules_hunter import RulesHunter
 from hunter.neural.policy import random_policy
 from hunter.surroundings import ProtagonistSurroundings
 import enemy_kinds
@@ -27,7 +26,7 @@ def test_it_is_an_enemy_type_a_level_can_place():
 
 
 def test_it_is_magenta_not_the_rules_red_or_the_allied_green():
-    assert NeuralHunter.COLOR not in (RulesHunter.COLOR, HunterShip.COLOR)
+    assert NeuralHunter.COLOR not in (tuple(enemy_kinds.kind('rules_hunter').tuning['color']), HunterShip.COLOR)
     red, green, blue = NeuralHunter.COLOR
     assert red > 200 and blue > 200 and green < 120
 
@@ -72,7 +71,7 @@ def played(game, monkeypatch):  # noqa: F811
     real_level_config(monkeypatch)
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 9}, 'layout': LAYOUT} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: random_policy(0))
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: random_policy(0))
     game._rules_worker_factory = SilentWorker
     game.level = 3
     game.start_level()
@@ -110,13 +109,13 @@ def test_without_a_neural_model_the_level_starts_without_it(game, monkeypatch, c
     real_level_config(monkeypatch)
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 9}, 'layout': LAYOUT} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: None)
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: None)
     game._rules_worker_factory = SilentWorker
     game.level = 3
     with caplog.at_level(logging.WARNING):
         game.start_level()
     assert not any(isinstance(h, NeuralHunter) for h in game.enemy_hunters)
-    assert any(isinstance(h, RulesHunter) for h in game.enemy_hunters)
+    assert any(h.type == 'rules_hunter' for h in game.enemy_hunters)
     assert 'neural' in caplog.text.lower()
 
 
@@ -125,7 +124,7 @@ def test_a_level_file_can_ask_for_neural_hunters_by_count(game, monkeypatch):  #
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 12},
         'enemies': {'static': 1, 'patrol': 0, 'aggressive': 0, 'neural_hunter': 1}} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: random_policy(0))
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: random_policy(0))
     assert level_config.get_level_neural_hunter_count(3) == 1
     game.level = 3
     game.start_level()

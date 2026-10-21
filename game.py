@@ -44,8 +44,9 @@ from sounds import SoundManager
 from states.splash_screen import SplashScreenState
 from game_handlers.autoplay import AutoplayDirector
 from game_handlers.enemy_roster import EnemyRoster
-from game_handlers.spawn_manager import SpawnManager
+from game_handlers.spawn_manager import SpawnManager, make_enemy
 from game_handlers.collision_handler import CollisionHandler
+from creatures.creature import Creature
 from creatures.encounter import Encounter
 from game_handlers.fire_rate_calculator import calculate_fire_cooldown
 from game_handlers.state_handlers import StateHandlerRegistry
@@ -57,7 +58,6 @@ from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
 from hunter.surroundings import GameSurroundings, ProtagonistSurroundings
-from entities.rules_hunter import RulesHunter
 from entities.neural_hunter import VIBERS
 from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_beacon, reserve_hunter_clearance
 from hunter.worker import PilotWorker
@@ -542,12 +542,13 @@ class Game:
         """Whom the enemy hunters hunt: the player's ship. (The lab replaces this with the hunter.)"""
         return self.ship
 
-    def _make_rules_worker(self):
+    def rules_worker(self):
+        """A new pilot worker for a Terminator's rules pilot."""
         if self._rules_worker_factory is not None:
             return self._rules_worker_factory()
         return PilotWorker(client_factory=RulesClient)
 
-    def _load_enemy_policy(self):
+    def enemy_policy(self):
         """The neural pilot's policy for Neural hunters, loaded once; None when no model is installed."""
         if not hasattr(self, '_enemy_policy'):
             self._enemy_policy = load_neural_policy()
@@ -579,10 +580,10 @@ class Game:
         """Make an enemy hunter of each (kind, position): a Rules hunter with its own pilot worker, or a Viber of
         any size flown by the neural pilot. Without an installed neural model a Viber is left out (and said so)."""
         for kind, pos in placements:
-            if enemy_kinds.kind(kind).pilot == 'rules':
-                self.roster.add(RulesHunter(pos, self._make_rules_worker(), ProtagonistSurroundings(self)))
+            if enemy_kinds.kind(kind).body is not None:
+                self.roster.add(make_enemy(kind, pos, self.level, self.command_recorder))
                 continue
-            policy = self._load_enemy_policy()
+            policy = self.enemy_policy()
             if policy is None:
                 logging.getLogger(__name__).warning('Level %d: no neural model, so no Neural hunter', self.level)
                 continue
@@ -591,7 +592,7 @@ class Game:
     def _fly_enemy_hunters(self, dt):
         """Each enemy hunter looks, decides, fires and flies; touching one hurts the player as touching a boss does."""
         for hunter in self.enemy_hunters:
-            if not hunter.active:
+            if not hunter.active or isinstance(hunter, Creature):    # the Encounter flies the Creatures
                 continue
             self.projectiles.extend(hunter.fly(dt))
             if self.ship is not None and self.ship.active and not self.ship.is_shield_active():
@@ -630,8 +631,10 @@ class Game:
 
     def _close_enemy_hunters(self):
         """Stop every enemy hunter's pilot and worker (a level ends, restarts, or the game closes)."""
+        self.encounter.close()
         for hunter in self.enemy_hunters:
-            hunter.close()
+            if not isinstance(hunter, Creature):
+                hunter.close()
 
     def _make_duel_worker(self):
         """The rules pilot's worker for a duel: its own thread, apart from the game's hunter worker."""

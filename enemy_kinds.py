@@ -38,7 +38,7 @@ class EnemyKind:
     par_weight: str        # the par allowance it earns: an ordinary enemy's or a spawning boss's
     spawn_radius: float    # how far it reaches at its largest: where it is placed must be that open (0: its centre)
     layer: int             # drawing order: kinds on a higher layer are drawn over those on a lower one
-    pilot: Optional[str] = None             # an enemy hunter's pilot; None for every other kind
+    pilot: Optional[str] = None             # an enemy hunter's pilot (its pilot trait's mode); None for other kinds
     hunter: Optional[HunterStats] = None    # an enemy hunter's own numbers
     tuning: Mapping[str, Any] = field(default_factory=dict)   # settings only this kind's own code reads
     allegiance: str = 'enemy'              # whom it targets and whose shots hurt it: 'friend' or 'enemy'
@@ -68,11 +68,13 @@ def _parse(key: str, raw: Dict[str, Any]) -> EnemyKind:
     allegiance = raw.get('allegiance', 'enemy')
     if allegiance not in ALLEGIANCES:
         raise ValueError(f'enemy kind {key!r}: allegiance must be one of {ALLEGIANCES}')
+    traits = raw.get('traits', {})
+    pilot = traits['pilot'].get('mode') if 'pilot' in traits else raw.get('pilot')
     return EnemyKind(key=key, name=singular, plural=plural, anchored=raw['anchored'],
                      replays_player=raw['replaysPlayer'], par_weight=raw['parWeight'],
-                     spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=raw.get('pilot'), hunter=hunter,
+                     spawn_radius=float(raw['spawnRadius']), layer=raw['layer'], pilot=pilot, hunter=hunter,
                      tuning=raw.get('tuning', {}), allegiance=allegiance, body=raw.get('body'),
-                     traits=tuple(raw.get('traits', {}).items()))
+                     traits=tuple(traits.items()))
 
 
 def load(path: Optional[str] = None) -> Dict[str, EnemyKind]:
@@ -101,7 +103,7 @@ def anchored() -> Tuple[str, ...]:
 
 
 def hunters() -> Tuple[str, ...]:
-    """The kinds flown by a pilot, which the game makes itself (they need a pilot and a view of the game)."""
+    """The kinds flown by a pilot: the enemy hunters, which the game places itself, apart from the other enemies."""
     return tuple(k for k, entry in _CATALOGUE.items() if entry.pilot is not None)
 
 

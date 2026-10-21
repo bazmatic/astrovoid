@@ -7,7 +7,7 @@ import pytest
 import config
 import level_config
 from entities.jev_beacon import JevBeacon
-from entities.rules_hunter import RulesHunter
+from creatures.creature import Creature
 from level_layout import parse_layout
 from maze.config import MazeComplexity
 from maze.generator import Maze
@@ -75,7 +75,7 @@ def test_each_enemy_is_at_its_cell_and_only_those_exist(played):
     assert cells(played, played.roster.of_kind('static', 'patrol', 'aggressive')) == [(5, 5)]
     assert cells(played, played.roster.of_kind('flocker')) == [(2, 6)]
     assert cells(played, played.roster.of_kind('replay')) == [(6, 4)]
-    assert cells(played, played.roster.of_kind('rules_hunter')) == [(6, 2)] and isinstance(played.roster.of_kind('rules_hunter')[0], RulesHunter)
+    assert cells(played, played.roster.of_kind('rules_hunter')) == [(6, 2)] and isinstance(played.roster.of_kind('rules_hunter')[0], Creature)
     assert len(list(played.roster.all())) == 4
     assert played.roster.of_kind('static', 'patrol', 'aggressive')[0].type == 'static'
 

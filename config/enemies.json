@@ -245,11 +245,23 @@
     "parWeight": "enemy",
     "spawnRadius": 0,
     "layer": 7,
-    "pilot": "rules",
-    "hitPoints": 12,
-    "sizeScale": 1.0,
-    "shotStrength": 1.0,
-    "showsHitPoints": false
+    "tuning": {
+      "size": 8,
+      "color": [255, 90, 90],
+      "fill": [110, 25, 25],
+      "noseColor": [255, 215, 200],
+      "cockpitColor": [60, 10, 10],
+      "engineColor": [170, 60, 20],
+      "engineLitColor": [255, 150, 80],
+      "showsHitPoints": false
+    },
+    "allegiance": "enemy",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {"mode": "rules"},
+      "ramsShip": {},
+      "takesHits": {"hitPoints": 12}
+    }
   },
   "neural_hunter": {
     "name": ["Viber", "Vibers"],

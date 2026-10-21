@@ -1,10 +1,10 @@
 """A pilot: the creature follows a craft, a hunter ship its pilot flies exactly as it flies the allied hunter."""
-import time
 from dataclasses import replace
+from time import monotonic
 
 import config
-from entities.hunter_ship import HunterShip
 from creatures.trait import Trait
+from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.settings_for import hunter_settings_for
 from hunter.surroundings import ProtagonistSurroundings
@@ -37,7 +37,7 @@ class Pilot(Trait):
         c.craft, c.pilot_thrusting, c.pilot_worker, c.flight = craft, False, None, None
         if self.mode == 'rules':
             c.pilot_worker = enc.world.rules_worker()
-            pilot = WorkerPilot(c.pilot_worker, time.monotonic)
+            pilot = WorkerPilot(c.pilot_worker, monotonic)
         else:
             policy = enc.world.enemy_policy()
             if policy is None:

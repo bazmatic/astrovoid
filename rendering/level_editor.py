@@ -18,7 +18,6 @@ from editor.model import PALETTE, TIMER_STEP, EditorModel
 from entities.command_recorder import CommandRecorder
 from entities.jev_beacon import JevBeacon
 from entities.neural_hunter import VIBERS
-from entities.rules_hunter import RulesHunter
 from entities.ship import Ship
 from game_handlers.spawn_manager import make_enemy
 from maze.config import MazeComplexity
@@ -50,23 +49,6 @@ CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255
 CURSOR_COLOR = config.COLOR_NEON_VOID_START
 CONFIRM_KEYS = (pygame.K_y, pygame.K_RETURN)
 CANCEL_KEYS = (pygame.K_n, pygame.K_ESCAPE)
-
-
-class _NullWorker:
-    """A pilot worker that never answers: the editor's Rules hunter is only drawn."""
-    busy = False
-
-    def submit(self, observation):
-        return True
-
-    def poll(self):
-        return None
-
-    def cancel(self):
-        pass
-
-    def close(self):
-        pass
 
 
 class _NoView:
@@ -373,9 +355,7 @@ class LevelEditor:
         recorder = CommandRecorder()
         sprites = []
         for kind, cell in layout.enemies:
-            if enemy_kinds.kind(kind).pilot == 'rules':
-                sprites.append((kind, RulesHunter(centre(*cell), _NullWorker(), _NoView())))
-            elif kind in VIBERS:
+            if kind in VIBERS:
                 sprites.append((kind, VIBERS[kind](centre(*cell), None, _NoView())))      # drawn, never flown
             else:
                 sprites.append((kind, make_enemy(kind, centre(*cell), model.level, recorder)))

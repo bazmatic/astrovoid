@@ -1,5 +1,6 @@
 # tests/test_rules_hunter_game.py
 import math
+import threading
 from types import SimpleNamespace
 
 import pygame
@@ -7,10 +8,13 @@ import pytest
 
 import config
 import level_config
+from creatures.creature import Creature
+from entities.hunter_ship_body import HunterShipBody
 from entities.projectile import Projectile
-from entities.rules_hunter import RULES_HUNTER_HIT_POINTS, RulesHunter
 from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_rules_hunter import SilentWorker
+
+RULES_HUNTER_HIT_POINTS = 12
 
 
 @pytest.fixture
@@ -40,7 +44,7 @@ def test_the_protagonist_is_the_players_ship(arena):
 
 
 def test_a_level_with_a_rules_hunter_spawns_one_clear_of_the_player(arena):
-    assert len(arena.roster.of_kind('rules_hunter')) == 1 and isinstance(arena.roster.of_kind('rules_hunter')[0], RulesHunter)
+    assert len(arena.roster.of_kind('rules_hunter')) == 1 and isinstance(arena.roster.of_kind('rules_hunter')[0], Creature)
     hunter = arena.roster.of_kind('rules_hunter')[0]
     assert hunter in arena.roster.alive()
     assert math.hypot(hunter.x - arena.ship.x, hunter.y - arena.ship.y) >= config.ENEMY_START_CLEARANCE
@@ -75,7 +79,7 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
     destroyed = 0
     for hit in range(RULES_HUNTER_HIT_POINTS):
         projectile = shot_at(hunter)
-        used = arena.collision_handler.shoot_into(projectile, arena.roster)
+        used = arena.encounter.shoot(projectile)
         assert used
         destroyed += not hunter.active
     assert destroyed == 1 and not hunter.active and hunter.hit_points == 0
@@ -84,13 +88,13 @@ def test_the_players_shots_destroy_it_in_twelve_hits_with_no_crystal(arena):
 
 def test_the_hunters_shots_hurt_it_too(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    arena.collision_handler.shoot_into(shot_at(hunter, 'hunter'), arena.roster)
+    arena.encounter.shoot(shot_at(hunter, 'hunter'))
     assert hunter.hit_points == RULES_HUNTER_HIT_POINTS - 1
 
 
 def test_its_own_shots_do_not_hurt_it(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    assert not arena.collision_handler.shoot_into(shot_at(hunter, 'enemy'), arena.roster)
+    assert not arena.encounter.shoot(shot_at(hunter, 'enemy'))
     assert hunter.hit_points == RULES_HUNTER_HIT_POINTS
 
 
@@ -98,7 +102,7 @@ def test_killing_it_with_a_player_shot_feeds_the_level_complete_portrait(arena):
     from rendering.enemy_death_portrait import EnemyDeathPortrait
     hunter = arena.roster.of_kind('rules_hunter')[0]
     hunter.hit_points = 1
-    arena.collision_handler.shoot_into(shot_at(hunter), arena.roster)
+    arena.encounter.shoot(shot_at(hunter))
     assert arena.scoring.enemies_destroyed >= 1
     portrait = EnemyDeathPortrait(arena.collision_handler.last_player_kill, 20)
     portrait.update(5.0)
@@ -120,21 +124,21 @@ def test_touching_it_counts_as_an_enemy_collision_for_the_player(arena):
     arena.ship.x, arena.ship.y = hunter.x, hunter.y
     arena.ship.shield_active = False
     before = arena.scoring.enemy_collisions
-    arena._fly_enemy_hunters(1.0)
+    arena.encounter.step(1.0)
     assert arena.scoring.enemy_collisions > before
 
 
 def test_flying_with_the_player_inactive_does_not_crash(arena):
     arena.ship.active = False
     for _ in range(20):
-        arena._fly_enemy_hunters(1.0)
+        arena.encounter.step(1.0)
 
 
 def test_its_shots_join_the_games_projectiles(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
     hunter.flight.fly = lambda dt: [shot_at(hunter, 'enemy')]
     before = len(arena.projectiles)
-    arena._fly_enemy_hunters(1.0)
+    arena.encounter.step(1.0)
     assert len(arena.projectiles) == before + 1
 
 
@@ -159,3 +163,36 @@ def test_it_is_drawn_while_it_lives_and_its_death_is_animated(arena):
     arena.roster.draw(screen)
     assert any(screen.get_at((x, y))[:3] != (0, 0, 0)
                for x in range(540, 660) for y in range(340, 460))
+
+
+def test_a_terminator_is_a_creature(arena):
+    [hunter] = arena.roster.of_kind('rules_hunter')
+    assert isinstance(hunter, Creature) and isinstance(hunter.body, HunterShipBody)
+    assert arena.enemy_hunters == [hunter]
+
+
+def test_its_own_shots_never_hit_it(arena):
+    import creatures
+    hunter = arena.roster.of_kind('rules_hunter')[0]
+    own = hunter.craft._shots()[0]
+    own.x, own.y = hunter.x, hunter.y
+    crab = creatures.build('patrol', (100.0, 100.0))
+    crab_shot = Projectile((hunter.x, hunter.y), 0.0, source='enemy')
+    assert not arena.encounter.shoot(own) and not arena.encounter.shoot(crab_shot)
+    assert hunter.hit_points == RULES_HUNTER_HIT_POINTS and crab.active
+
+
+def test_restarting_the_level_stops_every_terminator_thread(game, monkeypatch):
+    made = []
+    real = type(game).rules_worker
+    monkeypatch.setattr(type(game), 'rules_worker', lambda self: made.append(real(self)) or made[-1])
+    game.level = 25
+    for _ in range(2):
+        game.start_level()
+        for _ in range(5):
+            game.encounter.step(1.0)
+    game._close_enemy_hunters()
+    assert len(made) == 2 and all(w._thread is not None for w in made)
+    for worker in made:
+        worker.join(2.0)
+    assert not any(w._thread.is_alive() for w in made)

@@ -100,7 +100,9 @@ class CollisionHandler:
     def shoot_into(self, projectile, roster) -> bool:
         """A friendly shot against the enemies on the roster that are not Creatures (the Encounter offers it to those
         first): the enemy hunters. True when one took it."""
-        return self.shoot_enemy_hunters(projectile, roster.of_kind(*enemy_kinds.hunters()))
+        from creatures.creature import Creature
+        return self.shoot_enemy_hunters(
+            projectile, [h for h in roster.of_kind(*enemy_kinds.hunters()) if not isinstance(h, Creature)])
 
     def handle_projectile_ship_collision(
         self,

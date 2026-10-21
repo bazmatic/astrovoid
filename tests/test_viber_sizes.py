@@ -89,7 +89,7 @@ def played(game, monkeypatch):  # noqa: F811
     real_level_config(monkeypatch)
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 11}, 'layout': LAYOUT} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: random_policy(0))
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: random_policy(0))
     game._rules_worker_factory = SilentWorker
     game.level = 3
     game.start_level()
@@ -108,7 +108,7 @@ def test_a_level_file_without_a_layout_can_ask_for_them(game, monkeypatch):  # n
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 12},
         'enemies': {'static': 0, 'patrol': 0, 'aggressive': 0, 'boss_viber': 1, 'vibelet': 1}} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: random_policy(0))
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: random_policy(0))
     game.level = 3
     game.start_level()
     assert sorted(h.type for h in game.enemy_hunters) == ['boss_viber', 'vibelet']
@@ -118,7 +118,7 @@ def test_without_a_neural_model_they_are_left_out(game, monkeypatch):  # noqa: F
     real_level_config(monkeypatch)
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {
         'seed': 1, 'maze': {'complexity': 'empty', 'grid_size': 11}, 'layout': LAYOUT} if level == 3 else None)
-    monkeypatch.setattr(type(game), '_load_enemy_policy', lambda self: None)
+    monkeypatch.setattr(type(game), 'enemy_policy', lambda self: None)
     game.level = 3
     game.start_level()
     assert game.enemy_hunters == []
@@ -136,11 +136,11 @@ def test_the_editor_offers_and_draws_them():
 
 @pytest.mark.parametrize('kind', ['neural_hunter', 'vibelet', 'rules_hunter'])
 def test_no_hit_point_bar_is_drawn_above_an_enemy_hunter(kind):
+    import creatures
     from entities.neural_hunter import VIBERS
-    from entities.rules_hunter import RulesHunter
     pygame.init()
     surface = pygame.Surface((800, 800))
-    hunter = (RulesHunter((400.0, 400.0), SilentWorker(), None) if kind == 'rules_hunter'
+    hunter = (creatures.build('rules_hunter', (400.0, 400.0)) if kind == 'rules_hunter'
               else VIBERS[kind]((400.0, 400.0), None, None))
     hunter.draw(surface)
     above = range(0, round(400 - hunter.radius * 1.6))
@@ -166,11 +166,11 @@ def test_the_boss_viber_has_a_power_bar_above_it_that_drains_as_it_is_hit():
 
 def test_each_kind_says_whether_it_carries_a_bar(monkeypatch):
     from dataclasses import replace
-    from entities.rules_hunter import RulesHunter
-    assert [k for k in enemy_kinds.hunters() if enemy_kinds.kind(k).hunter.shows_hit_points] == ['boss_viber']
-    for key, shows in (('boss_viber', False), ('vibelet', True), ('rules_hunter', True)):
+    assert [k for k in enemy_kinds.hunters() if enemy_kinds.kind(k).hunter is not None
+            and enemy_kinds.kind(k).hunter.shows_hit_points] == ['boss_viber']
+    for key, shows in (('boss_viber', False), ('vibelet', True)):
         entry = enemy_kinds.kind(key)
         monkeypatch.setitem(enemy_kinds._CATALOGUE, key, replace(entry, hunter=replace(entry.hunter, shows_hit_points=shows)))
-    shows = {cls.__name__: cls((400.0, 400.0), *((SilentWorker(), None) if cls is RulesHunter else (None, None)))
-             .shows_hit_points() for cls in (NeuralHunter, BossViber, Vibelet, RulesHunter)}
-    assert shows == {'NeuralHunter': False, 'BossViber': False, 'Vibelet': True, 'RulesHunter': True}
+    shows = {cls.__name__: cls((400.0, 400.0), None, None).shows_hit_points()
+             for cls in (NeuralHunter, BossViber, Vibelet)}
+    assert shows == {'NeuralHunter': False, 'BossViber': False, 'Vibelet': True}
