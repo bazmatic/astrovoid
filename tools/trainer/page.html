@@ -1,0 +1,283 @@
+<title>Hunter Training</title>
+<style>
+/* Layout: one column of small-multiple line charts, summary strip on top; fitness chart first and widest. */
+:root{--bg:#f6f7f9;--panel:#ffffff;--fg:#1c2330;--muted:#667085;--grid:#e3e6ec;--line:#2f6fed;--ref:#d9822b;--base:#8a93a3;--good:#1f9d6b;--bad:#d64545;--font:"IBM Plex Sans",system-ui,sans-serif;--mono:"IBM Plex Mono",ui-monospace,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10141b;--panel:#171c26;--fg:#e6eaf2;--muted:#8d97a8;--grid:#262d3a;--line:#6ea0ff;--ref:#f0a24f;--base:#7b8596;--good:#43c590;--bad:#f06a6a;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#10141b;--panel:#171c26;--fg:#e6eaf2;--muted:#8d97a8;--grid:#262d3a;--line:#6ea0ff;--ref:#f0a24f;--base:#7b8596;--good:#43c590;--bad:#f06a6a;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:14px}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:16px;padding-block:24px;display:flex;flex-direction:column;gap:16px}
+h1{font-size:22px;margin:0;text-wrap:balance}
+p.sub{margin:4px 0 0;color:var(--muted);max-width:65ch}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.stat{background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:10px 12px;min-width:0}
+.stat b{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
+.stat span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px}
+.rules ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rules li{display:flex;gap:10px;align-items:baseline}
+.rules li b{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right}
+.rules li small{color:var(--muted);font-size:12px}
+.rules .gain b{color:var(--good)}.rules .cost b{color:var(--bad)}
+.grid{display:grid;grid-template-columns:1fr;gap:12px}
+.card{background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:12px;min-width:0}
+.card.wide{grid-column:1/-1}
+.card h2{font-size:14px;margin:0}.card p{margin:2px 0 8px;color:var(--muted);font-size:12px}
+svg{width:100%;height:auto;display:block}
+svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
+.key{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:6px}
+.key i{display:inline-block;width:14px;height:0;border-top:2px solid;vertical-align:middle;margin-right:5px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:12px}
+.badge{font-weight:600;padding:2px 10px;border-radius:999px;border:1px solid currentColor;font-size:13px}
+.badge.training{color:var(--good)}.badge.pausing,.badge.paused,.badge.interrupted{color:var(--ref)}.badge.idle{color:var(--muted)}
+.bar .facts{color:var(--muted);font-family:var(--mono);font-size:13px;font-variant-numeric:tabular-nums}
+.bar .facts b{color:var(--fg);font-family:var(--font)}
+.actions{display:flex;gap:8px;margin-left:auto}
+button{font:inherit;font-size:13px;padding:6px 14px;border-radius:6px;border:1px solid var(--grid);background:var(--panel);color:var(--fg);cursor:pointer}
+button:hover:not(:disabled){border-color:var(--line)}
+button.primary{background:var(--line);border-color:var(--line);color:#fff}
+button.danger{color:var(--bad);border-color:var(--bad)}
+button.danger.armed{background:var(--bad);color:#fff}
+button:disabled{opacity:.45;cursor:not-allowed}
+.msg{font-size:13px;color:var(--muted)}.msg.error{color:var(--bad)}
+.next{background:var(--panel);border:1px dashed var(--grid);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px}
+.next .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.next h2,.view h2{font-size:14px;margin:0}
+select,input[type=text]{font:inherit;font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid var(--grid);background:var(--bg);color:var(--fg);min-width:0}
+input[type=text]{width:9em;font-family:var(--mono)}
+.form[hidden]{display:none}
+.form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:12px}
+.form fieldset{border:1px solid var(--grid);border-radius:6px;padding:8px 12px;margin:0;min-width:0}
+.form legend{font-weight:600;font-size:13px;padding:0 4px}
+.setting{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:4px;font-size:13px}
+.setting label{flex:1;min-width:0}
+.setting.changed{background:color-mix(in srgb,var(--ref) 18%,transparent)}
+.tag{font-size:11px;color:var(--muted);border:1px solid var(--grid);border-radius:4px;padding:0 4px}
+.levels{flex-direction:column;align-items:stretch}
+.levels .picks{display:flex;flex-wrap:wrap;gap:4px}
+.levels .picks label{flex:none;display:inline-flex;align-items:center;gap:2px;font-family:var(--mono);font-size:12px;border:1px solid var(--grid);border-radius:4px;padding:2px 6px;cursor:pointer}
+.levels .picks label.on{border-color:var(--line);color:var(--line)}
+.levels .picks input{display:none}
+.view{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+</style>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap">
+<div class="wrap">
+ <header><h1>Hunter training</h1>
+ <p class="sub">Start, pause, resume and stop training, and watch it. Training maximises the return: the rewards minus the penalties listed below, per episode. Each point is the mean of one iteration's episodes.</p></header>
+ <div class="bar" id="status"><span class="msg">Loading…</span></div>
+ <div class="next" id="next">
+  <h2>Next run</h2>
+  <div class="row">Carry on from <select id="from-run" aria-label="Run to carry on from"></select> at <select id="from-iter" aria-label="Checkpoint"></select>
+   <span class="msg" id="changed-count"></span>
+   <button id="edit">Edit settings</button>
+   <button class="primary" id="start" disabled>Start</button></div>
+  <div class="msg" id="next-msg"></div>
+  <div class="form" id="form" hidden></div>
+ </div>
+ <div class="view"><h2>Charts for</h2><select id="view-run" aria-label="Run to chart"></select></div>
+ <div class="strip" id="strip"></div>
+ <div class="rules" id="rules"></div>
+ <div class="grid" id="charts"></div>
+</div>
+<script>
+let D=[];
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function smooth(v,k=5){return v.map((_,i)=>{const s=v.slice(Math.max(0,i-k+1),i+1);return s.reduce((a,b)=>a+b,0)/s.length})}
+function chart({title,sub,key,ref,base,gate,wide}){
+  if(D.length&&!(key in D.at(-1)))return '';        // a run that does not log this one
+  const W=960,H=300,m={l:44,r:10,t:10,b:22};
+  const xs=D.map(d=>d.iteration),ys=D.map(d=>d[key]);
+  const g=gate?D.filter(d=>'gate_score' in d):[];
+  let all=ys.concat(ref!=null?[ref]:[],base!=null?[base]:[],g.map(d=>d.gate_score));
+  let lo=Math.min(...all),hi=Math.max(...all);const pad=(hi-lo||1)*.08;lo-=pad;hi+=pad;
+  const x0=0,x1=Math.max(10,...xs);
+  const X=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r),Y=v=>H-m.b-(v-lo)/(hi-lo)*(H-m.t-m.b);
+  let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css('--grid')}"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${v.toFixed(Math.abs(hi)<10?2:0)}</text>`}
+  for(let i=0;i<=4;i++){const v=Math.round(x0+(x1-x0)*i/4);s+=`<text x="${X(v)}" y="${H-6}" text-anchor="middle">${v}</text>`}
+  const hl=(v,c,d)=>v==null?'':`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css(c)}" stroke-dasharray="${d}" stroke-width="1.5"/>`;
+  s+=hl(ref,'--ref','6 4')+hl(base,'--base','2 4');
+  const path=v=>v.map((y,i)=>(i?'L':'M')+X(xs[i]).toFixed(1)+' '+Y(y).toFixed(1)).join('');
+  if(D.length){s+=`<path d="${path(ys)}" fill="none" stroke="${css('--line')}" stroke-opacity=".25" stroke-width="1"/>`;
+  s+=`<path d="${path(smooth(ys,5))}" fill="none" stroke="${css('--line')}" stroke-opacity=".6" stroke-width="1.4"/>`;
+  s+=`<path d="${path(smooth(ys,25))}" fill="none" stroke="${css('--ref')}" stroke-width="2.8"/>`;
+  // The highest and lowest the 5-iteration average has reached so far, labelled at the right.
+  const av=smooth(ys,5),fmt=v=>v.toFixed(Math.abs(hi)<10?2:1);
+  // Each is marked on the x axis where it was seen: a triangle pointing up for the high, down for the low.
+  const ay=H-m.b,c=css('--base');
+  for(const [v,dy,up] of [[Math.max(...av),-5,true],[Math.min(...av),13,false]]){
+    const x=X(xs[av.indexOf(v)]);
+    s+=hl(v,'--base','1 3')+`<text x="${W-m.r-4}" y="${Y(v)+dy}" text-anchor="end">${fmt(v)}</text>`;
+    s+=`<line x1="${x}" x2="${x}" y1="${Y(v)}" y2="${ay}" stroke="${c}" stroke-dasharray="1 3"/>`;
+    s+=up?`<path d="M${x-5} ${ay}L${x+5} ${ay}L${x} ${ay-8}Z" fill="${c}"/>`
+         :`<path d="M${x-5} ${ay-8}L${x+5} ${ay-8}L${x} ${ay}Z" fill="${c}"/>`;
+  }
+  const ex=X(xs.at(-1)),ey=Y(smooth(ys,25).at(-1));s+=`<circle cx="${ex}" cy="${ey}" r="4.5" fill="${css('--ref')}"/>`}
+  g.forEach(d=>{s+=`<rect x="${X(d.iteration)-4}" y="${Y(d.gate_score)-4}" width="8" height="8" fill="${d.gate_passed?css('--good'):css('--panel')}" stroke="${css('--good')}" stroke-width="2"/>`});
+  s+='</svg>';
+  const k=`<div class="key"><span><i style="color:${css('--ref')};border-top-width:3px"></i>25-iteration average</span><span><i style="color:${css('--line')}"></i>5-iteration average</span><span><i style="color:${css('--line')};opacity:.4"></i>each iteration</span><span><i style="color:${css('--base')};border-top-style:dotted"></i>highest and lowest 5-iteration average</span></div>`;
+  return `<div class="card${wide?' wide':''}"><h2>${title}</h2><p>${sub}</p>${s}${k}</div>`;
+}
+// Game time is estimated: the log has no episode lengths, so each episode is taken as EPISODE_S seconds of play.
+const EPISODE_S=75;let EPI=96;
+const gameTime=s=>{const h=s/3600;return h<48?`${h.toFixed(0)} h`:`${Math.floor(h/24)} d ${Math.round(h%24)} h`};
+function render(){
+  const last=D.at(-1)||{},sm=k=>{const v=smooth(D.map(d=>d[k]),25);return v.at(-1)};
+  document.getElementById('strip').innerHTML=[
+   ['Iterations',D.length?D.length:'0'],['Training return',D.length?sm('mean_return').toFixed(1):'-'],['Kills / min',D.length?sm('kills_per_min').toFixed(1):'-'],
+   ['Wall quotient / min',D.length?sm('wall_quotient_per_min').toFixed(2):'-'],['Hits taken / min',D.length?sm('hits_taken_per_min').toFixed(2):'-'],
+   ['Last iteration (s)',D.length?((last.rollout_s||0)+(last.update_s||0)).toFixed(1):'-'],
+   ['Game time',D.length?gameTime(D.length*EPI*EPISODE_S):'-']].map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
+  document.getElementById('charts').innerHTML=[
+   chart({title:'Training return',sub:'Higher is better. What training maximises. Only comparable within a run.',key:'mean_return',wide:true}),
+   chart({title:'Speed',sub:'Higher is better. Average speed as a share of top speed.',key:'speed_fraction'}),
+   chart({title:'Powerups per episode',sub:'Higher is better. Crystals the hunter collects.',key:'powerups_per_episode'}),
+   chart({title:'Gun upgraded',sub:'Higher is better. Share of the time the guns are upgraded.',key:'upgraded_fraction'}),
+   chart({title:'Deaths per episode',sub:'Lower is better. Share of episodes in which the hunter is destroyed.',key:'deaths_per_episode'}),
+   chart({title:'Follows the enemy compass',sub:'Higher is better. Share of the time with no enemy in sight that the hunter heads within 45° of the compass.',key:'compass_follow'}),
+   chart({title:'Hits per episode',sub:'Higher is better. Hunter shots that reach an enemy.',key:'hits_per_episode'}),
+   chart({title:'Unaimed shots per episode',sub:'Shots not within 20° of an enemy in sight (at walls, at nothing, or well wide), each at the shot price.',key:'unaimed_shots_per_episode'}),
+   chart({title:'Time in panic',sub:'Share of decisions made in panic: after the last 5 s scored below the panic level, choices are more random until the score recovers.',key:'panic_fraction'}),
+   chart({title:'Bored time',sub:'Lower is better. Share of the time with no enemy in sight in which nothing new has come into view for a second: the same nearby walls (within 3 cells) and crystals as in the last 10 s.',key:'bored_fraction'}),
+   chart({title:'Rules hunter beaten',sub:'Higher is better. Share of Rules-hunter episodes in which it is destroyed.',key:'rules_beaten'}),
+   chart({title:'Kills per minute',sub:'Must not fall.',key:'kills_per_min'}),
+   chart({title:'Wall collision quotient (per minute)',sub:'Lower is better. Harder crashes count more.',key:'wall_quotient_per_min'}),
+   chart({title:'Enemy hits taken per minute',sub:'Lower is better.',key:'hits_taken_per_min'}),
+   chart({title:'Distance from the starting policy (KL)',sub:'How far the policy has moved from where the run started.',key:'kl'}),
+   chart({title:'Policy entropy',sub:'Randomness of the controls. Near zero means it has stopped exploring.',key:'entropy'})].join('');
+}
+async function loadRules(){
+  if(!VIEW)return;
+  try{const r=await fetch(`api/runs/${VIEW}/config`,{cache:'no-store'});if(!r.ok)return;const c=await r.json();
+    const rows=c.rewards||[];if(!rows.length)return;
+    const list=(sign,cls)=>rows.filter(x=>x.sign===sign).map(x=>`<li class="${cls}"><b>${sign==='-'?'&minus;':'+'}${+x.value}</b><span>${x.name}<br><small>${x.unit}</small></span></li>`).join('');
+    const e=c.episode||{};
+    if(e.episodes_per_iteration&&e.episodes_per_iteration!==EPI){EPI=e.episodes_per_iteration;render()}
+    document.getElementById('rules').innerHTML=
+     `<div class="card gain"><h2>Active rewards</h2><ul>${list('+','gain')}</ul></div>`+
+     `<div class="card cost"><h2>Active penalties</h2><ul>${list('-','cost')}</ul></div>`+
+     `<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.rules_share?` ${Math.round(e.rules_share*100)}% of episodes are fought against a Rules hunter, which hunts only the hunter.`:''}</p></div>`;
+  }catch(e){}
+}
+async function refresh(){if(!VIEW)return;const asked=VIEW;try{const r=await fetch(`api/runs/${VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();n.forEach(d=>{if('free_shots_per_episode' in d&&!('unaimed_shots_per_episode' in d))d.unaimed_shots_per_episode=d.free_shots_per_episode});if(asked===VIEW&&n.length!==D.length){D=n;render()}}}catch(e){}}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let VIEW=null,STATUS=null,RUNS=[],SCHEMA=null,BASE={},EDITS={},FOLLOW=true;
+async function api(path,opts){const r=await fetch(path,{cache:'no-store',...opts});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
+const post=(path,body)=>api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
+const fmtLevels=v=>{if(!v||!v.length)return 'the tune set';const s=[...new Set(v)].sort((a,b)=>a-b),out=[];for(let i=0;i<s.length;){let j=i;while(j+1<s.length&&s[j+1]===s[j]+1)j++;out.push(i===j?`${s[i]}`:`${s[i]}-${s[j]}`);i=j+1}return out.join(',')};
+
+// The status strip: what is training, with the buttons that fit its state.
+function renderStatus(){
+  const s=STATUS;if(!s)return;
+  const state=s.run?s.state:'idle',iter=s.iteration!=null?s.iteration:'-';
+  const started=s.started?new Date(s.started).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'-';
+  const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · ${s.seconds_per_iteration.toFixed(1)} s per iteration`:''}</span>`:'<span class="facts">No runs yet</span>';
+  const buttons={training:['pause','stop'],pausing:['stop'],paused:['resume','stop'],interrupted:['resume','stop'],idle:[]}[state]||[];
+  const label={pause:'Pause',resume:'Resume',stop:'Stop'};
+  const note={pausing:'Pausing after this iteration…',paused:'Paused: resume to carry on where it stopped.',interrupted:'Interrupted (it ended without a pause or stop): resume to carry on from its last iteration.'}[state]||'';
+  $('status').innerHTML=`<span class="badge ${state}">${{training:'Training',pausing:'Pausing',paused:'Paused',interrupted:'Interrupted',idle:'Idle'}[state]}</span>${facts}${note?`<span class="msg">${note}</span>`:''}<span class="msg" id="status-msg"></span><span class="actions">${buttons.map(b=>`<button data-act="${b}" class="${b==='stop'?'danger':''}">${label[b]}</button>`).join('')}</span>`;
+  $('status').querySelectorAll('button').forEach(b=>b.onclick=()=>act(b));
+  renderStart();
+}
+async function act(button){
+  const what=button.dataset.act;
+  if(what==='stop'&&!button.classList.contains('armed')){       // Stop takes a second click
+    button.classList.add('armed');button.textContent='Really stop?';
+    setTimeout(()=>{if(button.isConnected){button.classList.remove('armed');button.textContent='Stop'}},5000);return}
+  button.disabled=true;
+  try{const r=await post(`api/${what}`,what==='resume'?{run:STATUS.run}:{});
+    await loadStatus();$('status-msg').textContent={pause:`${r.run} will pause once its current iteration is saved.`,resume:`Resumed ${r.run}.`,stop:`Stopped ${r.run}.`}[what];
+    await loadRuns()}
+  catch(e){const m=$('status-msg');m.className='msg error';m.textContent=e.message;button.disabled=false}
+}
+async function loadStatus(){try{STATUS=await api('api/status');renderStatus();if(FOLLOW&&STATUS.run&&STATUS.run!==VIEW)setView(STATUS.run)}catch(e){}}
+
+// The next run: where it carries on from and the settings it changes.
+function nextNumber(){return RUNS.length?Math.max(...RUNS.map(r=>+r.name.slice(3)))+1:1}
+function fillFrom(){
+  const sel=$('from-run'),keep=sel.value,usable=RUNS.filter(r=>r.checkpoints.length).reverse();
+  sel.innerHTML=usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
+  if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;fromChanged()}
+  fillIters();
+}
+function fillIters(){
+  const run=RUNS.find(r=>r.name===$('from-run').value),sel=$('from-iter'),keep=sel.value;if(!run){sel.innerHTML='';return}
+  const its=[...run.checkpoints].reverse();
+  sel.innerHTML=its.map((c,i)=>`<option value="${c}">${c}${i===0?' (last)':''}</option>`).join('');
+  if(its.includes(keep))sel.value=keep;
+}
+async function fromChanged(){
+  fillIters();
+  try{BASE=await api(`api/runs/${$('from-run').value}/settings`);EDITS={};renderForm()}catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message}
+}
+const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+function typed(s,raw){
+  if(s.kind==='bool')return raw;
+  if(s.kind==='levels')return raw;
+  const t=String(raw).trim();
+  if(s.kind==='optional_float'&&(t===''||t.toLowerCase()==='none'||t.toLowerCase()==='off'))return null;
+  return t!==''&&!isNaN(+t)?+t:t;
+}
+function edited(s){return s.dest in EDITS?EDITS[s.dest]:BASE[s.dest]?.value}
+function setEdit(s,raw){const v=typed(s,raw);if(same(v,BASE[s.dest]?.value))delete EDITS[s.dest];else EDITS[s.dest]=v;renderChanged()}
+function renderChanged(){
+  const n=Object.keys(EDITS).length;$('changed-count').textContent=n?`· ${n} setting${n===1?'':'s'} changed`:'· same settings';
+  document.querySelectorAll('.setting').forEach(el=>el.classList.toggle('changed',el.dataset.dest in EDITS));
+}
+function levelPicker(s){
+  const chosen=new Set(edited(s)||[]),all=[...new Set([...SCHEMA.levels,...(BASE.levels?.value||[])])].sort((a,b)=>a-b);
+  return `<div class="picks">${all.map(l=>`<label class="${chosen.has(l)?'on':''}"><input type="checkbox" value="${l}" ${chosen.has(l)?'checked':''}>${l}</label>`).join('')}</div>
+   <div class="row"><button type="button" data-levels="all">All</button><button type="button" data-levels="none">None</button><span class="msg">${esc(fmtLevels(edited(s)))}</span></div>`;
+}
+function renderForm(){
+  if(!SCHEMA)return;
+  const groups=['Rewards','Episodes','Training'];
+  $('form').innerHTML=groups.map(g=>`<fieldset><legend>${g}</legend>${SCHEMA.settings.filter(s=>s.group===g).map(s=>{
+    const src=BASE[s.dest]?.source,tag=src&&src!=='recorded'?`<span class="tag" title="This run did not record it: ${src==='recovered'?'worked out from what it did record':'taken from the newest run that recorded it'}">${src}</span>`:'';
+    const v=edited(s),id=`set-${s.dest}`;
+    const input=s.kind==='bool'?`<input type="checkbox" id="${id}" ${v?'checked':''}>`:s.kind==='levels'?'':`<input type="text" id="${id}" value="${esc(v===null||v===undefined?'none':v)}">`;
+    return s.kind==='levels'?`<div class="setting levels" data-dest="${s.dest}"><span>${esc(s.label)} ${tag}</span>${levelPicker(s)}</div>`
+      :`<div class="setting" data-dest="${s.dest}" title="${esc(s.help)}"><label for="${id}">${esc(s.label)}</label>${tag}${input}</div>`}).join('')}</fieldset>`).join('');
+  SCHEMA.settings.forEach(s=>{
+    const el=document.querySelector(`.setting[data-dest="${s.dest}"]`);if(!el)return;
+    if(s.kind==='levels'){
+      el.querySelectorAll('.picks input').forEach(i=>i.onchange=()=>{setEdit(s,[...el.querySelectorAll('.picks input:checked')].map(x=>+x.value));renderForm()});
+      el.querySelectorAll('[data-levels]').forEach(b=>b.onclick=()=>{setEdit(s,b.dataset.levels==='all'?[...el.querySelectorAll('.picks input')].map(x=>+x.value):[]);renderForm()});
+    }else{const i=el.querySelector('input');i.oninput=i.onchange=()=>setEdit(s,s.kind==='bool'?i.checked:i.value)}
+  });
+  renderChanged();
+}
+function renderStart(){
+  const b=$('start'),state=STATUS?.run?STATUS.state:'idle';
+  b.textContent=`Start run${nextNumber()}`;
+  const why={training:`${STATUS?.run} is training: pause or stop it first.`,pausing:`${STATUS?.run} is pausing.`,paused:`${STATUS?.run} is paused: resume or stop it first.`,interrupted:`${STATUS?.run} was interrupted: resume or stop it first.`}[state];
+  b.disabled=!!why||!$('from-run').value;
+  if(why){$('next-msg').className='msg';$('next-msg').textContent=why}
+  else if($('next-msg').textContent.endsWith('first.')||$('next-msg').textContent.endsWith('pausing.'))$('next-msg').textContent='';
+}
+$('from-run').onchange=fromChanged;
+$('edit').onclick=()=>{$('form').hidden=!$('form').hidden;$('edit').textContent=$('form').hidden?'Edit settings':'Hide settings'};
+$('start').onclick=async()=>{
+  const b=$('start');b.disabled=true;
+  try{const r=await post('api/start',{from:`${$('from-run').value}/${$('from-iter').value}`,changes:EDITS});
+    $('next-msg').className='msg';$('next-msg').textContent=`Started ${r.run} from ${r.started_from}${r.changes.length?`, changing ${r.changes.map(c=>c.setting).join(', ')}`:' with the same settings'}.`;
+    FOLLOW=true;await loadRuns();await loadStatus();$('from-run').value='';fillFrom()}
+  catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message;b.disabled=false}
+};
+
+// The charts, for the active run unless another one is chosen.
+async function loadRuns(){
+  try{RUNS=await api('api/runs');fillFrom();
+    const sel=$('view-run'),keep=FOLLOW?'':sel.value;
+    sel.innerHTML=`<option value="">The active run</option>`+[...RUNS].reverse().map(r=>`<option value="${r.name}">${r.name} (${r.state}, ${r.iterations_done} iterations)</option>`).join('');
+    sel.value=keep;renderStart()}catch(e){}
+}
+function setView(run){if(run===VIEW)return;VIEW=run;D=[];$('rules').innerHTML='';render();refresh();loadRules()}
+$('view-run').onchange=()=>{const v=$('view-run').value;FOLLOW=!v;setView(v||STATUS?.run||null)};
+async function boot(){
+  try{SCHEMA=await api('api/settings')}catch(e){}
+  await loadRuns();await loadStatus();
+  setInterval(loadStatus,5000);setInterval(loadRuns,15000);setInterval(refresh,15000);setInterval(loadRules,60000);
+}
+render();boot();matchMedia('(prefers-color-scheme: dark)').addEventListener('change',render);
+</script>
