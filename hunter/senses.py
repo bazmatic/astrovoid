@@ -14,6 +14,7 @@ MAX_POWERUP_MEMORY = 2
 POWERUP_MEMORY_TTL = 90.0   # seconds a crystal seen and then lost from view is remembered (they do not expire)
 MEMORY_TTL = 10.0          # seconds an out-of-sight enemy is remembered
 UPGRADE_CAP = 6.0
+HITS_CAP = 20             # hits left read as log(1 + hits) / log(1 + HITS_CAP), capped at 1: a Mother reads 1
 HIT_POINT_CELLS = 2.0      # the enemy compass routes through a wall block at this many cells of route per hit point
 
 _RAY_ANGLES = np.arange(RAYS) * (2 * math.pi / RAYS)
@@ -39,6 +40,7 @@ def _names():
     names += [f'crystal_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
     names += ['hit_present', 'hit_fwd', 'hit_side']
     names += [f'enemy_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
+    names += [f'enemy{i}_hits' for i in range(MAX_ENEMIES)]
     return tuple(names)
 
 
@@ -66,6 +68,30 @@ def ray_distances(origin, heading_degrees, wall_starts, wall_ends, reach):
     hit = (np.abs(denom) > 1e-9) & (t >= 0) & (u >= 0) & (u <= 1)
     t = np.where(hit, t, np.inf)
     return np.minimum(t.min(axis=1), float(reach))
+
+
+def ray_hits(origin, heading_degrees, walls, reach):
+    """The wall each of the 16 sight rays meets first within `reach` (None where it meets none), ray 0 along the nose.
+    `walls` are segments with .start and .end."""
+    walls = list(walls)
+    if not walls:
+        return [None] * RAYS
+    starts = np.array([w.start for w in walls], dtype=float).reshape(-1, 2)
+    ends = np.array([w.end for w in walls], dtype=float).reshape(-1, 2)
+    h = math.radians(heading_degrees)
+    ch, sh = math.cos(h), math.sin(h)
+    dx = _RAY_COS * ch - _RAY_SIN * sh
+    dy = _RAY_SIN * ch + _RAY_COS * sh
+    ex, ey = ends[:, 0] - starts[:, 0], ends[:, 1] - starts[:, 1]
+    ax, ay = starts[:, 0] - origin[0], starts[:, 1] - origin[1]
+    denom = dx[:, None] * ey[None, :] - dy[:, None] * ex[None, :]
+    with np.errstate(divide='ignore', invalid='ignore'):
+        t = (ax[None, :] * ey[None, :] - ay[None, :] * ex[None, :]) / denom
+        u = (ax[None, :] * dy[:, None] - ay[None, :] * dx[:, None]) / denom
+    hit = (np.abs(denom) > 1e-9) & (t >= 0) & (t <= reach) & (u >= 0) & (u <= 1)
+    t = np.where(hit, t, np.inf)
+    nearest = t.argmin(axis=1)
+    return [walls[j] if np.isfinite(t[i, j]) else None for i, j in enumerate(nearest)]
 
 
 def blocked(origin, targets, wall_starts, wall_ends):
@@ -164,6 +190,8 @@ class Senses:
         seen = candidates(enemies, MAX_ENEMIES)
         for i, (d, e) in enumerate(seen):
             contact(f'enemy{i}', d, e)
+            hits = max(0.0, float(getattr(e, 'hit_points', 1)))
+            out[_INDEX[f'enemy{i}_hits']] = min(1.0, math.log1p(hits) / math.log1p(HITS_CAP))
             self._memory[e] = (e.x, e.y, now)
         for i, (d, b) in enumerate(candidates([p for p in projectiles if p.is_enemy], MAX_BULLETS)):
             contact(f'bullet{i}', d, b)

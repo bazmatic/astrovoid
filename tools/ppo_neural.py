@@ -45,20 +45,25 @@ def pack(episodes, mean, scale):
     controls = torch.zeros(batch, length, 3, dtype=torch.long)
     rewards = torch.zeros(batch, length)
     mask = torch.zeros(batch, length, dtype=torch.bool)
+    temperatures = torch.ones(batch, length)       # what each choice was sampled at (training's panic raises it)
     for i, e in enumerate(episodes):
         n = len(e['senses'])
         x[i, :n] = torch.from_numpy((np.asarray(e['senses'], dtype=np.float32) - mean) / scale)
         controls[i, :n] = torch.from_numpy(np.asarray(e['controls'], dtype=np.int64))
         rewards[i, :n] = torch.from_numpy(np.asarray(e['rewards'], dtype=np.float32)) * REWARD_SCALE
         mask[i, :n] = True
-    return {'x': x, 'controls': controls, 'rewards': rewards, 'mask': mask}
+        if 'temperatures' in e:
+            temperatures[i, :n] = torch.from_numpy(np.asarray(e['temperatures'], dtype=np.float32)[:n])
+    return {'x': x, 'controls': controls, 'rewards': rewards, 'mask': mask, 'temperatures': temperatures}
 
 
-def joint_logp(logits, controls):
+def joint_logp(logits, controls, temperatures=None):
+    """The log-probability of the chosen controls, each scored at the temperature it was sampled at."""
     import torch
     total = 0.0
     for k, head in enumerate(HEADS):
-        logp = torch.log_softmax(logits[head], dim=-1)
+        z = logits[head] if temperatures is None else logits[head] / temperatures[..., None]
+        logp = torch.log_softmax(z, dim=-1)
         total = total + logp.gather(-1, controls[..., k:k + 1]).squeeze(-1)
     return total
 
@@ -98,7 +103,7 @@ def improve(net, ref, optimiser, episodes, mean, scale, kl_coef, rng, clip=0.2, 
     x, controls, mask = batch['x'], batch['controls'], batch['mask']
     with torch.no_grad():
         logits, values = net(x)
-        old_logp = joint_logp(logits, controls)
+        old_logp = joint_logp(logits, controls, batch['temperatures'])
         advantages, returns = gae(batch['rewards'], values, mask, gamma, lam)
         ref_logits, _ = ref(x)
         chosen = advantages[mask]
@@ -114,7 +119,8 @@ def improve(net, ref, optimiser, episodes, mean, scale, kl_coef, rng, clip=0.2, 
             m = mask[index]
             logits, values = net(x[index])
             # Clamped so a policy that has moved far within one update cannot overflow the ratio's gradient.
-            ratio = torch.exp(torch.clamp(joint_logp(logits, controls[index]) - old_logp[index], -20.0, 20.0))
+            logp = joint_logp(logits, controls[index], batch['temperatures'][index])
+            ratio = torch.exp(torch.clamp(logp - old_logp[index], -20.0, 20.0))
             a = advantages[index]
             surrogate = torch.minimum(ratio * a, torch.clamp(ratio, 1 - clip, 1 + clip) * a)
             policy_loss = -surrogate[m].mean()
@@ -291,6 +297,10 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             blind = sum(e.get('blind_steps', 0) for e in flown)
             stats.update(compass_follow=sum(e.get('following_steps', 0) for e in flown) / blind if blind else 0.0)
             unseen = sum(e.get('unseen_steps', 0) for e in flown)
+            steps = sum(len(e.get('temperatures', ())) for e in flown)
+            stats.update(panic_fraction=sum(int((np.asarray(e.get('temperatures', ())) > 1.0).sum()) for e in flown)
+                         / steps if steps else 0.0)
+            stats.update(hits_per_episode=float(np.mean([e.get('hits', 0) for e in flown])))
             stats.update(unaimed_shots_per_episode=float(np.mean([e.get('unaimed_shots', 0) for e in flown])))
             stats.update(bored_fraction=sum(e.get('bored_steps', 0) for e in flown) / unseen if unseen else 0.0)
             current = out_dir / f'iter{iteration:04d}.npz'
@@ -327,7 +337,10 @@ def reward_summary(args):
             ('Rules hunter destroyed', '+', args.rules_bounty, 'points, on top of its share of the kill reward'),
             ('Following the enemy compass', '+', getattr(args, 'compass_reward', 0.0),
              'points per maze width the route to the nearest enemy shortens while none is in sight'),
-            ('Shot with no enemy in sight', '-', getattr(args, 'shot_price', 0.0), 'points each'),
+            ('Hit on an enemy', '+', getattr(args, 'hit_reward', 0.0), 'points per shot that reaches an enemy'),
+            ('Turning', '-', getattr(args, 'turning_penalty', 0.0), 'points per second spent turning'),
+            ('Unaimed shot', '-', getattr(args, 'shot_price', 0.0),
+             'points each, unless within 20° of an enemy in sight'),
             ('Boredom', '-', getattr(args, 'boredom_penalty', 0.0),
              f'points per second with no enemy in sight in a cell visited in the last {getattr(args, "boredom_window", 10.0):g} s')]
     return [{'name': n, 'sign': s, 'value': round(v, 4), 'unit': u} for n, s, v, u in rows if v]
@@ -347,6 +360,34 @@ def parse_levels(text):
     return tuple(levels)
 
 
+def shaping_from(args):
+    """The episode shaping a run's arguments ask for: what fly_rollout is called with."""
+    return {'wall_scale': args.wall_scale,
+            'hit_scale': args.hit_scale,
+            'still_penalty': args.still_penalty,
+            'horizon': args.horizon,
+            'random_start': not args.fixed_start,
+            'still_speed': args.still_speed,
+            'turn_change_penalty': args.turn_change_penalty,
+            'reversal_penalty': args.reversal_penalty,
+            'health': args.health,
+            'death_penalty': args.death_penalty,
+            'speed_penalty': args.speed_penalty,
+            'powerup_reward': args.powerup_reward,
+            'after_clear': args.after_clear,
+            'upgrade_bonus': args.upgrade_bonus,
+            'pursue_hunter': not args.decoy_player,
+            'rules_bounty': args.rules_bounty,
+            'compass_reward': args.compass_reward,
+            'boredom_penalty': args.boredom_penalty,
+            'boredom_window': args.boredom_window,
+            'shot_price': args.shot_price,
+            'turning_penalty': args.turning_penalty,
+            'hit_reward': args.hit_reward,
+            'panic_score': args.panic_score,
+            'panic_temperature': args.panic_temperature}
+
+
 def write_run_config(args):
     """Record what this run trains on beside its log, so the dashboard can list it."""
     import json
@@ -357,11 +398,13 @@ def write_run_config(args):
         'episode': {'horizon_seconds': args.horizon, 'after_clear_seconds': args.after_clear,
                     'episodes_per_iteration': args.episodes, 'learning_rate': args.lr,
                     'health': args.health, 'wall_energy': _wall_energy() if args.health else 0,
-                    'rules_share': args.rules_share, 'levels': args.levels},
-        'start': str(args.start)}, indent=1))
+                    'rules_share': args.rules_share, 'levels': args.levels,
+                    'panic_score': args.panic_score, 'panic_temperature': args.panic_temperature},
+        'start': str(args.start), 'shaping': shaping_from(args),
+        'decision_frames': 6, 'turn_rate': 1.0}, indent=1))
 
 
-def main(argv=None):
+def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--start', default=str(DEFAULT_START))
     parser.add_argument('--out', default=str(DEFAULT_OUT))
@@ -410,27 +453,27 @@ def main(argv=None):
     parser.add_argument('--boredom-window', type=float, default=10.0,
                         help='seconds before a visited maze cell counts as new again')
     parser.add_argument('--shot-price', type=float, default=0.0,
-                        help='points lost per shot fired with no enemy in sight (the neural hunter fires unaimed then)')
+                        help='points lost per shot not within 20 degrees of an enemy in sight')
+    parser.add_argument('--panic-score', type=float, default=None,
+                        help='panic once the last 5 s score below this (e.g. -10); off when not given')
+    parser.add_argument('--panic-temperature', type=float, default=3.0,
+                        help='the temperature choices are sampled at while panicking')
+    parser.add_argument('--hit-reward', type=float, default=0.0,
+                        help='points gained per hunter shot that reaches an enemy')
+    parser.add_argument('--turning-penalty', type=float, default=0.0,
+                        help='points lost per second spent turning (circling costs; a quick correction is cheap)')
     parser.add_argument('--levels', type=parse_levels, default=None,
                         help='levels to train on, e.g. 1-20 or 4,7,13 (default: the tune set)')
-    args = parser.parse_args(argv)
+    return parser
+
+
+def main(argv=None):
+    args = build_parser().parse_args(argv)
     write_run_config(args)
     from experiments import run
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
-                      shaping={'wall_scale': args.wall_scale, 'hit_scale': args.hit_scale,
-                               'still_penalty': args.still_penalty, 'horizon': args.horizon,
-                               'random_start': not args.fixed_start,
-                               'still_speed': args.still_speed,
-                               'turn_change_penalty': args.turn_change_penalty,
-                               'reversal_penalty': args.reversal_penalty,
-                               'health': args.health, 'death_penalty': args.death_penalty,
-                               'speed_penalty': args.speed_penalty,
-                               'powerup_reward': args.powerup_reward, 'after_clear': args.after_clear,
-                               'upgrade_bonus': args.upgrade_bonus, 'pursue_hunter': not args.decoy_player,
-                               'rules_bounty': args.rules_bounty, 'compass_reward': args.compass_reward,
-                               'boredom_penalty': args.boredom_penalty, 'boredom_window': args.boredom_window,
-                               'shot_price': args.shot_price},
+                      shaping=shaping_from(args),
                       rules_share=args.rules_share, levels=args.levels)
     print('done | last checkpoint:', result['last'])
 

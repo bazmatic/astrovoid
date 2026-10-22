@@ -16,6 +16,7 @@ class NeuralController:
         self.closed = False
         self.action = NEUTRAL
         self.override = None          # a PilotAction that replaces the next decision (teacher-corrected rounds)
+        self.temperature = 1.0        # sampled choices are drawn at this temperature (training's panic raises it)
         self.status = 'unavailable' if self.unavailable else 'waiting'
         self.frames = 0
         self.last_controls = (1, 0, 0)
@@ -43,7 +44,8 @@ class NeuralController:
             return NEUTRAL
         if self.frames % self.decision_frames == 0:
             senses = senses_factory(self.last_controls, self.frames / config.FPS)
-            controls, self._state = self.policy.act(senses, self._state, self.greedy, self.rng)
+            hot = {'temperature': self.temperature} if self.temperature != 1.0 else {}
+            controls, self._state = self.policy.act(senses, self._state, self.greedy, self.rng, **hot)
             self.last_controls = (controls[0], 1 if controls[1] else 0, 1 if controls[2] else 0)
             self.action = to_action(controls)
             if self.override is not None:

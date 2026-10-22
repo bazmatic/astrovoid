@@ -129,3 +129,25 @@ def test_a_non_finite_gradient_skips_the_step_even_when_the_loss_is_finite():
     before = [p.detach().clone() for p in net.parameters()]
     ppo.improve(net, ref, optimiser, toy_episodes(net, policy, rng, count=4), policy.mean, policy.scale, 0.0, rng)
     assert all(torch.equal(a, b) for a, b in zip(before, net.parameters()))
+
+
+def test_a_higher_temperature_flattens_the_sampled_choices_but_not_the_greedy_one():
+    policy = random_policy(3, hidden=8, embed=4)
+    rng = np.random.default_rng(0)
+    senses = np.zeros(SENSE_SIZE, np.float32)
+    greedy, _ = policy.act(senses, policy.initial_state(), greedy=True)
+    assert policy.act(senses, policy.initial_state(), greedy=True, temperature=50.0)[0] == greedy
+    turns = [policy.act(senses, policy.initial_state(), greedy=False, rng=rng, temperature=1e6)[0][0] for _ in range(3000)]
+    assert all(abs(np.mean(np.asarray(turns) == k) - 1 / 3) < 0.04 for k in range(3))
+
+
+def test_the_learning_step_scores_each_choice_at_the_temperature_it_was_made_at():
+    logits = {'turn': torch.tensor([[[2.0, 0.0, -1.0]]]), 'thrust': torch.tensor([[[1.0, 0.0]]]),
+              'fire': torch.tensor([[[0.0, 3.0]]])}
+    controls = torch.tensor([[[0, 1, 1]]])
+    t = torch.tensor([[2.0]])
+    expected = sum(torch.log_softmax(logits[h] / 2.0, dim=-1)[0, 0, c] for h, c in zip(ppo.HEADS, (0, 1, 1)))
+    assert float(ppo.joint_logp(logits, controls, t)) == pytest.approx(float(expected))
+    episode = {'senses': np.zeros((2, SENSE_SIZE), np.float32), 'controls': np.zeros((2, 3), np.int8),
+               'rewards': np.zeros(2, np.float32)}
+    assert ppo.pack([episode], np.zeros(SENSE_SIZE), np.ones(SENSE_SIZE))['temperatures'].tolist() == [[1.0, 1.0]]

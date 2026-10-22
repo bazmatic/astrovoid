@@ -150,3 +150,12 @@ def test_crowd_traits_run_once_per_kind_with_the_live_creatures_of_that_kind():
     encounter.kill(jellies[2])
     encounter.step(1.0)
     assert sorted(calls) == sorted([sorted(id(c) for c in jellies[:2]), sorted(id(c) for c in crabs)])
+
+
+def test_hits_are_counted_by_who_fired_them():
+    encounter = _encounter(_creature([]), _creature([], pos=(500.0, 500.0)))
+    encounter.shoot(Projectile((100.0, 100.0), 0, source='hunter'))
+    encounter.shoot(Projectile((100.0, 100.0), 0, source='hunter'))
+    encounter.shoot(Projectile((100.0, 100.0), 0))                 # the player's
+    encounter.shoot(Projectile((300.0, 300.0), 0, source='hunter'))  # a miss
+    assert encounter.hits['hunter'] == 2 and encounter.hits['player'] == 1

@@ -165,7 +165,7 @@ def test_with_no_enemy_in_sight_the_neural_hunter_fires_along_its_nose(maze):
     assert any(fly() for _ in range(3))
 
 
-def test_with_an_enemy_in_sight_fire_control_still_holds_the_shot_until_lined_up(maze):
+def test_the_neural_hunter_fires_when_it_pulls_the_trigger_even_off_target(maze):
     from hunter.model import PilotAction
     ship = HunterShip(cell(maze, 2, 3))
     ship.angle, ship.fire_remaining = 90.0, 0.0              # nose south, the enemy due east in plain sight and reach
@@ -175,7 +175,7 @@ def test_with_an_enemy_in_sight_fire_control_still_holds_the_shot_until_lined_up
     for _ in range(3):
         flight.controller.override = PilotAction(0, False, True)
         shots.append(flight.fly(1.0))
-    assert not any(shots)
+    assert any(shots)
 
 
 def test_the_ship_counts_its_shots(maze):

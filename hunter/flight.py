@@ -10,7 +10,7 @@ then flown a frame at a time:
 
 The ship's settings are the flight's settings, fixed for its life: a flight with different settings is a new
 flight. Inside, the flight picks the observer its pilot reads (perception for Jev and the rules pilot, senses
-for the neural one), consults fire control while the pilot engages, drops a burst the pilot is no longer
+for the neural one), consults fire control while the rules pilot or Jev engages (the neural pilot aims for itself), drops a burst the pilot is no longer
 behind, and settles the ship against the walls.
 """
 import time
@@ -86,11 +86,12 @@ class HunterFlight:
         maze = self.surroundings.maze
         # Fire control is only consulted while the pilot is engaging something.
         solution = None
-        if action.track or action.fire or ship.burst_remaining:
-            solution = find_firing_solution(ship, self.surroundings.enemies(), maze, ship.settings)
-            # With no enemy to aim at, the neural pilot's trigger fires along the nose, at walls or anything else.
-            if self._neural and solution is None and action.fire:
+        if self._neural:
+            # The neural pilot aims for itself: its trigger fires along the nose, whatever is there.
+            if action.fire:
                 solution = FiringSolution(0.0, True)
+        elif action.track or action.fire or ship.burst_remaining:
+            solution = find_firing_solution(ship, self.surroundings.enemies(), maze, ship.settings)
         shots = ship.step(dt, action, solution) or []
         ship.check_wall_collision(maze.walls, maze.spatial_grid)
         return shots

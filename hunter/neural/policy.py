@@ -38,11 +38,13 @@ class NeuralPolicy:
         logits = {k: p[f'{k}_w'] @ new_state + p[f'{k}_b'] for k in HEAD_SIZES}
         return logits, new_state
 
-    def act(self, senses, state, greedy=True, rng=None):
+    def act(self, senses, state, greedy=True, rng=None, temperature=1.0):
+        """Choose the controls. Sampled choices are drawn at `temperature`: above 1 the odds flatten (training's
+        panic); the greedy choice is the same at any temperature."""
         logits, new_state = self.step(senses, state)
         picks = []
         for head in ('turn', 'thrust', 'fire'):
-            z = logits[head] - logits[head].max()
+            z = (logits[head] - logits[head].max()) / temperature
             probs = np.exp(z) / np.exp(z).sum()
             if greedy:
                 picks.append(int(np.argmax(probs)))

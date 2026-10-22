@@ -6,6 +6,7 @@ stand-in): the ship, the hunter, the maze, the scoring, the shots, the pickups a
 
 Every enemy is a Creature; a shot no creature takes remains available to the rest of the level.
 """
+from collections import Counter
 from typing import Dict, List, Optional, Tuple
 
 from creatures.creature import Creature
@@ -17,6 +18,7 @@ class Encounter:
     def __init__(self, roster, world):
         self.roster = roster
         self.world = world
+        self.hits = Counter()          # shots that reached an enemy, by who fired them ('player', 'hunter', ...)
 
     @property
     def ship(self):
@@ -92,6 +94,7 @@ class Encounter:
                 if (creature.active and creature.allegiance == 'enemy'
                         and projectile.check_circle_collision(creature.get_pos(), creature.radius)):
                     self._spawn(creature)   # shot before its first frame
+                    self.hits[projectile.source] += 1
                     for trait in creature.traits:
                         trait.on_shot(creature, projectile, self)
                         if not creature.active:

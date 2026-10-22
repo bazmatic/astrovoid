@@ -49,5 +49,7 @@ def test_the_trained_flight_and_observation_contract_is_preserved():
     with np.load(FIXTURE) as baseline:
         np.testing.assert_allclose(states, baseline['states'], rtol=0, atol=1e-10)
         np.testing.assert_allclose(shots, baseline['shots'], rtol=0, atol=1e-10)
-        np.testing.assert_array_equal(observations, baseline['observations'])
-        assert tuple(baseline['features']) == FEATURE_NAMES
+        # Senses added since are appended (so trained policies migrate), so the baseline is a prefix of them.
+        width = baseline['observations'].shape[1]
+        np.testing.assert_array_equal(observations[:, :width], baseline['observations'])
+        assert tuple(baseline['features']) == FEATURE_NAMES[:width]
