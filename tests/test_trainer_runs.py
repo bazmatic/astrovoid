@@ -122,3 +122,19 @@ def test_terminate_tree_terms_then_kills_what_is_left():
     terminate_tree(10, procs, kill=kill, wait=0.05)
     assert (10, signal.SIGTERM) in sent and (11, signal.SIGTERM) in sent and (10, signal.SIGKILL) in sent
     assert (11, signal.SIGKILL) not in sent
+
+
+def test_a_last_line_without_its_newline_is_not_counted(tmp_path):
+    run = make_run(tmp_path, 'run1', 1)
+    with open(run / 'train.log', 'a') as log:
+        log.write('policy_loss=0.1 iteration=1 kl=0.2 update_s=1.0 compass_follow=')
+    assert [row['iteration'] for row in log_rows(run)] == [0.0]
+
+
+def test_only_the_trainer_itself_counts_as_training_not_commands_that_mention_it(tmp_path):
+    out = tmp_path / 'run3'
+    procs = [Process(20, 1, f'zsh -c nohup ./venv/bin/python -m tools.ppo_neural --out {out} &'),
+             Process(21, 1, f'claude -p run python -m tools.ppo_neural --out {out}'),
+             Process(22, 1, f'grep tools.ppo_neural --out {out}')]
+    assert training(procs, tmp_path) == {}
+    assert training([Process(23, 1, f'/v/bin/python3.10 tools/ppo_neural.py --out {out}')], tmp_path) == {'run3': 23}

@@ -58,7 +58,19 @@ def make_handler(root, processes, launch):
                 return self.send(200, {dest: asdict(v) for dest, v in values.items()})
             self.send(404, {'error': 'not found'})
 
+        def from_this_page(self):
+            """Only this app's own page may act: other sites in the browser can send a plain POST to localhost
+            without asking, and a site renamed to point here (DNS rebinding) arrives with its own Host."""
+            port = self.server.server_address[1]
+            ours = {f'127.0.0.1:{port}', f'localhost:{port}'}
+            origin = self.headers.get('Origin')
+            return self.headers.get('Host') in ours and (origin is None or origin.split('//', 1)[-1] in ours)
+
         def do_POST(self):
+            if not (self.headers.get('Content-Type') or '').startswith('application/json'):
+                return self.send(415, {'error': 'send JSON'})       # forces a browser preflight we never answer
+            if not self.from_this_page():
+                return self.send(403, {'error': 'only the training manager page can do that'})
             try:
                 length = int(self.headers.get('Content-Length') or 0)
                 body = json.loads(self.rfile.read(length) or b'{}')

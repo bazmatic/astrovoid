@@ -13,7 +13,7 @@ Process = namedtuple('Process', 'pid ppid command')
 
 
 def list_processes():
-    out = subprocess.run(['ps', '-axo', 'pid=,ppid=,command='], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(['ps', '-axww', '-o', 'pid=,ppid=,command='], capture_output=True, text=True, check=True).stdout
     processes = []
     for line in out.splitlines():
         parts = line.split(None, 2)
@@ -22,14 +22,26 @@ def list_processes():
     return processes
 
 
+def _is_trainer(words):
+    """Python running the trainer itself: `python -m tools.ppo_neural` or `python .../tools/ppo_neural.py`. Not a
+    shell or an agent whose command line merely mentions it."""
+    if not words or not Path(words[0]).name.startswith('python'):
+        return False
+    if len(words) > 2 and words[1] == '-m' and words[2] == 'tools.ppo_neural':
+        return True
+    return len(words) > 1 and words[1].replace('\\', '/').endswith('tools/ppo_neural.py')
+
+
 def _out_folder(command):
-    """The --out of a tools.ppo_neural command line, or None for any other command."""
-    if 'tools.ppo_neural' not in command:
+    """The --out of a trainer's command line, or None for any other command."""
+    if 'ppo_neural' not in command:
         return None
     try:
         words = shlex.split(command)
     except ValueError:
         words = command.split()
+    if not _is_trainer(words):
+        return None
     for i, word in enumerate(words):
         if word == '--out' and i + 1 < len(words):
             return words[i + 1]

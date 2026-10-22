@@ -42,7 +42,8 @@ def list_runs() -> list:
 
 @server.tool()
 @_errors_as_data
-def start_run(from_run: str | None = None, changes: dict[str, str] | None = None) -> dict:
+def start_run(from_run: str | None = None,
+              changes: dict[str, str | int | float | bool | list[int]] | None = None) -> dict:
     """Start a new run. It carries on from `from_run` ('run51' for its last checkpoint, or 'run51/iter0200'),
     by default the newest run's last checkpoint, with that run's settings and `changes` applied
     ({'speed_penalty': '2', 'levels': '1-20'}). It refuses while a run is training, paused or interrupted.

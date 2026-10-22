@@ -280,6 +280,10 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
         rng.bit_generator.state = saved['numpy_rng']
         first = saved['next_iteration']
         current = out_dir / f'iter{first - 1:04d}.npz'
+        log_file = out_dir / 'train.log'
+        if log_file.exists() and not log_file.read_bytes().endswith(b'\n'):
+            with open(log_file, 'a') as record:          # a line cut short by a crash: start ours on a new line
+                record.write('\n')
     else:
         current = out_dir / 'iter_start.npz'
         export(net, policy, current)
@@ -327,14 +331,14 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             save_resume_state(out_dir, net, optimiser, rng, iteration + 1, iterations)
             with open(out_dir / 'train.log', 'a') as record:     # the dashboard reads the newest run's train.log
                 record.write(line + '\n')
-            if (out_dir / PAUSE_FILE).exists():
+            if (out_dir / PAUSE_FILE).exists() and iteration < iterations - 1:   # on the last one it just finishes
                 (out_dir / PAUSE_FILE).unlink()
                 write_state(out_dir, 'paused', iteration)
                 paused = True
                 break
         else:
-            if iterations > first:
-                write_state(out_dir, 'finished', iterations - 1)
+            (out_dir / PAUSE_FILE).unlink(missing_ok=True)
+            write_state(out_dir, 'finished', iterations - 1)
     finally:
         if pooled is not None:
             pooled.close()

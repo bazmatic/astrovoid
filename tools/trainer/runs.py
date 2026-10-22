@@ -40,12 +40,13 @@ def next_run_number(root):
 def log_rows(run_dir):
     """The run's complete train.log lines, as numbers (and True/False)."""
     try:
-        lines = (Path(run_dir) / 'train.log').read_text().splitlines()
+        text = (Path(run_dir) / 'train.log').read_text()
     except OSError:
         return []
+    lines = text.split('\n')[:-1]          # the last piece has no newline yet: a line still being written
     rows = []
     for line in lines:
-        if 'iteration=' not in line or 'update_s=' not in line:   # update_s is near the end: the line is whole
+        if 'iteration=' not in line or 'update_s=' not in line:   # a line cut short and then written over
             continue
         try:
             pairs = [part.split('=') for part in line.split()]

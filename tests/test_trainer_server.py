@@ -100,7 +100,8 @@ def test_pause_and_stop_act_on_the_training_run(setup):
 
 def test_bad_requests_are_a_400(setup):
     assert post(setup, '/api/start', {'changes': {'speed_penalty': 'fast'}})[0] == 409
-    request = urllib.request.Request(setup['url'] + '/api/start', data=b'{nope', method='POST')
+    request = urllib.request.Request(setup['url'] + '/api/start', data=b'{nope', method='POST',
+                                     headers={'Content-Type': 'application/json'})
     with pytest.raises(urllib.error.HTTPError) as e:
         urllib.request.urlopen(request)
     assert e.value.code == 400
@@ -122,3 +123,23 @@ def test_a_taken_port_moves_to_the_next_one(tmp_path):
         httpd.server_close()
     finally:
         taken.close()
+
+
+def raw_post(setup, path, headers):
+    request = urllib.request.Request(setup['url'] + path, data=b'{}', method='POST', headers=headers)
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status
+    except urllib.error.HTTPError as e:
+        return e.code
+
+
+def test_other_web_pages_cannot_drive_the_trainer(setup):
+    setup['processes'] = [trainer(9, setup['root'] / 'run52')]
+    assert raw_post(setup, '/api/pause', {'Content-Type': 'text/plain'}) == 415          # no-cors simple request
+    assert raw_post(setup, '/api/pause', {'Content-Type': 'application/json', 'Origin': 'https://evil.example'}) == 403
+    assert raw_post(setup, '/api/pause', {'Content-Type': 'application/json', 'Host': 'evil.example:8765'}) == 403
+    assert not (setup['root'] / 'run52' / 'PAUSE').exists()
+    port = setup['url'].rsplit(':', 1)[1]
+    assert raw_post(setup, '/api/pause', {'Content-Type': 'application/json',
+                                         'Origin': f'http://localhost:{port}', 'Host': f'localhost:{port}'}) == 200

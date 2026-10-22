@@ -72,3 +72,39 @@ def test_the_run_config_records_every_argument(tmp_path):
 def test_resume_without_resume_state_refuses(tmp_path, start):
     with pytest.raises(FileNotFoundError):
         train(start, tmp_path / 'empty', 2, resume=True)
+
+
+def test_a_pause_on_the_last_iteration_finishes_the_run(tmp_path, start):
+    out = tmp_path / 'out'
+    out.mkdir()
+
+    def pause_on_the_last(line):                # iteration 1 is the last of 2
+        if 'iteration=1 ' in line + ' ':
+            (out / 'PAUSE').touch()
+
+    result = train(start, out, 2, log=pause_on_the_last)
+    assert not result['paused'] and state(out) == {'state': 'finished', 'iteration': 1}
+    assert not (out / 'PAUSE').exists()
+
+
+def test_resuming_a_run_with_nothing_left_marks_it_finished(tmp_path, start):
+    out = tmp_path / 'out'
+    train(start, out, 2)
+    (out / 'state.json').unlink()
+    result = train(start, out, 2, resume=True)
+    assert result['history'] == [] and state(out) == {'state': 'finished', 'iteration': 1}
+
+
+def test_a_resumed_run_starts_its_log_on_a_new_line_after_a_crash_mid_write(tmp_path, start):
+    out = tmp_path / 'out'
+    out.mkdir()
+
+    def pause_at_once(line):
+        (out / 'PAUSE').touch()
+
+    train(start, out, 3, log=pause_at_once)
+    with open(out / 'train.log', 'a') as log:
+        log.write('policy_loss=0.1 iteration=1 kl=0.2 upd')            # killed while writing
+    train(start, out, 3, resume=True)
+    lines = (out / 'train.log').read_text().splitlines()
+    assert lines[1] == 'policy_loss=0.1 iteration=1 kl=0.2 upd' and 'iteration=1 ' in lines[2] + ' '
