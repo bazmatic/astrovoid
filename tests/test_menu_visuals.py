@@ -283,55 +283,78 @@ class TestConfirmationDialog:
         assert max(confirm.bottom, cancel.bottom) <= hints.top
 
 
-class TestControlsScreen:
-    def make_game(self):
+class TestSettingsScreen:
+    def make_game(self, tmp_path):
         from unittest.mock import Mock
         from game_handlers.state_handlers import StateHandlerRegistry
         from rendering.main_menu import MainMenu
+        from rendering.settings_menu import SettingsMenu
         game = Mock()
         game.state = config.STATE_MENU
         game.main_menu = MainMenu(pygame.Surface(SIZE))
+        game.settings_menu = SettingsMenu(pygame.Surface(SIZE), self.settings(tmp_path))
         return game, StateHandlerRegistry()
+
+    def settings(self, tmp_path):
+        from user_settings import UserSettings
+        return UserSettings(tmp_path / 'player_settings.json')  # Never the player's real settings file
 
     def key(self, key):
         return pygame.event.Event(pygame.KEYDOWN, key=key, unicode="")
 
-    def test_main_menu_no_longer_carries_the_key_mappings(self, screen):
-        game, _ = self.make_game()
-        assert game.main_menu.menu_options == ["START GAME", "LEVELS", "FUN", "SELECT PROFILE", "CONTROLS", "QUIT"]
+    def test_main_menu_no_longer_carries_the_key_mappings(self, screen, tmp_path):
+        game, _ = self.make_game(tmp_path)
+        assert game.main_menu.menu_options == ["START GAME", "LEVELS", "FUN", "SELECT PROFILE", "SETTINGS", "QUIT"]
         assert not hasattr(game.main_menu, 'controls_surface')
 
-    def test_controls_option_opens_the_screen_and_escape_returns(self, screen):
-        game, registry = self.make_game()
-        game.main_menu.menu_selected_index = game.main_menu.menu_options.index("CONTROLS")
+    def test_settings_option_opens_the_screen_and_escape_returns(self, screen, tmp_path):
+        game, registry = self.make_game(tmp_path)
+        game.main_menu.menu_selected_index = game.main_menu.menu_options.index("SETTINGS")
         registry.get_handler(game.state).handle_keyboard(self.key(pygame.K_RETURN), game)
-        assert game.state == config.STATE_CONTROLS
+        assert game.state == config.STATE_SETTINGS
         registry.get_handler(game.state).handle_keyboard(self.key(pygame.K_ESCAPE), game)
         assert game.state == config.STATE_MENU
 
-    def test_one_panel_per_device_side_by_side(self, screen):
-        from rendering.controls_menu import CONTROL_GROUPS, ControlsMenu
-        menu = ControlsMenu(screen)
+    def test_sound_toggles_mutes_and_is_remembered(self, screen, tmp_path):
+        from sounds import sound_manager
+        game, registry = self.make_game(tmp_path)
+        game.state = config.STATE_SETTINGS
+        handler = registry.get_handler(game.state)
+        try:
+            assert game.settings_menu.settings.sound and not sound_manager._muted
+            handler.handle_keyboard(self.key(pygame.K_RETURN), game)
+            assert game.state == config.STATE_SETTINGS
+            assert not game.settings_menu.settings.sound and sound_manager._muted
+            assert not self.settings(tmp_path).sound
+            handler.handle_keyboard(self.key(pygame.K_RIGHT), game)
+            assert self.settings(tmp_path).sound and not sound_manager._muted
+        finally:
+            sound_manager.set_muted(False)
+
+    def test_settings_sit_above_one_panel_per_device_side_by_side(self, screen, tmp_path):
+        from rendering.settings_menu import CONTROL_GROUPS, SettingsMenu
+        menu = SettingsMenu(screen, self.settings(tmp_path))
         layout = menu.layout()
-        panels = layout['panels']
+        panels, settings = layout['panels'], layout['settings']
         assert len(panels) == len(CONTROL_GROUPS) == 2
         assert panels[0].right < panels[1].left
-        assert layout['title'].bottom <= panels[0].top
+        assert layout['title'].bottom <= settings[0].top
+        assert settings[-1].bottom < panels[0].top
         assert max(panel.bottom for panel in panels) <= layout['hints'].top
-        assert all(screen.get_rect().contains(panel) for panel in panels)
+        assert all(screen.get_rect().contains(rect) for rect in panels + settings)
 
-    def test_every_mapping_fits_inside_its_panel(self, screen):
-        from rendering.controls_menu import CONTROL_GROUPS, ControlsMenu
-        menu = ControlsMenu(screen)
+    def test_every_mapping_fits_inside_its_panel(self, screen, tmp_path):
+        from rendering.settings_menu import CONTROL_GROUPS, SettingsMenu
+        menu = SettingsMenu(screen, self.settings(tmp_path))
         pad = menu._scaled(36)
         for rect, (_, mappings) in zip(menu.layout()['panels'], CONTROL_GROUPS):
             for key_text, action_text in mappings:
                 needed = menu.row_font.size(key_text)[0] + menu.row_font.size(action_text)[0] + menu._scaled(28) + 40
                 assert needed <= rect.width - pad * 2
 
-    def test_draws_and_leaves_the_screen_opaque(self, screen):
-        from rendering.controls_menu import ControlsMenu
-        menu = ControlsMenu(screen)
+    def test_draws_and_leaves_the_screen_opaque(self, screen, tmp_path):
+        from rendering.settings_menu import SettingsMenu
+        menu = SettingsMenu(screen, self.settings(tmp_path))
         menu.update(1.0)
         menu.draw()
         assert is_opaque(screen)

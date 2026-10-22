@@ -56,8 +56,8 @@ capture('new-best')
 game.level_succeeded = False
 game.star_animation = None
 capture('failed-retry-hint')
-game.state = config.STATE_CONTROLS
-capture('controls')
+game.state = config.STATE_SETTINGS
+capture('settings')
 print('Saved:', output, flush=True)
 game._close_hunter()
 pygame.quit()

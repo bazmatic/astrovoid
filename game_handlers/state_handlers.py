@@ -78,8 +78,8 @@ class MenuStateHandler(StateHandler):
             elif selected_option == "SELECT PROFILE":
                 game.profile_selection_menu.refresh_profiles()
                 game.state = config.STATE_PROFILE_SELECTION
-            elif selected_option == "CONTROLS":
-                game.state = config.STATE_CONTROLS
+            elif selected_option == "SETTINGS":
+                game.state = config.STATE_SETTINGS
             elif selected_option == "QUIT":
                 game.running = False
             return True
@@ -109,8 +109,8 @@ class MenuStateHandler(StateHandler):
                 elif selected_option == "SELECT PROFILE":
                     game.profile_selection_menu.refresh_profiles()
                     game.state = config.STATE_PROFILE_SELECTION
-                elif selected_option == "CONTROLS":
-                    game.state = config.STATE_CONTROLS
+                elif selected_option == "SETTINGS":
+                    game.state = config.STATE_SETTINGS
                 elif selected_option == "QUIT":
                     game.running = False
                 return True
@@ -308,21 +308,56 @@ class LevelSelectStateHandler(StateHandler):
         return False
 
 
-class ControlsStateHandler(StateHandler):
-    """Handler for the controls screen: any confirm or cancel input goes back to the menu."""
+class SettingsStateHandler(StateHandler):
+    """Handler for the settings screen: up and down choose a setting, confirm or left and right
+    change it, cancel goes back to the menu."""
+
+    def __init__(self):
+        self.last_navigation_time = 0.0
+        self.navigation_debounce_interval = 0.15
 
     def handle_keyboard(self, event: 'pygame.event.Event', game: 'Game') -> bool:
-        if event.key in (pygame.K_ESCAPE, pygame.K_q, pygame.K_RETURN, pygame.K_SPACE, pygame.K_BACKSPACE):
+        menu = game.settings_menu
+        if event.key in (pygame.K_ESCAPE, pygame.K_q, pygame.K_BACKSPACE):
             game.state = config.STATE_MENU
-            return True
-        return False
+        elif event.key in (pygame.K_UP, pygame.K_w):
+            menu.navigate(-1)
+        elif event.key in (pygame.K_DOWN, pygame.K_s):
+            menu.navigate(1)
+        elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_LEFT, pygame.K_RIGHT, pygame.K_a, pygame.K_d):
+            menu.toggle_selected()
+        else:
+            return False
+        return True
 
     def handle_controller(self, event: 'pygame.event.Event', game: 'Game') -> bool:
-        if event.type != pygame.JOYBUTTONDOWN:
-            return False
-        if (game.input_handler.is_controller_menu_confirm_pressed(event.button)
-                or game.input_handler.is_controller_menu_cancel_pressed(event.button)):
-            game.state = config.STATE_MENU
+        menu = game.settings_menu
+        if event.type == pygame.JOYBUTTONDOWN:
+            if game.input_handler.is_controller_menu_cancel_pressed(event.button):
+                game.state = config.STATE_MENU
+                return True
+            if game.input_handler.is_controller_menu_confirm_pressed(event.button):
+                menu.toggle_selected()
+                return True
+        elif event.type == pygame.JOYHATMOTION:
+            dx, dy = event.value
+            if dy:
+                menu.navigate(-dy)
+                return True
+            if dx:
+                menu.toggle_selected()
+                return True
+        elif event.type == pygame.JOYAXISMOTION and abs(event.value) > config.CONTROLLER_DEADZONE:
+            now = time.time()
+            if now - self.last_navigation_time < self.navigation_debounce_interval:
+                return False
+            self.last_navigation_time = now
+            if event.axis in (1, 3):
+                menu.navigate(1 if event.value > 0 else -1)
+            elif event.axis in (0, 2):
+                menu.toggle_selected()
+            else:
+                return False
             return True
         return False
 
@@ -633,7 +668,7 @@ class StateHandlerRegistry:
         self.handlers = {
             config.STATE_MENU: MenuStateHandler(),
             config.STATE_PROFILE_SELECTION: ProfileSelectionStateHandler(),
-            config.STATE_CONTROLS: ControlsStateHandler(),
+            config.STATE_SETTINGS: SettingsStateHandler(),
             config.STATE_LEVEL_SELECT: LevelSelectStateHandler(),
             config.STATE_FUN: FunStateHandler(),
             config.STATE_EDITOR: EditorStateHandler(),

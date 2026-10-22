@@ -81,7 +81,7 @@ def test_power_out_finishes_quickly_and_never_records_a_clear(game, monkeypatch,
 
 @pytest.mark.parametrize("power_out", [False, True])
 def test_controller_y_restarts_and_controls_explain_it(game, power_out):
-    from rendering.controls_menu import CONTROL_GROUPS
+    from rendering.settings_menu import CONTROL_GROUPS
     game.input_handler.controllers = [Mock(get_numbuttons=lambda: 12)]
     assert game.input_handler.is_controller_restart_pressed(3)
     assert not game.input_handler.is_controller_restart_pressed(2)

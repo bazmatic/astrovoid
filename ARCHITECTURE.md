@@ -215,7 +215,7 @@ counts, par, exits, editor palettes and enemy-hunter enumeration.
 - **`stars.py`**: `draw_star`, `draw_glow`, `StarBurst` - the faceted star artwork shared by every star
 
 - **`fonts.py`**: `get_font` - the bundled typeface (Chakra Petch, in `assets/fonts`); all text goes through it
-- **`controls_menu.py`**: `ControlsMenu` - key and button mappings, reached from the main menu
+- **`settings_menu.py`**: `SettingsMenu` - player settings (sound on/off) and the key and button mappings, reached from the main menu
 - **`dial.py`**: Neon HUD instrument dials (time, power, ammo)
   - Segmented arc that fills clockwise, with a dim unlit track
   - Static layers drawn once per size and colour, then cached
@@ -355,7 +355,7 @@ Note: Individual state implementations (menu, playing, level complete, etc.) are
 │   ├── stars.py
 │   ├── dial.py
 │   ├── fonts.py
-│   └── controls_menu.py
+│   └── settings_menu.py
 ├── states/                  # State management
 │   └── state_machine.py
 └── utils/                   # Utilities

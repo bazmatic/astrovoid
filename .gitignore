@@ -24,6 +24,7 @@ Thumbs.db
 # Game specific
 *.log
 profiles.json
+player_settings.json
 
 # Private machine-local credentials (never commit)
 /.astrovoid-local/

@@ -16,6 +16,23 @@ import os
 from typing import Optional, Dict, Tuple, Any
 
 
+# The player's sound setting; shared by every SoundManager
+_muted = False
+
+
+def set_muted(muted: bool) -> None:
+    """Silence or restore all game sound; muting also stops whatever is playing."""
+    global _muted
+    _muted = muted
+    if muted and config.SOUND_ENABLED and pygame.mixer.get_init():
+        pygame.mixer.stop()
+
+
+def _audible() -> bool:
+    """Whether sounds should play now: enabled in config and not muted by the player."""
+    return config.SOUND_ENABLED and not _muted
+
+
 class SoundManager:
     """Manages sound generation and playback for game audio effects.
     
@@ -185,7 +202,7 @@ class SoundManager:
 
     def play_bad_hit(self) -> None:
         """Play a quick 'bad hit' sound for when the player is struck."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
 
         sound = self._generate_bad_hit()
@@ -318,7 +335,7 @@ class SoundManager:
         
         If sound is already playing, this does nothing.
         """
-        if not config.SOUND_ENABLED or not self.thruster_sound or not self.thruster_channel:
+        if not _audible() or not self.thruster_sound or not self.thruster_channel:
             return
         
         # Only start if not already playing
@@ -351,7 +368,7 @@ class SoundManager:
         Args:
             is_upgraded: If True, plays an enhanced shooting sound for upgraded guns.
         """
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         # Use channel 1 for shoot sound (channel 0 is reserved for thruster)
@@ -370,7 +387,7 @@ class SoundManager:
     
     def play_powerup_activation(self) -> None:
         """Play quick phasing tone when a powerup is collected."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         if self.powerup_sound is None:
@@ -602,7 +619,7 @@ class SoundManager:
         
         Uses a separate channel so it doesn't interfere with other sounds.
         """
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         # Generate sound with random pitch variation (±15%)
@@ -674,7 +691,7 @@ class SoundManager:
     
     def play_exit_warble(self) -> None:
         """Play cosmic warble when player reaches the exit."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         if self.exit_warble_sound is None:
@@ -783,7 +800,7 @@ class SoundManager:
         Args:
             pitch: Frequency in Hz for the tinkling sound.
         """
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         # Check cache first
@@ -896,7 +913,7 @@ class SoundManager:
 
     def start_critical_warning(self) -> None:
         """Start the looping critical warning tone."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
 
         if self.critical_warning_sound is None:
@@ -974,7 +991,7 @@ class SoundManager:
     
     def play_star_lost(self) -> None:
         """Play sad descending tone when a star is lost."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         sound = self._generate_star_lost_sound()
@@ -985,7 +1002,7 @@ class SoundManager:
     
     def play_star_gained(self) -> None:
         """Play optimistic ascending tone when a star is gained."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         sound = self._generate_star_gained_sound()
@@ -1127,7 +1144,7 @@ class SoundManager:
     
     def play_portal_power_up(self) -> None:
         """Play ascending tone when portal activates."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         if self.portal_power_up_sound is None:
@@ -1142,7 +1159,7 @@ class SoundManager:
     
     def play_portal_power_down(self) -> None:
         """Play descending tone when portal deactivates."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         if self.portal_power_down_sound is None:
@@ -1228,7 +1245,7 @@ class SoundManager:
         
         Generates a new tweet sound each time with random characteristics.
         """
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
         
         sound = self._generate_tweet_sound()
@@ -1297,7 +1314,7 @@ class SoundManager:
 
     def play_power_down(self) -> None:
         """Play power-down sound when ship runs out of energy."""
-        if not config.SOUND_ENABLED:
+        if not _audible():
             return
 
         sound = self._generate_power_down_sound()

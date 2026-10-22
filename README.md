@@ -379,7 +379,7 @@ asterdroids/
 │   ├── stars.py          # The faceted star artwork
 │   ├── dial.py           # HUD instrument dials
 │   ├── fonts.py          # The game typeface (Chakra Petch)
-│   ├── controls_menu.py  # Key and button mappings screen
+│   ├── settings_menu.py  # Settings (sound) and key and button mappings screen
 │   ├── level_complete_menu.py # Level complete and level failed screens
 │   ├── splash_scene.py   # Splash animation: a squid chasing the ship to the title
 │   ├── wall_renderer.py  # Rock drawing for wall blocks and their faces

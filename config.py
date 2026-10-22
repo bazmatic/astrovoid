@@ -570,7 +570,7 @@ STATES_DEFAULTS = {
     "splash": "splash",
     "menu": "menu",
     "profileSelection": "profile_selection",
-    "controls": "controls",
+    "settings": "settings",
     "levelSelect": "level_select",
     "fun": "fun",
     "editor": "editor",
@@ -774,7 +774,7 @@ LEVEL_COMPLETE_STAR_SIZE = SETTINGS.starAnimation.levelCompleteStarSize
 STATE_SPLASH = STATES_DEFAULTS["splash"]
 STATE_MENU = STATES_DEFAULTS["menu"]
 STATE_PROFILE_SELECTION = STATES_DEFAULTS["profileSelection"]
-STATE_CONTROLS = STATES_DEFAULTS["controls"]
+STATE_SETTINGS = STATES_DEFAULTS["settings"]
 STATE_LEVEL_SELECT = STATES_DEFAULTS["levelSelect"]
 STATE_FUN = STATES_DEFAULTS["fun"]
 STATE_EDITOR = STATES_DEFAULTS["editor"]

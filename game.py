@@ -27,6 +27,7 @@ from policies.exit import DEFAULT_EXIT_POLICY, ExitPolicy, ExitState, OpenAfterT
 from scoring.par import par_seconds, route_cells
 from scoring.stars import StarTally, describe, earned, star_count
 from profiles import ProfileManager, LevelResult
+from user_settings import UserSettings
 from rendering import Renderer
 from rendering.ui_elements import AnimatedStarRating, StarIndicator, UIElementRenderer
 from rendering.menu_components import AnimatedBackground, NeonText, Button, ControllerIcon, render_hint_row
@@ -34,7 +35,7 @@ from rendering.visual_effects import draw_button_glow
 from rendering.main_menu import MainMenu
 from rendering.level_complete_menu import LevelCompleteMenu
 from rendering.profile_selection_menu import ProfileSelectionMenu
-from rendering.controls_menu import ControlsMenu
+from rendering.settings_menu import SettingsMenu
 from rendering.level_select_menu import LevelSelectMenu
 from rendering.fun_menu import FunMenu
 from rendering.level_editor import LevelEditor
@@ -105,6 +106,7 @@ class Game:
         else:
             self.initial_start_level = None
         self.profile_manager = ProfileManager()
+        self.user_settings = UserSettings()
         self.ship: Optional[Ship] = None
         self.maze: Optional[Maze] = None
         self.obstacles: Optional[ObstacleWorld] = None
@@ -175,7 +177,7 @@ class Game:
         
         # Menu UI components
         self.main_menu = MainMenu(screen)
-        self.controls_menu = ControlsMenu(screen)
+        self.settings_menu = SettingsMenu(screen, self.user_settings)
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
         self.fun_menu = FunMenu(screen)
         self.level_editor = LevelEditor(self, screen)
@@ -760,8 +762,8 @@ class Game:
         elif self.state == config.STATE_LEVEL_SELECT:
             self.level_select_menu.update(dt)
             return
-        elif self.state == config.STATE_CONTROLS:
-            self.controls_menu.update(dt)
+        elif self.state == config.STATE_SETTINGS:
+            self.settings_menu.update(dt)
             return
         elif self.state == config.STATE_LEVEL_COMPLETE:
             self.level_complete_menu.update(dt)
@@ -1178,8 +1180,8 @@ class Game:
             self.profile_selection_menu.draw()
         elif self.state == config.STATE_LEVEL_SELECT:
             self.level_select_menu.draw()
-        elif self.state == config.STATE_CONTROLS:
-            self.controls_menu.draw()
+        elif self.state == config.STATE_SETTINGS:
+            self.settings_menu.draw()
         elif self.state == config.STATE_FUN:
             self.fun_menu.draw()
         elif self.state == config.STATE_EDITOR:
