@@ -489,6 +489,21 @@ other as its enemy. It uses whatever policy is in `assets/neural/hunter.npz`; ea
 and a fight not settled within `game.duelTimeoutSeconds` (120) is a draw. Escape leaves it. It does not touch your
 profile.
 
+#### Training manager
+
+`./run-trainer.sh` opens the training manager in the browser (port 8765, or the next free one): what is training,
+with Pause, Resume and Stop; a Next run box that carries on from any run and checkpoint (the newest by default) with
+its settings, any of which can be changed first, including which levels to train on; and the charts for any run.
+Runs live in `.astrovoid-local/neural/rl/runN/`. One run trains at a time. Pause lets the current iteration finish,
+then the run can be resumed later as the same run; Stop ends it. Closing the manager does not stop training.
+
+The same controls work from the command line: `./run-trainer.sh status`, `runs`, `start [--from run51/iter0200]
+[--set speed_penalty=2 --set levels=1-20]`, `stop`, `pause` and `resume [RUN]` (`--help` for more).
+
+Agents: manage training with the `astrovoid-trainer` MCP tools (registered in `.mcp.json`: `training_status`,
+`list_runs`, `start_run`, `stop_run`, `pause_run`, `resume_run`) or `./run-trainer.sh`, not by launching
+`tools.ppo_neural` by hand. The MCP tools need `pip install -r requirements-train.txt`.
+
 #### Unattended data collection
 
 `AUTOPLAY=1 ./run.sh` skips the menus and runs levels with no one at the controls. The player

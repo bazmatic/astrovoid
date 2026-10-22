@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "astrovoid-trainer": {
+      "command": "./venv/bin/python",
+      "args": ["-m", "tools.trainer.mcp_server"]
+    }
+  }
+}

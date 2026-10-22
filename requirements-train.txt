@@ -1,2 +1,3 @@
 # Only needed to train the neural pilot (tools/train_neural.py); the game never imports these.
 torch>=2.2
+mcp>=2.3                 # the training manager's MCP tools for agents (tools/trainer/mcp_server.py)
