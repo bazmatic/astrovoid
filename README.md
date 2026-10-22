@@ -494,6 +494,9 @@ profile.
 `./run-trainer.sh` opens the training manager in the browser (port 8765, or the next free one): what is training,
 with Pause, Resume and Stop; a Next run box that carries on from any run and checkpoint (the newest by default) with
 its settings, any of which can be changed first, including which levels to train on; and the charts for any run.
+Replay an episode lists any finished iteration's episodes by level; Find panic flies them again (a minute or so,
+slowing training meanwhile) to show each one's panic, return, kills and ending, the most panic first; Watch opens one
+in the game window at normal, half or quarter speed (`python -m tools.watch_episode` does the same from the command line).
 Runs live in `.astrovoid-local/neural/rl/runN/`. One run trains at a time. Pause lets the current iteration finish,
 then the run can be resumed later as the same run; Stop ends it. Closing the manager does not stop training.
 

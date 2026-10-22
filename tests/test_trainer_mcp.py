@@ -50,7 +50,7 @@ def test_status_runs_stop_and_resume(monkeypatch, tmp_path):
     monkeypatch.setattr(mcp_server.control, 'resume', lambda run=None: run)
     assert mcp_server.training_status() == {'state': 'idle', 'run': 'run52'}
     assert mcp_server.list_runs()[0] == {'name': 'run52', 'state': 'stopped', 'iterations_done': 3, 'total': 10,
-                                         'started_from': 'run51/iter0001', 'checkpoints': ['iter0002']}
+                                         'started_from': 'run51/iter0001', 'checkpoints': ['iter0002'], 'replayable': False}
     assert mcp_server.stop_run() == {'run': 'run52'} and mcp_server.resume_run('run50') == {'run': 'run50'}
 
 

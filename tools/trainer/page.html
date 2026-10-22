@@ -58,6 +58,15 @@ input[type=text]{width:9em;font-family:var(--mono)}
 .levels .picks label.on{border-color:var(--line);color:var(--line)}
 .levels .picks input{display:none}
 .view{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.episodes{overflow:auto;max-height:420px;width:fit-content;max-width:100%;border:1px solid var(--grid);border-radius:6px}
+.episodes[hidden]{display:none}
+.episodes table{border-collapse:collapse;font-size:13px}
+.episodes th,.episodes td{padding:4px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--grid)}
+.episodes th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:600;font-size:12px}
+.episodes td{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.episodes td.end{font-family:var(--font);text-align:left}
+.episodes tr.panic td.p{color:var(--bad)}
+.episodes button{padding:2px 10px;font-size:12px}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap">
 <div class="wrap">
@@ -72,6 +81,15 @@ input[type=text]{width:9em;font-family:var(--mono)}
    <button class="primary" id="start" disabled>Start</button></div>
   <div class="msg" id="next-msg"></div>
   <div class="form" id="form" hidden></div>
+ </div>
+ <div class="next" id="replay">
+  <h2>Replay an episode</h2>
+  <div class="row">Run <select id="rp-run" aria-label="Run to replay"></select> iteration <select id="rp-iter" aria-label="Iteration to replay"></select>
+   level <select id="rp-level" aria-label="Level"><option value="">All</option></select>
+   speed <select id="rp-speed" aria-label="Playback speed"><option value="1">Normal</option><option value="0.5">Half</option><option value="0.25">Quarter</option></select>
+   <button id="rp-fly" title="Flies the iteration's episodes again to see how each went: takes a while, and slows training while it runs">Find panic</button></div>
+  <div class="msg" id="rp-msg">Episodes open in the game window (Esc closes it). A red label shows when the hunter panics.</div>
+  <div class="episodes" id="rp-list" hidden></div>
  </div>
  <div class="view"><h2>Charts for</h2><select id="view-run" aria-label="Run to chart"></select></div>
  <div class="strip" id="strip"></div>
@@ -273,13 +291,66 @@ $('start').onclick=async()=>{
 
 // The charts, for the active run unless another one is chosen.
 async function loadRuns(){
-  try{RUNS=await api('api/runs');fillFrom();
+  try{RUNS=await api('api/runs');fillFrom();fillReplay();
     const sel=$('view-run'),keep=FOLLOW?'':sel.value;
     sel.innerHTML=`<option value="">The active run</option>`+[...RUNS].reverse().map(r=>`<option value="${r.name}">${r.name} (${r.state}, ${r.iterations_done} iterations)</option>`).join('');
     sel.value=keep;renderStart()}catch(e){}
 }
 function setView(run){if(run===VIEW)return;VIEW=run;D=[];$('rules').innerHTML='';render();refresh();loadRules()}
 $('view-run').onchange=()=>{const v=$('view-run').value;FOLLOW=!v;setView(v||STATUS?.run||null)};
+// Replays: an iteration's episodes, optionally flown again to see how each went, each one watchable.
+let EPISODES=[],FLOWN=false,RP_KEY='';
+function fillReplay(){
+  const sel=$('rp-run'),keep=sel.value,usable=RUNS.filter(r=>r.replayable&&r.checkpoints.length).reverse();
+  sel.innerHTML=usable.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
+  if(keep&&usable.some(r=>r.name===keep))sel.value=keep;
+  const run=RUNS.find(r=>r.name===sel.value),it=$('rp-iter'),keepIt=it.value;
+  const its=run?run.checkpoints.map(c=>+c.slice(4)).reverse():[];
+  it.innerHTML=its.map((n,i)=>`<option value="${n}">${n}${i===0?' (last)':''}</option>`).join('');
+  if(its.includes(+keepIt)&&keepIt!=='')it.value=keepIt;
+  loadEpisodes();
+}
+async function loadEpisodes(){
+  const run=$('rp-run').value,iteration=$('rp-iter').value,key=`${run}/${iteration}`;
+  if(!run||iteration===''||key===RP_KEY)return;
+  RP_KEY=key;EPISODES=[];FLOWN=false;renderEpisodes();
+  try{const e=await post('api/episodes',{run,iteration:+iteration});if(RP_KEY===key){EPISODES=e;fillLevels();renderEpisodes()}}
+  catch(e){$('rp-msg').className='msg error';$('rp-msg').textContent=e.message==='not found'?'This training manager is older than the page: close it (ctrl-c) and run ./run-trainer.sh again.':e.message}
+}
+function fillLevels(){
+  const sel=$('rp-level'),keep=sel.value,levels=[...new Set(EPISODES.map(e=>e.level))].sort((a,b)=>a-b);
+  sel.innerHTML='<option value="">All</option>'+levels.map(l=>`<option value="${l}">${l}</option>`).join('');
+  if(levels.includes(+keep))sel.value=keep;
+}
+function renderEpisodes(){
+  const list=$('rp-list'),level=$('rp-level').value;
+  let rows=EPISODES.filter(e=>level===''||e.level===+level);
+  if(FLOWN)rows=[...rows].sort((a,b)=>b.panic-a.panic||a.episode-b.episode);
+  list.hidden=!EPISODES.length;
+  const head=FLOWN?'<th>Panic</th><th>Return</th><th>Kills</th><th>Seconds</th><th class="end">Ended</th>':'';
+  list.innerHTML=`<table><thead><tr><th>Episode</th><th>Level</th>${head}<th></th></tr></thead><tbody>${rows.map(e=>
+    `<tr class="${FLOWN&&e.panic>0?'panic':''}"><td>${e.episode}</td><td>${e.level}</td>${FLOWN?`<td class="p">${Math.round(e.panic*100)}%</td><td>${e.return.toFixed(1)}</td><td>${e.kills}</td><td>${e.seconds.toFixed(1)}</td><td class="end">${esc(e.end)}</td>`:''}<td><button data-ep="${e.episode}">Watch</button></td></tr>`).join('')}</tbody></table>`;
+  list.querySelectorAll('button[data-ep]').forEach(b=>b.onclick=()=>watchEpisode(+b.dataset.ep));
+}
+async function watchEpisode(episode){
+  const m=$('rp-msg'),speed=+$('rp-speed').value;
+  try{await post('api/replay',{run:$('rp-run').value,iteration:+$('rp-iter').value,episode,speed});
+    m.className='msg';m.textContent=`Opening episode ${episode} in the game window${speed===1?'':` at ${$('rp-speed').selectedOptions[0].text.toLowerCase()} speed`} (Esc closes it).`}
+  catch(e){m.className='msg error';m.textContent=e.message}
+}
+$('rp-run').onchange=()=>{$('rp-iter').value='';fillReplay()};
+$('rp-iter').onchange=loadEpisodes;
+$('rp-level').onchange=renderEpisodes;
+$('rp-fly').onclick=async()=>{
+  const b=$('rp-fly'),m=$('rp-msg'),run=$('rp-run').value,iteration=+$('rp-iter').value,key=RP_KEY;
+  b.disabled=true;m.className='msg';m.textContent=`Flying ${EPISODES.length||'the'} episodes again… this takes a minute or so.`;
+  try{const e=await post('api/episodes',{run,iteration,fly:true});
+    if(RP_KEY===key){EPISODES=e;FLOWN=true;fillLevels();renderEpisodes();
+      m.textContent=`${e.filter(x=>x.panic>0).length} of ${e.length} episodes panicked; the most panic first.`}}
+  catch(e){m.className='msg error';m.textContent=e.message}
+  b.disabled=false;
+};
+
 async function boot(){
   try{SCHEMA=await api('api/settings')}catch(e){}
   await loadRuns();await loadStatus();

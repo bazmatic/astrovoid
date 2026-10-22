@@ -6,7 +6,7 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from tools.trainer import control, runs
+from tools.trainer import control, replay, runs
 from tools.trainer.control import TrainerError
 from tools.trainer.processes import REPO, list_processes
 from tools.trainer.settings import SETTINGS, config_of, read_settings
@@ -21,7 +21,8 @@ def available_levels():
 
 def run_json(run):
     return {'name': run.name, 'state': run.state, 'iterations_done': run.iterations_done, 'total': run.total,
-            'started_from': run.started_from, 'checkpoints': run.checkpoints}
+            'started_from': run.started_from, 'checkpoints': run.checkpoints,
+            'replayable': replay.replayable(run.path)}
 
 
 def make_handler(root, processes, launch):
@@ -93,6 +94,14 @@ def make_handler(root, processes, launch):
                 if path == '/api/resume':
                     return self.send(200, {'run': control.resume(body.get('run'), root=root, processes=processes(),
                                                                  launch=launch)})
+                if path == '/api/episodes':
+                    if body.get('fly'):
+                        return self.send(200, replay.fly(body.get('run'), body.get('iteration'), root=root))
+                    return self.send(200, replay.episodes(body.get('run'), body.get('iteration'), root=root))
+                if path == '/api/replay':
+                    replay.watch(body.get('run'), body.get('iteration'), body.get('episode'), body.get('speed', 1.0),
+                                 root=root, launch=launch)
+                    return self.send(200, {'watching': body.get('episode')})
             except TrainerError as e:
                 return self.send(409, {'error': str(e)})
             self.send(404, {'error': 'not found'})

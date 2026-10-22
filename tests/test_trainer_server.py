@@ -143,3 +143,52 @@ def test_other_web_pages_cannot_drive_the_trainer(setup):
     port = setup['url'].rsplit(':', 1)[1]
     assert raw_post(setup, '/api/pause', {'Content-Type': 'application/json',
                                          'Origin': f'http://localhost:{port}', 'Host': f'localhost:{port}'}) == 200
+
+
+def replayable(setup):
+    run = setup['root'] / 'run52'
+    config = json.loads((run / 'config.json').read_text())
+    config.update({'episode': {'episodes_per_iteration': 6, 'levels': [3, 16], 'rules_share': 0.0},
+                   'shaping': {'horizon': 60.0}, 'decision_frames': 6, 'turn_rate': 1.0})
+    (run / 'config.json').write_text(json.dumps(config))
+    return run
+
+
+def test_an_iterations_episodes_are_listed_with_their_levels(setup):
+    replayable(setup)
+    code, body = post(setup, '/api/episodes', {'run': 'run52', 'iteration': 2})
+    assert code == 200 and [e['episode'] for e in body] == list(range(6))
+    assert {e['level'] for e in body} <= {3, 16}
+    assert post(setup, '/api/episodes', {'run': 'run52', 'iteration': 3}) == \
+        (409, {'error': 'run52 has not finished iteration 3'})
+    assert post(setup, '/api/episodes', {'run': '../x', 'iteration': 0})[0] == 409
+
+
+def test_a_run_from_before_replays_says_so(setup):
+    code, body = post(setup, '/api/episodes', {'run': 'run52', 'iteration': 1})
+    assert code == 409 and body['error'].startswith('run52 cannot be replayed')
+
+
+def test_flying_reports_how_each_episode_went(setup, monkeypatch):
+    replayable(setup)
+    import tools.watch_episode as watch_episode
+    monkeypatch.setattr(watch_episode, 'fly_all', lambda run, iteration, workers:
+                        [(16, 0.5, -100.0, 1, 'died', 20.0), (3, 0.0, 40.0, 10, 'cleared', 30.0)])
+    code, body = post(setup, '/api/episodes', {'run': 'run52', 'iteration': 2, 'fly': True})
+    assert code == 200 and body[0] == {'episode': 0, 'level': 16, 'panic': 0.5, 'return': -100.0, 'kills': 1,
+                                       'end': 'died', 'seconds': 20.0}
+
+
+def test_watching_opens_the_episode_at_the_chosen_speed(setup):
+    run = replayable(setup)
+    assert post(setup, '/api/replay', {'run': 'run52', 'iteration': 2, 'episode': 5, 'speed': 0.5}) == \
+        (200, {'watching': 5})
+    assert setup['launch'].commands[-1][1:] == ['-m', 'tools.watch_episode', str(run), '2', '5', '--speed', '0.5']
+    assert post(setup, '/api/replay', {'run': 'run52', 'iteration': 2, 'episode': 6})[0] == 409
+    assert post(setup, '/api/replay', {'run': 'run52', 'iteration': 2, 'episode': 0, 'speed': 4})[0] == 409
+    assert len(setup['launch'].commands) == 1
+
+
+def test_runs_say_whether_they_can_be_replayed(setup):
+    replayable(setup)
+    assert [(r['name'], r['replayable']) for r in get_json(setup, '/api/runs')] == [('run51', False), ('run52', True)]

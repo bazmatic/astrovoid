@@ -43,10 +43,15 @@ def _fly(item):
             flown['result'].kills, flown['result'].end, len(temperatures) * spec.decision_frames / 60.0)
 
 
-def find(run, iteration, workers):
+def fly_all(run, iteration, workers):
+    """Each of the iteration's episodes flown again: (level, panic share, return, kills, end, seconds)."""
     jobs, shaping = episode_jobs(run, iteration)
     with ProcessPoolExecutor(workers) as pool:
-        rows = list(pool.map(_fly, [(job, shaping) for job in jobs]))
+        return list(pool.map(_fly, [(job, shaping) for job in jobs]))
+
+
+def find(run, iteration, workers):
+    rows = fly_all(run, iteration, workers)
     print(f'{"episode":>7} {"level":>5} {"panic":>6} {"return":>7} {"kills":>5} {"seconds":>7}  end')
     for index, (level, panic, ret, kills, end, seconds) in sorted(enumerate(rows), key=lambda r: -r[1][1]):
         if panic > 0:
@@ -95,7 +100,8 @@ def watch(run, iteration, episode, speed):
         flip()
         clock.tick(60 * speed)
 
-    flown = fly_rollout(level, seed, spec, trace=frame, **shaping)
+    # Training skips the tentacles' drag physics; a watched episode needs it, or they hang where they started.
+    flown = fly_rollout(level, seed, spec, trace=frame, low_graphics=False, **shaping)
     temperatures = flown['temperatures']
     print(f'episode {episode}: level {level}, {flown["result"].end}, kills {flown["result"].kills}, '
           f'return {flown["rewards"].sum():.1f}, panic {100 * float((temperatures > 1.0).mean()):.0f}%')

@@ -319,13 +319,14 @@ def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
                 speed_penalty=0.0, powerup_reward=0.0, after_clear=0.0, upgrade_bonus=0.0, pursue_hunter=True, reversal_penalty=0.0,
                 health=0, death_penalty=0.0, rules_bounty=0.0, compass_reward=0.0, boredom_penalty=0.0,
                 boredom_window=10.0, shot_price=0.0, turning_penalty=0.0, hit_reward=0.0, panic_score=None,
-                panic_temperature=1.0, trace=None):
+                panic_temperature=1.0, trace=None, low_graphics=True):
     recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed,
                                turn_change_penalty, speed_penalty, powerup_reward, upgrade_bonus, reversal_penalty, death_penalty,
                                rules_bounty, compass_reward, boredom_penalty, boredom_window, shot_price,
                                turning_penalty, hit_reward, panic_score, panic_temperature)
     result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder, random_start=random_start,
-                         after_clear=after_clear, pursue_hunter=pursue_hunter, health=health, trace=trace)
+                         after_clear=after_clear, pursue_hunter=pursue_hunter, health=health, trace=trace,
+                         low_graphics=low_graphics)
     senses, controls, rewards = recorder.arrays()
     blind, following = compass_following(senses)
     unseen, bored = recorder.bored_steps(senses, recorder._views)
