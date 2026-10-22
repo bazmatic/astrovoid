@@ -99,3 +99,45 @@ def test_an_observer_is_drawn_as_a_faint_shape():
 
     full, faint = drawn(False), drawn(True)
     assert 0 < faint <= full * 0.3
+
+
+@pytest.mark.parametrize('hunter_active', [True, False])
+def test_enemy_pilots_see_the_hunter_instead_of_the_hidden_player(hunter_active):
+    from game import Game
+    from hunter.surroundings import ProtagonistSurroundings
+
+    game = Game.__new__(Game)
+    game.ship = SimpleNamespace(active=True, observer=True)
+    hunter = SimpleNamespace(active=hunter_active)
+    game.hunter_flight = SimpleNamespace(ship=hunter)
+    assert ProtagonistSurroundings(game).enemies() == ([hunter] if hunter_active else [])
+
+
+def test_enemy_pilots_have_no_target_when_observing_without_a_hunter():
+    from game import Game
+    from hunter.surroundings import ProtagonistSurroundings
+
+    game = Game.__new__(Game)
+    game.ship = SimpleNamespace(active=True, observer=True)
+    game.hunter_flight = None
+    assert ProtagonistSurroundings(game).enemies() == []
+
+
+def test_enemy_pilots_follow_observer_target_changes_without_rebuilding_the_view():
+    from game import Game
+    from hunter.surroundings import ProtagonistSurroundings
+
+    game = Game.__new__(Game)
+    game.ship = SimpleNamespace(active=True, observer=False)
+    game.hunter_flight = None
+    view = ProtagonistSurroundings(game)
+    assert view.enemies() == [game.ship]
+    game.ship.observer = True
+    assert view.enemies() == []
+    hunter = SimpleNamespace(active=True)
+    game.hunter_flight = SimpleNamespace(ship=hunter)
+    assert view.enemies() == [hunter]
+    hunter.active = False
+    assert view.enemies() == []
+    game.ship.observer = False
+    assert view.enemies() == [game.ship]

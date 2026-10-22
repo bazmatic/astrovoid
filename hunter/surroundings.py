@@ -39,10 +39,10 @@ class GameSurroundings:
 
 
 class ProtagonistSurroundings:
-    """What a Rules hunter perceives: its protagonist and that protagonist's shots, and nothing else.
+    """What an enemy pilot perceives: its protagonist and friendly shots, and nothing else.
 
-    The protagonist is whoever the game names (`Game.protagonist()`): the player's ship in play, the hunter in the
-    lab. No other enemy, no pickup and no friend is shown, so the enemy never hunts or fires at anything else.
+    The protagonist is whoever the game names (`Game.protagonist()`): the player's ship in normal play,
+    the Hunter in Observer mode or the lab. No other enemy, pickup or friend is shown.
     """
 
     def __init__(self, game):

@@ -541,7 +541,12 @@ class Game:
         return self.roster.of_kind(*enemy_kinds.hunters())
 
     def protagonist(self):
-        """Whom the enemy hunters hunt: the player's ship. (The lab replaces this with the hunter.)"""
+        """Whom enemy pilots hunt: the player, or the Hunter while observing.
+
+        The lab replaces this with its own hunter target.
+        """
+        if self.ship is not None and getattr(self.ship, 'observer', False):
+            return self.hunter
         return self.ship
 
     def rules_worker(self):
