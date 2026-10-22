@@ -3,7 +3,7 @@ built."""
 from typing import Dict, Mapping, Type
 
 from creatures.trait import Trait
-from creatures.traits import brains, burst_fire, combat, crowd, flock, growth, lighthouse, piloted, propulsion, rooted, spawning
+from creatures.traits import brains, burst_fire, combat, crowd, energy, flock, growth, lighthouse, piloted, propulsion, rooted, spawning
 from entities.anemone import AnemoneBody
 from entities.belemnite import BelemniteBody
 from entities.egg import EggBody
@@ -25,7 +25,7 @@ TRAITS: Dict[str, Type[Trait]] = {trait.NAME: trait for trait in (
     rooted.Anchored, rooted.PullsShip, rooted.FlingsShip,
     flock.Flocks, flock.Tweets,
     lighthouse.Scans, lighthouse.LaunchesFlock,
-    piloted.Pilot, burst_fire.BurstFire,
+    piloted.Pilot, burst_fire.BurstFire, energy.Energy,
 )}
 BODIES: Dict[str, type] = {'urchin': Urchin, 'crab': PatrolCrab, 'jelly': Jellyfish, 'belemnite': BelemniteBody, 'squid': Squid, 'egg': EggBody, 'anemone': AnemoneBody, 'flocker': FlockerBody, 'flighthouse': FlighthouseBody, 'hunterShip': HunterShipBody}
 

@@ -26,6 +26,9 @@ class Trait:
     def on_frame(self, c, enc, dt: float) -> None:
         """Every frame while the creature lives."""
 
+    def on_after_frame(self, c, enc, dt: float) -> None:
+        """After ordinary hooks, before Body animation: complete movement after firing."""
+
     def on_shot(self, c, shot, enc) -> None:
         """A friendly shot struck the creature."""
 

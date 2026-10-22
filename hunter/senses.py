@@ -208,8 +208,9 @@ class Senses:
         self._remember_crystals(out, origin, h, reach, now, {id(c) for _, c in crystals_seen})
         # A collision with a bullet or a ship since the last decision: the strongest push, in the hunter's frame as a
         # share of top speed. Walls are not counted: the rays already tell it how close they are.
-        take_hit = getattr(hunter, 'take_hit', None)
-        hit = take_hit() if take_hit is not None else None
+        from creatures.traits.energy import take_hit
+        read_hit = getattr(hunter, 'take_hit', None)
+        hit = read_hit() if read_hit is not None else take_hit(hunter)
         if hit is not None:
             out[_INDEX['hit_present']] = 1.0
             out[_INDEX['hit_fwd']] = max(-1.0, min(1.0, (hit[0] * ch + hit[1] * sh) / vmax))

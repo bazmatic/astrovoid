@@ -1,66 +1,84 @@
-"""The look of a creature shaped like a hunter ship: the arrowhead, its engine and plume in its kind's colours, a bar of
-the hits it has left if its kind shows one, and an expanding ring when it dies."""
+"""The arrowhead, plume, immunity flash, hit bar and expanding death ring of a hunter-shaped Creature."""
+import math
 import pygame
 
 import config
-from entities.hunter_ship import HunterShip
+from rendering.thrust_plume import advance_thrust_particles, draw_thrust_plume
 
-_COLOURS = (('COLOR', 'color'), ('FILL', 'fill'), ('NOSE_COLOR', 'noseColor'), ('COCKPIT_COLOR', 'cockpitColor'),
-            ('ENGINE_COLOR', 'engineColor'), ('ENGINE_LIT_COLOR', 'engineLitColor'))
+_COLOURS = {'color': (120, 255, 90), 'fill': (25, 110, 40), 'noseColor': (215, 255, 200),
+            'cockpitColor': (15, 60, 30), 'engineColor': (170, 95, 20), 'engineLitColor': (255, 200, 80)}
 
 
 class HunterShipBody:
-    """Draws through a puppet HunterShip set where the creature is. A creature with a craft (see the pilot trait)
-    shows its craft's plume."""
-
-    DEATH_DURATION = HunterShip.DEATH_DURATION
-    DEATH_FRICTION = 0.0   # the wreck stays where it was hit
-    BAR_WIDTH = 40         # px across, for a ship of the player's size
-    BAR_HEIGHT = 4
+    DEATH_DURATION = 48.0
+    DEATH_FRICTION = 0.0
+    BAR_WIDTH, BAR_HEIGHT = 40, 4
 
     def __init__(self, creature):
-        self._puppet = HunterShip(creature.get_pos())
-        for attribute, key in _COLOURS:
-            setattr(self._puppet, attribute, tuple(creature.kind.tuning.get(key, getattr(HunterShip, attribute))))
+        creature.thrust_particles = []
+        creature.thrusting = False
+        self.colours = {key: tuple(creature.kind.tuning.get(key, value)) for key, value in _COLOURS.items()}
         self._shows_hit_points = creature.kind.tuning.get('showsHitPoints', False)
 
-    def on_event(self, creature, name: str) -> None:
-        """Its look follows its craft, so events change nothing."""
+    def on_event(self, creature, name):
+        if name == 'integrated':
+            advance_thrust_particles(creature, creature.integration_dt)
 
-    def update(self, creature, dt: float, target=None) -> None:
-        """Nothing moves on its own: the craft carries the plume."""
+    def update(self, creature, dt, target=None):
+        pass
 
-    def update_death(self, creature, dt: float) -> None:
-        """The ring grows with the death timer."""
+    def update_death(self, creature, dt):
+        pass
 
-    def _place(self, creature) -> HunterShip:
-        puppet = self._puppet
-        puppet.x, puppet.y, puppet.vx, puppet.vy = creature.x, creature.y, creature.vx, creature.vy
-        puppet.angle, puppet.radius = creature.angle, creature.radius
-        puppet.pilot_thrusting = getattr(creature, 'pilot_thrusting', False)
-        craft = getattr(creature, 'craft', None)
-        puppet.thrusting = craft.thrusting if craft is not None else False
-        puppet.thrust_particles = craft.thrust_particles if craft is not None else []
-        return puppet
+    @staticmethod
+    def _place(c, x, y):
+        heading = math.radians(c.angle)
+        cs, sn = math.cos(heading), math.sin(heading)
+        return c.x + (x * cs - y * sn) * c.radius, c.y + (x * sn + y * cs) * c.radius
 
-    def draw(self, screen: pygame.Surface, creature) -> None:
-        self._place(creature).draw(screen)
+    def outline(self, c):
+        return [self._place(c, x, y) for x, y in ((1.4, 0), (-0.9, 0.85), (-0.35, 0), (-0.9, -0.85))]
+
+    def _nose_section(self, c, back_x):
+        half_width = 0.85 * (1.4 - back_x) / 2.3
+        return [self._place(c, 1.4, 0), self._place(c, back_x, half_width), self._place(c, back_x, -half_width)]
+
+    def draw(self, screen, c):
+        colours = self.colours
+        colour = colours['color']
+        if getattr(c, 'immunity_remaining', 0) and int(c.immunity_remaining * 20) % 2:
+            colour = (235, 255, 230)
+        outline = self.outline(c)
+        pygame.draw.polygon(screen, colours['fill'], outline)
+        middle = tuple((a + b) // 2 for a, b in zip(colours['fill'], colours['color']))
+        pygame.draw.polygon(screen, middle, self._nose_section(c, -0.2))
+        pygame.draw.polygon(screen, colours['noseColor'], self._nose_section(c, 0.45))
+        pygame.draw.lines(screen, colour, True, outline, 1)
+        cockpit = self._place(c, 0.5, 0)
+        pygame.draw.circle(screen, colours['cockpitColor'], (round(cockpit[0]), round(cockpit[1])), 1)
+        engine = self._place(c, -0.5, 0)
+        burning = getattr(c, 'pilot_thrusting', False)
+        pygame.draw.circle(screen, colours['engineLitColor'] if burning else colours['engineColor'],
+                           (round(engine[0]), round(engine[1])), max(2, round(c.radius * 0.22)))
+        # During the stage 5 transition only, the old pilot still owns the particles.
+        plume = getattr(c, 'craft', c)
+        if hasattr(plume, 'thrust_particles'):
+            draw_thrust_plume(plume, screen, config.THRUST_PLUME_LENGTH * 0.6 if burning else 0)
         if self._shows_hit_points:
-            self._draw_hit_points(screen, creature)
+            self._draw_hit_points(screen, c)
 
-    def draw_death(self, screen: pygame.Surface, creature) -> None:
-        puppet = self._place(creature)
-        puppet.active, puppet.death_timer = False, creature.death_timer
-        puppet.draw_death(screen)
-        puppet.active = True
+    def draw_death(self, screen, c):
+        progress = c.death_progress
+        radius = round(c.radius * (1.5 + 4 * progress))
+        pygame.draw.circle(screen, self.colours['color'], (round(c.x), round(c.y)), radius,
+                           max(1, round(3 * (1 - progress))))
 
-    def _draw_hit_points(self, screen, creature):
-        """A bar above it, as wide as the ship is big, that drains as it is hit."""
-        bar = pygame.Rect(0, 0, round(self.BAR_WIDTH * creature.radius / config.SHIP_SIZE), self.BAR_HEIGHT)
-        bar.midbottom = (round(creature.x), round(creature.y - creature.radius * 2.2))
+    def _draw_hit_points(self, screen, c):
+        bar = pygame.Rect(0, 0, round(self.BAR_WIDTH * c.radius / config.SHIP_SIZE), self.BAR_HEIGHT)
+        bar.midbottom = (round(c.x), round(c.y - c.radius * 2.2))
         pygame.draw.rect(screen, (60, 20, 20), bar)
         fill = bar.copy()
-        fill.width = round(bar.width * max(0, creature.hit_points) / creature.max_hit_points)
+        fill.width = round(bar.width * max(0, c.hit_points) / c.max_hit_points)
         if fill.width:
-            pygame.draw.rect(screen, self._puppet.COLOR, fill)
+            pygame.draw.rect(screen, self.colours['color'], fill)
         pygame.draw.rect(screen, (150, 70, 70), bar, 1)

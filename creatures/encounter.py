@@ -54,12 +54,8 @@ class Encounter:
         for creature in creatures:
             if not creature.active:
                 continue
-            for trait in creature.traits:
-                trait.on_frame(creature, self, dt)
-                if not creature.active:
-                    break
-            else:
-                creature.body.update(creature, dt, self.target_for(creature))
+            self.step_creature(creature, dt)
+            if creature.active:
                 for trait in creature.traits:
                     if trait.CROWD:
                         crowds.setdefault((trait.NAME, trait.crowd(creature)), (trait, []))[1].append(creature)
@@ -67,6 +63,26 @@ class Encounter:
             live = [creature for creature in members if creature.active]
             if live:
                 trait.on_crowd(live, self, dt)
+
+    def step_creature(self, creature, dt):
+        """Run one creature once; its gun fires before late propulsion moves it."""
+        self._spawn(creature)
+        if not creature.active:
+            return
+        for trait in creature.traits:
+            trait.on_frame(creature, self, dt)
+            if not creature.active:
+                return
+        for trait in creature.after_frame_traits:
+            trait.on_after_frame(creature, self, dt)
+            if not creature.active:
+                return
+        creature.body.update(creature, dt, self.target_for(creature))
+
+    def close_creature(self, creature):
+        """Release one creature's traits, even if it has died."""
+        for trait in creature.traits:
+            trait.on_close(creature, self)
 
     def ready(self) -> None:
         """Set up every creature on the roster that is not yet (its spawn hooks), without a frame passing."""
@@ -76,8 +92,7 @@ class Encounter:
     def close(self) -> None:
         """The encounter is over: every creature's traits let go of what they hold. Safe to call again."""
         for creature in self.creatures():
-            for trait in creature.traits:
-                trait.on_close(creature, self)
+            self.close_creature(creature)
 
     def _spawn(self, creature) -> None:
         """Run a newcomer's spawn hooks, once."""

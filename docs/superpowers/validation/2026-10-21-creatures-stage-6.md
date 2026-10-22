@@ -54,3 +54,22 @@ was corrected before the fixture was captured.
   imposing that requirement on existing reload guns.
 - The fire cooldown calculation is shared through `cooldown_for_upgrade(level)`; player ship callers retain
   `calculate_fire_cooldown(ship)` and the same formula and thresholds.
+
+## Task 3 — direct steering, energy and standalone drawing
+
+Integrated newer user edits as `71e1084` before the migration; all 86 focused user-change tests passed, including
+the previously red hit-point sensing test. The frozen contract retains its original feature prefix; new hit-point
+features were appended by the user and are preserved.
+
+Direct Creature flight matches all 6048 frozen motion/timer states, shot records and original observation fields.
+Headless drawing matches on 16 heading/thrust/immunity combinations and three death frames. Energy and propulsion
+regressions cover immunity, fractional wall loss, strongest-knock clearing, held/replaced burn decisions and
+steering before firing before integration.
+
+Full suite in a frozen Task 3 source checkout: **2342 passed in 258.46 seconds**. An earlier live-tree run had
+2341 passes and a parallel-worker import failure because Task 4 was being edited during subprocess startup;
+that run is superseded by the immutable-source verification. Subsequent full suites use stable sources.
+
+Ruling: rendering of the shared plume was extracted without changing player behavior; the standalone hunter
+Body advances its own particles at the integration event before the wall sweep, preserving old RNG order.
+Ruling: wall loss remains independent of bullet immunity; enemy pilot bullets continue through TakesHits.

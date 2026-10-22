@@ -26,6 +26,13 @@ class Controls:
     aim: Optional[Tuple[float, float]] = None  # where it wants to shoot
     on_target: bool = False
     gun_enabled: bool = True
+    track: bool = False
+    course: bool = False
+    burn_heading: Optional[float] = None
+    burn_frames: Optional[float] = None
+    burn_reference: Optional[int] = None
+    decision_token: object = None
+    lead_degrees: Optional[float] = None
 
 
 class Creature(GameEntity):
@@ -39,6 +46,8 @@ class Creature(GameEntity):
         self.recorder = recorder
         self.body = body
         self.traits = tuple(traits)
+        from creatures.trait import Trait
+        self.after_frame_traits = tuple(t for t in self.traits if type(t).on_after_frame is not Trait.on_after_frame)
         self.controls = Controls()
         self.angle = random.uniform(0, 360)
         self.speed = 0.0

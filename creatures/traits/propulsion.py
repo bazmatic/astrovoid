@@ -81,14 +81,27 @@ class Thrusters(Trait):
     NAME = 'thrusters'
 
     def __init__(self, speedShare: float, thrust: float = config.SHIP_THRUST_FORCE,
-                 turnRate: float = config.SHIP_ROTATION_SPEED, friction: float = config.SHIP_FRICTION):
+                 turnRate: float = config.SHIP_ROTATION_SPEED, friction: float = config.SHIP_FRICTION,
+                 mode: str = 'standard'):
+        if mode not in ('standard', 'hunter'):
+            raise ValueError('thrusters: unknown mode')
+        self.mode = mode
         self.max_speed = speedShare * config.SHIP_MAX_SPEED
         self.force, self.turn_rate, self.friction = thrust, turnRate, friction
 
     def on_spawn(self, c, enc):
         c.prev_x, c.prev_y = c.x, c.y
+        c.max_speed, c.thrust_force, c.current_rotation_speed = self.max_speed, self.force, self.turn_rate
+        c.pilot_thrusting = False
+        c.thrust_frames = 0
+        c._decision = c._burn_left = None
+        c.thrust_particles = []
+        c.thrusting = False
 
     def on_frame(self, c, enc, dt):
+        if self.mode == 'hunter':
+            self._steer(c, enc, dt)
+            return
         controls = c.controls
         if controls.heading is not None:
             thrust.turn_toward(c, controls.heading, self.turn_rate)
@@ -102,3 +115,48 @@ class Thrusters(Trait):
         maze = enc.maze
         if maze is not None and thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
             c.emit('hit_wall', enc)
+
+    def _steer(self, c, enc, dt):
+        action = c.controls
+        if action.track:
+            if action.lead_degrees is not None:
+                c.angle = (c.angle + max(-self.turn_rate, min(self.turn_rate, action.lead_degrees))) % 360
+        elif action.course:
+            if action.burn_heading is not None:
+                swing = (action.burn_heading - c.angle + 180) % 360 - 180
+                c.angle = (c.angle + max(-self.turn_rate, min(self.turn_rate, swing))) % 360
+        elif action.turn:
+            c.angle = (c.angle + (1 if action.turn > 0 else -1) * self.turn_rate) % 360
+        if action.decision_token is not c._decision:
+            c._decision = action.decision_token
+            c._burn_left = None
+            if action.burn_frames is not None:
+                used = 0 if action.burn_reference is None else c.thrust_frames - action.burn_reference
+                c._burn_left = max(0.0, action.burn_frames - used)
+        burning = action.thrust
+        if burning and action.burn_heading is not None:
+            swing = (action.burn_heading - c.angle + 180) % 360 - 180
+            burning = abs(swing) <= (5.0 if action.course else 20.0)
+        if burning and c._burn_left is not None:
+            burning = c._burn_left > 0
+            if burning:
+                c._burn_left -= dt
+        c.pilot_thrusting = burning
+        if burning:
+            thrust.apply_thrust(c, self.force, self.max_speed)
+            c.thrust_frames += 1
+            c.emit('thrust', enc)
+
+    def on_after_frame(self, c, enc, dt):
+        if self.mode != 'hunter':
+            return
+        thrust.coast(c, dt, self.friction)
+        c.integration_dt = dt
+        c.emit('integrated', enc)
+        thrust.cap_speed(c, self.max_speed)
+        maze = enc.maze
+        if maze is not None:
+            vx, vy = c.vx, c.vy
+            if thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
+                c.wall_impulse = (c.vx - vx, c.vy - vy)
+                c.emit('hit_wall', enc)
