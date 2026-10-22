@@ -20,6 +20,9 @@ class Trait:
         except TypeError as error:
             raise ValueError(f'trait {cls.NAME!r}: bad parameters {dict(params)}: {error}') from None
 
+    def validate_peers(self, params: Mapping) -> None:
+        """Reject incompatible parameters of other traits in this catalogue entry."""
+
     def on_spawn(self, c, enc) -> None:
         """Once, when the creature joins the encounter: set up its state."""
 

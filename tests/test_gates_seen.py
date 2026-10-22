@@ -5,7 +5,7 @@ import numpy as np
 
 from creatures.traits.rooted import wall_between
 import creatures
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.fire_control import find_firing_solution
 from hunter.model import NEUTRAL, HunterSettings
 from hunter.perception import HunterPerception
@@ -32,7 +32,7 @@ def world(gates):
 
 
 def hunter():
-    ship = HunterShip((100, 500))
+    ship = HunterRig((100, 500))
     ship.angle = 0.0
     return ship
 

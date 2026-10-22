@@ -27,7 +27,7 @@ def draw_duel(screen, arena):
         hunter = side.hunter
         if hunter.active:
             hunter.draw(screen)
-        colour = hunter.COLOR
+        colour = hunter.body.colours['color']
         tag = tag_font.render(TAGS.get(side.name, side.name.upper()), True, colour)
         screen.blit(tag, tag.get_rect(center=(int(hunter.x), int(hunter.y - hunter.radius * 3.2))))
         for pip in range(max(hunter.settings.health, 0)):

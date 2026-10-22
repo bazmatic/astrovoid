@@ -20,7 +20,7 @@ from unittest.mock import Mock
 from entities.command_recorder import CommandRecorder
 import creatures
 from entities.ship import Ship
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 
 
 def test_a_creature_aims_at_the_nearest_hunter():
@@ -28,7 +28,7 @@ def test_a_creature_aims_at_the_nearest_hunter():
     crab = creatures.build('patrol', (300, 300), 1)
     player = Ship((900, 800))
     player.shield_active = True
-    hunter = HunterShip((320, 300))
+    hunter = HunterRig((320, 300))
     enc = encounter(crab, world_=world(ship=player, hunter=hunter))
     enc.step(1.0)
     assert enc.target_for(crab) == hunter.get_pos()
@@ -41,7 +41,7 @@ def test_a_creature_targets_the_nearest_hunter(kind):
     creature = creatures.build(kind, (300, 300), 1, CommandRecorder())
     player = Ship((900, 800))
     player.shield_active = True
-    hunter = HunterShip((320, 300))
+    hunter = HunterRig((320, 300))
     assert encounter(creature, world_=world(ship=player, hunter=hunter)).target_for(creature) == hunter.get_pos()
 
 
@@ -51,7 +51,7 @@ def test_a_flocker_aims_at_the_nearest_hunter():
     flocker.angle = 0.0
     player = Ship((900, 800))
     player.shield_active = True
-    hunter = HunterShip((320, 300))
+    hunter = HunterRig((320, 300))
     enc = encounter(flocker, world_=world(ship=player, hunter=hunter))
     enc.step(1.0)
     flocker.gun_cooldown = 0.0

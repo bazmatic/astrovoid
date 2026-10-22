@@ -1,3 +1,4 @@
+from tests.creature_parts import fire_round
 """The Viber: a Creature whose neural pilot flies a hunter ship that hunts only the player."""
 import copy
 import logging
@@ -8,7 +9,7 @@ import pytest
 import creatures
 import enemy_kinds
 import level_config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.projectile import Projectile
 from hunter.neural.policy import random_policy
 from tests.creature_parts import encounter, pilot_world
@@ -33,7 +34,7 @@ def test_it_is_an_enemy_type_a_level_can_place():
 
 
 def test_it_is_magenta_not_the_rules_red_or_the_allied_green():
-    assert MAGENTA not in (tuple(enemy_kinds.kind('rules_hunter').tuning['color']), HunterShip.COLOR)
+    assert MAGENTA not in (tuple(enemy_kinds.kind('rules_hunter').tuning['color']), HunterRig.COLOR)
     red, green, blue = MAGENTA
     assert red > 200 and blue > 200 and green < 120
 
@@ -47,8 +48,8 @@ def test_it_flies_on_the_neural_pilot_and_its_shots_join_the_level():
 
 
 def test_its_shots_are_enemy_shots():
-    hunter, _ = make()
-    assert all(s.is_enemy and s.source == 'enemy' and s.dynamic_color == MAGENTA for s in hunter.craft._shots())
+    hunter, enc = make()
+    assert all(s.is_enemy and s.source == 'enemy' and s.dynamic_color == MAGENTA for s in fire_round(hunter, enc))
 
 
 def test_twelve_hits_destroy_it():

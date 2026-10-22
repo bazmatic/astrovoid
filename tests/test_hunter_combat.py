@@ -24,10 +24,10 @@ def test_hunter_kill_does_not_award_player_points():
 
 
 def test_hostile_bullets_consumed_even_during_immunity_and_no_friendly_fire():
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     scoring = Mock()
     handler = CollisionHandler(Mock(),scoring,Mock())
-    hunter = HunterShip((200,200), HunterSettings(indestructible=False))
+    hunter = HunterRig((200,200), HunterSettings(indestructible=False))
     for source in ('player','hunter'):
         assert not handler.handle_projectile_hunter_collision(Projectile((200,200),0,source=source),hunter)
     for _ in range(2):
@@ -56,9 +56,9 @@ def test_hunter_boss_kill_still_spawns_children():
 
 
 def test_friendly_contact_bounces_without_damage_and_hostile_contact_hurts():
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from entities.ship import Ship
-    hunter = HunterShip((300,300), HunterSettings(indestructible=False))
+    hunter = HunterRig((300,300), HunterSettings(indestructible=False))
     player = Ship((301,300))
     handler = CollisionHandler(Mock(),Mock(),Mock())
     handler.handle_hunter_contacts(hunter,player,[])

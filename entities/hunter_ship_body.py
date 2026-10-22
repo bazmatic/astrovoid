@@ -5,8 +5,11 @@ import pygame
 import config
 from rendering.thrust_plume import advance_thrust_particles, draw_thrust_plume
 
-_COLOURS = {'color': (120, 255, 90), 'fill': (25, 110, 40), 'noseColor': (215, 255, 200),
+DEFAULT_COLOURS = {'color': (120, 255, 90), 'fill': (25, 110, 40), 'noseColor': (215, 255, 200),
             'cockpitColor': (15, 60, 30), 'engineColor': (170, 95, 20), 'engineLitColor': (255, 200, 80)}
+
+
+HULL_POINTS = ((1.4, 0), (-0.9, 0.85), (-0.35, 0), (-0.9, -0.85))
 
 
 class HunterShipBody:
@@ -17,7 +20,7 @@ class HunterShipBody:
     def __init__(self, creature):
         creature.thrust_particles = []
         creature.thrusting = False
-        self.colours = {key: tuple(creature.kind.tuning.get(key, value)) for key, value in _COLOURS.items()}
+        self.colours = {key: tuple(creature.kind.tuning.get(key, value)) for key, value in DEFAULT_COLOURS.items()}
         self._shows_hit_points = creature.kind.tuning.get('showsHitPoints', False)
 
     def on_event(self, creature, name):
@@ -37,7 +40,7 @@ class HunterShipBody:
         return c.x + (x * cs - y * sn) * c.radius, c.y + (x * sn + y * cs) * c.radius
 
     def outline(self, c):
-        return [self._place(c, x, y) for x, y in ((1.4, 0), (-0.9, 0.85), (-0.35, 0), (-0.9, -0.85))]
+        return [self._place(c, x, y) for x, y in HULL_POINTS]
 
     def _nose_section(self, c, back_x):
         half_width = 0.85 * (1.4 - back_x) / 2.3
@@ -60,10 +63,7 @@ class HunterShipBody:
         burning = getattr(c, 'pilot_thrusting', False)
         pygame.draw.circle(screen, colours['engineLitColor'] if burning else colours['engineColor'],
                            (round(engine[0]), round(engine[1])), max(2, round(c.radius * 0.22)))
-        # During the stage 5 transition only, the old pilot still owns the particles.
-        plume = getattr(c, 'craft', c)
-        if hasattr(plume, 'thrust_particles'):
-            draw_thrust_plume(plume, screen, config.THRUST_PLUME_LENGTH * 0.6 if burning else 0)
+        draw_thrust_plume(c, screen, config.THRUST_PLUME_LENGTH * 0.6 if burning else 0)
         if self._shows_hit_points:
             self._draw_hit_points(screen, c)
 

@@ -80,11 +80,11 @@ assert Game is not None
 
 
 def test_request_includes_observation_history_and_units_for_every_question():
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from hunter.perception import HunterPerception
     from hunter.model import NEUTRAL
     from tests.test_hunter_perception import maze
-    ship,perception = HunterShip((150,150)),HunterPerception()
+    ship,perception = HunterRig((150,150)),HunterPerception()
     for now in range(4):
         observation = perception.observe(ship,maze(),None,[],[],NEUTRAL,now,1)
     class Client:

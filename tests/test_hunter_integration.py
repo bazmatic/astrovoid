@@ -44,3 +44,15 @@ def game(monkeypatch, tmp_path):
     pygame.quit()
 
 
+
+
+def test_summoning_builds_a_friend_creature_outside_the_enemy_roster(game):
+    from creatures.creature import Creature
+    import enemy_kinds
+    game.start_level()
+    game._summon_hunter(game.ship.get_pos())
+    assert isinstance(game.hunter, Creature)
+    assert game.hunter.allegiance == 'friend'
+    assert game.hunter not in game.roster.all()
+    assert 'allied_hunter' not in enemy_kinds.kinds()
+    assert not hasattr(game.hunter, 'craft')

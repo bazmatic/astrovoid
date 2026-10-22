@@ -5,7 +5,13 @@ from dataclasses import dataclass, replace
 from typing import Optional
 
 import config
-from entities.hunter_ship import HunterShip
+import creatures
+from creatures.creature import Creature
+from hunter.build import PilotSetup
+from creatures.encounter import Encounter
+from game_handlers.enemy_roster import EnemyRoster
+from creatures.traits.energy import damage
+from types import SimpleNamespace
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.settings_for import hunter_settings_for
 from hunter.spawn import resolve_hunter_spawn
@@ -26,7 +32,7 @@ class DuelResult:
 @dataclass
 class Combatant:
     name: str
-    hunter: HunterShip
+    hunter: Creature
     pilot: object                # a WorkerPilot or NeuralPilot (see hunter.flight)
     flight: HunterFlight = None  # built by the arena
 
@@ -72,7 +78,15 @@ class DuelArena:
         self.result = None
         self.shots = {side.name: [] for side in self.sides}
         for side in self.sides:
-            side.flight = HunterFlight(side.hunter, side.pilot, DuelSurroundings(self, side))
+            setup = PilotSetup(side.hunter.settings, side.pilot, DuelSurroundings(self, side))
+            side.hunter.pilot_setup = setup
+            world = SimpleNamespace(ship=None, hunter=None, maze=self.maze, scoring=None,
+                                    command_recorder=None, projectiles=self.shots[side.name])
+            roster = EnemyRoster()
+            roster.add(side.hunter)
+            enc = Encounter(roster, world)
+            enc.ready()
+            side.flight = side.hunter.flight
 
     def _other(self, side):
         return self.sides[1] if side is self.sides[0] else self.sides[0]
@@ -93,10 +107,11 @@ class DuelArena:
         self._judge()
 
     def _fly(self, side, dt):
-        shots = side.flight.fly(dt)
-        for shot in shots:
+        self.shots[side.name] = side.flight.encounter.world.projectiles
+        before = len(self.shots[side.name])
+        side.flight.step(dt)
+        for shot in self.shots[side.name][before:]:
             shot.is_enemy = True                     # the pilots read a bullet's allegiance from this flag
-        self.shots[side.name].extend(shots)
 
     def _move_shots(self, dt):
         for side in self.sides:
@@ -110,10 +125,10 @@ class DuelArena:
                     shot.active = False
                 if shot.active and victim.active and shot.check_circle_collision(victim.get_pos(), victim.radius):
                     shot.active = False
-                    victim.take_damage()
+                    damage(victim, victim.encounter)
                 if shot.active:
                     alive.append(shot)
-            self.shots[side.name] = alive
+            self.shots[side.name][:] = alive
         if self.enemies is not None:
             self.enemies.move_bullets(dt, [side.hunter for side in self.sides])
 
@@ -172,9 +187,12 @@ def build_duel(maze, player, rules_worker, policy, health, timeout_seconds, deci
     vibes_settings = replace(hunter_settings_for('neural'), indestructible=False, health=health, wall_energy=0.0)
     sight = min(rules_settings.sensor_range(maze), vibes_settings.sensor_range(maze))
     rules_at, vibes_at = duel_spawns(maze, player, sight)
-    rules, vibes = HunterShip(rules_at, rules_settings), HunterShip(vibes_at, vibes_settings)
+    rules = creatures.build('allied_hunter', rules_at, pilot_setup=PilotSetup(rules_settings, None, None), angle=0)
+    vibes = creatures.build('allied_hunter', vibes_at, pilot_setup=PilotSetup(vibes_settings, None, None), angle=0)
     for name, value in VIBES_COLORS.items():
-        setattr(vibes, name, value)                  # on this ship only: the class, and normal hunters, keep their look
+        key = {'COLOR':'color', 'FILL':'fill', 'NOSE_COLOR':'noseColor', 'COCKPIT_COLOR':'cockpitColor',
+               'ENGINE_COLOR':'engineColor', 'ENGINE_LIT_COLOR':'engineLitColor'}[name]
+        vibes.body.colours[key] = value
     rules.angle = get_angle_to_point(rules_at, vibes_at)
     vibes.angle = get_angle_to_point(vibes_at, rules_at)
     return DuelArena(maze, [

@@ -1,3 +1,4 @@
+from tests.creature_parts import fire_round
 """The Boss Viber and the Vibelet: Vibers at double and half size, and what an enemy bullet costs."""
 from unittest.mock import Mock
 
@@ -24,7 +25,7 @@ def make(kind):
 
 
 def strength(kind):
-    return dict(enemy_kinds.kind(kind).traits)['pilot'].get('shotStrength', 1.0)
+    return dict(enemy_kinds.kind(kind).traits)['gun'].get('shotStrength', 1.0)
 
 
 def shoot(viber, enc, times):
@@ -73,15 +74,15 @@ def test_a_vibelet_bullet_is_almost_harmless():
 def test_the_boss_viber_is_double_size_and_takes_double_the_hits():
     (boss, enc), (viber, _) = make('boss_viber'), make('neural_hunter')
     assert boss.radius == 2 * viber.radius
-    assert all(s.strength == 1.0 for s in boss.craft._shots())
+    assert all(s.strength == 1.0 for s in fire_round(boss, enc))
     assert shoot(boss, enc, 24) == [True] * 23 + [False]
 
 
 def test_the_vibelet_is_half_size_dies_to_one_hit_and_its_bullets_are_a_tenth_as_strong():
     (vibelet, enc), (viber, _) = make('vibelet'), make('neural_hunter')
     assert vibelet.radius == viber.radius / 2
-    assert all(s.strength == 0.1 and s.is_enemy for s in vibelet.craft._shots())
-    assert all(s.strength == 1.0 for s in viber.craft._shots())
+    assert all(s.strength == 0.1 and s.is_enemy for s in fire_round(vibelet, enc))
+    assert all(s.strength == 1.0 for s in fire_round(viber, _))
     assert shoot(vibelet, enc, 1) == [False]
 
 

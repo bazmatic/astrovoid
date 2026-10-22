@@ -259,6 +259,10 @@
     "body": "hunterShip",
     "traits": {
       "pilot": {"mode": "rules"},
+      "energy": {},
+      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "burstFire": {},
+      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
       "ramsShip": {},
       "takesHits": {"hitPoints": 12}
     }
@@ -284,6 +288,10 @@
     "body": "hunterShip",
     "traits": {
       "pilot": {"mode": "neural"},
+      "energy": {},
+      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "burstFire": {},
+      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
       "ramsShip": {},
       "takesHits": {"hitPoints": 12}
     }
@@ -309,6 +317,10 @@
     "body": "hunterShip",
     "traits": {
       "pilot": {"mode": "neural"},
+      "energy": {},
+      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "burstFire": {},
+      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
       "ramsShip": {},
       "takesHits": {"hitPoints": 24}
     }
@@ -333,7 +345,11 @@
     "allegiance": "enemy",
     "body": "hunterShip",
     "traits": {
-      "pilot": {"mode": "neural", "shotStrength": 0.1},
+      "pilot": {"mode": "neural"},
+      "energy": {},
+      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "burstFire": {},
+      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 0.1},
       "ramsShip": {},
       "takesHits": {"hitPoints": 1}
     }
@@ -380,6 +396,69 @@
       "dropsPickup": {},
       "explodes": {"reach": 7.0, "damage": 3, "push": 7.0, "wallHits": 1, "fuse": 8.0, "color": [240, 120, 60]},
       "keepsApart": {"crowd": "chasers"}
+    }
+  },
+  "allied_hunter": {
+    "name": [
+      "Hunter",
+      "Hunters"
+    ],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "layer": 7,
+    "tuning": {
+      "size": 8,
+      "color": [
+        120,
+        255,
+        90
+      ],
+      "fill": [
+        25,
+        110,
+        40
+      ],
+      "noseColor": [
+        215,
+        255,
+        200
+      ],
+      "cockpitColor": [
+        15,
+        60,
+        30
+      ],
+      "engineColor": [
+        170,
+        95,
+        20
+      ],
+      "engineLitColor": [
+        255,
+        200,
+        80
+      ],
+      "showsHitPoints": false
+    },
+    "allegiance": "friend",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {
+        "mode": "jev"
+      },
+      "energy": {},
+      "thrusters": {
+        "speedShare": 1,
+        "mode": "hunter"
+      },
+      "burstFire": {},
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true
+      }
     }
   }
 }

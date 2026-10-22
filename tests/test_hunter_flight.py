@@ -1,3 +1,4 @@
+from tests.hunter_fixture import FlightRig as HunterFlight
 import json
 from dataclasses import replace
 
@@ -6,8 +7,8 @@ import pygame
 import pytest
 
 import creatures
-from entities.hunter_ship import HunterShip
-from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
+from tests.hunter_fixture import HunterRig
+from hunter.flight import NeuralPilot, WorkerPilot
 from hunter.model import ACTIONS, HunterSettings, PilotDecision, PilotResult
 from hunter.neural.policy import random_policy
 from hunter.senses import SENSE_SIZE
@@ -51,7 +52,7 @@ def cell(maze, col, row):
 def rules_flight(maze, enemies=(), settings=HunterSettings()):
     now = [10.0]
     worker = Worker()
-    flight = HunterFlight(HunterShip(cell(maze, 2, 3), settings), WorkerPilot(worker, lambda: now[0]),
+    flight = HunterFlight(HunterRig(cell(maze, 2, 3), settings), WorkerPilot(worker, lambda: now[0]),
                           Surroundings(maze, enemies))
     return flight, worker, now
 
@@ -116,7 +117,7 @@ def test_the_pilot_sees_as_far_as_the_flights_settings_allow(maze):
 
 
 def test_listeners_hear_every_senses_the_neural_pilot_is_shown_until_the_flight_closes(maze):
-    flight = HunterFlight(HunterShip(cell(maze, 2, 3)), NeuralPilot(random_policy(1), decision_frames=3),
+    flight = HunterFlight(HunterRig(cell(maze, 2, 3)), NeuralPilot(random_policy(1), decision_frames=3),
                           Surroundings(maze, [creatures.build('static', cell(maze, 4, 3))]))
     heard = []
     flight.on_observed(heard.append)
@@ -148,7 +149,7 @@ def sealed_neural_flight(maze, angle):
     for col, row in ((1, 3), (3, 3), (2, 2), (2, 4)):
         maze.grid[row][col] = 1
     maze.rebuild_walls()
-    ship = HunterShip(cell(maze, 2, 3))
+    ship = HunterRig(cell(maze, 2, 3))
     ship.angle, ship.fire_remaining = angle, 0.0
     flight = HunterFlight(ship, NeuralPilot(random_policy(1), decision_frames=1),
                           Surroundings(maze, [creatures.build('static', cell(maze, 5, 3))]))
@@ -167,7 +168,7 @@ def test_with_no_enemy_in_sight_the_neural_hunter_fires_along_its_nose(maze):
 
 def test_the_neural_hunter_fires_when_it_pulls_the_trigger_even_off_target(maze):
     from hunter.model import PilotAction
-    ship = HunterShip(cell(maze, 2, 3))
+    ship = HunterRig(cell(maze, 2, 3))
     ship.angle, ship.fire_remaining = 90.0, 0.0              # nose south, the enemy due east in plain sight and reach
     flight = HunterFlight(ship, NeuralPilot(random_policy(1), decision_frames=1),
                           Surroundings(maze, [creatures.build('static', cell(maze, 4, 3))]))

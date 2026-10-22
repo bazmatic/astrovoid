@@ -4,7 +4,7 @@ import math
 
 import pytest
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.ship import Ship
 from hunter.course import course_correction
 from hunter.jev_pilot import PILOT_QUESTIONS
@@ -134,7 +134,7 @@ def test_rule_following_pilot_circles_a_block_keeping_it_on_the_left(monkeypatch
     world.walls = [WallSegment((1000, 1000), (1200, 1000), 3), WallSegment((1200, 1000), (1200, 1200), 3),
                    WallSegment((1200, 1200), (1000, 1200), 3), WallSegment((1000, 1200), (1000, 1000), 3)]
     centre = (1100.0, 1100.0)
-    ship = HunterShip((1100.0, 955.0))
+    ship = HunterRig((1100.0, 955.0))
     ship.angle = 200.0
     track = {'swept': 0.0, 'last': None, 'gaps': []}
 
@@ -161,7 +161,7 @@ def test_rule_following_pilot_explores_a_sealed_room_without_crashing(monkeypatc
     world.walls = [WallSegment((1000, 1000), (1300, 1000), 3), WallSegment((1300, 1000), (1300, 1300), 3),
                    WallSegment((1300, 1300), (1000, 1300), 3), WallSegment((1000, 1300), (1000, 1000), 3)]
     centre = (1150.0, 1150.0)
-    ship = HunterShip((1150.0, 1150.0))
+    ship = HunterRig((1150.0, 1150.0))
     ship.angle = 30.0
     track = {'swept': 0.0, 'last': None, 'gaps': []}
 
@@ -194,7 +194,7 @@ def sealed_room():
 
 
 def test_wall_follow_is_offered_only_when_cut_off_from_the_player():
-    ship, player = HunterShip((150, 150)), Ship((450, 150))
+    ship, player = HunterRig((150, 150)), Ship((450, 150))
     open_world = reading(ship, maze(), player)
     assert open_world['wall_follow'] is None
     assert open_world['follow_player'] is not None
@@ -205,11 +205,11 @@ def test_wall_follow_is_offered_only_when_cut_off_from_the_player():
 
 
 def test_wall_follow_is_offered_when_there_is_no_player():
-    assert reading(HunterShip((150, 150)), sealed_room(), None)['wall_follow'] is not None
+    assert reading(HunterRig((150, 150)), sealed_room(), None)['wall_follow'] is not None
 
 
 def test_wall_follow_reading_has_a_course_and_a_bearing():
-    ship = HunterShip((150, 170))
+    ship = HunterRig((150, 170))
     ship.angle = 0.0
     follow = reading(ship, sealed_room(), Ship((450, 150)))['wall_follow']
     # Nearest wall is the bottom one, so it goes on the left: head west, behind the nose
@@ -218,7 +218,7 @@ def test_wall_follow_reading_has_a_course_and_a_bearing():
     course = follow['course']
     assert course['burn_needed']
     assert 0 < course['speed_after_metres_per_second'] <= course['speed_limit_metres_per_second']
-    assert set(course) == set(reading(HunterShip((150, 150)), maze(), Ship((450, 150)))['follow_player']['course'])
+    assert set(course) == set(reading(HunterRig((150, 150)), maze(), Ship((450, 150)))['follow_player']['course'])
 
 
 def test_pilot_rules_cover_wall_following():

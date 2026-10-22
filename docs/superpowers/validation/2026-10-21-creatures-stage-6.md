@@ -73,3 +73,114 @@ that run is superseded by the immutable-source verification. Subsequent full sui
 Ruling: rendering of the shared plume was extracted without changing player behavior; the standalone hunter
 Body advances its own particles at the integration event before the wall sweep, preserving old RNG order.
 Ruling: wall loss remains independent of bullet immunity; enemy pilot bullets continue through TakesHits.
+
+## Tasks 4–7 — pilot, ally, duel, lab and old-class removal
+
+Every enemy and the allied hunter now uses Creature traits. Pilot decides controls; Thrusters steers and integrates;
+BurstFire schedules rounds; Gun emits volleys and manages upgrades; Energy handles immunity, wall loss and knocks.
+HunterFlight owns pilot lifetime and observations, and steps one Creature through its Encounter. Game's ally stays
+outside its enemy roster. Duel sides route shots explicitly to their opponent. No production HunterShip class,
+private craft or fly-return-shots path remains; the beacon shares the Body's geometry and colours.
+
+The pilot/ally/duel/lab caller migration was integrated atomically, because changing the shared flight interface
+otherwise leaves callers using a removed simulation path. Task 3 was committed separately as `ebea7e9`.
+
+### Correctness and review
+
+The frozen migrated suite passed **2350 tests** before the final listener-edge regression was added. A final
+frozen full-suite run includes that additional regression; its result is appended below when complete.
+The frozen 6048 motion/timer frames, shot records and original observation prefix still match. Nineteen headless
+pixel cases now compare against hashes captured from the old renderer before its deletion.
+
+The whole-stage review found and resolved:
+
+- Energy with standard Thrusters or BouncesOffWalls lacked wall_impulse. Both now provide actual impulses;
+  Energy has a player-speed normalization fallback for propulsion without a maximum-speed field.
+- Contacts formerly inferred a net velocity change, which lost opposing/combined knocks. Circle collision physics
+  now emits individual contact impulses; Energy preserves the strongest and updates the velocity checkpoint.
+- BurstFire with a default reload gun could silently be ignored. Trait peer validation rejects that pairing.
+
+All three were reproduced by failing tests before their fixes. The reviewer independently reran Energy/BurstFire:
+29 passed, with no remaining concrete concerns. A further regression demonstrated that wall death cleared the
+controller's decision before the final-frame callback. The callback now reads the Creature's held decision token;
+35 focused flight/lab tests passed afterward. This callback-only correction does not execute in the timed scenarios,
+which attach no frame listeners. The final full suite verifies it.
+
+### Headless smoke checks
+
+All 40 seeded levels were started, updated for 60 frames and drawn. Rules and neural allies were summoned,
+paused/resumed, destroyed through Energy and closed. The duel ran 120 frames without enemies and 120 with enemies,
+then drew and closed. This is headless smoke coverage, not a claim that a human played through all exits.
+Five-second rules and greedy-neural lab episodes also ran in every timing round; their complete result records
+matched the baseline in all rounds. Duel elapsed/results matched too.
+
+The real-display check remains skipped at the user's explicit request; headless pixel checks do not replace it.
+
+### CPU speed gate (2026-10-22)
+
+Baseline: integrated user commit `71e1084`. Candidate: the verified frozen stage 6 source set, excluding the newer
+concurrent menu/settings/sound work and policy-weight edits. Two source trees alternating for five rounds,
+seed 1, 60 warm-up and 600 measured frames, 1352×878 dummy display/audio, time.process_time. Synchronous rules
+workers and a fake decision clock are used on both sides. Frame scenarios cover levels 1/8/21/24/25/40 with no
+ally and with a rules ally; duel and rules/neural lab throughput add neural-path coverage.
+
+Frame and duel values are ms/frame; lab values are ms for the five-second episode. Medians of five:
+
+| Scenario | Baseline ms | Stage 6 ms | Change |
+|---|---:|---:|---:|
+| duel rules-neural | 1.149 | 0.943 | -18.0% |
+| frame none/1 | 4.022 | 4.122 | +2.5% |
+| frame none/21 | 8.014 | 8.689 | +8.4% |
+| frame none/24 | 2.202 | 2.494 | +13.3% |
+| frame none/25 | 2.249 | 2.514 | +11.8% |
+| frame none/40 | 12.481 | 12.113 | -3.0% |
+| frame none/8 | 6.138 | 6.074 | -1.0% |
+| frame rules/1 | 4.137 | 4.458 | +7.8% |
+| frame rules/21 | 9.181 | 9.956 | +8.4% |
+| frame rules/24 | 3.650 | 3.262 | -10.6% |
+| frame rules/25 | 2.480 | 2.398 | -3.3% |
+| frame rules/40 | 12.639 | 12.033 | -4.8% |
+| frame rules/8 | 6.115 | 6.715 | +9.8% |
+| lab neural | 644.855 | 615.011 | -4.6% |
+| lab rules | 778.029 | 713.621 | -8.3% |
+
+**Passed:** every scenario is within the 20% limit. Frame changes range from −10.6% to +13.3%; duel −18.0%;
+rules lab −8.3%, neural lab −4.6%. Raw samples include run-to-run variation and outcome metadata:
+[2026-10-22-stage6-gate.csv](2026-10-22-stage6-gate.csv).
+Reproduction script: [2026-10-22-stage6-gate.py](2026-10-22-stage6-gate.py), invoked with a source-tree root and
+round number. Each source tree needs the project's venv, installed dependencies and committed assets.
+
+### Replaced tests
+
+- `tests/test_pilot_trait.py::test_the_creature_follows_the_craft`: replaced by
+  `test_the_pilot_flies_the_creature_without_a_craft`; the second moving object no longer exists.
+- `tests/test_pilot_trait.py::test_a_push_moves_the_craft_and_the_pilot_feels_it`: renamed to
+  `test_a_push_moves_the_creature_and_the_pilot_feels_it`, retaining push/sensing coverage on the actual Creature.
+- `tests/test_experiment_shadow.py::test_a_trial_is_not_counted_by_a_recorder_wrapping_the_ships_step`: replaced by
+  `test_a_trial_is_not_counted_by_the_flights_frame_listener`; trials no longer monkeypatch ship methods.
+
+Other behavioral tests remain, with test-only HunterRig/FlightRig fixtures translating control setup to actual
+Creature/Encounter/trait operations. These fixtures implement no parallel flight model. The old ship class is gone.
+
+### Additional rulings
+
+- Explicit allied/duel initial headings are supplied before Creature construction, avoiding an extra random draw;
+  enemy headings retain stage 5's random start. The numeric flight model and policy layout are preserved.
+- Runtime settings resolve into immutable per-flight trait parameters without mutating catalogue entries.
+- Enemy enumeration excludes friends; full catalogue lookup/validation includes them. Existing make_enemy rejects
+  friendly kinds through its existing kinds() guard, so a separate spawn-manager branch was unnecessary.
+- Borrowed Game/duel/lab workers stay with their owner; enemy workers close once. Pilot LIVE state includes setup,
+  and portraits omit the Encounter and all callbacks/workers. Closing uses a nonrecursive shutdown path.
+- Observation happens before timer advancement; steering and firing precede integration. Held decision identity
+  preserves burn budgets and is retained by shadow trials without copying live pilot state.
+- Lab counters subscribe to attempted-damage, pickup and per-frame wall-check events, preserving attempted-versus-
+  applied meaning and wall-contact reset behavior. Recordings observe the held action even on the death frame.
+- Contact impulses are recorded individually at collision time, rather than inferred from a net change at sensing.
+- Existing real behavior tests are retained through test rigs and frozen artifacts; only obsolete craft/method-
+  wrapping assertions above were replaced. No reward tuning, policy retraining or model-weight change is included.
+
+Inherited deferred minor: the stage 5 no-model level-21 test proves clearance under AllCleared rather than its
+actual exit configuration. No new deferred review findings remain in stage 6. Concurrent user changes remain
+uncommitted and are excluded from this work; the settings-menu staging area is preserved separately.
+
+Final verification after the death-frame callback fix: **2351 passed in 244.18s**, using the isolated final source tree and dummy SDL display/audio. This excludes concurrent settings/training work.

@@ -13,6 +13,12 @@ from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
 from entities.explosion import Explosions, push, reaches
 from entities.projectile import Projectile
+from creatures.traits.energy import damage, register_hit
+
+
+def _damage_hunter(hunter):
+    return damage(hunter, hunter.encounter)
+
 if TYPE_CHECKING:
     from entities.ship import Ship
     from entities.explosion import Blast
@@ -142,8 +148,8 @@ class CollisionHandler:
             dvx, dvy = push(blast, hunter.get_pos())
             hunter.vx += dvx
             hunter.vy += dvy
-            hunter.register_hit(dvx, dvy)
-            hunter.take_damage()
+            register_hit(hunter, dvx, dvy)
+            _damage_hunter(hunter)
         caught = [e for e in enemies if e.active and reaches(blast, e.get_pos(), e.radius)]
         for enemy in caught:
             dvx, dvy = push(blast, enemy.get_pos())
@@ -194,7 +200,7 @@ class CollisionHandler:
         projectile.active = False
         from utils.math_utils import apply_circle_collision_physics
         apply_circle_collision_physics(hunter, projectile, 0.3)
-        if hunter.take_damage():
+        if _damage_hunter(hunter):
             self.sound_manager.play_enemy_destroy()
         else:
             self.sound_manager.play_bad_hit()
@@ -209,7 +215,7 @@ class CollisionHandler:
             if not hunter.active:
                 break
             if enemy.active and hunter.check_circle_collision(enemy.get_pos(), enemy.radius, enemy):
-                if hunter.take_damage():
+                if _damage_hunter(hunter):
                     self.sound_manager.play_enemy_destroy()
 
     def handle_ship_crystal_collision(
@@ -244,7 +250,7 @@ class CollisionHandler:
             return False
         if not crystal.check_circle_collision(hunter.get_pos(), hunter.radius):
             return False
-        hunter.collect_powerup()
+        hunter.emit('pickup', hunter.encounter)
         self.level_crystals_collected += 1
         self.sound_manager.play_powerup_activation()
         return True

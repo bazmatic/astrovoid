@@ -78,9 +78,9 @@ def test_transient_backoff_does_not_extend_inputs():
 
 
 def test_turn_is_held_until_replaced_or_expired():
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     now,w,c,observe = setup()
-    ship = HunterShip((100,100))
+    ship = HunterRig((100,100))
     c.tick(observe)
     now[0] = 10.1
     w.result = PilotResult(c.generation,10,10.1,PilotDecision(ACTIONS['left_thrust_fire']))

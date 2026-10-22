@@ -1,17 +1,8 @@
-"""A hunter flight: one hunter in play with its pilot, from its summons until it dies, is replaced, or the level ends.
+"""A Creature's pilot lifetime, observations and single-frame stepping.
 
-The flight is built once from the hunter's ship, a pilot and its surroundings (see hunter.surroundings),
-then flown a frame at a time:
-
-    flight = HunterFlight(HunterShip(pos, settings), WorkerPilot(worker), surroundings)
-    shots = flight.fly(dt)        # each frame of play; the caller places the shots
-    flight.pause()                # each frame play is paused
-    flight.close()                # when it is done with
-
-The ship's settings are the flight's settings, fixed for its life: a flight with different settings is a new
-flight. Inside, the flight picks the observer its pilot reads (perception for Jev and the rules pilot, senses
-for the neural one), consults fire control while the rules pilot or Jev engages (the neural pilot aims for itself), drops a burst the pilot is no longer
-behind, and settles the ship against the walls.
+The pilot decides controls; reusable traits own propulsion, bursts, projectiles and energy. step(dt) places shots
+through the Creature's Encounter world. Enemy encounters call the same traits directly, without a second step.
+Pause invalidates pending decisions without advancing timers; closing releases listeners and owned workers.
 """
 import time
 from dataclasses import dataclass
@@ -48,8 +39,13 @@ class NeuralPilot:
 
 
 class HunterFlight:
-    def __init__(self, ship, pilot, surroundings):
+    def __init__(self, ship, pilot, surroundings, *, encounter, owns_worker=False):
         self.ship = ship
+        self.encounter = encounter
+        self._worker = getattr(pilot, 'worker', None) if owns_worker else None
+        self._closed = self._closing = False
+        self._frame_listeners = []
+        self._event_listeners = []
         self.surroundings = surroundings
         # For the lab, which reads the pilot's decision steps and may override a decision; play has no need of it.
         self.controller = pilot.controller(ship.settings)
@@ -70,42 +66,82 @@ class HunterFlight:
         """Call `listener` with everything the pilot is shown (its senses, or its observation) until the flight closes."""
         self._listeners.append(listener)
 
-    def fly(self, dt):
-        """Fly one frame (dt in frame units, 1.0 = 1/60 s) and return the shots fired, for the caller to place.
-
-        The pilot may look and decide, fire control aims while it engages, and the ship moves and meets the walls.
-        A destroyed hunter does not fly: its pilot is closed.
-        """
+    def decide(self):
+        """Sense before timers advance, then give the Creature all of the pilot's held controls."""
+        from creatures.traits.burst_fire import cancel_burst
         ship = self.ship
-        if not ship.active:
-            self.controller.close()
-            return []
+        from creatures.traits.energy import register_hit
+        previous = getattr(ship, '_pilot_velocity', (ship.vx, ship.vy))
+        if previous != (ship.vx, ship.vy):
+            register_hit(ship, ship.vx - previous[0], ship.vy - previous[1])
         action = self.controller.tick(self._sense if self._neural else self._perceive)
-        if self.controller.status != 'active':
-            ship.cancel_burst()
-        maze = self.surroundings.maze
-        # Fire control is only consulted while the pilot is engaging something.
+        controls = ship.controls
+        for field in ('turn', 'thrust', 'fire', 'track', 'course', 'burn_heading', 'burn_frames', 'burn_reference'):
+            setattr(controls, field, getattr(action, field))
+        controls.decision_token = action
+        controls.gun_enabled = self.controller.status == 'active'
+        if not controls.gun_enabled:
+            cancel_burst(ship)
         solution = None
         if self._neural:
-            # The neural pilot aims for itself: its trigger fires along the nose, whatever is there.
             if action.fire:
                 solution = FiringSolution(0.0, True)
         elif action.track or action.fire or ship.burst_remaining:
-            solution = find_firing_solution(ship, self.surroundings.enemies(), maze, ship.settings)
-        shots = ship.step(dt, action, solution) or []
-        ship.check_wall_collision(maze.walls, maze.spatial_grid)
-        return shots
+            solution = find_firing_solution(ship, self.surroundings.enemies(), self.surroundings.maze, ship.settings)
+        controls.lead_degrees = solution.lead_degrees if solution is not None else None
+        controls.on_target = solution is not None and solution.on_target
+
+    def step(self, dt):
+        """Step the Creature once; its gun places shots directly in the world's sink."""
+        if not self.ship.active:
+            self.close()
+            return
+        before = self.ship.shots_fired
+        self.frame_start_angle = self.ship.angle
+        listeners = tuple(self._frame_listeners)
+        self.encounter.step_creature(self.ship, dt)
+        for listener in listeners:
+            listener(self.ship, dt, self.ship.controls.decision_token, self.ship.shots_fired - before)
+
+    def on_frame(self, listener):
+        self._frame_listeners.append(listener)
+
+    def on_event(self, listener):
+        self._event_listeners.append(listener)
+
+    def _event(self, creature, name):
+        for listener in tuple(self._event_listeners):
+            listener(creature, name)
 
     def pause(self):
         """Hold still for a frame of paused play: the pilot stops deciding, the engine cuts and any burst is dropped."""
         self.controller.tick(None, running=False)
         self.ship.pilot_thrusting = False
-        self.ship.cancel_burst()
+        from creatures.traits.burst_fire import cancel_burst
+        cancel_burst(self.ship)
 
     def close(self):
         """End the flight: the pilot stops for good and the listeners are let go. The ship stays as it is."""
+        if self._closing or self._closed:
+            return
+        self._closing = True
+        if self.encounter is not None:
+            self.encounter.close_creature(self.ship)
+        self._shutdown()
+        self._closing = False
+
+    def _shutdown(self):
+        if self._closed:
+            return
+        self._closed = True
         self.controller.close()
         self._listeners.clear()
+        self._frame_listeners.clear()
+        self._event_listeners.clear()
+        close = getattr(self._worker, 'close', None)
+        if close is not None:
+            close()
+        self._worker = None
 
     def _perceive(self, now, generation):
         return self._shown(self._observer.perceive(

@@ -98,6 +98,7 @@ class Encounter:
         """Run a newcomer's spawn hooks, once."""
         if not creature.has_spawned and creature.active:
             creature.has_spawned = True
+            creature.encounter = self
             for trait in creature.traits:
                 trait.on_spawn(creature, self)
 
@@ -127,7 +128,8 @@ class Encounter:
             return
         creature.killed_by = shot.source if shot is not None else 'enemy'
         creature.die()
-        self.world.sound_manager.play_enemy_destroy()
+        if creature.allegiance == 'enemy':
+            self.world.sound_manager.play_enemy_destroy()
         if shot is not None:
             self.world.collision_handler.record_kill(shot, creature)
         for trait in creature.traits:

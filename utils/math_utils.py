@@ -404,7 +404,8 @@ def apply_circle_collision_physics(
                      Default 0.85 provides realistic bounce behavior.
     """
     
-    witnesses = [(e, e.vx, e.vy) for e in (entity1, entity2) if hasattr(e, 'register_hit')]
+    witnesses = [(e, e.vx, e.vy) for e in (entity1, entity2)
+                 if hasattr(e, 'register_hit') or (hasattr(e, 'emit') and getattr(e, 'encounter', None) is not None)]
     # Calculate masses (use radius squared as proxy for mass, proportional to area)
     mass1 = calculate_entity_mass(entity1.radius)
     mass2 = calculate_entity_mass(entity2.radius)
@@ -426,7 +427,12 @@ def apply_circle_collision_physics(
     entity1.vx, entity1.vy = new_vel1
     entity2.vx, entity2.vy = new_vel2
     for entity, vx, vy in witnesses:
-        entity.register_hit(entity.vx - vx, entity.vy - vy)      # what the collision did to its velocity
+        impulse = (entity.vx - vx, entity.vy - vy)
+        if hasattr(entity, 'register_hit'):
+            entity.register_hit(*impulse)
+        else:
+            entity.contact_impulse = impulse
+            entity.emit('contact', entity.encounter)
     
     # Separate objects to prevent overlap
     # Separation is already calculated correctly in resolve_circle_collision

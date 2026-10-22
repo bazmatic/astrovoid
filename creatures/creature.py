@@ -1,4 +1,4 @@
-"""The Creature: every migrated enemy is one, assembled from its kind's Body and Traits.
+"""The Creature: every enemy and ally, assembled from its kind's Body and Traits.
 
 It holds what every creature has, and the state its traits keep. It does not act on its own: the Encounter runs its
 traits every frame and animates its Body.
@@ -37,7 +37,7 @@ class Controls:
 
 class Creature(GameEntity):
 
-    def __init__(self, kind, pos, body, traits: Sequence, level: int = 1, recorder=None):
+    def __init__(self, kind, pos, body, traits: Sequence, level: int = 1, recorder=None, angle=None):
         super().__init__(pos, kind.tuning['size'])
         self.kind = kind
         self.type = kind.key
@@ -49,7 +49,7 @@ class Creature(GameEntity):
         from creatures.trait import Trait
         self.after_frame_traits = tuple(t for t in self.traits if type(t).on_after_frame is not Trait.on_after_frame)
         self.controls = Controls()
-        self.angle = random.uniform(0, 360)
+        self.angle = random.uniform(0, 360) if angle is None else angle
         self.speed = 0.0
         self.hit_points = 1
         self.max_hit_points = 1

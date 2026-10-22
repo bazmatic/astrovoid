@@ -28,7 +28,7 @@ def test_player_kills_are_counted(game, monkeypatch):
 
 
 def test_hunter_kills_and_pickups_count(game, monkeypatch):
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from entities.powerup_crystal import PowerupCrystal
     monkeypatch.setattr(level_config, 'load_level_config', level_file(patrol=1))
     start(game, 3)
@@ -36,7 +36,7 @@ def test_hunter_kills_and_pickups_count(game, monkeypatch):
     game.update(1.0)
     assert game.star_tally().kills == 1
     crystal = PowerupCrystal((300.0, 300.0))
-    hunter = HunterShip((300.0, 300.0))
+    hunter = HunterRig((300.0, 300.0))
     assert game.collision_handler.handle_hunter_crystal_collision(hunter, crystal)
     assert game.collision_handler.level_crystals_collected == 1
 

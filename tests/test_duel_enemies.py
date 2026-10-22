@@ -6,7 +6,7 @@ from unittest.mock import Mock
 import pygame
 import pytest
 
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.projectile import Projectile
 from game_handlers.combat_targets import nearest_friendly
 from hunter.duel_enemies import KEEP_CLEAR_OF_HUNTERS, DuelEnemies, _Target
@@ -23,8 +23,8 @@ def world():
     pygame.display.set_mode((320, 240))
     random.seed(13)
     maze = Maze(13, complexity=MazeComplexity.COMPLEX, grid_size=26)
-    a = HunterShip(maze.position_calculator.grid_center_to_screen(3, 3), SETTINGS)
-    b = HunterShip(maze.position_calculator.grid_center_to_screen(20, 18), SETTINGS)
+    a = HunterRig(maze.position_calculator.grid_center_to_screen(3, 3), SETTINGS)
+    b = HunterRig(maze.position_calculator.grid_center_to_screen(20, 18), SETTINGS)
     enemies = DuelEnemies(maze, Mock())
     return maze, a, b, enemies
 

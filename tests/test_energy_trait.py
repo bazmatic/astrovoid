@@ -50,3 +50,43 @@ def test_wall_energy_is_fractional_and_does_not_use_bullet_immunity():
     c.wall_impulse = (10, 0)
     c.emit('hit_wall', enc)
     assert not c.active
+
+
+def test_energy_accepts_standard_thrusters_wall_impulses():
+    from creatures.traits.propulsion import Thrusters
+    from tests.creature_parts import world, open_maze
+    c = creature([Energy(indestructible=False, wallEnergy=1), Thrusters(1)], pos=(95, 100))
+    c.vx = 3
+    enc = encounter(c, world_=world(maze=open_maze([((105, 0), (105, 200))])))
+    enc.step(1)
+    assert c.health < 3
+    assert take_hit(c) is not None
+
+
+def test_energy_accepts_a_bouncing_creatures_wall_impulse():
+    from creatures.traits.combat import BouncesOffWalls
+    from creatures.traits.propulsion import Coasts
+    from tests.creature_parts import world, open_maze
+    c = creature([Energy(indestructible=False, wallEnergy=1), Coasts(), BouncesOffWalls()], pos=(95, 100))
+    c.vx = 3
+    enc = encounter(c, world_=world(maze=open_maze([((105, 0), (105, 200))])))
+    enc.step(1)
+    assert c.health < 3
+    assert take_hit(c) is not None
+
+
+def test_opposite_contacts_keep_the_strongest_individual_knock():
+    from types import SimpleNamespace
+    from utils.math_utils import apply_circle_collision_physics
+    c, enc = make()
+    c.vx, c.vy = 3, 0
+    c._pilot_velocity = (3, 0)
+    a = SimpleNamespace(x=c.x + 15, y=c.y, vx=0, vy=0, radius=c.radius)
+    apply_circle_collision_physics(c, a, 1)
+    first = (c.vx - 3, c.vy)
+    c.x, c.y = 100, 100
+    b = SimpleNamespace(x=85, y=100, vx=3, vy=0, radius=c.radius)
+    apply_circle_collision_physics(c, b, 1)
+    assert c.vx == pytest.approx(3)
+    assert take_hit(c) == pytest.approx(first)
+    assert c._pilot_velocity == (c.vx, c.vy)

@@ -75,3 +75,12 @@ def target(pos):
     """Something to chase or shoot at: alive, at a position."""
     return SimpleNamespace(x=pos[0], y=pos[1], active=True, get_pos=lambda: pos,
                            is_shield_active=lambda: True, check_circle_collision=lambda *a: False)
+
+
+def fire_round(c, enc):
+    """Exercise a creature's burst and gun interfaces, with an aligned trigger independent of its pilot."""
+    before = len(enc.world.projectiles)
+    c.controls.fire = c.controls.on_target = c.controls.gun_enabled = True
+    for name in ('burstFire', 'gun'):
+        next(t for t in c.traits if t.NAME == name).on_frame(c, enc, 1.0)
+    return enc.world.projectiles[before:]

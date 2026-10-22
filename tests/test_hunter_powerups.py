@@ -4,7 +4,7 @@ import json
 import pytest
 
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 import creatures
 from entities.powerup_crystal import PowerupCrystal
 from entities.ship import Ship
@@ -38,7 +38,7 @@ def reading(ship, powerups, **kwargs):
 
 
 def upgraded(level):
-    ship = HunterShip((200, 200))
+    ship = HunterRig((200, 200))
     for _ in range(level):
         ship.collect_powerup()
     return ship
@@ -137,7 +137,7 @@ def burst_starts(ship, frames=120):
 
 
 def test_a_new_hunter_has_no_upgrade_and_fires_single_shots():
-    ship = HunterShip((200, 200))
+    ship = HunterRig((200, 200))
     assert ship.get_gun_upgrade_level() == 0
     shots = ship.step(1, FIRE, LINED_UP)
     assert len(shots) == 1
@@ -148,7 +148,7 @@ def test_the_first_powerup_shortens_the_wait_between_bursts():
     def wait(ship):
         starts = burst_starts(ship)
         return starts[1] - starts[0]
-    plain, quick = HunterShip((200, 200)), upgraded(1)
+    plain, quick = HunterRig((200, 200)), upgraded(1)
     assert wait(quick) < wait(plain)
     ratio = calculate_fire_cooldown(quick) / calculate_fire_cooldown(plain)
     assert quick.fire_interval == pytest.approx(plain.settings.fire_interval * ratio)

@@ -76,17 +76,22 @@ def kind(key: str) -> EnemyKind:
 
 def kinds() -> Tuple[str, ...]:
     """Every kind's key, in the catalogue's order. Every kind can be placed in a level."""
+    return tuple(k for k, entry in _CATALOGUE.items() if entry.allegiance == 'enemy')
+
+
+def all_kinds() -> Tuple[str, ...]:
+    """Every catalogue key, including friends."""
     return tuple(_CATALOGUE)
 
 
 def anchored() -> Tuple[str, ...]:
     """The kinds that never move."""
-    return tuple(k for k, entry in _CATALOGUE.items() if entry.anchored)
+    return tuple(k for k, entry in _CATALOGUE.items() if entry.allegiance == 'enemy' and entry.anchored)
 
 
 def hunters() -> Tuple[str, ...]:
     """The kinds flown by a pilot: the enemy hunters, which the game places itself, apart from the other enemies."""
-    return tuple(k for k, entry in _CATALOGUE.items() if entry.pilot is not None)
+    return tuple(k for k, entry in _CATALOGUE.items() if entry.allegiance == 'enemy' and entry.pilot is not None)
 
 
 def name(key: str) -> str:

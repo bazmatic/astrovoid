@@ -1,3 +1,4 @@
+from creatures.traits.energy import damage
 import copy
 import pytest
 from experiments import harness
@@ -116,7 +117,7 @@ def test_with_pursue_hunter_every_enemy_targets_the_hunter_not_the_parked_player
 def test_a_mortal_hunter_ends_the_episode_when_it_is_destroyed():
     def kill_it(t, game, hunter):
         if t > 0.5:
-            hunter.take_damage()
+            damage(hunter, hunter.encounter)
     result = run_episode(13, 0, horizon=10.0, health=1, trace=kill_it)
     assert result.end == 'died' and result.elapsed < 2.0
 
@@ -124,7 +125,7 @@ def test_a_mortal_hunter_ends_the_episode_when_it_is_destroyed():
 def test_an_immortal_hunter_is_not_hurt_by_hits_it_takes():
     def hit_it(t, game, hunter):
         hunter.immunity_remaining = 0.0
-        hunter.take_damage()
+        damage(hunter, hunter.encounter)
     result = run_episode(13, 0, horizon=2.0, trace=hit_it)
     assert result.end != 'died' and result.hits_taken >= 1
 
@@ -134,7 +135,7 @@ def test_a_mortal_hunter_survives_fewer_hits_than_its_health():
     def hit_twice(t, game, hunter):
         if 0.5 < t < 0.52 or 1.5 < t < 1.52:
             hunter.immunity_remaining = 0.0
-            hunter.take_damage()
+            damage(hunter, hunter.encounter)
         seen.append(hunter.health)
     result = run_episode(13, 0, horizon=3.0, health=3, trace=hit_twice)
     assert result.end != 'died' and 0 < min(seen) <= 1.0      # two hits taken; a wall may have taken a little more

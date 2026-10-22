@@ -1,3 +1,4 @@
+from tests.creature_parts import fire_round
 # tests/test_rules_hunter_game.py
 import math
 import threading
@@ -136,9 +137,8 @@ def test_flying_with_the_player_inactive_does_not_crash(arena):
 
 def test_its_shots_join_the_games_projectiles(arena):
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    hunter.flight.fly = lambda dt: [shot_at(hunter, 'enemy')]
     before = len(arena.projectiles)
-    arena.encounter.step(1.0)
+    fire_round(hunter, arena.encounter)
     assert len(arena.projectiles) == before + 1
 
 
@@ -174,7 +174,7 @@ def test_a_terminator_is_a_creature(arena):
 def test_its_own_shots_never_hit_it(arena):
     import creatures
     hunter = arena.roster.of_kind('rules_hunter')[0]
-    own = hunter.craft._shots()[0]
+    own = fire_round(hunter, arena.encounter)[0]
     own.x, own.y = hunter.x, hunter.y
     crab = creatures.build('patrol', (100.0, 100.0))
     crab_shot = Projectile((hunter.x, hunter.y), 0.0, source='enemy')

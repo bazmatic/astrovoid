@@ -112,11 +112,11 @@ def test_client_answers_in_the_shape_jev_pilot_reads():
 
 def test_jev_pilot_decides_with_the_rules_client():
     import creatures
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from hunter.model import NEUTRAL
     from hunter.perception import HunterPerception
     from tests.test_hunter_perception import maze
-    ship = HunterShip((150, 150))
+    ship = HunterRig((150, 150))
     ship.angle = 0
     obs = HunterPerception().observe(ship, maze(), None, [creatures.build('patrol', (250, 150), 1)], [], NEUTRAL, 0, 1)
     decision = asyncio.run(JevPilot(RulesClient()).decide(obs))

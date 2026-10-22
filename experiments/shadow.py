@@ -28,26 +28,35 @@ def restore(hunter, state):
 
 def trial_controls(game, hunter, action, frames):
     """The (turn, thrust, fire) the ship would execute over `frames` frames of `action`, state restored."""
-    saved = snapshot(hunter)
-    random_state = random.getstate()           # the step's particles draw from the episode's seeded stream
-    rate = hunter.current_rotation_speed
+    from types import SimpleNamespace
+    from creatures.encounter import Encounter
+    from game_handlers.enemy_roster import EnemyRoster
+    # Portrait copying deliberately drops pilot/controller/listeners. Trials use only the same traits and state.
+    trial = copy.deepcopy(hunter)
+    trial._decision = hunter._decision  # immutable held action: preserve its identity and remaining burn budget
+    roster = EnemyRoster()
+    roster.add(trial)
+    enc = Encounter(roster, SimpleNamespace(ship=None, hunter=None, maze=None, projectiles=[]))
+    random_state = random.getstate()
     record = []
     try:
         for _ in range(frames):
             solution = None
-            if action.track or action.fire or hunter.burst_remaining:
-                solution = find_firing_solution(
-                    hunter, game.roster.alive(), game.maze, hunter.settings)
-            before = hunter.angle
-            # The class method, not hunter.step: the lab wraps the instance's step to count frames, and a
-            # trial must not be counted.
-            shots = type(hunter).step(hunter, 1, action, solution)
-            record.append((((hunter.angle - before + 180.0) % 360.0) - 180.0,
-                           bool(hunter.pilot_thrusting), bool(action.fire or shots)))
+            if action.track or action.fire or trial.burst_remaining:
+                solution = find_firing_solution(trial, game.roster.alive(), game.maze, trial.settings)
+            for field in ('turn', 'thrust', 'fire', 'track', 'course', 'burn_heading', 'burn_frames', 'burn_reference'):
+                setattr(trial.controls, field, getattr(action, field))
+            trial.controls.decision_token = action
+            trial.controls.gun_enabled = True
+            trial.controls.on_target = solution is not None and solution.on_target
+            trial.controls.lead_degrees = solution.lead_degrees if solution is not None else None
+            before, volleys = trial.angle, trial.shots_fired
+            enc.step_creature(trial, 1)
+            record.append((((trial.angle - before + 180) % 360) - 180,
+                           bool(trial.pilot_thrusting), bool(action.fire or trial.shots_fired > volleys)))
     finally:
-        restore(hunter, saved)
         random.setstate(random_state)
-    return step_labels(record, rate)
+    return step_labels(record, hunter.current_rotation_speed)
 
 
 class ShadowTeacher:

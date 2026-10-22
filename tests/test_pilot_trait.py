@@ -9,6 +9,12 @@ import enemy_kinds
 from creatures.creature import Creature
 from creatures.traits.combat import TakesHits
 from creatures.traits.piloted import Pilot
+from creatures.traits.energy import Energy, take_hit
+from creatures.traits.propulsion import Thrusters
+from creatures.traits.burst_fire import BurstFire
+from creatures.traits.combat import Gun
+from hunter.build import flight_kind
+from hunter.settings_for import hunter_settings_for
 from entities.hunter_ship_body import HunterShipBody
 from tests.creature_parts import encounter, world
 from tests.test_rules_hunter import SilentWorker, Target
@@ -42,7 +48,15 @@ class CountingWorker(SilentWorker):
 def piloted(mode='neural', policy=None, worker=None, protagonist=None, **tuning):
     """A piloted creature at (500, 500) facing right, set up on a level with a protagonist; and its Encounter."""
     kind = replace(enemy_kinds.kind('static'), allegiance='enemy', tuning={**TUNING, **tuning})
-    c = Creature(kind, (500.0, 500.0), None, [Pilot(mode), TakesHits(12)])
+    settings = replace(hunter_settings_for(mode), indestructible=True)
+    kind = replace(kind, traits=(('pilot', {'mode': mode}), ('energy', {}),
+                                ('thrusters', {'speedShare': 1}), ('burstFire', {}),
+                                ('gun', {'cadence': 'burst', 'aimMode': 'nose', 'upgrades': True}),
+                                ('takesHits', {'hitPoints': 12})))
+    from creatures.registry import TRAITS
+    kind = flight_kind(kind, settings)
+    c = Creature(kind, (500.0, 500.0), None, [TRAITS[n].from_params(p) for n, p in kind.traits])
+    c.settings = settings
     c.body = HunterShipBody(c)
     c.angle = 0.0
     stand_in = world(maze=senses_maze())
@@ -63,23 +77,21 @@ def test_a_pilot_flies_its_creature_and_its_shots_join_the_level():
     assert shots and all(s.is_enemy and s.source == 'enemy' and s.dynamic_color == RED for s in shots)
 
 
-def test_the_creature_follows_the_craft():
-    c, enc = piloted(policy=ThrustAndFire(), protagonist=Target(700.0, 500.0, True))
-    for _ in range(5):
-        enc.step(1.0)
-    craft = c.craft
-    assert (c.x, c.y, c.vx, c.vy, c.angle) == (craft.x, craft.y, craft.vx, craft.vy, craft.angle)
-    assert c.pilot_thrusting == craft.pilot_thrusting
+def test_the_pilot_flies_the_creature_without_a_craft():
+    c, enc = piloted(policy=ThrustAndFire())
+    enc.step(1)
+    assert c.flight.ship is c
+    assert not hasattr(c, 'craft')
 
 
-def test_a_push_moves_the_craft_and_the_pilot_feels_it():
+def test_a_push_moves_the_creature_and_the_pilot_feels_it():
     c, enc = piloted(mode='rules')
-    enc.step(1.0)
-    x = c.craft.x
-    c.vx += 3.0
-    enc.step(1.0)
-    assert c.craft.take_hit() == pytest.approx((3.0, 0.0))
-    assert c.craft.x > x + 2.0
+    enc.step(1)
+    x = c.x
+    c.vx += 3
+    enc.step(1)
+    assert take_hit(c) == pytest.approx((3, 0))
+    assert c.x > x + 2
 
 
 def test_a_neural_pilot_without_a_model_never_flies():
@@ -112,7 +124,7 @@ def test_a_copy_leaves_the_pilot_behind():
 
 def test_an_unknown_mode_is_rejected():
     with pytest.raises(ValueError):
-        Pilot.from_params({'mode': 'jev'})
+        Pilot.from_params({'mode': 'unknown'})
 
 
 def test_the_body_draws_the_arrowhead_in_the_kinds_colours():

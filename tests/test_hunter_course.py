@@ -5,7 +5,7 @@ import random
 
 import pytest
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.course import course_correction
 from hunter.model import NEUTRAL, PilotAction
 
@@ -63,7 +63,7 @@ def open_space(monkeypatch):
 
 
 def ship_at(velocity=(0.0, 0.0), heading=0.0):
-    ship = HunterShip((50000, 50000))
+    ship = HunterRig((50000, 50000))
     ship.vx, ship.vy = velocity
     ship.angle = heading
     return ship
@@ -200,7 +200,7 @@ def follow_reading(ship, player_pos, action=NEUTRAL):
 
 
 def near_ship(velocity=(0.0, 0.0), heading=0.0):
-    ship = HunterShip((150, 500))
+    ship = HunterRig((150, 500))
     ship.vx, ship.vy = velocity
     ship.angle = heading
     return ship

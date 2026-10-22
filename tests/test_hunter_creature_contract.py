@@ -6,7 +6,7 @@ import random
 import config
 import numpy as np
 
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.model import ACTIONS, FiringSolution, HunterSettings, NEUTRAL, PilotAction
 from maze.wall_segment import WallSegment
 from hunter.senses import FEATURE_NAMES
@@ -24,7 +24,7 @@ def contract_trace(direct=False):
         for mortal in (False, True):
             for action in actions:
                 random.seed(42)
-                ship = HunterShip((500.0, 500.0), replace(HunterSettings(), indestructible=not mortal))
+                ship = HunterRig((500.0, 500.0), replace(HunterSettings(), indestructible=not mortal))
                 if direct:
                     from creatures.traits.energy import Energy
                     from creatures.traits.propulsion import Thrusters

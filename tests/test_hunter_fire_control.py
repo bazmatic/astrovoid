@@ -6,7 +6,7 @@ import pytest
 import config
 import creatures
 import enemy_kinds
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.fire_control import find_firing_solution
 from hunter.jev_pilot import PILOT_QUESTIONS
 from hunter.model import ACTIONS, FiringSolution, HunterSettings, PilotAction
@@ -25,7 +25,7 @@ def urchin(pos):
 
 
 def ship_at(pos=(500, 500), heading=0.0):
-    ship = HunterShip(pos)
+    ship = HunterRig(pos)
     ship.angle = heading
     return ship
 

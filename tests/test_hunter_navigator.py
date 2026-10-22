@@ -2,12 +2,12 @@
 from dataclasses import replace
 
 import pytest
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.model import ACTIONS
 
 
 def ship_at(heading=0.0):
-    ship = HunterShip((2000, 2000))
+    ship = HunterRig((2000, 2000))
     ship.angle = heading
     return ship
 
@@ -42,7 +42,7 @@ def test_swings_the_short_way_round():
 def test_engine_waits_until_the_nose_is_lined_up():
     ship = ship_at(heading=0.0)
     action = course(90.0, 30.0)
-    frames_to_align = round((90.0 - HunterShip.BURN_ALIGNMENT_DEGREES) / ship.current_rotation_speed)
+    frames_to_align = round((90.0 - HunterRig.BURN_ALIGNMENT_DEGREES) / ship.current_rotation_speed)
     for _ in range(frames_to_align - 2):
         ship.step(1, action)
         assert not ship.pilot_thrusting

@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 import config
 import creatures
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.ship import Ship
 from hunter.jev_pilot import PILOT_QUESTIONS, JevPilot, worked_burn
 from hunter.model import ACTIONS, PULSE_FRAMES, FiringSolution
@@ -22,7 +22,7 @@ FPS = config.FPS
 
 
 def ship_at(pos=(2000, 2000), heading=0.0, velocity=(0.0, 0.0)):
-    ship = HunterShip(pos)
+    ship = HunterRig(pos)
     ship.angle = heading
     ship.vx, ship.vy = velocity
     return ship
@@ -144,7 +144,7 @@ def test_engage_reading_far_from_the_enemy_calls_for_a_closing_burn():
     engage = reading(ship_at((500, 500)), enemies=[creatures.build('static', (850, 500))])['engage']
     assert engage['range_state'] == 'far'
     assert engage['distance_metres'] == pytest.approx(350)
-    assert engage['burn_needed'] and engage['burn_seconds'] > scaled_seconds(0.2, HunterShip((0, 0)).thrust_force)
+    assert engage['burn_needed'] and engage['burn_seconds'] > scaled_seconds(0.2, HunterRig((0, 0)).thrust_force)
     assert engage['target_closing_speed_metres_per_second'] > 0
     assert engage['holding_still']
 

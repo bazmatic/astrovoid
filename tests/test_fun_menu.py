@@ -118,7 +118,7 @@ def test_the_duel_maze_is_a_complex_one_not_an_empty_box(game, policy_file):
     key(game, pygame.K_RETURN)
     assert len(game.duel.maze.walls) > 200                     # an empty arena has only its outer wall
     for side in game.duel.sides:                                # and both hunters still start in the clear
-        assert not side.hunter.check_wall_collision(game.duel.maze.walls, game.duel.maze.spatial_grid)
+        assert game.duel.maze.is_open(side.hunter.get_pos(), side.hunter.radius)
     game.end_duel()
 
 

@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 from unittest.mock import Mock
 
-from entities.hunter_ship import HunterShip
+from hunter.build import PilotSetup, make_hunter
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.jev_pilot import JevPilot
 from hunter.model import HunterSettings, PilotResult
@@ -269,8 +269,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
                            wall_energy=config.SETTINGS.game.neuralWallEnergy)
     near = _random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y)
     game._close_hunter()
-    flight = HunterFlight(HunterShip(nearest_hunter_spawn(near, game.maze, game.ship), settings),
-                          pilot, game.hunter_surroundings)
+    flight = make_hunter(nearest_hunter_spawn(near, game.maze, game.ship), world=game,
+                         setup=PilotSetup(settings, pilot, game.hunter_surroundings))
     game.hunter_flight = flight
     hunter = flight.ship
     # In the lab a Rules hunter hunts the hunter, not the parked player
@@ -282,39 +282,20 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
 
     counter = EventCounter()
 
-    original_wall = hunter.check_wall_collision
-
-    def counting_wall(*args, **kwargs):
-        vx, vy = hunter.vx, hunter.vy
-        hit = original_wall(*args, **kwargs)
-        counter.wall(hit, math.hypot(hunter.vx - vx, hunter.vy - vy) / max(hunter.max_speed, 1e-6))
-        return hit
-    hunter.check_wall_collision = counting_wall
-
-    original_damage = hunter.take_damage
-
-    def counting_damage():
-        counter.hit_taken(elapsed)
-        return original_damage()
-    hunter.take_damage = counting_damage
-
-    original_collect = hunter.collect_powerup
-
-    def counting_collect():
-        counter.powerups += 1
-        return original_collect()
-    hunter.collect_powerup = counting_collect
+    def counted(creature, event):
+        if event == 'wall_checked':
+            counter.wall(creature.wall_contact, math.hypot(*creature.wall_impulse) / max(creature.max_speed, 1e-6))
+        elif event == 'damage_attempted':
+            counter.hit_taken(elapsed)
+        elif event == 'pickup':
+            counter.powerups += 1
+    flight.on_event(counted)
 
     if recorder is not None:
-        original_step = hunter.step
-
-        def recording_step(dt, action, solution=None):
-            before = hunter.angle
-            shots = original_step(dt, action, solution)
-            recorder.add_frame(rotation=((hunter.angle - before + 180.0) % 360.0) - 180.0,
-                               engine=bool(hunter.pilot_thrusting), trigger=bool(action.fire or shots))
-            return shots
-        hunter.step = recording_step
+        def recording_frame(creature, dt, action, volleys):
+            recorder.add_frame(rotation=((creature.angle - flight.frame_start_angle + 180.0) % 360.0) - 180.0,
+                               engine=bool(creature.pilot_thrusting), trigger=bool(action.fire or volleys))
+        flight.on_frame(recording_frame)
         recorder.begin(game, hunter, settings)
 
     alive = _active_enemies(game)

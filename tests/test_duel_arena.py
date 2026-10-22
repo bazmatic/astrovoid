@@ -6,7 +6,7 @@ import pygame
 import pytest
 
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.projectile import Projectile
 from hunter.duel import Combatant, DuelArena, DuelResult, build_duel, duel_spawns
 from hunter.model import NEUTRAL, HunterSettings
@@ -58,6 +58,12 @@ class ScriptedNeural:
         self.closed = True
 
 
+def duel_creature(pos, settings):
+    import creatures
+    from hunter.build import PilotSetup
+    return creatures.build('allied_hunter', pos, pilot_setup=PilotSetup(settings, None, None), angle=0)
+
+
 @pytest.fixture
 def maze():
     pygame.init()
@@ -71,8 +77,8 @@ def cell(maze, col, row):
 
 @pytest.fixture
 def arena(maze):
-    a = HunterShip(cell(maze, 2, 3), SETTINGS)
-    b = HunterShip(cell(maze, 5, 3), SETTINGS)
+    a = duel_creature(cell(maze, 2, 3), SETTINGS)
+    b = duel_creature(cell(maze, 5, 3), SETTINGS)
     rules, vibes = ScriptedRules(), ScriptedNeural()
     duel = DuelArena(maze, [Combatant('rules', a, rules), Combatant('vibes', b, vibes)], timeout_seconds=60.0)
     duel.scripted = (rules, vibes)
@@ -137,7 +143,7 @@ def test_both_destroyed_in_the_same_frame_is_a_draw(arena):
 
 
 def test_the_duel_times_out_as_a_draw(maze):
-    a, b = HunterShip(cell(maze, 2, 3), SETTINGS), HunterShip(cell(maze, 5, 3), SETTINGS)
+    a, b = duel_creature(cell(maze, 2, 3), SETTINGS), duel_creature(cell(maze, 5, 3), SETTINGS)
     duel = DuelArena(maze, [Combatant('rules', a, ScriptedRules()), Combatant('vibes', b, ScriptedNeural())],
                      timeout_seconds=1.0)
     duel.update(30.0)
@@ -214,8 +220,8 @@ def test_build_duel_makes_a_destructible_rules_hunter_and_a_distinct_neural_one(
     assert not rules.hunter.settings.indestructible and not vibes.hunter.settings.indestructible
     assert rules.hunter.settings.turn_rate_multiplier == hunter_settings_for('rules').turn_rate_multiplier
     assert vibes.hunter.settings.turn_rate_multiplier == config.SETTINGS.game.neuralTurnRate
-    assert rules.hunter.COLOR != vibes.hunter.COLOR                      # you can tell them apart
-    assert HunterShip.COLOR == (120, 255, 90)                            # the class, so normal hunters, is unchanged
+    assert rules.hunter.body.colours['color'] != vibes.hunter.body.colours['color']                      # you can tell them apart
+    assert rules.hunter.body.colours['color'] == (120, 255, 90)                            # the class, so normal hunters, is unchanged
     toward = math.degrees(math.atan2(vibes.hunter.y - rules.hunter.y, vibes.hunter.x - rules.hunter.x)) % 360
     assert abs((rules.hunter.angle - toward + 180) % 360 - 180) < 1.0    # they start facing each other
     assert HunterSettings().indestructible is True                       # the default hunter is still unkillable

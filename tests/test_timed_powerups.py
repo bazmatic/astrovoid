@@ -3,7 +3,7 @@ import pygame
 import pytest
 
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.ship import Ship
 from hunter.model import ACTIONS
 
@@ -57,7 +57,7 @@ class TestWearingOff:
         assert len(shots) == 1 and not shots[0].is_upgraded
 
     def test_the_hunters_powerups_wear_off_too(self):
-        hunter = HunterShip((200.0, 200.0))
+        hunter = HunterRig((200.0, 200.0))
         hunter.collect_powerup()
         hunter.collect_powerup()
         for _ in range(DURATION_FRAMES - 1):

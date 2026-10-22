@@ -18,9 +18,15 @@ _Avoid_: ally ship, bot, AI ship
 Whatever decides how the hunter turns, thrusts and fires. One of three: Jev (a remote model), rules (the same criteria written as plain code), or neural (a small trained policy). It also flies the Terminator, the Vibers and any creature given the `pilot` trait.
 _Avoid_: agent, controller; "brain" is the wider term for whatever decides a Creature's controls
 
-**Craft**:
-The hunter ship a pilot flies inside a creature, which the creature follows.
-_Avoid_: vessel, inner ship
+**Craft** (retired after stage 5):
+The former private hunter ship a creature followed. Stage 6 removed it: propulsion, energy and weapons now act
+on the Creature itself.
+
+**Burst**:
+A queued group of rounds, scheduled by `burstFire`. A round is released when the gun is ready and aligned.
+
+**Volley**:
+The projectiles emitted together in one round: one projectile, or the upgraded three-way spread.
 
 **Hunter flight**:
 One hunter in play with its pilot, from the moment it is summoned until it dies, is replaced, or the level ends.
@@ -132,10 +138,10 @@ _Avoid_: explosion (that is what the player sees of it), splash damage
 
 ### Creatures
 
-How every enemy is built: from its catalogue entry's `body` and `traits`.
+How every enemy and the allied hunter is built: from its catalogue entry's `body` and `traits`.
 
 **Creature**:
-One enemy assembled from its Enemy Kind's catalogue entry: a Body and a list of Traits. It holds what every enemy has
+One enemy or ally assembled from its catalogue entry: a Body and a list of Traits. It holds what every creature has
 (position, velocity, hit points, allegiance) and the state its traits keep.
 _Avoid_: enemy class, entity (for this sense)
 

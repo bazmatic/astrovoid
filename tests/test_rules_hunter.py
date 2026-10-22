@@ -1,3 +1,4 @@
+from tests.creature_parts import fire_round
 # tests/test_rules_hunter.py
 """The Terminator: a Creature whose rules pilot flies a hunter ship that hunts only its protagonist."""
 import copy
@@ -9,7 +10,7 @@ import pytest
 import creatures
 import enemy_kinds
 from creatures.traits import piloted
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from entities.hunter_ship_body import HunterShipBody
 from entities.projectile import Projectile
 from hunter.surroundings import ProtagonistSurroundings
@@ -111,13 +112,13 @@ def test_twelve_hits_destroy_it_and_only_the_twelfth():
 
 
 def test_its_shots_are_enemy_shots_in_its_colour():
-    hunter, _, _ = make()
-    shots = hunter.craft._shots()
+    hunter, _, enc = make()
+    shots = fire_round(hunter, enc)
     assert shots and all(s.is_enemy and s.source == 'enemy' and s.dynamic_color == RED for s in shots)
 
 
 def test_the_normal_hunters_shots_are_still_the_hunters():
-    shots = HunterShip((100.0, 100.0))._shots()
+    shots = HunterRig((100.0, 100.0))._shots()
     assert all(s.source == 'hunter' and not s.is_enemy for s in shots)
 
 
@@ -158,7 +159,7 @@ def test_it_draws_red():
 
 
 def test_its_colours_are_not_the_allied_hunters():
-    assert RED != HunterShip.COLOR
+    assert RED != HunterRig.COLOR
     assert RED[0] > RED[1]   # red
 
 

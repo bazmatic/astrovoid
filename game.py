@@ -52,7 +52,8 @@ from game_handlers.state_handlers import StateHandlerRegistry
 from utils.math_utils import get_angle_to_point
 
 
-from entities.hunter_ship import HunterShip
+from creatures.creature import Creature
+from hunter.build import PilotSetup, make_hunter
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
 from hunter.neural.loader import load_neural_policy
 from hunter.settings_for import hunter_settings_for
@@ -422,7 +423,7 @@ class Game:
         
     
     @property
-    def hunter(self) -> Optional[HunterShip]:
+    def hunter(self) -> Optional[Creature]:
         """The hunter's ship while a hunter flight is in play, else None."""
         return self.hunter_flight.ship if self.hunter_flight is not None else None
 
@@ -446,7 +447,8 @@ class Game:
             if self.hunter_worker is None:
                 self.hunter_worker = PilotWorker()
             pilot = WorkerPilot(self.hunter_worker)
-        self.hunter_flight = HunterFlight(HunterShip(pos, hunter_settings_for(mode)), pilot, self.hunter_surroundings)
+        self.hunter_flight = make_hunter(pos, world=self, setup=PilotSetup(
+            hunter_settings_for(mode), pilot, self.hunter_surroundings))
 
     def _hunter_energy_reading(self):
         """(energy, most energy) of the hunter flying now, or None when there is none (or it has been destroyed)."""
@@ -505,7 +507,7 @@ class Game:
         if not self.player_has_moved:
             self.hunter_flight.pause()
             return
-        self.projectiles.extend(self.hunter_flight.fly(dt))
+        self.hunter_flight.step(dt)
 
     def _hotkey_summon_hunter(self) -> None:
         """Test key (ASTROVOID_HUNTER_HOTKEY): call the hunter in now.

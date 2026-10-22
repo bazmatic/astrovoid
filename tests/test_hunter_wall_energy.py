@@ -1,7 +1,7 @@
 """A mortal hunter loses energy to walls in proportion to how hard it hits them."""
 from dataclasses import replace
 import pytest
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.model import HunterSettings
 from maze.wall_segment import WallSegment
 
@@ -10,7 +10,7 @@ MORTAL = replace(HunterSettings(), indestructible=False, health=10, wall_energy=
 
 def crash(settings, speed_share):
     """Fly a hunter into a wall at `speed_share` of its top speed; return the ship."""
-    ship = HunterShip((100.0, 100.0), settings)
+    ship = HunterRig((100.0, 100.0), settings)
     ship.prev_x, ship.prev_y = 100.0, 100.0
     ship.vx = speed_share * ship.max_speed
     ship.x = 100.0 + ship.vx

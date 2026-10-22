@@ -54,13 +54,13 @@ def test_a_plain_action_trial_reports_that_action():
     assert (turn, thrust) == (2, False)
 
 
-def test_a_trial_is_not_counted_by_a_recorder_wrapping_the_ships_step():
+def test_a_trial_is_not_counted_by_the_flights_frame_listener():
     seen = []
     game, hunter = real_game_at()
-    original = hunter.step
-    hunter.step = lambda *a, **k: (seen.append(1), original(*a, **k))[1]
+    game.hunter_flight.on_frame(lambda *args: seen.append(1))
     shadow.trial_controls(game, hunter, PilotAction(1, True, False), frames=6)
     assert seen == []
+
 
 
 def test_the_trial_matches_what_the_ship_really_does_when_the_teacher_flies():

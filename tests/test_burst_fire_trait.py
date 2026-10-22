@@ -151,3 +151,11 @@ def test_gun_upgrades_expire_and_change_the_wait_between_bursts():
         enc.step(1)
     assert not enc.world.projectiles[-1].is_upgraded
     assert c.fire_interval == c.base_fire_interval
+
+
+def test_a_burst_cannot_be_silently_ignored_by_a_reload_gun():
+    import enemy_kinds
+    from creatures.registry import validate
+    kind = replace(enemy_kinds.kind('static'), traits=(('burstFire', {}), ('gun', {})))
+    with pytest.raises(ValueError, match='burst.*cadence'):
+        validate({'static': kind})

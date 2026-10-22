@@ -5,7 +5,7 @@ import random
 
 import pytest
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.braking import braking_solution, hull_travel, stopping_run
 from hunter.model import NEUTRAL, PilotAction
 
@@ -142,7 +142,7 @@ def open_space(monkeypatch):
 
 
 def test_stopping_run_matches_the_real_ship(open_space):
-    ship = HunterShip((50000, 50000))
+    ship = HunterRig((50000, 50000))
     ship.vx, ship.angle = 3.0, 180.0
     predicted, burn = stopping_run(3.0, 20, ship.thrust_force, config.SHIP_FRICTION)
     for _ in range(20):
@@ -160,7 +160,7 @@ def test_braking_when_told_to_always_stops_short_of_the_wall(open_space, seed):
     """Coast until the helper says brake, then fly its burn: the hull never reaches the wall."""
     rng = random.Random(seed)
     reaction = 27  # A decision takes 0.45 s to land
-    ship = HunterShip((50000, 50000))
+    ship = HunterRig((50000, 50000))
     course = rng.uniform(0, 2 * math.pi)
     speed = rng.uniform(0.6, 5.0)
     ship.vx, ship.vy = math.cos(course) * speed, math.sin(course) * speed
@@ -221,7 +221,7 @@ def brake_reading(ship, walls):
 
 
 def moving_ship(position, velocity, heading=0.0):
-    ship = HunterShip(position)
+    ship = HunterRig(position)
     ship.vx, ship.vy = velocity
     ship.angle = heading
     return ship
@@ -252,7 +252,7 @@ def test_too_fast_hands_the_navigator_the_braking_burn():
     burn = navigation_course(state)
     assert burn['burn_needed']
     assert burn['burn_heading_degrees'] == brake['burn_heading_degrees']
-    assert burn['burn_seconds'] == brake['burn_seconds'] > scaled_seconds(0.5, HunterShip((0, 0)).thrust_force)
+    assert burn['burn_seconds'] == brake['burn_seconds'] > scaled_seconds(0.5, HunterRig((0, 0)).thrust_force)
 
 
 def test_pilot_rules_fly_the_braking_burn_with_the_navigator():

@@ -22,6 +22,10 @@ class BurstFire(Trait):
             raise ValueError('burstFire: rounds must be a positive integer, spacing >= 0 and interval > 0')
         self.rounds, self.spacing, self.interval = rounds, spacing, interval
 
+    def validate_peers(self, params):
+        if params['gun'].get('cadence', 'reload') != 'burst':
+            raise ValueError("burstFire requires gun cadence 'burst'")
+
     def on_spawn(self, c, enc):
         c.fire_remaining = 0.0
         c.base_fire_interval = c.fire_interval = self.interval

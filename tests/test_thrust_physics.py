@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 import config
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from physics.thrust import apply_thrust, cap_speed, coast, sweep_walls, turn_toward
 
 
@@ -54,14 +54,11 @@ def test_the_ships_fly_as_before():
     box = [((100.0, 100.0), (500.0, 100.0)), ((500.0, 100.0), (500.0, 500.0)),
            ((500.0, 500.0), (100.0, 500.0)), ((100.0, 500.0), (100.0, 100.0))]
     random.seed(0)
-    ship = HunterShip((300.0, 300.0))
+    ship = HunterRig((300.0, 300.0))
     hits = 0
     for frame in range(240):
-        if frame % 3 == 0:
-            ship.rotate_right()
-        if frame % 40 < 30:
-            ship.apply_thrust()
-        ship.update(1.0)
+        from hunter.model import PilotAction
+        ship.step(1.0, PilotAction(1 if frame % 3 == 0 else 0, frame % 40 < 30, False))
         hits += ship.check_wall_collision(box)
     assert (ship.x, ship.y, ship.vx, ship.vy, ship.angle, len(ship.thrust_particles), hits) == (
         308.6787883735199, 373.9216601532574, -2.7576273993144405, -1.2225346510362698, 200.0, 4, 2)

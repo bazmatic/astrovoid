@@ -98,10 +98,10 @@ def test_restarting_puts_the_gates_back(game, monkeypatch):
 
 
 def test_only_an_active_hunter_is_pushed_by_a_gate(game, monkeypatch):
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     gate = begin(game, monkeypatch, [FREE])
     px, py = gate.pin
-    hunter = HunterShip((px, py))
+    hunter = HunterRig((px, py))
     hunter.vx, hunter.vy = 0.0, 3.0
     monkeypatch.setattr(type(game), 'hunter', property(lambda self: hunter))
     seen = []

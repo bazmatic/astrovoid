@@ -56,9 +56,9 @@ def test_there_is_no_reading_without_a_hunter(game):
 
 def test_the_reading_is_the_hunters_energy_and_its_most_while_it_flies(game):
     from dataclasses import replace
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from hunter.model import HunterSettings
-    game.hunter_flight = flying(HunterShip((300.0, 300.0), replace(HunterSettings(), indestructible=False, health=10)))
+    game.hunter_flight = flying(HunterRig((300.0, 300.0), replace(HunterSettings(), indestructible=False, health=10)))
     assert game._hunter_energy_reading() == (10, 10)
     game.hunter.take_damage()
     assert game._hunter_energy_reading() == (9, 10)
@@ -68,10 +68,10 @@ def test_the_reading_is_the_hunters_energy_and_its_most_while_it_flies(game):
 
 def test_the_gauge_is_drawn_in_the_hud_not_beside_the_ship(game):
     from dataclasses import replace
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from hunter.model import HunterSettings
     import config
-    game.hunter_flight = flying(HunterShip((600.0, 400.0), replace(HunterSettings(), indestructible=False, health=10)))
+    game.hunter_flight = flying(HunterRig((600.0, 400.0), replace(HunterSettings(), indestructible=False, health=10)))
     pygame.init()
     game.screen = pygame.Surface((1352, 878))
     game.screen.fill((0, 0, 0))
@@ -85,9 +85,9 @@ def test_the_gauge_is_drawn_in_the_hud_not_beside_the_ship(game):
 
 def test_the_gauge_sits_below_whatever_is_above_it_in_the_panel(game):
     from dataclasses import replace
-    from entities.hunter_ship import HunterShip
+    from tests.hunter_fixture import HunterRig
     from hunter.model import HunterSettings
-    game.hunter_flight = flying(HunterShip((600.0, 400.0), replace(HunterSettings(), indestructible=False, health=10)))
+    game.hunter_flight = flying(HunterRig((600.0, 400.0), replace(HunterSettings(), indestructible=False, health=10)))
     pygame.init()
     game.screen = pygame.Surface((1352, 878))
     game.screen.fill((0, 0, 0))

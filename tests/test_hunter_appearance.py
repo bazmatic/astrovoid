@@ -3,7 +3,7 @@ import math
 
 import pygame
 import pytest
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.model import HunterSettings
 
 POS = (200.0, 200.0)
@@ -11,7 +11,7 @@ HEADINGS = [0.0, 45.0, 90.0, 160.0, 233.0, 301.0]
 
 
 def ship_at(heading):
-    ship = HunterShip(POS)
+    ship = HunterRig(POS)
     ship.angle = heading
     return ship
 
@@ -86,11 +86,11 @@ def test_engine_mark_sits_at_the_tail(heading):
     assert all(abs(across(ship, point)) < ship.radius * 0.6 for point in amber)
 
 
-def test_engine_mark_brightens_under_thrust():
+def test_engine_mark_brightens_under_thrust(monkeypatch):
+    monkeypatch.setattr('entities.hunter_ship_body.draw_thrust_plume', lambda *args, **kwargs: None)
     def engine_glow(thrusting):
         ship = ship_at(0.0)
         ship.pilot_thrusting = thrusting
-        ship.draw_thrust_plume = lambda *args, **kwargs: None  # Measure the mark, not the flame
         return max(sum(color) for color in drawn(ship).values() if color[0] > color[1] > color[2])
 
     assert engine_glow(True) > engine_glow(False) * 1.3
@@ -102,7 +102,7 @@ def test_cockpit_sits_forward_of_centre():
 
 
 def test_stays_green_and_flashes_when_hit():
-    ship = HunterShip(POS, HunterSettings(indestructible=False))
+    ship = HunterRig(POS, HunterSettings(indestructible=False))
     ship.angle = 0.0
     calm = drawn(ship)
     greens = [c for c in calm.values() if c[1] > c[0] and c[1] > c[2]]

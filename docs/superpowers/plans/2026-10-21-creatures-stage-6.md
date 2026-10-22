@@ -1,6 +1,6 @@
 # Creatures and Traits, Stage 6 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Execute inline, with one whole-stage review at the end, following the user's stage 5 preference.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking. Execute inline, with one whole-stage review at the end, following the user's stage 5 preference.
 
 **Goal:** The allied hunter, duel combatants and experimental hunters become Creatures, and piloted creatures share independent propulsion, gun, burst-firing and energy traits instead of following a private HunterShip.
 
@@ -286,21 +286,21 @@ def test_a_non_pilot_creature_fires_one_three_round_burst():
 `creatures/traits/propulsion.py`, `entities/hunter_ship_body.py`; create `creatures/traits/energy.py`,
 `tests/test_energy_trait.py`, `tests/test_piloted_propulsion.py`; register Energy.
 
-- [ ] Write failing tests for direct Creature steering under every action, identity-sensitive burn accounting,
+- [x] Write failing tests for direct Creature steering under every action, identity-sensitive burn accounting,
   clock ordering, pre-movement muzzle position, no tunnelling, speed caps, strongest knock read/clear,
   proportional fractional wall energy, immunity and indestructibility. Enemy TakesHits remains independent.
-- [ ] Add the Controls fields and late hook exactly as described. Extract step_creature and close_creature;
+- [x] Add the Controls fields and late hook exactly as described. Extract step_creature and close_creature;
   retain spawn-once behavior and crowd ordering. Test that death skips later normal and late hooks.
-- [ ] Move HunterShip.step's steering/burn blocks to Thrusters' hunter mode and its integration to the late hook,
+- [x] Move HunterShip.step's steering/burn blocks to Thrusters' hunter mode and its integration to the late hook,
   using thrust.apply_thrust/coast/cap_speed/sweep_walls. Do not call HunterShip.step or create a craft. Preserve
   current generic Thrusters default behavior and source-of-settings resolution.
-- [ ] Implement Energy helpers and event handling. A wall sweep sets wall_impulse before hit_wall; Energy then
+- [x] Implement Energy helpers and event handling. A wall sweep sets wall_impulse before hit_wall; Energy then
   records the knock and applies wall cost. Emit death through Encounter so pilot closure happens on wall death.
-- [ ] Move arrowhead geometry and death drawing into HunterShipBody. Keep particle state in the Body/Creature,
+- [x] Move arrowhead geometry and death drawing into HunterShipBody. Keep particle state in the Body/Creature,
   preserve RNG order and immunity flash. Headless seeded surfaces cover headings, engine states, immunity,
   bar full/half and three death frames. Remove the rendering puppet's dependency on HunterShip; temporarily
   read the old craft's particle state until Task 4 migrates the pilot. Remove that fallback in Task 4.
-- [ ] Run baseline motion/energy/appearance tests and the full suite. Commit the new traits and hooks.
+- [x] Run baseline motion/energy/appearance tests and the full suite. Commit the new traits and hooks.
 
 ### Task 4: Pilot and HunterFlight use the Creature; migrate enemy pilots
 
@@ -310,21 +310,21 @@ def test_a_non_pilot_creature_fires_one_three_round_burst():
 create `hunter/build.py`; modify `tests/test_pilot_trait.py`, `tests/test_rules_hunter.py`,
 `tests/test_neural_hunter.py`, `tests/test_viber_sizes.py`, `tests/test_hunter_creature_contract.py`.
 
-- [ ] Write failing tests for a Creature with no craft, decisions populating Controls without moving it, exactly
+- [x] Write failing tests for a Creature with no craft, decisions populating Controls without moving it, exactly
   one step per frame, worker ownership, pause, death, restart, listeners and portrait copies. Assert pilot
   requirements reject missing thrusters/gun and that different Bodies can use the same pilot/burst traits.
-- [ ] Add the allied catalogue entry and enemy-only enumeration before using it in make_hunter; test that
+- [x] Add the allied catalogue entry and enemy-only enumeration before using it in make_hunter; test that
   make_enemy rejects allies and enemy palette/count order is unchanged. This keeps this task independently safe.
-- [ ] Add PilotSetup and make_hunter, extend build with optional setup, and change Flight into the lifetime/step
+- [x] Add PilotSetup and make_hunter, extend build with optional setup, and change Flight into the lifetime/step
   interface above. Enemy spawn derives setup; explicit factory setup is used for the ally/duel/lab. Support
   jev/rules/neural without inventing a catalogue-configured worker service.
-- [ ] Move existing HunterFlight observer/controller/fire-control logic to decide. It reads the actual Creature;
+- [x] Move existing HunterFlight observer/controller/fire-control logic to decide. It reads the actual Creature;
   replace ship.cancel_burst with burst-state cancellation. Pilot copies all decision fields into Controls;
   retain neural no-solution trigger behavior and listeners' observation order.
-- [ ] Resolve enemy profile settings into Energy/Thrusters/BurstFire/Gun parameters, preserving colours, strength,
+- [x] Resolve enemy profile settings into Energy/Thrusters/BurstFire/Gun parameters, preserving colours, strength,
   size, HP, random headings, protagonist-only surroundings and no-model omission. Remove craft copying and
   pilot_thrusting hand-over from Pilot; Body now reads direct Creature state.
-- [ ] Migrate perception/senses knock reading to energy.take_hit without changing observation shape, field order
+- [x] Migrate perception/senses knock reading to energy.take_hit without changing observation shape, field order
   or policy weights. Compare Task 1 traces, including exact shot frames and observation arrays before accepting
   numerical motion drift. Run all enemy hunter and pilot tests, then the full suite. Commit.
 
@@ -335,19 +335,19 @@ create `hunter/build.py`; modify `tests/test_pilot_trait.py`, `tests/test_rules_
 `tests/test_hunter_combat.py`, `tests/test_hunter_hotkey.py`, `tests/test_hunter_energy_gauge.py`,
 `tests/test_hunter_powerups.py`, `tests/test_layout_play.py`.
 
-- [ ] Write failing summon tests for jev/rules/neural: isinstance(game.hunter, Creature), correct settings/green
+- [x] Write failing summon tests for jev/rules/neural: isinstance(game.hunter, Creature), correct settings/green
   body, no ally in enemy counts/palette/exit/par, no friendly fire, hunter-source scoring, no double update,
   powerup upgrades, fractional energy gauge, pause/TTL cancellation, death animation and resummoning.
-- [ ] Re-run Task 4's ally enumeration/validation tests and verify all existing level/editor counts before
+- [x] Re-run Task 4's ally enumeration/validation tests and verify all existing level/editor counts before
   changing Game. The catalogue entry and filtering already exist; do not add a second ally entry.
-- [ ] Summon through make_hunter with Game world and GameSurroundings; retain current worker reuse/ownership.
+- [x] Summon through make_hunter with Game world and GameSurroundings; retain current worker reuse/ownership.
   _update_hunter calls flight.step (shots already enter Game.projectiles), advances death once and respects all
   existing freeze/player-not-moved conditions. _close_hunter closes the Creature's traits before discarding it.
-- [ ] Change hunter damage sites in collision_handler (projectiles, contacts, blasts) to energy.damage(hunter,
+- [x] Change hunter damage sites in collision_handler (projectiles, contacts, blasts) to energy.damage(hunter,
   encounter); change knock sites to register_hit; change crystal collection to collect_powerup(hunter,
   encounter). Update Game call sites to supply the hunter flight's encounter. Preserve projectile spending,
   explosion count, sound and kill credit. Do not offer the ally through enemy Encounter.shoot.
-- [ ] Keep the allied flight outside the enemy roster; draw and gate paths visit it once. Check restart/quit and
+- [x] Keep the allied flight outside the enemy roster; draw and gate paths visit it once. Check restart/quit and
   hotkey replacement with outstanding decisions. Run all hunter Game tests and full suite. Commit.
 
 ### Task 6: Duel and lab migrate to the same Creature path
@@ -356,19 +356,19 @@ create `hunter/build.py`; modify `tests/test_pilot_trait.py`, `tests/test_rules_
 `tests/test_duel_arena.py`, `tests/test_duel_enemies.py`, `tests/test_duel_safety.py`,
 `tests/test_experiment_harness.py`, `tests/test_experiment_rollout.py`, `tests/test_experiment_run.py`.
 
-- [ ] Write failing tests: both combatants are Creatures, independent settings and colours, separate sinks,
+- [x] Write failing tests: both combatants are Creatures, independent settings and colours, separate sinks,
   explicit opponent routing, no self-hits, wall immunity in duel, timeout/draw/death and borrowed worker cleanup.
   Lab tests pin fake-clock decision rate, stochastic neural RNG, initial heading, shot/thrust counters,
   observation callback order and existing output keys.
-- [ ] Add one Encounter world per duel side whose projectile sink is arena.shots[side.name] and surroundings
+- [x] Add one Encounter world per duel side whose projectile sink is arena.shots[side.name] and surroundings
   are DuelSurroundings. Replace _fly with flight.step and preserve is_enemy override for new shots. Damage
   opponents through Energy; preserve optional DuelEnemies update and shot ordering. Close all flights safely.
-- [ ] Build lab flights through make_hunter with existing settings/clock/pilot/RNG. Replace monkeypatches of
+- [x] Build lab flights through make_hunter with existing settings/clock/pilot/RNG. Replace monkeypatches of
   check_wall_collision, take_damage, collect_powerup and step with existing trait events and a frame callback
   on HunterFlight: on_frame(listener), called after a completed step with Creature, dt, held action and emitted
   volley count. Wall/damage/pickup counters subscribe to explicit events with the same attempted-versus-applied
   meaning as the old counters. Listener collections are cleared on close and are never copied into portraits.
-- [ ] Keep recorder.begin/before_frame/after_frame, rollout fields, trained weights and output schemas unchanged.
+- [x] Keep recorder.begin/before_frame/after_frame, rollout fields, trained weights and output schemas unchanged.
   Run the experiment, duel, shadow and student tests; compare baseline deterministic episode traces. Run full
   suite and commit. Do not alter PPO algorithm or reward definitions to make the refactor's tests pass.
 
@@ -378,7 +378,7 @@ create `hunter/build.py`; modify `tests/test_pilot_trait.py`, `tests/test_rules_
 `tests/test_hunter_appearance.py`, `tests/test_hunter_course.py`, `tests/test_hunter_flight.py`; modify
 `ARCHITECTURE.md`, `GLOSSARY.md`, `docs/superpowers/validation/2026-10-21-creatures-stage-6.md`.
 
-- [ ] Find remaining callers before deletion:
+- [x] Find remaining callers before deletion:
 
 ```sh
 rg -n 'HunterShip|entities\.hunter_ship\b|\.craft\b|hunter\.step\(|hunter\.take_damage\(|hunter\.collect_powerup\(' --glob '*.py' --glob '!venv/**' .
@@ -387,30 +387,30 @@ rg -n 'HunterShip|entities\.hunter_ship\b|\.craft\b|hunter\.step\(|hunter\.take_
   Migrate real behavior tests to make_hunter/Encounter/traits. Delete only tests of obsolete construction seams;
   list file::test and its reason. HunterShipBody is a valid remaining class; do not rename it to clean a grep.
   Remove old imports once no simulation, appearance, tool or test consumer needs the class.
-- [ ] Run full suite and deterministic enemy/ally/duel/lab trace comparisons. Run headless seeded pixel checks;
+- [x] Run full suite and deterministic enemy/ally/duel/lab trace comparisons. Run headless seeded pixel checks;
   retain the user's real-display skip. Smoke the seeded 40-level progression, beacon summon, paused/resumed
   hunter, neural mortal wall death, duel with/without enemies and one rules/neural lab episode. Pin commands
   and observed output in the validation report rather than claiming unobserved visual play.
-- [ ] CPU speed gate: two clean worktrees at integrated baseline and candidate, exclude unrelated work, alternate
+- [x] CPU speed gate: two clean worktrees at integrated baseline and candidate, exclude unrelated work, alternate
   five rounds; 60 warm-up + 600 frames, seed 1, time.process_time. Measure levels 1/8/21/24/25/40 without an ally
   and with a rules or greedy neural ally. Include a duel and lab episode throughput comparison. For the ally
   use fixed spawn/heading and fake clock/SyncWorker; normal worker roundtrip timing is not a refactor metric.
   Record medians, spread and raw CSV. Stop and report any >20% regression before committing completion.
-- [ ] Update architecture with trait ordering, burstFire ownership, Creature-backed HunterFlight, single state,
+- [x] Update architecture with trait ordering, burstFire ownership, Creature-backed HunterFlight, single state,
   enemy-only catalogue enumeration, worker ownership and lab hooks. Update glossary Craft to explain that
   the former private craft was removed; Burst is a queued group of rounds, Volley is projectiles emitted at once.
-- [ ] Request one whole-stage code review against the integrated baseline, focused on trained behavior, burst
+- [x] Request one whole-stage code review against the integrated baseline, focused on trained behavior, burst
   reuse, allies leaking into enemy systems, double stepping, death/portrait lifecycle and lab observability.
   Fix important findings, re-run affected checks and record deferred minor issues.
-- [ ] Commit verified files by name. Hand back the speed table, gameplay differences, deleted tests, every
+- [x] Commit verified files by name. Hand back the speed table, gameplay differences, deleted tests, every
   ruling, review findings and remaining limitations. Keep the branch local until pushing is authorized.
 
 ## Self-review checklist
 
-- [ ] Spec stage 6: allied entry, Jev/rules/neural, HunterFlight, duel and experiments all have explicit tasks.
-- [ ] Stage 5 deferred work: craft removed; propulsion, gun, energy and independent burstFire covered.
-- [ ] Burst test demonstrates a non-pilot user; gun never owns a queued burst.
-- [ ] Pre-movement shooting, before-clock sensing, identity-sensitive burns and worker ownership specified.
-- [ ] Ally excluded from enemy counts, editor, par, exits and friendly-shot collision offers.
-- [ ] Active other-session work is integrated before shared files are edited.
-- [ ] Complete suite, deterministic comparisons, headless drawing, speed gate and one final review included.
+- [x] Spec stage 6: allied entry, Jev/rules/neural, HunterFlight, duel and experiments all have explicit tasks.
+- [x] Stage 5 deferred work: craft removed; propulsion, gun, energy and independent burstFire covered.
+- [x] Burst test demonstrates a non-pilot user; gun never owns a queued burst.
+- [x] Pre-movement shooting, before-clock sensing, identity-sensitive burns and worker ownership specified.
+- [x] Ally excluded from enemy counts, editor, par, exits and friendly-shot collision offers.
+- [x] Active other-session work is integrated before shared files are edited.
+- [x] Complete suite, deterministic comparisons, headless drawing, speed gate and one final review included.

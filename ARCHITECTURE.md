@@ -30,7 +30,7 @@ Main game coordinator class. Manages game state, level progression, and coordina
 The Enemy Kind catalogue, read from `config/enemies.json`: one entry per kind, in the order the editor palette and the
 level counts use. `kind(key)` gives an `EnemyKind` (names, `anchored`, `replays_player`, `par_weight`, `spawn_radius`,
 its `pilot` mode, Body, Traits and its own `tuning`); `kinds()`, `anchored()` and `hunters()` list
-keys; `name()` and `plural()` give what the player reads. A missing or unknown field stops the game at startup.
+enemy keys; `all_kinds()` includes friends; `name()` and `plural()` give what the player reads. A missing or unknown field stops the game at startup.
 
 #### `config.py`
 
@@ -108,16 +108,16 @@ The entity system provides a foundation for all game objects:
 
 ### Creatures (`creatures/`)
 
-Every enemy is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
+Every enemy and the allied hunter is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
 its `config/enemies.json` entry and run in the entry's order (see
-`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). The allied hunter still uses its own ship and flight.
+`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). A Creature is the only moving state; pilots and the lab use the same traits.
 
 - **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
   `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
   keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter and the live state
   named by each trait in `LIVE` (a pilot’s flight and worker).
 - **`trait.py`**: `Trait`, whose hooks all do nothing by default: `on_spawn`, `on_frame`, `on_shot`, `on_death`,
-  `on_event`, `on_close` when the encounter ends, and `on_crowd` for a `CROWD` trait (once a frame per crowd:
+  `on_event`, `on_after_frame` for late integration, `on_close` when the encounter ends, and `on_crowd` for a `CROWD` trait (once a frame per crowd:
   a kind, or a crowd the trait names, as Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
   `from_params` builds it from its catalogue parameters.
 - **`traits/`**: `brains.py` (`still`, `patrol`, `chase`, `replaysPlayer`), `propulsion.py` (`coasts`, `drift`,
@@ -128,22 +128,26 @@ its `config/enemies.json` entry and run in the entry's order (see
   kill), `rooted.py` (`anchored`, `pullsShip`, a crowd trait whose pulls together never exceed one at full strength,
   `flingsShip`), `flock.py` (`flocks`, a crowd brain that decides the whole flock's next frame, `tweets`),
   `lighthouse.py` (`scans`, which watches the player's ship only, and `launchesFlock`), and
-  `piloted.py` (`pilot`, rules or neural): a pilot flies a private **craft**, a `HunterShip` with its own
-  `HunterFlight`; each frame pushes reach the craft, it flies and places its shots, and the creature follows its
-  position, velocity and heading. Death and encounter closing stop its flight and worker
+  `piloted.py` (`pilot`, Jev/rules/neural, decides controls), `burst_fire.py` (`burstFire`, schedules queued rounds),
+  and `energy.py` (`energy`, health, damage immunity, wall loss and strongest-knock sensing). A pilot no longer
+  moves a private ship: thrusters steer, the gun emits its scheduled volley, then late propulsion integrates and
+  resolves walls. Energy handles contact/wall impulses as events. BurstFire works without a pilot; startup
+  validation rejects a burst paired with a gun that ignores its cadence.
 - **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
   bad parameters or a missing requirement when the game starts
-- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every enemy kind
-- **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's traits in roster order and then
-  animates its Body, then each kind's crowd traits; `shoot(projectile)` offers a friendly shot to each live creature in
+- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every enemy kind; `hunter.build.make_hunter` resolves runtime pilot
+  settings for the friendly hunter without mutating the shared catalogue
+- **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's ordinary traits, late
+  integration and Body in roster order, then crowd traits; `step_creature` and `close_creature` also serve flights; `shoot(projectile)` offers a friendly shot to each live creature in
   roster order and stops at the first it reaches; a miss returns False. `close()` runs every creature’s
   `on_close` hooks, including dead creatures, and is safe to repeat. `ready()` runs every newcomer's spawn hooks
   without a frame passing; the game calls it at level start, so creatures show their state (an anemone its reach) before the player moves.
   Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
   `add_shot`, `explode`, and `spawn`, which puts a new enemy of any kind on the roster). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
 
-`entities/hunter_ship_body.py` supplies `HunterShipBody` (`hunterShip`): an arrowhead drawn through a puppet
-`HunterShip`, using the kind’s colours, the craft’s plume, an optional hit-point bar and an expanding death ring.
+`entities/hunter_ship_body.py` supplies `HunterShipBody` (`hunterShip`): the arrowhead geometry, kind colours, immunity
+flash, shared plume, optional hit-point bar and expanding death ring. It owns no moving ship; the old HunterShip
+class is removed. The beacon shares the Body’s hull shape and default colours.
 
 ### Enemy Roster (`game_handlers/enemy_roster.py`)
 
@@ -158,16 +162,24 @@ its `config/enemies.json` entry and run in the entry's order (see
 The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms).
 
 - **`flight.py`**: `HunterFlight` - one hunter in play with its pilot, from its summons until it is closed
-  - Built from the hunter's ship, a pilot (`WorkerPilot` for Jev or the rules pilot, `NeuralPilot` for the neural one) and its surroundings
-  - `fly(dt)` flies one frame and returns the shots fired; `pause()` holds it still; `close()` ends it
-  - Picks the observer the pilot reads, consults fire control, drops a burst no live decision backs, and settles the ship against the walls
+  - Built from a Creature, its Encounter, a pilot (`WorkerPilot` for Jev or the rules pilot, `NeuralPilot` for the neural one) and its surroundings
+  - `step(dt)` runs one Creature frame and routes shots through its Encounter; `pause()` holds it still; `close()` ends it
+  - `decide()` picks the observer and controls; rules/Jev consult fire control, while the neural pilot aims along
+    its own nose. `step(dt)` runs the Creature once and places shots in the world sink; `pause()` advances no
+    physics or clocks and drops the queued burst. Enemy pilots are stepped only by their roster Encounter
   - The ship's settings are the flight's, fixed for its life
-  - `on_observed(fn)` lets the lab record what the pilot is shown
+  - `on_observed(fn)`, `on_frame(fn)` and `on_event(fn)` let the lab record observations and actual trait effects;
+    shadow trials copy Creature state, preserve the held decision’s identity and use an isolated Encounter
+  - Closing stops an owned enemy worker once; Game/duel/lab close their borrowed workers. Portraits omit the
+    flight, worker, setup and Encounter, so copies retain no live callbacks or threads
 - **`surroundings.py`**: what the hunter may perceive at the moment it looks (maze, enemies, threats, pickups, the visible friend)
   - `GameSurroundings` answers for a level; `DuelSurroundings` (in `duel.py`) for each side of a duel
 - **`duel.py`**: `DuelArena` - two hunter flights fighting each other
 
-`Game`, `DuelArena` and the experiments harness each hold a `HunterFlight` rather than wiring the ship, pilot and observers themselves.
+`Game`, `DuelArena` and the experiments harness each hold a Creature-backed `HunterFlight`. The friendly flight
+has its own one-Creature Encounter outside the enemy roster. Duel sides use separate projectile sinks and explicit
+opponent routing; ordinary friendly shots never hit allies. The allied catalogue entry is excluded from enemy
+counts, par, exits, editor palettes and enemy-hunter enumeration.
 
 ### Scoring System (`scoring/`)
 

@@ -95,6 +95,7 @@ class Thrusters(Trait):
         c.pilot_thrusting = False
         c.thrust_frames = 0
         c._decision = c._burn_left = None
+        c._pilot_velocity = (c.vx, c.vy)
         c.thrust_particles = []
         c.thrusting = False
 
@@ -113,8 +114,11 @@ class Thrusters(Trait):
         thrust.coast(c, dt, self.friction)
         thrust.cap_speed(c, self.max_speed)
         maze = enc.maze
-        if maze is not None and thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
-            c.emit('hit_wall', enc)
+        if maze is not None:
+            vx, vy = c.vx, c.vy
+            if thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
+                c.wall_impulse = (c.vx - vx, c.vy - vy)
+                c.emit('hit_wall', enc)
 
     def _steer(self, c, enc, dt):
         action = c.controls
@@ -157,6 +161,10 @@ class Thrusters(Trait):
         maze = enc.maze
         if maze is not None:
             vx, vy = c.vx, c.vy
-            if thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
+            c.wall_contact = thrust.sweep_walls(c, maze.walls, maze.spatial_grid)
+            c.wall_impulse = (0.0, 0.0)
+            if c.wall_contact:
                 c.wall_impulse = (c.vx - vx, c.vy - vy)
                 c.emit('hit_wall', enc)
+            c.emit('wall_checked', enc)
+        c._pilot_velocity = (c.vx, c.vy)

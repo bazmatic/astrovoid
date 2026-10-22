@@ -10,6 +10,8 @@ def register_hit(c, dvx, dvy):
     hit = getattr(c, '_hit', None)
     if hit is None or dvx * dvx + dvy * dvy > hit[0] ** 2 + hit[1] ** 2:
         c._hit = (dvx, dvy)
+    if hasattr(c, '_pilot_velocity'):
+        c._pilot_velocity = (c.vx, c.vy)
 
 
 def take_hit(c):
@@ -20,6 +22,7 @@ def take_hit(c):
 
 def damage(c, enc):
     """Apply one energy hit; True only when this call destroys the creature."""
+    c.emit('damage_attempted', enc)
     if not c.active or c.indestructible or c.immunity_remaining > 0:
         return False
     c.health -= 1
@@ -51,10 +54,12 @@ class Energy(Trait):
         c.immunity_remaining = max(0.0, c.immunity_remaining - dt / config.FPS)
 
     def on_event(self, c, name, enc):
+        if name == 'contact':
+            register_hit(c, *c.contact_impulse)
         if name == 'hit_wall' and c.active:
             dvx, dvy = c.wall_impulse
             register_hit(c, dvx, dvy)
             if not c.indestructible and c.wall_energy > 0:
-                c.health -= c.wall_energy * math.hypot(dvx, dvy) / max(c.max_speed, 1e-6)
+                c.health -= c.wall_energy * math.hypot(dvx, dvy) / max(getattr(c, 'max_speed', config.SHIP_MAX_SPEED), 1e-6)
                 if c.health <= 0:
                     enc.kill(c)

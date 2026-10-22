@@ -30,15 +30,10 @@ def test_the_same_student_episode_twice_is_identical(spec):
 
 
 def test_the_student_flies_with_the_specs_turn_rate_and_plain_controls(spec, monkeypatch):
-    from entities.hunter_ship import HunterShip
     seen = []
-    original = HunterShip.step
-
-    def spy(self, dt, action, solution=None):
-        seen.append((self.current_rotation_speed, action))
-        return original(self, dt, action, solution)
-    monkeypatch.setattr(HunterShip, 'step', spy)
-    run_episode(13, 0, horizon=2.0, student=spec)
+    def observe(t, game, hunter):
+        seen.append((hunter.current_rotation_speed, game.hunter_flight.controller.action))
+    run_episode(13, 0, horizon=2.0, student=spec, trace=observe)
     assert seen
     assert all(rate == pytest.approx(HunterShipRate.base * 1.0) for rate, _ in seen)
     assert all(not (a.track or a.course or a.worked_burn) for _, a in seen)

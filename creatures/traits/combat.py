@@ -86,7 +86,9 @@ class BouncesOffWalls(Trait):
                 normal_x, normal_y = -(end[1] - start[1]) / length, (end[0] - start[0]) / length
                 if (c.x - start[0]) * normal_x + (c.y - start[1]) * normal_y < 0:
                     normal_x, normal_y = -normal_x, -normal_y
+                vx, vy = c.vx, c.vy
                 apply_wall_collision_physics(c, (normal_x, normal_y), config.COLLISION_RESTITUTION)
+                c.wall_impulse = (c.vx - vx, c.vy - vy)
                 c.x += normal_x * (c.radius + 1.0)
                 c.y += normal_y * (c.radius + 1.0)
             c.emit('hit_wall', enc)
@@ -191,6 +193,9 @@ class Gun(Trait):
         if name == 'pickup' and self.upgrades:
             c.gun_upgrade_level += 1
             c.upgrade_remaining = config.POWERUP_DURATION_SECONDS
+            if self.cadence == 'burst':
+                c.fire_interval = (c.base_fire_interval * cooldown_for_upgrade(c.gun_upgrade_level)
+                                   / config.SETTINGS.powerups.fireRateBaseCooldown)
 
     def _reload(self, c, strength):
         low = strength.fire_interval_min if self.interval_min is None else self.interval_min

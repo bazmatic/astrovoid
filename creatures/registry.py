@@ -48,3 +48,7 @@ def validate(catalogue: Mapping) -> None:
             missing = [needed for needed in trait.REQUIRES if needed not in names]
             if missing:
                 raise ValueError(f'enemy kind {key!r}: trait {name!r} requires {missing}')
+            try:
+                trait.validate_peers(dict(kind.traits))
+            except ValueError as error:
+                raise ValueError(f'enemy kind {key!r}: {error}') from None

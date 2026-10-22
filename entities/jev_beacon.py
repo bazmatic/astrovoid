@@ -7,7 +7,7 @@ allied Jev hunter when the player collects it.
 import math
 from typing import List, Tuple
 import pygame
-from entities.hunter_ship import HunterShip
+from entities.hunter_ship_body import DEFAULT_COLOURS, HULL_POINTS
 from entities.powerup_crystal import PowerupCrystal
 from rendering import visual_effects
 
@@ -21,7 +21,7 @@ class JevBeacon(PowerupCrystal):
     """
 
     # Drawing constants (lengths are multiples of the radius)
-    RING_COLOR = HunterShip.ENGINE_LIT_COLOR
+    RING_COLOR = DEFAULT_COLOURS['engineLitColor']
     RING_RADIUS = 2.3
     RING_ARCS = 3  # Broken into arcs so the turning shows
     RING_ARC_SWEEP = 80.0  # Degrees covered by each arc
@@ -30,13 +30,9 @@ class JevBeacon(PowerupCrystal):
 
     def emblem_points(self, center: Tuple[float, float], size: float) -> List[Tuple[float, float]]:
         """The hunter's arrowhead, nose up, with its centre at center."""
-        ship = HunterShip
-        outline = [
-            (ship.NOSE_X, 0.0), (ship.WING_X, ship.WING_HALF_SPAN),
-            (ship.NOTCH_X, 0.0), (ship.WING_X, -ship.WING_HALF_SPAN),
-        ]
-        # Shifted along its length so the shape, not the ship's own centre, sits in the ring
-        middle = (ship.NOSE_X + ship.WING_X) / 2
+        outline = HULL_POINTS
+        # Centre the complete arrowhead in the beacon's ring.
+        middle = (HULL_POINTS[0][0] + HULL_POINTS[1][0]) / 2
         return [(center[0] + y * size, center[1] - (x - middle) * size) for x, y in outline]
 
     def draw(self, screen: pygame.Surface) -> None:
@@ -70,6 +66,6 @@ class JevBeacon(PowerupCrystal):
             pygame.draw.lines(screen, self.RING_COLOR, False, points, 2)
         
         emblem = self.emblem_points(center, size * self.EMBLEM_SCALE)
-        pygame.draw.polygon(screen, HunterShip.FILL, emblem)
-        pygame.draw.aalines(screen, HunterShip.COLOR, True, emblem)
-        pygame.draw.circle(screen, HunterShip.NOSE_COLOR, (int(emblem[0][0]), int(emblem[0][1])), 1)
+        pygame.draw.polygon(screen, DEFAULT_COLOURS['fill'], emblem)
+        pygame.draw.aalines(screen, DEFAULT_COLOURS['color'], True, emblem)
+        pygame.draw.circle(screen, DEFAULT_COLOURS['noseColor'], (int(emblem[0][0]), int(emblem[0][1])), 1)

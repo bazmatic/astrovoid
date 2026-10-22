@@ -1,7 +1,7 @@
 import math
 import json
 import pytest
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 import creatures
 from hunter.perception import HunterPerception
 from hunter.model import NEUTRAL
@@ -12,7 +12,7 @@ from maze.wall_segment import WallSegment
 
 @pytest.mark.parametrize('heading,direction', [(45,'left'),(0,'ahead'),(315,'right'),(180,'behind')])
 def test_real_observation_reports_enemy_direction_relative_to_nose(heading,direction):
-    ship = HunterShip((150,150))
+    ship = HunterRig((150,150))
     ship.angle = heading
     obs = HunterPerception().observe(ship,maze(),None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     state = pilot_state(json.loads(obs.state_json))
@@ -20,7 +20,7 @@ def test_real_observation_reports_enemy_direction_relative_to_nose(heading,direc
 
 
 def test_navigation_sensors_do_not_offer_cells_behind_a_wall():
-    ship,world = HunterShip((150,150)),maze()
+    ship,world = HunterRig((150,150)),maze()
     world.walls = [WallSegment((180,0),(180,900),3)]
     obs = HunterPerception().observe(ship,world,None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     state = pilot_state(json.loads(obs.state_json))
@@ -30,7 +30,7 @@ def test_navigation_sensors_do_not_offer_cells_behind_a_wall():
 
 
 def test_metres_speed_heading_and_rotation_use_physics_units():
-    ship = HunterShip((150,150))
+    ship = HunterRig((150,150))
     ship.vx,ship.vy,ship.angle = 3,4,315
     obs = HunterPerception().observe(ship,maze(),None,[creatures.build('patrol', (250,150),1)],[],NEUTRAL,0,1)
     raw = json.loads(obs.state_json)
@@ -51,7 +51,7 @@ def test_metres_speed_heading_and_rotation_use_physics_units():
 
 
 def test_history_is_last_three_nonrecursive_states_and_resets_with_generation():
-    perception,ship = HunterPerception(),HunterShip((150,150))
+    perception,ship = HunterPerception(),HunterRig((150,150))
     for now in range(5):
         ship.angle = now*10
         obs = perception.observe(ship,maze(),None,[],[],NEUTRAL,now,1)
@@ -67,7 +67,7 @@ def test_history_is_last_three_nonrecursive_states_and_resets_with_generation():
 
 
 def test_motion_reports_seconds_until_wall_impact_when_coasting():
-    ship,world = HunterShip((150,150)),maze()
+    ship,world = HunterRig((150,150)),maze()
     world.walls = [WallSegment((250,0),(250,900),3)]
     ship.vx,ship.angle = 2,90
 
@@ -79,7 +79,7 @@ def test_motion_reports_seconds_until_wall_impact_when_coasting():
     moving,physics = motion()
     assert moving['wall_clearance_metres'] == pytest.approx(100-ship.radius)
     # Fly the same course with the engine off and count frames to contact.
-    coaster,frames = HunterShip((150,150)),0
+    coaster,frames = HunterRig((150,150)),0
     coaster.vx = 2
     while coaster.x+coaster.radius < 250:
         coaster.step(1,NEUTRAL)
@@ -108,7 +108,7 @@ def test_motion_reports_seconds_until_wall_impact_when_coasting():
 
 def test_turning_state_and_bearings_projected_to_next_decision():
     from dataclasses import replace
-    ship = HunterShip((150,150))
+    ship = HunterRig((150,150))
     ship.angle = 300
     enemy = creatures.build('patrol', (250,150),1)
 
@@ -138,7 +138,7 @@ def test_turning_state_and_bearings_projected_to_next_decision():
 def test_aim_leads_a_crossing_enemy_and_reports_whether_the_nose_is_on_target():
     import config
     from entities.ship import Ship
-    ship = HunterShip((150,150))
+    ship = HunterRig((150,150))
     enemy = creatures.build('patrol', (350,150),1)
 
     def contacts(player=None):
@@ -174,7 +174,7 @@ def test_aim_leads_a_crossing_enemy_and_reports_whether_the_nose_is_on_target():
 
 
 def test_brake_solution_compares_speed_with_what_can_be_stopped_before_the_wall():
-    ship,world = HunterShip((150,150)),maze()
+    ship,world = HunterRig((150,150)),maze()
     world.walls = [WallSegment((350,0),(350,900),3)]
 
     def brake():
@@ -210,7 +210,7 @@ def test_brake_solution_compares_speed_with_what_can_be_stopped_before_the_wall(
 
 def test_follow_player_routes_around_walls_to_the_player():
     from entities.ship import Ship
-    ship,world,player = HunterShip((150,150)),maze(),Ship((350,150))
+    ship,world,player = HunterRig((150,150)),maze(),Ship((350,150))
     enemy = creatures.build('patrol', (150,450),1)
 
     def follow():

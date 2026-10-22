@@ -3,7 +3,7 @@ import json
 import math
 import pytest
 import creatures
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 from hunter.jev_pilot import JevPilot
 from hunter.model import ACTIONS, NEUTRAL
 from hunter.perception import HunterPerception
@@ -14,7 +14,7 @@ from tests.test_hunter_perception import maze
 
 
 def raw_state(enemies=(), heading=10):
-    ship = HunterShip((150, 150))
+    ship = HunterRig((150, 150))
     ship.vx, ship.vy, ship.angle = 3, 1, heading
     obs = HunterPerception().observe(ship, maze(), None, list(enemies), [], NEUTRAL, 0, 1)
     return json.loads(obs.state_json), obs
@@ -78,7 +78,7 @@ def test_ratios_reach_the_range_state():
 
 
 def test_cruising_fraction_reaches_the_speed_state():
-    ship = HunterShip((150, 150))
+    ship = HunterRig((150, 150))
     ship.vx, ship.vy, ship.angle = 0.5, 0, 0
     obs = HunterPerception().observe(ship, maze(), None, [], [], NEUTRAL, 0, 1)
     raw = json.loads(obs.state_json)
@@ -233,7 +233,7 @@ def test_request_interval_is_not_a_rule_parameter():
 
 def strafing_state(walls=None, tracking=True, heading=0, speed=0.3):
     """A slow hunter aiming at an enemy dead ahead, last steering `track`, with the given walls."""
-    ship = HunterShip((150, 150))
+    ship = HunterRig((150, 150))
     ship.vx, ship.vy, ship.angle = speed, 0, heading
     obs = HunterPerception().observe(ship, maze(), None, [creatures.build('patrol', (250, 150), 1)], [], NEUTRAL, 0, 1)
     raw = json.loads(obs.state_json)
@@ -363,8 +363,7 @@ def test_thrust_multiplier_is_a_bounded_parameter_that_matches_the_ship_default(
 
 def standing_still_with_a_wall(thrust):
     """A stationary hunter beside a wall: wall-follow wants a small speed-up to cruise."""
-    ship = HunterShip((150, 170))
-    ship.settings = replace_settings(thrust)
+    ship = HunterRig((150, 170), replace_settings(thrust))
     ship.angle = 180.0
     obs = HunterPerception().observe(ship, maze(), None, [], [], NEUTRAL, 0, 1)
     raw = json.loads(obs.state_json)

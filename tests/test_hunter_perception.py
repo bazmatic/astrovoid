@@ -2,7 +2,7 @@ import pytest
 import json
 from types import SimpleNamespace
 from dataclasses import replace
-from entities.hunter_ship import HunterShip
+from tests.hunter_fixture import HunterRig
 import creatures
 from maze.wall_segment import WallSegment
 from hunter.model import NEUTRAL, HunterSettings
@@ -19,7 +19,7 @@ def read(perception, hunter, world, enemies, now):
 
 
 def test_hidden_motion_does_not_rewrite_sighting():
-    p, h, m = HunterPerception(), HunterShip((150,150)), maze()
+    p, h, m = HunterPerception(), HunterRig((150,150)), maze()
     e = creatures.build('patrol', (250,150),1)
     first = read(p,h,m,[e],0)
     assert len(first['visible_contacts']) == 1
@@ -34,7 +34,7 @@ def test_hidden_motion_does_not_rewrite_sighting():
 
 def test_contact_caps_do_not_erase_visible_memory_and_snapshot_is_detached():
     settings = replace(HunterSettings(), max_contacts=1, max_memory_contacts=2)
-    p, h, m = HunterPerception(settings), HunterShip((150,150)), maze()
+    p, h, m = HunterPerception(settings), HunterRig((150,150)), maze()
     enemies = [creatures.build('patrol', (200+i*10,150),1) for i in range(3)]
     snap = p.observe(h,m,None,enemies,[],NEUTRAL,0,1)
     for e in enemies:
@@ -48,13 +48,13 @@ def test_contact_caps_do_not_erase_visible_memory_and_snapshot_is_detached():
 
 
 def test_visible_empty_position_removes_sighting():
-    p,h,m = HunterPerception(), HunterShip((150,150)), maze()
+    p,h,m = HunterPerception(), HunterRig((150,150)), maze()
     read(p,h,m,[creatures.build('patrol', (250,150),1)],0)
     assert not read(p,h,m,[],1)['remembered_contacts']
 
 
 def test_observed_death_removes_old_hidden_sighting():
-    p,h,m = HunterPerception(),HunterShip((150,150)),maze()
+    p,h,m = HunterPerception(),HunterRig((150,150)),maze()
     enemy = creatures.build('patrol', (250,150),1)
     read(p,h,m,[enemy],0)
     m.walls = [WallSegment((200,0),(200,900),3)]
@@ -75,7 +75,7 @@ def test_route_follows_an_opening_blasted_through_a_wall_cell():
         edges[y] = (left,right)
         world.walls += [left,right,WallSegment((200,y*100),(300,y*100),3),
                         WallSegment((200,y*100+100),(300,y*100+100),3)]
-    p,h,player = HunterPerception(),HunterShip((150,150)),Ship((350,150))
+    p,h,player = HunterPerception(),HunterRig((150,150)),Ship((350,150))
 
     def route():
         obs = p.observe(h,world,player,[],[],NEUTRAL,0,1)
@@ -97,7 +97,7 @@ def test_sight_range_is_the_same_distance_whatever_the_cell_size():
     assert settings.sensor_range(coarse) == pytest.approx(settings.sensor_range(dense)) == pytest.approx(800)
 
     def sees(world, distance):
-        state = read(HunterPerception(), HunterShip((150, 150)), world, [creatures.build('patrol', (150 + distance, 150), 1)], 0)
+        state = read(HunterPerception(), HunterRig((150, 150)), world, [creatures.build('patrol', (150 + distance, 150), 1)], 0)
         return len(state['visible_contacts']) == 1
 
     for world in (coarse, dense):
@@ -108,7 +108,7 @@ def test_sight_range_is_the_same_distance_whatever_the_cell_size():
 # --- enemies that remain ---------------------------------------------------------
 
 def test_the_state_says_whether_any_enemy_is_still_alive_even_out_of_sight():
-    ship = HunterShip((150, 150))
+    ship = HunterRig((150, 150))
     world = maze()
     world.walls = [WallSegment((180, 0), (180, 900), 3)]
     hidden = creatures.build('patrol', (250, 150), 1)          # behind a wall, so not visible

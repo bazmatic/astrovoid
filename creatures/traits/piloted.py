@@ -1,74 +1,56 @@
-"""A pilot: the creature follows a craft, a hunter ship its pilot flies exactly as it flies the allied hunter."""
-from dataclasses import replace
+"""A pilot decides controls; propulsion and weapons act on the Creature itself."""
 from time import monotonic
 
 import config
 from creatures.trait import Trait
-from entities.hunter_ship import HunterShip
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
-from hunter.settings_for import hunter_settings_for
 from hunter.surroundings import ProtagonistSurroundings
 
-MODES = ('rules', 'neural')
+MODES = ('jev', 'rules', 'neural')
 
 
 class Pilot(Trait):
-    """A `mode` pilot ('rules' or 'neural') flies a craft that hunts only the level's protagonist, and the creature
-    follows it. Its shots are its allegiance's, at `shotStrength`, in its kind's colour.
-
-    Each frame a push the creature took since the last (a blast, a gate, a ram) goes to the craft, which the pilot
-    feels as a hit; the craft flies a frame; and the creature takes its place, speed, heading and engine. A neural pilot
-    with no model installed never flies. It keeps `craft`, `flight` and `pilot_worker`; the last two are let go when it
-    dies or the encounter closes."""
     NAME = 'pilot'
-    LIVE = ('flight', 'pilot_worker')
+    REQUIRES = ('thrusters', 'gun')
+    LIVE = ('flight', 'pilot_worker', 'pilot_setup')
 
-    def __init__(self, mode: str, shotStrength: float = 1.0):
+    def __init__(self, mode):
         if mode not in MODES:
             raise ValueError(f'pilot: mode must be one of {MODES}, not {mode!r}')
-        self.mode, self.shot_strength = mode, shotStrength
+        self.mode = mode
 
     def on_spawn(self, c, enc):
-        craft = HunterShip(c.get_pos(), replace(hunter_settings_for(self.mode), indestructible=True))
-        craft.radius, craft.angle, craft.vx, craft.vy = c.radius, c.angle, c.vx, c.vy
-        craft.SHOT_SOURCE = 'enemy' if c.allegiance == 'enemy' else 'hunter'
-        craft.SHOT_STRENGTH = self.shot_strength
-        craft.COLOR = tuple(c.kind.tuning.get('color', HunterShip.COLOR))
-        c.craft, c.pilot_thrusting, c.pilot_worker, c.flight = craft, False, None, None
-        if self.mode == 'rules':
-            c.pilot_worker = enc.world.rules_worker()
-            pilot = WorkerPilot(c.pilot_worker, monotonic)
+        setup = getattr(c, 'pilot_setup', None)
+        c.flight = c.pilot_worker = None
+        if setup is not None:
+            pilot, surroundings, owns = setup.pilot, setup.surroundings, setup.owns_worker
         else:
-            policy = enc.world.enemy_policy()
-            if policy is None:
-                return
-            pilot = NeuralPilot(policy, config.SETTINGS.game.neuralDecisionFrames)
-        c.flight = HunterFlight(craft, pilot, ProtagonistSurroundings(enc.world))
+            surroundings, owns = ProtagonistSurroundings(enc.world), True
+            if self.mode == 'neural':
+                policy = enc.world.enemy_policy()
+                if policy is None:
+                    c.controls.gun_enabled = False
+                    return
+                pilot = NeuralPilot(policy, config.SETTINGS.game.neuralDecisionFrames)
+            else:
+                pilot = WorkerPilot(enc.world.rules_worker(), monotonic)
+        c.pilot_worker = getattr(pilot, 'worker', None)
+        c.flight = HunterFlight(c, pilot, surroundings, encounter=enc, owns_worker=owns)
 
     def on_frame(self, c, enc, dt):
-        if c.flight is None:
-            return
-        craft = c.craft
-        if (c.vx, c.vy) != (craft.vx, craft.vy):
-            craft.register_hit(c.vx - craft.vx, c.vy - craft.vy)
-        craft.x, craft.y, craft.vx, craft.vy = c.x, c.y, c.vx, c.vy
-        for shot in c.flight.fly(dt):
-            enc.add_shot(shot)
-        c.x, c.y, c.vx, c.vy, c.angle = craft.x, craft.y, craft.vx, craft.vy, craft.angle
-        c.pilot_thrusting = craft.pilot_thrusting
+        if c.flight is not None:
+            c.flight.decide()
+
+    def on_event(self, c, name, enc):
+        flight = getattr(c, 'flight', None)
+        if flight is not None:
+            flight._event(c, name)
 
     def on_death(self, c, enc):
-        self._close(c)
+        self.on_close(c, enc)
 
     def on_close(self, c, enc):
-        self._close(c)
-
-    def _close(self, c):
-        """Stop the pilot and its worker, once."""
-        flight, worker = getattr(c, 'flight', None), getattr(c, 'pilot_worker', None)
-        c.flight = c.pilot_worker = None
+        flight = getattr(c, 'flight', None)
         if flight is not None:
-            flight.close()
-        close = getattr(worker, 'close', None)   # the lab's synchronous worker has nothing to close
-        if close is not None:
-            close()
+            flight._shutdown()
+        c.flight = c.pilot_worker = c.pilot_setup = None
