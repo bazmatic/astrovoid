@@ -253,26 +253,42 @@ def log_line(*parts):
 
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=0, decision_frames=6,
              turn_rate=1.0, rollout=None, log=log_line, shaping=None, rules_share=0.0,
-             levels=None):
-    """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint."""
+             levels=None, resume=False):
+    """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint.
+
+    Each iteration also saves the resume state, and a PAUSE file in `out_dir` stops the run once the iteration is
+    saved. With `resume`, the run in `out_dir` carries on from its resume state as if it had never stopped; `start`
+    is still the run's original start, which the policy is held near."""
     import torch
     from experiments.score import mean_components
     policy = NeuralPolicy.load(start)                  # raises InvalidPolicy: never train from nothing
     torch.manual_seed(seed)
     rng = np.random.default_rng(seed)
     out_dir = Path(out_dir)
+    saved = torch.load(out_dir / RESUME_FILE, weights_only=False) if resume else None   # absent: FileNotFoundError
     out_dir.mkdir(parents=True, exist_ok=True)
-    pooled = None if rollout else PoolRollout(workers, shaping)
-    rollout = rollout or (lambda jobs, count: pooled(jobs))
+    (out_dir / STATE_FILE).unlink(missing_ok=True)
     net, ref = build_net(policy), build_net(policy)
     for parameter in ref.parameters():
         parameter.requires_grad_(False)
     optimiser = torch.optim.Adam(net.parameters(), lr=lr)
-    current = out_dir / 'iter_start.npz'
-    export(net, policy, current)
+    first = 0
+    if saved is not None:
+        net.load_state_dict(saved['net'])
+        optimiser.load_state_dict(saved['optimiser'])
+        torch.set_rng_state(saved['torch_rng'])
+        rng.bit_generator.state = saved['numpy_rng']
+        first = saved['next_iteration']
+        current = out_dir / f'iter{first - 1:04d}.npz'
+    else:
+        current = out_dir / 'iter_start.npz'
+        export(net, policy, current)
+    pooled = None if rollout else PoolRollout(workers, shaping)
+    rollout = rollout or (lambda jobs, count: pooled(jobs))
     history = []
+    paused = False
     try:
-        for iteration in range(iterations):
+        for iteration in range(first, iterations):
             jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, rules_share,
                              levels)
             t0 = time.perf_counter()
@@ -308,13 +324,42 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             history.append(stats)
             line = ' '.join(f'{k}={v:.3f}' if isinstance(v, float) else f'{k}={v}' for k, v in stats.items())
             log(line)
+            save_resume_state(out_dir, net, optimiser, rng, iteration + 1, iterations)
             with open(out_dir / 'train.log', 'a') as record:     # the dashboard reads the newest run's train.log
                 record.write(line + '\n')
+            if (out_dir / PAUSE_FILE).exists():
+                (out_dir / PAUSE_FILE).unlink()
+                write_state(out_dir, 'paused', iteration)
+                paused = True
+                break
+        else:
+            if iterations > first:
+                write_state(out_dir, 'finished', iterations - 1)
     finally:
         if pooled is not None:
             pooled.close()
     (out_dir / 'iter_start.npz').unlink(missing_ok=True)
-    return {'last': current if history else None, 'history': history}
+    return {'last': current if history else None, 'history': history, 'paused': paused}
+
+
+RESUME_FILE = 'resume.pt'     # everything an iteration leaves behind that the next one needs
+STATE_FILE = 'state.json'     # how the run ended: paused or finished
+PAUSE_FILE = 'PAUSE'          # present: stop once the current iteration is saved
+
+
+def save_resume_state(out_dir, net, optimiser, rng, next_iteration, iterations):
+    """Save what the run needs to carry on at `next_iteration`, replacing the last iteration's (never half-written)."""
+    import torch
+    temporary = out_dir / (RESUME_FILE + '.tmp')
+    torch.save({'net': net.state_dict(), 'optimiser': optimiser.state_dict(), 'torch_rng': torch.get_rng_state(),
+                'numpy_rng': rng.bit_generator.state, 'next_iteration': next_iteration, 'iterations': iterations},
+               temporary)
+    os.replace(temporary, out_dir / RESUME_FILE)
+
+
+def write_state(out_dir, state, iteration):
+    import json
+    (Path(out_dir) / STATE_FILE).write_text(json.dumps({'state': state, 'iteration': iteration}))
 
 
 def reward_summary(args):
@@ -401,7 +446,8 @@ def write_run_config(args):
                     'rules_share': args.rules_share, 'levels': args.levels,
                     'panic_score': args.panic_score, 'panic_temperature': args.panic_temperature},
         'start': str(args.start), 'shaping': shaping_from(args),
-        'decision_frames': 6, 'turn_rate': 1.0}, indent=1))
+        'decision_frames': 6, 'turn_rate': 1.0,
+        'args': {k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(args).items()}}, indent=1))
 
 
 def build_parser():
@@ -464,18 +510,24 @@ def build_parser():
                         help='points lost per second spent turning (circling costs; a quick correction is cheap)')
     parser.add_argument('--levels', type=parse_levels, default=None,
                         help='levels to train on, e.g. 1-20 or 4,7,13 (default: the tune set)')
+    parser.add_argument('--resume', action='store_true',
+                        help='carry on the run in --out from its resume state')
     return parser
 
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    write_run_config(args)
+    if not args.resume:
+        write_run_config(args)
     from experiments import run
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping=shaping_from(args),
-                      rules_share=args.rules_share, levels=args.levels)
-    print('done | last checkpoint:', result['last'])
+                      rules_share=args.rules_share, levels=args.levels, resume=args.resume)
+    if result['paused']:
+        print('paused | at iteration', result['history'][-1]['iteration'] if result['history'] else '-')
+    else:
+        print('done | last checkpoint:', result['last'])
 
 
 if __name__ == '__main__':
