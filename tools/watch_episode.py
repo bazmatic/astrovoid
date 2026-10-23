@@ -59,17 +59,49 @@ def find(run, iteration, workers):
     print(f'{sum(1 for r in rows if r[1] > 0)} of {len(rows)} episodes panicked')
 
 
+def _open_window():
+    """The window the replay is shown in: a function that shows the game's screen, or None to show it as it is.
+
+    The game world is as big as its screen (1352x878), and a replay must keep that size to fly as training did.
+    On a smaller desktop the game draws on its full-size screen, hidden, and each frame is shown shrunk in a
+    window that fits.
+    """
+    import pygame
+    from experiments import harness
+    from utils.window_size import fit_window_size
+    pygame.init()
+    sizes = pygame.display.get_desktop_sizes()
+    size = fit_window_size(harness.SCREEN, sizes[0] if sizes else None)
+    if size == harness.SCREEN:
+        return None
+    from unittest import mock
+    from pygame._sdl2.video import Renderer, Texture, Window
+    set_mode = pygame.display.set_mode
+    with mock.patch.object(pygame.display, 'set_mode', lambda size, flags=0, *a, **k: set_mode(size, flags | pygame.HIDDEN)):
+        harness._game = harness._make_game()
+    window = Window('Episode replay', size=size)
+    renderer = Renderer(window)
+
+    def show():
+        renderer.clear()
+        Texture.from_surface(renderer, pygame.display.get_surface()).draw(dstrect=(0, 0, *size))
+        renderer.present()
+    return show
+
+
 def watch(run, iteration, episode, speed):
     import pygame
     from experiments.rollout import fly_rollout
     jobs, shaping = episode_jobs(run, iteration)
     level, seed, spec = jobs[episode]
+    show = _open_window()
     clock, font, flip = pygame.time.Clock(), None, pygame.display.flip
 
     def frame(seconds, game, hunter):
         nonlocal font
         for event in pygame.event.get():
-            if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
+            if event.type in (pygame.QUIT, pygame.WINDOWCLOSE) or (event.type == pygame.KEYDOWN
+                                                                     and event.key == pygame.K_ESCAPE):
                 raise SystemExit
         stub = game.scoring.calculate_current_potential_score
         if not getattr(stub, 'for_drawing', False):
@@ -97,7 +129,7 @@ def watch(run, iteration, episode, speed):
         screen = pygame.display.get_surface()
         pygame.draw.rect(screen, (190, 30, 30) if panic else (20, 20, 30), (0, 0, label.get_width() + 24, 40))
         screen.blit(label, (12, 8))
-        flip()
+        (show or flip)()
         clock.tick(60 * speed)
 
     # Training skips the tentacles' drag physics; a watched episode needs it, or they hang where they started.

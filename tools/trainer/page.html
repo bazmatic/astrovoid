@@ -44,6 +44,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 .next h2,.view h2{font-size:14px;margin:0}
 select,input[type=text]{font:inherit;font-size:13px;padding:5px 8px;border-radius:6px;border:1px solid var(--grid);background:var(--bg);color:var(--fg);min-width:0}
 input[type=text]{width:9em;font-family:var(--mono)}
+input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;padding:5px 8px;border-radius:6px;border:1px solid var(--grid);background:var(--bg);color:var(--fg)}
+.range{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .form[hidden]{display:none}
 .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:12px}
 .form fieldset{border:1px solid var(--grid);border-radius:6px;padding:8px 12px;margin:0;min-width:0}
@@ -75,7 +77,7 @@ input[type=text]{width:9em;font-family:var(--mono)}
  <div class="bar" id="status"><span class="msg">Loading…</span></div>
  <div class="next" id="next">
   <h2>Next run</h2>
-  <div class="row">Carry on from <select id="from-run" aria-label="Run to carry on from"></select> at <select id="from-iter" aria-label="Checkpoint"></select>
+  <div class="row">Carry on from <select id="from-run" aria-label="Run to carry on from"></select> at iteration <input type="number" class="iter" id="from-iter" step="1" aria-label="Checkpoint iteration"><button type="button" id="from-last">Last</button><span class="range" id="from-range"></span>
    <span class="msg" id="changed-count"></span>
    <button id="edit">Edit settings</button>
    <button class="primary" id="start" disabled>Start</button></div>
@@ -84,9 +86,10 @@ input[type=text]{width:9em;font-family:var(--mono)}
  </div>
  <div class="next" id="replay">
   <h2>Replay an episode</h2>
-  <div class="row">Run <select id="rp-run" aria-label="Run to replay"></select> iteration <select id="rp-iter" aria-label="Iteration to replay"></select>
+  <div class="row">Run <select id="rp-run" aria-label="Run to replay"></select> iteration <input type="number" class="iter" id="rp-iter" step="1" aria-label="Iteration to replay"><button type="button" id="rp-last">Last</button><span class="range" id="rp-range"></span>
    level <select id="rp-level" aria-label="Level"><option value="">All</option></select>
    speed <select id="rp-speed" aria-label="Playback speed"><option value="1">Normal</option><option value="0.5">Half</option><option value="0.25">Quarter</option></select>
+   <button class="primary" id="rp-latest" title="The newest run's last finished iteration, its last episode, at the speed chosen">Watch the last episode</button>
    <button id="rp-fly" title="Flies the iteration's episodes again to see how each went: takes a while, and slows training while it runs">Find panic</button></div>
   <div class="msg" id="rp-msg">Episodes open in the game window (Esc closes it). A red label shows when the hunter panics.</div>
   <div class="episodes" id="rp-list" hidden></div>
@@ -224,11 +227,23 @@ function fillFrom(){
   if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;fromChanged()}
   fillIters();
 }
+// An iteration box: any finished iteration of the run, typed or stepped; Last jumps to the newest.
+function setIters(input,range,checkpoints){
+  const its=checkpoints.map(c=>+c.slice(4)).sort((a,b)=>a-b);
+  input.dataset.its=JSON.stringify(its);
+  input.min=its.length?its[0]:0;input.max=its.length?its.at(-1):0;input.disabled=!its.length;
+  range.textContent=its.length?` ${its[0]}–${its.at(-1)}`:'';
+  const keep=input.value===''?NaN:+input.value;
+  input.value=its.length?(its.includes(keep)?keep:its.at(-1)):'';
+}
+function snapIter(input){        // a typed number becomes the nearest finished iteration
+  const its=JSON.parse(input.dataset.its||'[]');if(!its.length)return;
+  const v=+input.value;input.value=input.value===''||isNaN(v)?its.at(-1):its.reduce((a,b)=>Math.abs(b-v)<Math.abs(a-v)?b:a);
+}
+const checkpointName=n=>`iter${String(n).padStart(4,'0')}`;
 function fillIters(){
-  const run=RUNS.find(r=>r.name===$('from-run').value),sel=$('from-iter'),keep=sel.value;if(!run){sel.innerHTML='';return}
-  const its=[...run.checkpoints].reverse();
-  sel.innerHTML=its.map((c,i)=>`<option value="${c}">${c}${i===0?' (last)':''}</option>`).join('');
-  if(its.includes(keep))sel.value=keep;
+  const run=RUNS.find(r=>r.name===$('from-run').value);
+  setIters($('from-iter'),$('from-range'),run?run.checkpoints:[]);
 }
 async function fromChanged(){
   fillIters();
@@ -283,7 +298,7 @@ $('from-run').onchange=fromChanged;
 $('edit').onclick=()=>{$('form').hidden=!$('form').hidden;$('edit').textContent=$('form').hidden?'Edit settings':'Hide settings'};
 $('start').onclick=async()=>{
   const b=$('start');b.disabled=true;
-  try{const r=await post('api/start',{from:`${$('from-run').value}/${$('from-iter').value}`,changes:EDITS});
+  try{const r=await post('api/start',{from:`${$('from-run').value}/${checkpointName($('from-iter').value)}`,changes:EDITS});
     $('next-msg').className='msg';$('next-msg').textContent=`Started ${r.run} from ${r.started_from}${r.changes.length?`, changing ${r.changes.map(c=>c.setting).join(', ')}`:' with the same settings'}.`;
     FOLLOW=true;await loadRuns();await loadStatus();$('from-run').value='';fillFrom()}
   catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message;b.disabled=false}
@@ -304,10 +319,8 @@ function fillReplay(){
   const sel=$('rp-run'),keep=sel.value,usable=RUNS.filter(r=>r.replayable&&r.checkpoints.length).reverse();
   sel.innerHTML=usable.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
   if(keep&&usable.some(r=>r.name===keep))sel.value=keep;
-  const run=RUNS.find(r=>r.name===sel.value),it=$('rp-iter'),keepIt=it.value;
-  const its=run?run.checkpoints.map(c=>+c.slice(4)).reverse():[];
-  it.innerHTML=its.map((n,i)=>`<option value="${n}">${n}${i===0?' (last)':''}</option>`).join('');
-  if(its.includes(+keepIt)&&keepIt!=='')it.value=keepIt;
+  const run=RUNS.find(r=>r.name===sel.value);
+  setIters($('rp-iter'),$('rp-range'),run?run.checkpoints:[]);
   loadEpisodes();
 }
 async function loadEpisodes(){
@@ -338,8 +351,20 @@ async function watchEpisode(episode){
     m.className='msg';m.textContent=`Opening episode ${episode} in the game window${speed===1?'':` at ${$('rp-speed').selectedOptions[0].text.toLowerCase()} speed`} (Esc closes it).`}
   catch(e){m.className='msg error';m.textContent=e.message}
 }
+$('rp-latest').onclick=async()=>{
+  const run=RUNS.filter(r=>r.replayable&&r.checkpoints.length).at(-1),m=$('rp-msg');
+  if(!run){m.className='msg error';m.textContent='No run can be replayed yet.';return}
+  const iteration=+run.checkpoints.at(-1).slice(4);
+  $('rp-run').value=run.name;$('rp-iter').value='';fillReplay();$('rp-iter').value=String(iteration);await loadEpisodes();
+  try{const e=EPISODES.length?EPISODES:await post('api/episodes',{run:run.name,iteration});
+    await watchEpisode(e.at(-1).episode)}
+  catch(e){m.className='msg error';m.textContent=e.message}
+};
 $('rp-run').onchange=()=>{$('rp-iter').value='';fillReplay()};
-$('rp-iter').onchange=loadEpisodes;
+$('rp-iter').onchange=()=>{snapIter($('rp-iter'));loadEpisodes()};
+$('rp-last').onclick=()=>{$('rp-iter').value='';fillReplay()};
+$('from-iter').onchange=()=>snapIter($('from-iter'));
+$('from-last').onclick=()=>{$('from-iter').value='';fillIters()};
 $('rp-level').onchange=renderEpisodes;
 $('rp-fly').onclick=async()=>{
   const b=$('rp-fly'),m=$('rp-msg'),run=$('rp-run').value,iteration=+$('rp-iter').value,key=RP_KEY;
