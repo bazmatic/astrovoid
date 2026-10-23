@@ -174,13 +174,25 @@ def reset():
     _game = None
 
 
-def _random_cell_centre(game, level, seed):
-    """The centre of an open maze cell picked from (level, seed), without touching the global random stream."""
+DUEL_SEPARATION = 0.6   # a duel's random start is at least this share of the farthest it could be from the foe
+
+
+def _random_cell_centre(game, level, seed, away_from=()):
+    """The centre of an open maze cell picked from (level, seed), without touching the global random stream.
+
+    With `away_from` (the Rules hunters on a duel level) only cells well away from all of them are picked: at
+    least DUEL_SEPARATION of the farthest any open cell is, so the duel never starts nose to nose.
+    """
     maze = game.maze
+    centre = maze.position_calculator.grid_center_to_screen
     cells = [(col, row) for row in range(maze.grid_height) for col in range(maze.grid_width)
              if not maze.grid[row][col]]
+    if away_from:
+        distance = {cell: min(math.dist(centre(*cell), foe) for foe in away_from) for cell in cells}
+        farthest = max(distance.values())
+        cells = [cell for cell in cells if distance[cell] >= DUEL_SEPARATION * farthest]
     col, row = random.Random(f'start-{level}-{seed}').choice(cells)
-    return maze.position_calculator.grid_center_to_screen(col, row)
+    return centre(col, row)
 
 
 def _loose_crystals(game):
@@ -210,10 +222,11 @@ def load_student_policy(student):
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
-                 pursue_hunter=False, health=0):
+                 pursue_hunter=False, health=0, duel_separation=False):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `duel_separation` keeps that random start well away from any Rules hunter (runs before it was added did not).
     `health` above zero makes the hunter mortal: it survives that many hits, and the episode ends 'died' when it
     is destroyed (0 keeps it indestructible: hits are counted, not suffered).
     `pursue_hunter` makes enemies chase the hunter alone: the parked player is no target (and, as with `hide_player`,
@@ -267,7 +280,8 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
         import config
         settings = replace(settings, indestructible=False, health=health,
                            wall_energy=config.SETTINGS.game.neuralWallEnergy)
-    near = _random_cell_centre(game, level, seed) if random_start else (game.ship.x, game.ship.y)
+    foes = [(r.x, r.y) for r in game.roster.of_kind('rules_hunter')] if duel_separation else []
+    near = _random_cell_centre(game, level, seed, foes) if random_start else (game.ship.x, game.ship.y)
     game._close_hunter()
     flight = make_hunter(nearest_hunter_spawn(near, game.maze, game.ship), world=game,
                          setup=PilotSetup(settings, pilot, game.hunter_surroundings))

@@ -434,7 +434,8 @@ def shaping_from(args):
             'turning_penalty': args.turning_penalty,
             'hit_reward': args.hit_reward,
             'panic_score': args.panic_score,
-            'panic_temperature': args.panic_temperature}
+            'panic_temperature': args.panic_temperature,
+            'duel_separation': True}
 
 
 def write_run_config(args):
