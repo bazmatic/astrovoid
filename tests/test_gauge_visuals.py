@@ -170,26 +170,29 @@ def test_alert_only_brightens_the_rim():
 
 
 class TestShipDials:
-    def time_dial_lit(self, seconds):
-        screen = pygame.Surface((320, 700), pygame.SRCALPHA)
+    def time_dial_lit(self, seconds, height):
+        screen = pygame.Surface((320, height), pygame.SRCALPHA)
         screen.fill((*BACKGROUND, 255))
         ship = Ship((0.0, 0.0))
         ship.draw_ui(screen, pygame.font.Font(None, 24), level=None, time_seconds=seconds)
         # Time dial is the top one
         center_x = config.UI_ZONE_WIDTH // 2
-        inner, outer = dial.arc_radii(60)
+        scale = min(1.0, height / 878)
+        center_y = round(180 * scale)
+        inner, outer = dial.arc_radii(round(60 * scale))
         count = 0
         for x in range(0, 320):
             for y in range(80, 280):
-                if inner + 1 <= math.hypot(x - center_x, y - 180) <= outer - 1 and max(screen.get_at((x, y))[:3]) >= 180:
+                if inner + 1 <= math.hypot(x - center_x, y - center_y) <= outer - 1 and max(screen.get_at((x, y))[:3]) >= 180:
                     count += 1
         return count
 
-    def test_time_dial_sweeps_once_a_minute(self):
+    @pytest.mark.parametrize('height', [700, 878])
+    def test_time_dial_sweeps_once_a_minute(self, height):
         pygame.font.init()
-        assert self.time_dial_lit(0.0) == 0
-        assert self.time_dial_lit(15.0) < self.time_dial_lit(30.0) < self.time_dial_lit(59.0)
-        assert self.time_dial_lit(61.0) < self.time_dial_lit(15.0)
+        assert self.time_dial_lit(0.0, height) == 0
+        assert self.time_dial_lit(15.0, height) < self.time_dial_lit(30.0, height) < self.time_dial_lit(59.0, height)
+        assert self.time_dial_lit(61.0, height) < self.time_dial_lit(15.0, height)
 
 
 class TestHudColumn:

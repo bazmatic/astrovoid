@@ -13,9 +13,12 @@ LINE_GAP = 2
 
 
 def draw_exit_panel(screen: pygame.Surface, lines: Sequence[str], is_open: bool,
-                    top: int = EXIT_PANEL_TOP, bottom: Optional[int] = None) -> pygame.Rect:
+                    top: Optional[int] = None, bottom: Optional[int] = None) -> pygame.Rect:
     """Draw the block and return the area it covers. Long lists of names wrap when there is room above
     `bottom`, and otherwise shrink onto one line."""
+    if top is None:
+        top = round(EXIT_PANEL_TOP * min(1.0, screen.get_height() / 878))
+    bottom = min(screen.get_height(), bottom) if bottom is not None else screen.get_height()
     widest = config.UI_ZONE_WIDTH - 24
     label = get_font(16).render('EXIT', True, LABEL_COLOR)
     font = get_font(20)
@@ -28,6 +31,8 @@ def draw_exit_panel(screen: pygame.Surface, lines: Sequence[str], is_open: bool,
         if bottom is None or top + height <= bottom:
             texts = wrapped
     images = [label] + [_fit(font.render(text, True, colour), widest) for text in texts]
+    height = sum(image.get_height() for image in images) + LINE_GAP * (len(images) - 1)
+    top = max(0, min(top, bottom - height))
     centre_x = config.UI_ZONE_WIDTH // 2
     drawn = pygame.Rect(centre_x, top, 0, 0)
     y = top

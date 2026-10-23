@@ -603,15 +603,16 @@ class Ship(RotatingThrusterShip):
         from rendering.number_sprite import NumberSprite
         
         # UI zone constants
-        GAUGE_RADIUS = 60
+        hud_scale = min(1.0, screen.get_height() / 878)
+        GAUGE_RADIUS = round(60 * hud_scale)
         GAUGE_CENTER_X = config.UI_ZONE_WIDTH // 2  # Center of UI zone
-        LEVEL_Y = 60  # Level indicator at top (needs space, so gauges start lower)
-        TIME_Y = 180   # Time gauge position (create space above other gauges)
+        LEVEL_Y = round(60 * hud_scale)  # Level indicator at top
+        TIME_Y = round(180 * hud_scale)
         
         # Calculate equal spacing for radial gauges
         # Start after time indicator, shift all gauges downward
-        GAUGE_START_Y = TIME_Y + GAUGE_RADIUS * 2 + 50  # Push gauges farther down
-        GAUGE_SPACING = 170  # Equal spacing between all radial gauges
+        GAUGE_START_Y = round(350 * hud_scale)
+        GAUGE_SPACING = round(170 * hud_scale)
         GAUGE_Y_POSITIONS = {
             'score': GAUGE_START_Y,
             'ammo': GAUGE_START_Y + GAUGE_SPACING
@@ -695,7 +696,7 @@ class Ship(RotatingThrusterShip):
                                                 ("PROGRESS SCORE", progress_score))):
             if value is None:
                 continue
-            y = GAUGE_Y_POSITIONS['ammo'] + 100 + index * 40
+            y = GAUGE_Y_POSITIONS['ammo'] + round((100 + index * 40) * hud_scale)
             label_image = label_font.render(label, True, (150, 160, 195))
             label_rect = label_image.get_rect(midleft=(12, y))
             value_image = value_font.render(f"{int(value):,}", True, (235, 242, 255))

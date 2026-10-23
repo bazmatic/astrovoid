@@ -50,3 +50,19 @@ def test_without_room_to_wrap_the_kinds_shrink_onto_one_line(surface):
     bottom = EXIT_PANEL_TOP + 66
     rect = draw_exit_panel(surface, ['KILL SQUIDDLER BOSSES, SQUIDLETS', '12 LEFT'], False, bottom=bottom)
     assert rect.bottom <= bottom and rect.right <= config.UI_ZONE_WIDTH
+
+
+def test_flighthouse_objective_fits_a_short_window():
+    import level_config
+    from policies.exit import ExitState
+
+    surface = pygame.Surface((1100, 700))
+    surface.fill(config.COLOR_BACKGROUND)
+    policy = level_config.get_level_exit_policy(28)
+    lines = policy.describe(ExitState(0, {'flighthouse': 2}))
+    assert lines == ['KILL FLIGHTHOUSES', '2 LEFT']
+    bottom = surface.get_height() - 30
+    rect = draw_exit_panel(surface, lines, False, bottom=bottom)
+    assert rect.height > 0
+    assert rect.bottom <= bottom
+    assert tuple((255, 150, 50)) in pixels(surface, rect)

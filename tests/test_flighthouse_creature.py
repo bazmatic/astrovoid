@@ -1,4 +1,4 @@
-"""The Flighthouse as a Creature: rooted, it sweeps its beam until it sees the player, then tracks them and launches
+"""The Flighthouse as a Creature: rooted, it sweeps its beam until it sees the player or an ally, then tracks and launches
 Flockers."""
 import math
 from types import SimpleNamespace
@@ -56,10 +56,42 @@ def test_a_wall_or_a_gate_hides_the_player():
         assert bool(launched(enc, tower)) is seen
 
 
-def test_a_flighthouse_ignores_the_hunter():
+def test_a_flighthouse_tracks_and_launches_at_an_ally_in_its_beam():
     tower, enc = lighthouse(angle=0.0, ship=target(ahead(180.0)), hunter=target(ahead(0.0)))
     enc.step(1.0)
-    assert not tower.sees_target and launched(enc, tower) == []
+    assert tower.sees_target
+    assert tower.sighted_at == ahead(0.0)
+    [flocker] = launched(enc, tower)
+    assert flocker.angle == pytest.approx(0.0)
+
+
+def test_an_unseen_nearer_player_does_not_hide_an_ally_in_the_beam():
+    tower, enc = lighthouse(ship=target(ahead(180.0, 100.0)), hunter=target(ahead(0.0)))
+    enc.step(1.0)
+    assert tower.sees_target and tower.sighted_at == ahead(0.0)
+    assert launched(enc, tower)
+
+
+@pytest.mark.parametrize('hidden_by', ['wall', 'gate', 'range', 'inactive', 'observer'])
+def test_hidden_or_inactive_allies_do_not_trigger_a_flighthouse(hidden_by):
+    ally = target(ahead(0.0, SCANS['range'] + 1 if hidden_by == 'range' else 300.0))
+    ally.active = hidden_by != 'inactive'
+    ally.observer = hidden_by == 'observer'
+    barrier = SimpleNamespace(start=(500.0, 200.0), end=(500.0, 400.0), active=True)
+    maze = open_maze([barrier] if hidden_by == 'wall' else [])
+    maze.gate_segments = [barrier] if hidden_by == 'gate' else []
+    tower, enc = lighthouse(hunter=ally, maze=maze)
+    enc.step(1.0)
+    assert not tower.sees_target and not launched(enc, tower)
+
+
+def test_the_nearest_visible_ship_is_tracked_and_launches_are_aimed_at_it():
+    ally_pos = ahead(5.0, 150.0)
+    tower, enc = lighthouse(ship=target(ahead(0.0)), hunter=target(ally_pos))
+    enc.step(1.0)
+    assert tower.sighted_at == ally_pos
+    [flocker] = launched(enc, tower)
+    assert flocker.angle == pytest.approx(5.0)
 
 
 def test_a_launched_flocker_is_a_creature_on_the_roster():

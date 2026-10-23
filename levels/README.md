@@ -1,6 +1,6 @@
 # Level files
 
-Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels from 25 have no file, except level 25 (the Rules hunter boss), and come from the formulas in `level_rules.py`.
+Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels 25–28 also have custom files. Later levels come from the formulas in `level_rules.py` unless a file overrides them.
 
 A file can exist for any level, and can state as much or as little as it likes. Whatever it leaves out comes from the formulas.
 
@@ -79,3 +79,17 @@ A saved layout on levels 1 to 24 must still satisfy these rules.
 - **Every sixth level** (`difficulty.bossLevelInterval`) is a boss level in a 16-cell open arena: split bosses, then a mother boss, then both, gaining a boss each time round up to three.
 - **Enemy speed and damage** grow 5% a level after level 4 and stop at 2.5 times.
 - **An arc level whose file is missing** gets `3 + level` enemies of the types introduced by then.
+
+## Level 28: Clockwork Reef
+
+A gate-free, three-chamber hunt. Permanent reef walls put the main crossings at
+opposite ends, creating an S-shaped route from the western start to the eastern
+exit. Rock plugs in the other ends can be blasted into shortcuts. Belemnites
+beside those plugs and the scattered cover make explosions useful, but dangerous
+at close range.
+
+Destroy both flighthouses (north in the middle chamber, south in the eastern
+chamber) to open the exit. Other enemies may remain alive. Ammo is unlimited;
+there is no hunter beacon and no neural model is required.
+
+Start directly with `START_LEVEL=28 ./run.sh`.

@@ -1,4 +1,4 @@
-"""A searchlight: sweeping for the player, locking on, and launching creatures at them."""
+"""A searchlight: sweeping for the player and allies, locking on, and launching creatures at them."""
 import math
 
 import config
@@ -15,7 +15,7 @@ def _turn_by(diff: float) -> float:
 
 
 class Scans(Trait):
-    """Sweeps its beam round at `scanSpeed` degrees a second until it sees the player's ship (never the hunter):
+    """Sweeps its beam round at `scanSpeed` degrees a second until it sees the player or an ally:
     within `range`, within the `coneDegrees` cone of its heading, and with no wall or gate in the way. Then it turns
     after the ship at `trackSpeed`. It keeps `sees_target`, and `sighted_at` (where the ship is) while it sees it, and
     emits `sighted` when it first sees it. It keeps `scan_range` and `scan_cone` for its Body's beam."""
@@ -30,9 +30,11 @@ class Scans(Trait):
 
     def on_frame(self, c, enc, dt):
         seconds = dt / float(config.FPS)
-        ship = enc.ship
-        goal = ship.get_pos() if ship is not None and ship.active and not getattr(ship, 'observer', False) else None
-        seen = goal is not None and self._sees(c, goal, enc.maze)
+        visible = [ship.get_pos() for ship in (enc.ship, enc.hunter)
+                   if ship is not None and ship.active and not getattr(ship, 'observer', False)
+                   and self._sees(c, ship.get_pos(), enc.maze)]
+        goal = min(visible, key=lambda pos: math.dist(c.get_pos(), pos), default=None)
+        seen = goal is not None
         if seen:
             turn = _turn_by(get_angle_to_point(c.get_pos(), goal) - c.angle)
             reach = self.track_speed * seconds

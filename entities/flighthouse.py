@@ -2,7 +2,7 @@
 
 A faceted base with hit point lights round its rim, a lamp in a rotating hood, and a searchlight beam the size of what
 it can see (its `scans` trait keeps `scan_range` and `scan_cone`; before its first frame it has no beam). The beam
-turns red and throbs while it sees the player (`sees_target`), and a ring bursts out when it launches (`launched`).
+turns red and throbs while it sees the player or an ally (`sees_target`), and a ring bursts out when it launches (`launched`).
 When it dies the beam sputters, the masonry breaks apart and the lamp goes out.
 """
 
@@ -22,7 +22,7 @@ class FlighthouseBody:
     """The look of a Flighthouse.
 
     Attributes:
-        alert_level: 0.0 calm, 1.0 locked on to the player.
+        alert_level: 0.0 calm, 1.0 locked on to a ship.
         launch_flash: 1.0 when a flocker launches, fading to 0.0.
     """
 
@@ -80,7 +80,7 @@ class FlighthouseBody:
             self._launched = True
 
     def update(self, creature, dt: float, target=None) -> None:
-        """The alert rises while it sees the player and falls when it does not; a launch flash fades."""
+        """The alert rises while it sees a ship and falls when it does not; a launch flash fades."""
         dt_seconds = dt / float(config.FPS)
         if not self._launched:
             self.launch_flash = max(0.0, self.launch_flash - dt_seconds / self.LAUNCH_FLASH_SECONDS)
@@ -176,7 +176,7 @@ class FlighthouseBody:
         """Draw the flighthouse as a lighthouse seen from above.
         
         A searchlight sweeps with the real vision cone and turns red when the
-        player is spotted. Lights on the base show remaining hit points.
+        player or an ally is spotted. Lights on the base show remaining hit points.
         """
 
         alert = self.alert_level

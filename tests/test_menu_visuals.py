@@ -380,7 +380,7 @@ def test_the_main_menu_buttons_fit_between_the_title_and_the_profile_badge(monke
     assert buttons[0].top > menu.menu_title_rect.bottom
 
 
-def test_six_buttons_stay_where_they_always_were(monkeypatch):
+def test_six_buttons_sit_higher_with_their_normal_spacing(monkeypatch):
     from rendering.main_menu import MainMenu
     pygame.init()
     pygame.display.set_mode((320, 240))
@@ -388,5 +388,5 @@ def test_six_buttons_stay_where_they_always_were(monkeypatch):
     monkeypatch.setattr(config, 'SCREEN_HEIGHT', SIZE[1])
     monkeypatch.delenv('LEVEL_EDITOR', raising=False)
     menu = MainMenu(pygame.Surface(SIZE))
-    assert [button.position[1] for button in menu.menu_buttons][:2] == [int(SIZE[1] * 0.46),
-                                                                        int(SIZE[1] * 0.46) + menu._scaled(80)]
+    assert [button.position[1] for button in menu.menu_buttons][:2] == [int(SIZE[1] * 0.42),
+                                                                        int(SIZE[1] * 0.42) + menu._scaled(80)]
