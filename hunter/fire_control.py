@@ -35,8 +35,13 @@ def find_firing_solution(hunter, enemies, maze, settings):
         # of sight are tested: those whose extent overlaps the box around it.
         left, right = min(origin[0], enemy.x) - 1, max(origin[0], enemy.x) + 1
         top, bottom = min(origin[1], enemy.y) - 1, max(origin[1], enemy.y) + 1
+        # The spatial grid's walls along the line are a superset of those (it indexes each wall in
+        # every bucket its box touches), and visible_point does not care about their order
+        grid = getattr(maze, 'spatial_grid', None)
+        nearby = (grid.get_walls_along_path(origin, (enemy.x, enemy.y), 1) if grid is not None
+                  else list(maze.walls))
         across = [
-            (w.start, w.end) for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ()))
+            (w.start, w.end) for w in nearby + list(getattr(maze, 'gate_segments', ()))
             if w.active
             and not (w.start[0] < left and w.end[0] < left) and not (w.start[0] > right and w.end[0] > right)
             and not (w.start[1] < top and w.end[1] < top) and not (w.start[1] > bottom and w.end[1] > bottom)]

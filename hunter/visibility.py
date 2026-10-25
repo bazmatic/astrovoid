@@ -6,9 +6,11 @@ wall is only tested against the walls that share its direction from the
 viewer. tests/visibility_reference.py keeps the plain version these must match.
 """
 import math
+from bisect import bisect_left, bisect_right
 
 EPS = 1e-7
 _TWO_PI = 2 * math.pi
+_WIDE = 0.25  # radians of half-width beyond which a wall is checked against every other
 
 
 def _sub(a, b):
@@ -197,16 +199,50 @@ def visible_wall_portions(origin, segments, radius):
     # A wall can only hide, cut or cross another if the two lie in overlapping
     # directions from the viewer, so each is tested against just those.
     spans = [_bearing_span(origin, wall) for wall in walls]
+    candidates = _span_window(spans)
     result = []
-    for (a, b), span in zip(walls, spans):
+    for index, ((a, b), span) in enumerate(zip(walls, spans)):
         if span is None:
             near = walls
         else:
             centre, half = span
             reach = half + 1e-6
-            near = [wall for wall, other in zip(walls, spans)
-                    if other is None or
-                    abs((other[0] - centre + math.pi) % _TWO_PI - math.pi) <= reach + other[1]]
+            near = [walls[i] for i in candidates(index)
+                    if spans[i] is None or
+                    abs((spans[i][0] - centre + math.pi) % _TWO_PI - math.pi) <= reach + spans[i][1]]
         for lo, hi in _merge(_intervals(origin, (a,b), near, radius)):
             result.append((_at(a, _sub(b,a), lo), _at(a, _sub(b,a), hi)))
     return result
+
+
+def _span_window(spans):
+    """candidates(i): the indices, in order, of the walls whose direction could overlap wall i's.
+
+    A superset of the walls the exact test above keeps: every wall without a span, and those whose
+    centre lies within wall i's half-width plus the widest narrow half-width (plus a margin) around
+    the circle, and every wide wall. With many short walls (curved rock) this avoids testing every pair."""
+    everyone = range(len(spans))
+    if len(spans) < 24:
+        return lambda index: everyone
+    # Walls without a span, or wide ones (often the nearest), are candidates for everyone, so one of
+    # them does not widen the window for all the rest
+    always = [i for i, span in enumerate(spans) if span is None or span[1] > _WIDE]
+    order = sorted((span[0] % _TWO_PI, i) for i, span in enumerate(spans) if span is not None and span[1] <= _WIDE)
+    keys = [centre for centre, _ in order]
+    widest = max((spans[i][1] for _, i in order), default=0.0)
+
+    def candidates(index):
+        centre, half = spans[index]
+        window = half + widest + 1e-6 + 1e-9
+        if window >= math.pi:
+            return everyone
+        centre %= _TWO_PI
+        found = list(always)
+        for lo, hi in ((centre - window, centre + window),
+                       (centre - window + _TWO_PI, centre + window + _TWO_PI),
+                       (centre - window - _TWO_PI, centre + window - _TWO_PI)):
+            if hi < 0 or lo > _TWO_PI:
+                continue
+            found.extend(i for _, i in order[bisect_left(keys, lo):bisect_right(keys, hi)])
+        return sorted(set(found))
+    return candidates

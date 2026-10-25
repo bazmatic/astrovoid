@@ -44,6 +44,12 @@ def _push_out_of_walls(creature, walls, spatial_grid=None) -> None:
             start, end = wall.get_segment()
         else:
             start, end = wall
+        # Most nearby walls are clear of the creature's bounding box: a wall that far away is out of
+        # reach, so skip the exact test (the margin keeps this from ever skipping an overlap)
+        x, y, reach = creature.x, creature.y, creature.radius + 1e-6
+        if (x + reach < start[0] and x + reach < end[0]) or (x - reach > start[0] and x - reach > end[0]) or \
+                (y + reach < start[1] and y + reach < end[1]) or (y - reach > start[1] and y - reach > end[1]):
+            continue
         closest = get_closest_point_on_line((creature.x, creature.y), start, end)
         dx, dy = creature.x - closest[0], creature.y - closest[1]
         distance = math.hypot(dx, dy)

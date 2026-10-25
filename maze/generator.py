@@ -141,6 +141,10 @@ class RecursiveBacktrackingGenerator:
         grid[corner[1]][corner[0]]=0
 
 
+# Spatial grid bucket size (px) for curved mazes: their many short segments would crowd 150 px buckets
+CURVED_BUCKET = 50.0
+
+
 class Maze:
     """Procedurally generated maze."""
     
@@ -215,7 +219,7 @@ class Maze:
         self.spatial_grid = SpatialGrid(
             config.SCREEN_WIDTH,
             config.SCREEN_HEIGHT,
-            cell_size=150.0  # Optimal cell size for this game
+            cell_size=CURVED_BUCKET if self.curved else 150.0  # square walls keep the bucket they always had
         )
         self.wall_generation = 0  # Goes up each time a block is destroyed
         # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
