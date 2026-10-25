@@ -345,7 +345,8 @@ class Maze:
         along = max(inset, min(1.0 - inset, along))
         return (int(round(ax + dx * along)), int(round(ay + dy * along)))
     
-    def damage_wall(self, wall: WallSegment, impact: Optional[Tuple[float, float]] = None) -> bool:
+    def damage_wall(self, wall: WallSegment, impact: Optional[Tuple[float, float]] = None,
+                    *, damage: int = 1) -> bool:
         """Damage the block a wall segment is a face of. Returns True if the block was destroyed.
         
         The whole block goes at once, and the faces of its neighbours that
@@ -355,6 +356,7 @@ class Maze:
         Args:
             wall: The wall segment that was hit.
             impact: Where the shot landed, for the chips it knocks off.
+            damage: Hit points removed in one impact (rail shots remove the whole block).
             
         Returns:
             True if the block was destroyed (hit points reached 0), False otherwise.
@@ -369,14 +371,14 @@ class Maze:
             return False
         if cell not in self.blocks:
             # A loose segment that belongs to no block
-            destroyed = wall.damage()
+            destroyed = wall.damage(damage)
             if destroyed:
                 self.spatial_grid.update_wall(wall)
                 self.walls = [w for w in self.walls if w.active]
             return destroyed
 
         faces = [w for w in self.walls if w.cell == cell]
-        hit_points = self.blocks[cell] - 1
+        hit_points = self.blocks[cell] - damage
         if not wall.destructible:
             # The outer ring wears down like any block, but its last hit point never goes
             hit_points = max(1, hit_points)

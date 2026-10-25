@@ -225,3 +225,14 @@ def test_build_duel_makes_a_destructible_rules_hunter_and_a_distinct_neural_one(
     toward = math.degrees(math.atan2(vibes.hunter.y - rules.hunter.y, vibes.hunter.x - rules.hunter.x)) % 360
     assert abs((rules.hunter.angle - toward + 180) % 360 - 180) < 1.0    # they start facing each other
     assert HunterSettings().indestructible is True                       # the default hunter is still unkillable
+
+
+def test_ship_death_keeps_animating_after_the_duel_result(arena):
+    victim = arena.sides[0].hunter
+    victim.die()
+    arena.result = DuelResult('vibes', 'destroyed')
+    remaining = victim.death_timer
+    elapsed = arena.elapsed
+    arena.update(4)
+    assert victim.death_timer == remaining - 4
+    assert arena.elapsed == elapsed

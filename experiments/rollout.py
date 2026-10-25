@@ -71,6 +71,8 @@ class RolloutRecorder:
         self._rules_paid = False
         self.upgrade_bonus = upgrade_bonus    # shaping: points gained per second the hunter's guns are upgraded
         self.upgraded_frames = 0
+        self._weapon_kills = {}
+        self._weapon_pickups = {}
         self._died = False
         self.senses, self.controls = [], []
         self.speed_sum, self.frames = 0.0, 0     # mean speed as a share of top speed, for the dashboard
@@ -85,6 +87,9 @@ class RolloutRecorder:
     # --- called by the harness ---
     def begin(self, game, hunter, settings):
         self._start_enemies = len(game.roster.alive())
+        handler = getattr(game, 'collision_handler', None)
+        self._weapon_kills = getattr(handler, 'weapon_kills', {})
+        self._weapon_pickups = getattr(handler, 'weapon_pickups', {})
         width = game.maze.grid_width * game.maze.cell_size_x
         self.compass_step_cap = 1.5 * hunter.max_speed * self.decision_frames / max(width, 1.0)
         cell = (game.maze.cell_size_x + game.maze.cell_size_y) / 2
@@ -319,14 +324,15 @@ def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
                 speed_penalty=0.0, powerup_reward=0.0, after_clear=0.0, upgrade_bonus=0.0, pursue_hunter=True, reversal_penalty=0.0,
                 health=0, death_penalty=0.0, rules_bounty=0.0, compass_reward=0.0, boredom_penalty=0.0,
                 boredom_window=10.0, shot_price=0.0, turning_penalty=0.0, hit_reward=0.0, panic_score=None,
-                panic_temperature=1.0, duel_separation=False, trace=None, low_graphics=True):
+                panic_temperature=1.0, duel_separation=False, trace=None, low_graphics=True, random_maze=False, combat_ruleset="legacy", weapon_tuning=None):
     recorder = RolloutRecorder(spec.decision_frames, wall_scale, hit_scale, still_penalty, still_speed,
                                turn_change_penalty, speed_penalty, powerup_reward, upgrade_bonus, reversal_penalty, death_penalty,
                                rules_bounty, compass_reward, boredom_penalty, boredom_window, shot_price,
                                turning_penalty, hit_reward, panic_score, panic_temperature)
     result = run_episode(level, seed, RULES, horizon, student=spec, recorder=recorder, random_start=random_start,
                          after_clear=after_clear, pursue_hunter=pursue_hunter, health=health, trace=trace,
-                         duel_separation=duel_separation, low_graphics=low_graphics)
+                         duel_separation=duel_separation, low_graphics=low_graphics, random_maze=random_maze,
+                         combat_ruleset=combat_ruleset, weapon_tuning=weapon_tuning)
     senses, controls, rewards = recorder.arrays()
     blind, following = compass_following(senses)
     unseen, bored = recorder.bored_steps(senses, recorder._views)
@@ -337,6 +343,7 @@ def fly_rollout(level, seed, spec, horizon=90.0, wall_scale=1.0, hit_scale=1.0,
             'senses': senses, 'controls': controls, 'rewards': rewards, 'result': result,
             'speed_fraction': recorder.speed_sum / recorder.frames if recorder.frames else 0.0,
             'upgraded_fraction': recorder.upgraded_frames / recorder.frames if recorder.frames else 0.0,
+            'weapon_kills': dict(recorder._weapon_kills), 'weapon_pickups': dict(recorder._weapon_pickups),
             'powerups': recorder._counter.powerups if recorder._counter is not None else 0,
             'died': result.end == 'died',
             'rules_arena': result.rules_hunters > 0, 'rules_beaten': result.rules_beaten}

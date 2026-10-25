@@ -1,6 +1,6 @@
 """The student's brain: a small GRU with one softmax head per control, run in plain numpy."""
 import numpy as np
-from hunter.senses import FEATURE_NAMES, SENSE_SIZE
+from hunter.senses import FEATURE_NAMES, SENSE_SIZE, OBSERVATION_VERSION
 
 HEAD_SIZES = {'turn': 3, 'thrust': 2, 'fire': 2}
 _PARAMS = ('embed_w', 'embed_b', 'gru_w_ih', 'gru_w_hh', 'gru_b_ih', 'gru_b_hh',
@@ -54,15 +54,33 @@ class NeuralPolicy:
 
     def save(self, path):
         np.savez(path, mean=self.mean, scale=self.scale, feature_names=np.array(FEATURE_NAMES),
+                 observation_version=OBSERVATION_VERSION,
                  **self.params)
 
     @classmethod
     def load(cls, path):
         try:
             data = np.load(path, allow_pickle=False)
-            if tuple(str(n) for n in data['feature_names']) != FEATURE_NAMES:
+            names = tuple(str(n) for n in data['feature_names'])
+            legacy_size = FEATURE_NAMES.index('power_boost')
+            version = int(data['observation_version']) if 'observation_version' in data else (1 if len(names) == legacy_size else OBSERVATION_VERSION)
+            if version not in (1, OBSERVATION_VERSION):
+                raise InvalidPolicy('unsupported observation version')
+            if names != FEATURE_NAMES and names != FEATURE_NAMES[:legacy_size]:
                 raise InvalidPolicy('senses layout differs from this build')
-            policy = cls({k: data[k] for k in _PARAMS}, data['mean'], data['scale'])
+            params = {k: data[k] for k in _PARAMS}
+            mean, scale = data['mean'], data['scale']
+            if len(names) == legacy_size:
+                # Explicit legacy-prefix adapter: new weapon features have zero influence.
+                # It preserves old behaviour but does not teach old pilots weapon choice.
+                if params['embed_w'].shape[1] != legacy_size or mean.shape != (legacy_size,) or scale.shape != (legacy_size,):
+                    raise InvalidPolicy('invalid legacy observation dimensions')
+                extra = SENSE_SIZE-legacy_size
+                params['embed_w'] = np.pad(params['embed_w'], ((0,0),(0,extra)))
+                mean = np.pad(mean, (0,extra))
+                scale = np.pad(scale, (0,extra), constant_values=1)
+            policy = cls(params, mean, scale)
+            policy.legacy_observations = len(names) == legacy_size
             if policy.params['embed_w'].shape[1] != SENSE_SIZE:
                 raise InvalidPolicy('senses layout differs from this build')
             if policy.mean.shape != (SENSE_SIZE,) or policy.scale.shape != (SENSE_SIZE,):

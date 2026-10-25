@@ -321,25 +321,25 @@ def get_maze_grid_size(level: int) -> int:
 
 
 def get_level_hunter_config(level: int):
-    """Return the level file's hunter entry: a spawn override, False for no hunter, or None if absent."""
+    """Return an earned-drop or spawn override, False for no hunter, or None for generated defaults."""
+    data = load_level_config(level)
+    hunter = data.get('hunter') if data else None
+    if isinstance(hunter, dict) and hunter.get('earned'):
+        return hunter
     layout = get_level_layout(level)
     if layout is not None:
         return {'spawn_cell': list(layout.beacon)} if layout.beacon is not None else False
-    data = load_level_config(level)
     return data.get('hunter') if data else None
 
 
 def level_has_hunter(level: int) -> bool:
     """Whether a level starts with a Jev beacon, the pickup that summons the hunter.
 
-    A level file decides if it says anything: False forbids one, a spawn
-    override places one. Otherwise there is none before HUNTER_FIRST_LEVEL,
-    and one every HUNTER_LEVEL_INTERVAL levels from then on.
+    Only an explicit spawn override places one. Earned and generated levels
+    require enemy kills to drop a beacon during play instead.
     """
-    if get_level_hunter_config(level) is None:
-        interval = config.HUNTER_LEVEL_INTERVAL
-        return level_allows_jev_beacon(level) and interval > 0 and level % interval == 0
-    return level_allows_jev_beacon(level)
+    hunter = get_level_hunter_config(level)
+    return isinstance(hunter, dict) and not hunter.get('earned') and level_allows_jev_beacon(level)
 
 
 def level_allows_jev_beacon(level: int) -> bool:

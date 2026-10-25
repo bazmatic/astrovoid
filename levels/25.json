@@ -22,5 +22,6 @@
   },
   "ammo_policy": {
     "type": "unlimited"
-  }
+  },
+  "hunter": false
 }

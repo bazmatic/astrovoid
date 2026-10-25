@@ -2,52 +2,111 @@
   "seed": 106,
   "maze": {
     "complexity": "empty",
-    "grid_size": 12
+    "grid_size": 18
   },
   "enemies": {
-    "static": 0,
-    "patrol": 0,
-    "aggressive": 0,
-    "replay": 2,
-    "flocker": 0,
+    "static": 3,
+    "patrol": 2,
+    "aggressive": 2,
+    "replay": 0,
+    "flocker": 1,
     "flighthouse": 0,
-    "egg": 0,
+    "egg": 1,
     "anemone": 0,
-    "split_boss": 1,
-    "mother_boss": 0
+    "split_boss": 0,
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "layout": {
     "walls": [],
-    "start": [10, 10],
-    "exit": [1, 1],
+    "start": [
+      10,
+      10
+    ],
+    "exit": [
+      1,
+      1
+    ],
     "enemies": [
       {
-        "type": "replay",
-        "cell": [5, 2]
+        "type": "patrol",
+        "cell": [
+          4,
+          1
+        ]
       },
       {
-        "type": "replay",
-        "cell": [3, 3]
+        "type": "flocker",
+        "cell": [
+          8,
+          1
+        ]
       },
       {
-        "type": "split_boss",
-        "cell": [2, 7]
+        "type": "egg",
+        "cell": [
+          1,
+          2
+        ]
       },
       {
-        "type": "replay",
-        "cell": [4, 7]
+        "type": "aggressive",
+        "cell": [
+          6,
+          2
+        ]
       },
       {
-        "type": "replay",
-        "cell": [3, 10]
+        "type": "static",
+        "cell": [
+          16,
+          2
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          5,
+          5
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          2,
+          6
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          3,
+          10
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          16,
+          16
+        ]
       }
     ],
     "beacon": null
   },
   "exit_policy": {
-    "type": "all_cleared"
+    "type": "type_cleared",
+    "enemy_types": [
+      "egg"
+    ]
   },
   "ammo_policy": {
-    "type": "unlimited"
-  }
+    "type": "limited"
+  },
+  "hunter": false
 }

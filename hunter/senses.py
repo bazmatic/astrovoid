@@ -11,8 +11,9 @@ from hunter.maze_route import MazeRoutes
 RAYS = 16
 MAX_ENEMIES, MAX_BULLETS, MAX_POWERUPS, MAX_MEMORY = 6, 4, 2, 2
 MAX_POWERUP_MEMORY = 2
-POWERUP_MEMORY_TTL = 90.0   # seconds a crystal seen and then lost from view is remembered (they do not expire)
+POWERUP_MEMORY_TTL = 90.0   # maximum seconds a crystal lost from view is remembered
 MEMORY_TTL = 10.0          # seconds an out-of-sight enemy is remembered
+OBSERVATION_VERSION = 2
 UPGRADE_CAP = 6.0
 HITS_CAP = 20             # hits left read as log(1 + hits) / log(1 + HITS_CAP), capped at 1: a Mother reads 1
 HIT_POINT_CELLS = 2.0      # the enemy compass routes through a wall block at this many cells of route per hit point
@@ -41,6 +42,9 @@ def _names():
     names += ['hit_present', 'hit_fwd', 'hit_side']
     names += [f'enemy_compass_{part}' for part in ('present', 'sin', 'cos', 'dist')]
     names += [f'enemy{i}_hits' for i in range(MAX_ENEMIES)]
+    names += ['power_boost', 'power_boost_remaining']
+    for group, count in (('powerup', MAX_POWERUPS), ('powerup_memory', MAX_POWERUP_MEMORY)):
+        names += [f'{group}{i}_lifetime' for i in range(count)]
     return tuple(names)
 
 
@@ -154,6 +158,10 @@ class Senses:
         out[_INDEX['cooldown']] = min(1.0, hunter.fire_remaining / max(hunter.fire_interval, 1e-6))
         out[_INDEX['burst']] = hunter.burst_remaining / max(self.settings.burst_size, 1)
         out[_INDEX['upgrade']] = min(1.0, hunter.gun_upgrade_level / UPGRADE_CAP)
+        out[_INDEX['power_boost']] = float(hunter.gun_upgrade_level > 0)
+        import config
+        out[_INDEX['power_boost_remaining']] = min(1.0, max(0.0,
+            getattr(hunter, 'upgrade_remaining', 0) / config.POWERUP_DURATION_SECONDS))
         out[_INDEX['enemies_present']] = 1.0 if any(e.active for e in enemies) else 0.0
 
         rays = ray_distances(origin, hunter.angle, starts, ends, reach) / reach
@@ -190,7 +198,7 @@ class Senses:
         seen = candidates(enemies, MAX_ENEMIES)
         for i, (d, e) in enumerate(seen):
             contact(f'enemy{i}', d, e)
-            hits = max(0.0, float(getattr(e, 'hit_points', 1)))
+            hits = max(0.0, float(getattr(e, 'effective_hit_points', getattr(e, 'hit_points', 1))))
             out[_INDEX[f'enemy{i}_hits']] = min(1.0, math.log1p(hits) / math.log1p(HITS_CAP))
             self._memory[e] = (e.x, e.y, now)
         for i, (d, b) in enumerate(candidates([p for p in projectiles if p.is_enemy], MAX_BULLETS)):
@@ -198,6 +206,7 @@ class Senses:
         crystals_seen = candidates(powerups, MAX_POWERUPS)
         for i, (d, c) in enumerate(crystals_seen):
             contact(f'powerup{i}', d, c, with_velocity=False)
+            self._pickup_lifetime(out, f'powerup{i}', c)
             self._crystal_memory[id(c)] = (c, c.x, c.y, now)
         if player is not None and player.active:
             d = math.hypot(player.x - origin[0], player.y - origin[1])
@@ -233,19 +242,26 @@ class Senses:
         out[_INDEX['last_fire']] = 1.0 if fire else 0.0
         return out
 
+    @staticmethod
+    def _pickup_lifetime(out, prefix, crystal):
+        lifetime = getattr(crystal, 'LIFETIME_FRAMES', None)
+        if lifetime is not None:
+            out[_INDEX[f'{prefix}_lifetime']] = max(0.0, 1-crystal.age/lifetime)
+
     def _remember_crystals(self, out, origin, h, reach, now, seen_ids):
         """Fill the powerup memory slots with the nearest crystals seen lately but not in the two sight slots now.
 
-        A crystal does not move or expire, so a memory only ends when it is collected or grows too old.
+        Memories end when a crystal is collected, expires, or grows too old.
         """
         kept = []
         for key, (crystal, x, y, seen_at) in list(self._crystal_memory.items()):
             if not crystal.active or now - seen_at > POWERUP_MEMORY_TTL:
                 del self._crystal_memory[key]
             elif key not in seen_ids:
-                kept.append((math.hypot(x - origin[0], y - origin[1]), x, y, seen_at))
+                kept.append((math.hypot(x - origin[0], y - origin[1]), x, y, seen_at, crystal))
         kept.sort(key=lambda item: item[0])
-        for i, (d, x, y, seen_at) in enumerate(kept[:MAX_POWERUP_MEMORY]):
+        for i, (d, x, y, seen_at, crystal) in enumerate(kept[:MAX_POWERUP_MEMORY]):
+            self._pickup_lifetime(out, f'powerup_memory{i}', crystal)
             rel = math.atan2(y - origin[1], x - origin[0]) - h
             out[_INDEX[f'powerup_memory{i}_present']] = 1.0
             out[_INDEX[f'powerup_memory{i}_sin']] = math.sin(rel)

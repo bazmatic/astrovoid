@@ -29,10 +29,11 @@ def test_the_standalone_body_draws_the_same_pixels(angle, burning, immunity):
 
 
 @pytest.mark.parametrize('timer', [4, 20, 45])
-def test_the_standalone_body_draws_the_same_death(timer):
+def test_the_ship_breakup_matches_its_visual_snapshot(timer):
     new = creature([], pos=(400, 400))
     new.radius = 8
     new.body = HunterShipBody(new)
+    new.angle = 0
     new.die()
     new.death_timer = timer
     surface = pygame.Surface((800, 800))

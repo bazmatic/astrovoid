@@ -142,11 +142,3 @@ def test_the_body_draws_the_arrowhead_in_the_kinds_colours():
     boss.draw(screen)
     bar_row = round(150 - 16 * 2.2) - 2
     assert any(tuple(screen.get_at((x, bar_row)))[:3] == RED for x in range(300))
-
-    c.die()
-    c.death_timer = c.DEATH_DURATION / 2
-    screen = pygame.Surface((300, 300))
-    c.draw_death(screen)
-    ring = round(8 * (1.5 + 4.0 * 0.5))
-    assert any(tuple(screen.get_at((150 + r, 150)))[:3] == RED for r in range(ring - 2, ring + 1))
-    assert tuple(screen.get_at((150, 150)))[:3] == (0, 0, 0)

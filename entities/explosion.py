@@ -35,6 +35,7 @@ class Blast:
     source: str = 'enemy'
     fuse: float = 0.0
     color: Tuple[int, int, int] = (255, 170, 60)
+    weapon_id: Optional[str] = None
 
 
 def reaches(blast: Blast, pos: Tuple[float, float], radius: float = 0.0) -> bool:

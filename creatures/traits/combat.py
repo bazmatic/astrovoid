@@ -136,6 +136,9 @@ class Gun(Trait):
             c.gun_cooldown = 0.0
         c.just_fired = False
         c.shots_fired = 0
+        from weapons.catalog import RULESET
+        c.nonstacking_powerups = (self.upgrades
+                                 and getattr(enc.world, 'combat_ruleset', 'legacy') == RULESET)
         if self.upgrades:
             c.gun_upgrade_level = 0
             c.upgrade_remaining = 0.0
@@ -191,7 +194,7 @@ class Gun(Trait):
 
     def on_event(self, c, name, enc):
         if name == 'pickup' and self.upgrades:
-            c.gun_upgrade_level += 1
+            c.gun_upgrade_level = 1 if c.nonstacking_powerups else c.gun_upgrade_level + 1
             c.upgrade_remaining = config.POWERUP_DURATION_SECONDS
             if self.cadence == 'burst':
                 c.fire_interval = (c.base_fire_interval * cooldown_for_upgrade(c.gun_upgrade_level)
@@ -219,7 +222,7 @@ class Explodes(Trait):
         """The blast this creature makes; its kills count for `source`."""
         styling = {} if self.color is None else {'color': self.color}
         return Blast((c.x, c.y), c.radius * self.reach, damage=self.damage, push=self.push, wall_hits=self.wall_hits,
-                     source=source, fuse=self.fuse, **styling)
+                     source=source, fuse=self.fuse, weapon_id=getattr(c, 'killed_by_weapon', None), **styling)
 
     def on_death(self, c, enc):
         enc.explode(self.blast(c, c.killed_by))

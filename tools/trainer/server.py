@@ -1,4 +1,4 @@
-"""The training manager's web app: the page, and a small JSON API over the engine. Local only."""
+"""The training manager's web app. Loopback by default; an explicit host can expose it on Tailscale."""
 import json
 import re
 import webbrowser
@@ -25,7 +25,7 @@ def run_json(run):
             'replayable': replay.replayable(run.path)}
 
 
-def make_handler(root, processes, launch):
+def make_handler(root, processes, launch, allowed_hosts=()):
     root = Path(root)
 
     class Handler(BaseHTTPRequestHandler):
@@ -64,8 +64,13 @@ def make_handler(root, processes, launch):
             without asking, and a site renamed to point here (DNS rebinding) arrives with its own Host."""
             port = self.server.server_address[1]
             ours = {f'127.0.0.1:{port}', f'localhost:{port}'}
+            host = self.server.server_address[0]
+            if host not in ('0.0.0.0', '::'):
+                ours.add(f'{host}:{port}')
+            ours.update(f'{name.lower()}:{port}' for name in allowed_hosts)
             origin = self.headers.get('Origin')
-            return self.headers.get('Host') in ours and (origin is None or origin.split('//', 1)[-1] in ours)
+            return self.headers.get('Host', '').lower() in ours and (
+                origin is None or origin.split('//', 1)[-1].lower() in ours)
 
         def do_POST(self):
             if not (self.headers.get('Content-Type') or '').startswith('application/json'):
@@ -112,8 +117,8 @@ def make_handler(root, processes, launch):
     return Handler
 
 
-def make_server(port, root=runs.RL_ROOT, host='127.0.0.1', processes=list_processes, launch=None):
-    return ThreadingHTTPServer((host, port), make_handler(root, processes, launch))
+def make_server(port, root=runs.RL_ROOT, host='127.0.0.1', processes=list_processes, launch=None, allowed_hosts=()):
+    return ThreadingHTTPServer((host, port), make_handler(root, processes, launch, allowed_hosts))
 
 
 def open_server(port, root=runs.RL_ROOT, **kwargs):
@@ -126,11 +131,11 @@ def open_server(port, root=runs.RL_ROOT, **kwargs):
     raise OSError(f'ports {port}-{port + 10} are all in use')
 
 
-def serve(port=8765, open_browser=True, root=runs.RL_ROOT):
-    httpd, used = open_server(port, root)
+def serve(port=8765, open_browser=True, root=runs.RL_ROOT, host='127.0.0.1', allowed_hosts=()):
+    httpd, used = open_server(port, root, host=host, allowed_hosts=allowed_hosts)
     if used != port:
         print(f'port {port} is in use (the old dashboard?), so using {used}')
-    url = f'http://127.0.0.1:{used}/'
+    url = f'http://{host}:{used}/'
     print(f'training manager: {url}  (ctrl-c to close it; training carries on)')
     if open_browser:
         webbrowser.open(url)

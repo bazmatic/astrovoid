@@ -153,3 +153,19 @@ def test_the_training_horizon_comes_from_the_shaping_and_defaults_to_ninety_seco
     short = ppo._rollout_job(job, shaping={'horizon': 4.0})
     assert short['result'].elapsed == pytest.approx(4.0, abs=0.05) and short['result'].end == 'horizon'
     assert ppo.DEFAULT_HORIZON == 90.0
+
+
+def test_credit_settings_reach_the_actual_optimizer_update(monkeypatch, tmp_path):
+    start = tmp_path / 'start.npz'
+    random_policy(0, hidden=16, embed=8).save(start)
+    seen = []
+    original = ppo.improve
+
+    def capture(*args, **kwargs):
+        seen.append((kwargs['gamma'], kwargs['lam']))
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(ppo, 'improve', capture)
+    ppo.train_rl(start, tmp_path / 'out', iterations=1, episodes=2, workers=1,
+                 gamma=0.995, gae_lambda=0.98, rollout=fake_rollout_factory(), log=lambda *_: None)
+    assert seen == [(0.995, 0.98)]

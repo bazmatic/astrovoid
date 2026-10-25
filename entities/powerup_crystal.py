@@ -16,7 +16,7 @@ from rendering import visual_effects
 from utils import circle_circle_collision
 
 
-class PowerupCrystal(GameEntity, Collidable, Drawable):
+class Pickup(GameEntity, Collidable, Drawable):
     """Represents a collectible powerup crystal that upgrades the player's guns.
     
     It is drawn as a cut gem turning on its vertical axis: a hard, geometric
@@ -42,6 +42,8 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
     BOB_HEIGHT = 1.5  # Pixels
     SPAWN_FRAMES = 14.0  # Frames to pop into view
     SPAWN_OVERSHOOT = 1.35  # Above 1.0 it swells past full size before settling
+    LIFETIME_FRAMES = 360.0  # Six seconds to collect, including the fade
+    FADE_FRAMES = 120.0  # Fade over the final two seconds
     GLINT_PERIOD = 70.0  # Frames between glints
     GLINT_FRAMES = 14.0
     MOTE_COUNT = 3
@@ -66,6 +68,17 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         self.motes = self.MOTE_COUNT
         self.sparks: List[Tuple[float, float, float, float]] = []
     
+    @property
+    def pickup_color(self):
+        return config.COLOR_POWERUP_CRYSTAL
+
+    @property
+    def visibility(self) -> float:
+        """Opacity remaining before an uncollected crystal expires."""
+        if self.LIFETIME_FRAMES is None:
+            return 1.0
+        return max(0.0, min(1.0, (self.LIFETIME_FRAMES - self.age) / self.FADE_FRAMES))
+
     @property
     def spawn_scale(self) -> float:
         """Size relative to normal while popping into view: 0.0, a swell past 1.0, then 1.0."""
@@ -126,6 +139,11 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         """
         if not self.active:
             return
+        self.age += dt
+        if self.LIFETIME_FRAMES is not None and self.age >= self.LIFETIME_FRAMES:
+            # Expiry is not collection: no upgrade, burst, or random sparks.
+            self.active = False
+            return
         
         # Check if player is within attraction radius and move towards player
         if player_pos is not None:
@@ -150,7 +168,6 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         self.x += self.vx * dt
         self.y += self.vy * dt
         
-        self.age += dt
         # Leave a trail while being pulled in; let it run out once at rest
         if self.vx != 0.0 or self.vy != 0.0:
             self.trail.append((self.x, self.y))
@@ -194,7 +211,7 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         Returns:
             True if collision occurred, False otherwise.
         """
-        if circle_circle_collision(
+        if self.active and circle_circle_collision(
             (self.x, self.y), self.radius,
             other_pos, other_radius
         ):
@@ -204,7 +221,7 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
     
     def _draw_gem(self, target: pygame.Surface, center: Tuple[float, float], size: float) -> None:
         """Draw the faceted gem with its centre at center; size is the pixel length of one unit."""
-        base = config.COLOR_POWERUP_CRYSTAL
+        base = self.pickup_color
         
         def shade(brightness: float) -> Tuple[int, int, int]:
             brightness = max(0.0, min(1.0, brightness))
@@ -239,19 +256,35 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
         """
         if not self.active:
             return
+        if self.visibility < 1.0:
+            # Keep the entire effect (including its trail and glow) fading together.
+            margin = math.ceil(self.radius * 5)
+            points = [(self.x, self.y), *self.trail]
+            left = math.floor(min(x for x, _ in points)) - margin
+            top = math.floor(min(y for _, y in points)) - margin
+            width = math.ceil(max(x for x, _ in points)) - left + margin + 1
+            height = math.ceil(max(y for _, y in points)) - top + margin + 1
+            layer = pygame.Surface((width, height), pygame.SRCALPHA)
+            self._draw_crystal(layer, (-left, -top))
+            layer.set_alpha(round(255 * self.visibility))
+            screen.blit(layer, (left, top))
+        else:
+            self._draw_crystal(screen)
+
+    def _draw_crystal(self, screen, offset=(0, 0)):
         scale = self.spawn_scale
         if scale <= 0.0:
             return
         
-        base = config.COLOR_POWERUP_CRYSTAL
+        base = self.pickup_color
         size = self.radius * scale * (1.0 + 0.06 * math.sin(self.pulse_phase))
-        center = (self.x, self.y + math.sin(self.pulse_phase * 0.7) * self.BOB_HEIGHT)
+        center = (self.x + offset[0], self.y + offset[1] + math.sin(self.pulse_phase * 0.7) * self.BOB_HEIGHT)
         
         # Sparkling trail left while it is pulled to the player
         for index, (trail_x, trail_y) in enumerate(self.trail[:-1]):
             strength = (index + 1) / len(self.trail)
             color = visual_effects.interpolate_color(self.SHADOW_COLOR, self.HIGHLIGHT_COLOR, strength * 0.8)
-            pygame.draw.circle(screen, color, (int(trail_x), int(trail_y)), max(1, int(round(self.radius * 0.35 * strength))))
+            pygame.draw.circle(screen, color, (int(trail_x + offset[0]), int(trail_y + offset[1])), max(1, int(round(self.radius * 0.35 * strength))))
         
         # Stepped alpha keeps the glow cache small
         glow_alpha = int(85 + 35 * math.sin(self.pulse_phase * 2.0)) // 10 * 10
@@ -305,7 +338,7 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
             return
         progress = self.death_progress
         visibility = 1.0 - progress
-        base = config.COLOR_POWERUP_CRYSTAL
+        base = self.pickup_color
         # Drawn off-screen so the burst can fade
         size = int(self.radius * 14)
         layer = pygame.Surface((size, size), pygame.SRCALPHA)
@@ -326,3 +359,26 @@ class PowerupCrystal(GameEntity, Collidable, Drawable):
             pygame.draw.line(layer, (*self.HIGHLIGHT_COLOR, int(255 * visibility)), tail, head, 1)
         
         screen.blit(layer, layer.get_rect(center=(int(self.x), int(self.y))))
+
+
+class PowerupCrystal(Pickup):
+    """A weapon payload using the shared pickup animation and lifecycle."""
+
+    def __init__(self, pos, weapon_id=None, catalog=None):
+        super().__init__(pos)
+        from weapons.catalog import CATALOG
+        self.catalog = catalog or CATALOG
+        self.weapon_id = weapon_id
+        if weapon_id is not None:
+            self.catalog[weapon_id]
+
+    @property
+    def pickup_color(self):
+        return self.catalog[self.weapon_id].color if self.weapon_id else super().pickup_color
+
+    def _draw_gem(self, target, center, size):
+        if self.weapon_id is None:
+            return super()._draw_gem(target, center, size)
+        from weapons.catalog import CATALOG
+        from weapons.presentation import draw_symbol
+        draw_symbol(target, center, size * 1.3, self.catalog[self.weapon_id])

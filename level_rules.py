@@ -73,8 +73,8 @@ BOSS_ARENA_SIZE = 16
 MAX_BOSSES = 3
 
 # Level each enemy type first appears on (anemones: config.ANEMONE_FIRST_LEVEL)
-FIRST_LEVELS = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 5,
-                'flocker': 8, 'flighthouse': 10, 'egg': 13}
+FIRST_LEVELS = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 8,
+                'flocker': 5, 'flighthouse': 10, 'egg': 4}
 
 # Each enemy added beyond the arc goes to the next type in this order, round and round
 GROWTH_ORDER = ('aggressive', 'replay', 'flocker', 'static', 'patrol', 'anemone')

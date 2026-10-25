@@ -370,3 +370,26 @@ def test_a_random_start_is_inside_the_maze_and_leaves_the_default_untouched():
         x, y = _start_position(20, seed, random_start=True)
         assert 0 <= x <= config.SCREEN_WIDTH and 0 <= y <= config.SCREEN_HEIGHT
     assert _start_position(20, 0) == _start_position(20, 0, random_start=False)
+
+
+def _maze_grid(level, seed, **kwargs):
+    grids = []
+    run_episode(level, seed, horizon=0.1,
+                trace=lambda t, game, hunter: grids.append(copy.deepcopy(game.maze.grid)), **kwargs)
+    return grids[0]
+
+
+@pytest.mark.parametrize('level', [14, 25])
+def test_random_training_mazes_vary_by_episode_seed_and_can_be_replayed(level):
+    first = _maze_grid(level, 300, random_maze=True)
+    second = _maze_grid(level, 301, random_maze=True)
+    assert first != second
+    assert _maze_grid(level, 300, random_maze=True) == first
+
+
+def test_random_maze_keeps_hand_built_levels_intact():
+    assert _maze_grid(29, 300, random_maze=True) == _maze_grid(29, 301, random_maze=True)
+
+
+def test_historical_episodes_keep_their_fixed_maze():
+    assert _maze_grid(25, 300) == _maze_grid(25, 301)

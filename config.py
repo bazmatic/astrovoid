@@ -267,6 +267,8 @@ class PowerupSettings:
     upgradedProjectile: PowerupUpgradedProjectile
     beyondLevel3: PowerupBeyondLevel3
     rotationSpeedMultiplier: float
+    inflationDurationSeconds: float = 5.0
+    inflationSizeMultiplier: float = 5.0
 
 
 @dataclass
@@ -468,7 +470,9 @@ def load_settings() -> Settings:
         ),
         beyondLevel3=PowerupBeyondLevel3(**powerup_raw["beyondLevel3"])
         ,
-        rotationSpeedMultiplier=powerup_raw["rotationSpeedMultiplier"]
+        rotationSpeedMultiplier=powerup_raw["rotationSpeedMultiplier"],
+        inflationDurationSeconds=powerup_raw.get("inflationDurationSeconds", 5.0),
+        inflationSizeMultiplier=powerup_raw.get("inflationSizeMultiplier", 5.0)
     )
 
     colors_raw = raw["colors"]

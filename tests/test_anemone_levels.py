@@ -6,7 +6,7 @@ from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_e
 
 
 @pytest.mark.parametrize('level, expected', [
-    (1, 0), (6, 0), (7, 2), (9, 2), (12, 0), (17, 3), (23, 3), (25, 4), (35, 5), (47, 6), (100, 6)])
+    (1, 0), (6, 0), (7, 1), (9, 1), (12, 0), (17, 3), (23, 3), (25, 4), (35, 5), (47, 6), (100, 6)])
 def test_schedule(level, expected):
     assert get_anemone_count(level) == expected
     assert get_enemy_counts(level).anemone == expected
@@ -26,7 +26,7 @@ def test_level_file_without_the_key_uses_the_schedule(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config',
                         lambda level: {'enemies': {'static': 1}, 'maze': {'grid_size': 40}})
     assert level_config.get_level_enemy_counts(3).anemone == 0
-    assert level_config.get_level_enemy_counts(9).anemone == 2
+    assert level_config.get_level_enemy_counts(9).anemone == 1
 
 
 @pytest.mark.parametrize('grid_size, expected', [(10, 1), (12, 1), (20, 4), (25, 6), (30, 9), (40, 16)])

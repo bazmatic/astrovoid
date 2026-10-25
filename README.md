@@ -18,13 +18,13 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
   - Flockers that swarm together, Flighthouses that launch them, and Anemones that pull the ship in
 - **Resource Management**: Limited fuel and ammunition require strategic decision-making
 - **Destructible Rock**: Maze walls are solid blocks of rock that crack under fire and can be blasted away a block at a time
-- **Powerup Crystals**: Short-lived gun upgrades dropped by destroyed enemies
+- **Weapon Pickups**: Six distinct weapons dropped by destroyed enemies; automatic replacement and finite ammo
 - **Scoring System**: Score based on completion time, collisions, resource usage, and enemy destructions
 - **Visual Effects**: Ship glow, thrust particles, enemy pulsing, and more
 - **Animated Splash**: A giant squid chases the ship up the screen and settles over the title
 - **Sound System**: Procedurally-generated sound effects for thrusters, shooting, enemy destruction, and portal activation/deactivation
 - **Paced Levels**: A designed arc of 24 levels introduces one enemy type at a time, then an endless game that gets harder without getting more crowded
-- **Boss Levels**: Every sixth level is a boss fight in an open arena
+- **Boss Levels**: Boss encounters build up through the campaign, followed by recurring endless-mode boss arenas
 - **Momentum Physics**: Eggs and Static enemies gain momentum when hit by projectiles, moving with realistic physics and bouncing off walls
 - **Exit Portal Lock**: Exit portal deactivates while any egg is alive, and on a boss level while any enemy is alive, requiring them to be destroyed before level completion
 
@@ -194,20 +194,27 @@ A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squi
 
 ### Resources
 
-- **Fuel**: Consumed when thrusting or using shield. Starts at 1000 units.
-- **Ammunition**: Consumed when firing. Starts at 50 rounds. Infinite on boss levels.
+- **Power / fuel**: Movement, shielding, hits, and time retain their existing costs.
+- **Weapon ammunition**: The basic gun is unlimited. Special weapons have their own finite ammo supply; emptying one returns you to basic.
 
-### Powerup Crystals
+### Weapon Pickups
 
-A destroyed enemy has a 30% chance of leaving a green crystal. Flying near one pulls it in. Each crystal:
+Destroyed enemies can leave a weapon pickup. Flying near one pulls it in; touching it immediately replaces your current weapon and discards its remaining ammo. Collecting the same weapon gives a fresh supply, never stacks. Pickups disappear after six seconds, fading during the last two. Equipped weapons have no expiry timer.
 
-- **Upgrades the gun** by one level. The first doubles the fire rate; from the second, each pull of the trigger is a three-way spread. Every crystal adds the same amount of firepower (one base gun's worth of shots per second) rather than multiplying it, so a spread fires at a slower rhythm than the single shots before it. Upgraded shots are larger and faster, and the ship turns a little quicker.
-- **Refills 25 rounds** of ammunition, up to the full 50.
-- **Halves the cost of firing** while the upgrade lasts. A spread costs the same as a single shot. Ammunition is no longer unlimited, so an upgraded gun can still run dry.
+| Weapon | Behaviour | Ammo per pickup |
+|---|---|---:|
+| Twin Blaster | Rapid parallel blue bolts | 60 volleys |
+| Scattergun | Five heavier orange pellets; two hits each, with faster firing | 20 volleys |
+| Railgun | Fast-firing violet shot; pierces creatures and instantly destroys rock, stopped by indestructible walls | 12 shots |
+| Seeker | Green missiles with bounded homing toward visible enemies | 18 missiles |
+| The Inflator | Pink balloons make creatures enormous; any follow-up hit pops them | 18 shots |
+| Grenade Launcher | Bouncing fused shells; shared Belemnite explosions | 10 grenades |
 
-Upgrades are temporary. They last 10 seconds from the most recent crystal, then all wear off together and the gun returns to normal. The bar under the "GUN UPGRADE" label on the HUD shows the time left. Upgrades are also cleared at the start of each level.
+Grenades detonate when an enemy comes within 28 pixels of their proximity sensor (measured from the enemy hull), on contact, or after 1.2 seconds. Walls block the proximity sensor. Their blasts can hurt you and your ally, destroy walls, and start Belemnite chain reactions. Distinct symbols identify weapons as well as colours. The HUD shows the equipped weapon and remaining volleys/shots. A new level starts with basic; swapping weapons cannot bypass the current firing cooldown.
 
-The numbers are in `config/settings.json` under `powerups`: `durationSeconds`, `firepowerPerCrystal`, `ammoRefill`, `ammoCostMultiplier` and `crystalSpawnChance`.
+Weapon tuning and drop weights live in `weapons/catalog.py`; optional level `weapons` lists restrict drops to named special weapon IDs. Drop chance remains under `powerups.crystalSpawnChance` in `config/settings.json`. Old ammo policies and timed upgrade settings apply only to legacy training/replays. New training runs record the weapon ruleset and tuning; resumed historical runs keep their recorded combat rules.
+
+The Inflator makes a creature five times its normal size for five seconds. Its first hit does no damage; any further shot or blast kills the inflated target. Surviving targets shrink back, retaining their original health. Set `powerups.inflationDurationSeconds` and `powerups.inflationSizeMultiplier` in `config/settings.json` to change the duration and scale. Inflated outlines are easier to shoot, while their navigation footprint remains normal so they can still fit through corridors. Hunters collecting this pickup receive their usual generic timed boost.
 
 ### Walls
 
@@ -491,6 +498,14 @@ profile.
 
 #### Training manager
 
+For access from another device on your Tailscale network, bind to this Mac's Tailscale IPv4 address:
+`./run-trainer.sh serve --host "$(tailscale ip -4)" --port 8766`.
+Open `http://<that-address>:8766/` on either device. The default listener accepts connections only from this Mac.
+To use a Tailscale hostname, add `--allowed-host quiescent --allowed-host quiescent.tailf8052b.ts.net`
+(substitute your Mac's names), then open `http://quiescent:8766/`.
+Use `--host 0.0.0.0` to listen on all IPv4 interfaces; include each network hostname or IP used by browsers
+with `--allowed-host` so the page's replay and training controls accept those addresses.
+
 `./run-trainer.sh` opens the training manager in the browser (port 8765, or the next free one): what is training,
 with Pause, Resume and Stop; a Next run box that carries on from any run and checkpoint (the newest by default) with
 its settings, any of which can be changed first, including which levels to train on; and the charts for any run.
@@ -545,14 +560,10 @@ arrives. It does not explore on its own.
 
 A powerup crystal in the hunter's sight is a goal of its own (`collect_powerup` in the
 pilot's readings and instructions): with no enemy to fight it flies onto the nearest one
-before going back to the player. Crystals upgrade the hunter's guns as they do yours:
-the first makes bursts come faster, the second turns each shot into a three-way spread,
-and those beyond the third make the shots bigger and faster. Each crystal adds the same
-amount of firepower rather than multiplying it, and the upgrades all wear off together
-`powerups.durationSeconds` after the last crystal. A crystal the hunter takes is one you
-do not get and does not count towards your score; you have first claim on one you both
-touch. The hunter leaves Jev beacons alone, and a newly summoned hunter starts with no
-upgrades.
+before going back to the player. Every weapon pickup gives the hunter the same generic power boost: its normal gun fires faster with larger, faster shots. The boost does not stack; another pickup refreshes its timer (`powerups.durationSeconds`). The hunter never equips the pickup's weapon or consumes its weapon ammunition. The player has first claim on a pickup both touch. Hunter pickups count for collection stars but do not add player pickup score. The hunter leaves Jev beacons alone and starts without a power boost.
+
+Existing neural weights use an explicit observation adapter that ignores the added boost timer and pickup lifetime features. They can still fly with familiar generic boosts; further training can learn the added timing information. Newly trained policies can observe whether their generic power boost is active, its remaining time, and pickup lifetime. Legacy runs retain their original gun-upgrade behaviour.
+
 Inputs expire 750 ms after their sensor snapshot; expired inputs stop turning,
 thrust and firing while momentum continues. Requests time out after one second.
 There is no local autopilot fallback. Constants are in `hunter/model.py`.

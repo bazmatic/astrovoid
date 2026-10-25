@@ -371,7 +371,7 @@ class LevelEditor:
         self._draw_hints([('Arrows', 'move'), ('Tab', 'item'), ('Space', 'place'), ('Del', 'remove'),
                           ('S', 'save'), ('X', 'revert'), ('Esc', 'back')])
         self._draw_hints([('E', f'Exit: {self.model.exit_policy.label()}'),
-                          ('A', f'Ammo: {self.model.ammo_policy.label()}'), ('- =', 'timer'), ('T', 'kill type'),
+                          ('A', f'Legacy ammo: {self.model.ammo_policy.label()}'), ('- =', 'timer'), ('T', 'kill type'),
                           ('R', 'turn gate'), ('F', 'flip')],
                          rows_up=1)
 

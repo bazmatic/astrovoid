@@ -4,7 +4,9 @@
     "complexity": "empty",
     "grid_size": 32
   },
-  "hunter": false,
+  "hunter": {
+    "earned": true
+  },
   "exit_policy": {
     "type": "type_cleared",
     "enemy_types": [
@@ -381,5 +383,23 @@
       }
     ],
     "beacon": null
+  },
+  "enemies": {
+    "static": 3,
+    "patrol": 2,
+    "aggressive": 2,
+    "replay": 0,
+    "flocker": 0,
+    "flighthouse": 2,
+    "egg": 0,
+    "anemone": 2,
+    "split_boss": 0,
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 6
   }
 }

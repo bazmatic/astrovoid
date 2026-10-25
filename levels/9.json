@@ -5,157 +5,310 @@
     "grid_size": 22
   },
   "enemies": {
-    "static": 2,
+    "static": 3,
     "patrol": 2,
     "aggressive": 2,
     "replay": 1,
-    "flocker": 2,
+    "flocker": 1,
     "flighthouse": 0,
-    "egg": 0,
-    "anemone": 2,
+    "egg": 1,
+    "anemone": 1,
     "split_boss": 0,
-    "mother_boss": 0
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 1
   },
   "layout": {
     "walls": [
-      [7, 1],
-      [8, 1],
-      [1, 4],
-      [1, 5],
-      [2, 5],
-      [17, 5],
-      [18, 5],
-      [19, 5],
-      [20, 5],
-      [17, 6],
-      [9, 7],
-      [10, 7],
-      [11, 7],
-      [17, 7],
-      [8, 8],
-      [9, 8],
-      [10, 8],
-      [11, 8],
-      [17, 8],
-      [1, 9],
-      [8, 9],
-      [11, 9],
-      [12, 9],
-      [13, 9],
-      [17, 9],
-      [1, 10],
-      [8, 10],
-      [11, 10],
-      [12, 10],
-      [13, 10],
-      [17, 10],
-      [8, 11],
-      [17, 11],
-      [8, 12],
-      [17, 12],
-      [8, 13],
-      [8, 14],
-      [8, 15],
-      [8, 16],
-      [17, 16],
-      [18, 16],
-      [19, 16],
-      [20, 16],
-      [8, 17],
-      [8, 18]
+      [
+        7,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        1,
+        4
+      ],
+      [
+        1,
+        5
+      ],
+      [
+        2,
+        5
+      ],
+      [
+        17,
+        5
+      ],
+      [
+        18,
+        5
+      ],
+      [
+        19,
+        5
+      ],
+      [
+        20,
+        5
+      ],
+      [
+        17,
+        6
+      ],
+      [
+        9,
+        7
+      ],
+      [
+        10,
+        7
+      ],
+      [
+        11,
+        7
+      ],
+      [
+        17,
+        7
+      ],
+      [
+        8,
+        8
+      ],
+      [
+        9,
+        8
+      ],
+      [
+        10,
+        8
+      ],
+      [
+        11,
+        8
+      ],
+      [
+        17,
+        8
+      ],
+      [
+        1,
+        9
+      ],
+      [
+        8,
+        9
+      ],
+      [
+        11,
+        9
+      ],
+      [
+        12,
+        9
+      ],
+      [
+        13,
+        9
+      ],
+      [
+        17,
+        9
+      ],
+      [
+        1,
+        10
+      ],
+      [
+        8,
+        10
+      ],
+      [
+        11,
+        10
+      ],
+      [
+        12,
+        10
+      ],
+      [
+        13,
+        10
+      ],
+      [
+        17,
+        10
+      ],
+      [
+        8,
+        11
+      ],
+      [
+        17,
+        11
+      ],
+      [
+        8,
+        12
+      ],
+      [
+        17,
+        12
+      ],
+      [
+        8,
+        13
+      ],
+      [
+        8,
+        14
+      ],
+      [
+        8,
+        15
+      ],
+      [
+        8,
+        16
+      ],
+      [
+        17,
+        16
+      ],
+      [
+        18,
+        16
+      ],
+      [
+        19,
+        16
+      ],
+      [
+        20,
+        16
+      ],
+      [
+        8,
+        17
+      ],
+      [
+        8,
+        18
+      ]
     ],
-    "start": [1, 20],
-    "exit": [19, 9],
+    "start": [
+      1,
+      20
+    ],
+    "exit": [
+      19,
+      9
+    ],
     "enemies": [
       {
+        "type": "replay",
+        "cell": [
+          5,
+          1
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          15,
+          1
+        ]
+      },
+      {
+        "type": "egg",
+        "cell": [
+          20,
+          2
+        ]
+      },
+      {
         "type": "anemone",
-        "cell": [10, 5]
+        "cell": [
+          10,
+          5
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [9, 9]
-      },
-      {
-        "type": "aggressive",
-        "cell": [10, 9]
-      },
-      {
-        "type": "aggressive",
-        "cell": [14, 9]
-      },
-      {
-        "type": "aggressive",
-        "cell": [15, 9]
-      },
-      {
-        "type": "aggressive",
-        "cell": [16, 9]
-      },
-      {
-        "type": "aggressive",
-        "cell": [9, 10]
-      },
-      {
-        "type": "aggressive",
-        "cell": [10, 10]
-      },
-      {
-        "type": "aggressive",
-        "cell": [14, 10]
-      },
-      {
-        "type": "aggressive",
-        "cell": [15, 10]
-      },
-      {
-        "type": "aggressive",
-        "cell": [16, 10]
-      },
-      {
-        "type": "aggressive",
-        "cell": [9, 11]
-      },
-      {
-        "type": "aggressive",
-        "cell": [10, 11]
+        "cell": [
+          16,
+          9
+        ]
       },
       {
         "type": "static",
-        "cell": [13, 14]
+        "cell": [
+          2,
+          10
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [19, 17]
+        "cell": [
+          10,
+          10
+        ]
       },
       {
-        "type": "aggressive",
-        "cell": [20, 17]
+        "type": "static",
+        "cell": [
+          20,
+          11
+        ]
       },
       {
-        "type": "aggressive",
-        "cell": [19, 18]
+        "type": "patrol",
+        "cell": [
+          7,
+          13
+        ]
       },
       {
-        "type": "aggressive",
-        "cell": [20, 18]
+        "type": "static",
+        "cell": [
+          13,
+          14
+        ]
       },
       {
-        "type": "aggressive",
-        "cell": [19, 19]
+        "type": "patrol",
+        "cell": [
+          8,
+          20
+        ]
       },
       {
-        "type": "aggressive",
-        "cell": [20, 19]
-      },
-      {
-        "type": "aggressive",
-        "cell": [19, 20]
-      },
-      {
-        "type": "aggressive",
-        "cell": [20, 20]
+        "type": "flocker",
+        "cell": [
+          18,
+          20
+        ]
       }
     ],
     "beacon": null
+  },
+  "hunter": false,
+  "exit_policy": {
+    "type": "type_cleared",
+    "enemy_types": [
+      "egg"
+    ]
+  },
+  "ammo_policy": {
+    "type": "limited"
   }
 }

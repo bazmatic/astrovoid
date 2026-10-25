@@ -5,133 +5,216 @@
     "grid_size": 20
   },
   "enemies": {
-    "static": 2,
-    "patrol": 1,
+    "static": 3,
+    "patrol": 2,
     "aggressive": 2,
-    "replay": 1,
-    "flocker": 0,
+    "replay": 0,
+    "flocker": 1,
     "flighthouse": 0,
-    "egg": 0,
-    "anemone": 2,
+    "egg": 1,
+    "anemone": 1,
     "split_boss": 0,
-    "mother_boss": 0
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "layout": {
     "walls": [
-      [4, 1],
-      [5, 1],
-      [8, 1],
-      [8, 2],
-      [8, 3],
-      [8, 4],
-      [8, 5],
-      [8, 6],
-      [14, 7],
-      [15, 7],
-      [16, 7],
-      [17, 7],
-      [18, 7],
-      [1, 11],
-      [2, 11],
-      [3, 11],
-      [4, 11],
-      [5, 11],
-      [18, 13],
-      [9, 16],
-      [14, 16],
-      [9, 17],
-      [14, 17],
-      [9, 18],
-      [14, 18]
+      [
+        4,
+        1
+      ],
+      [
+        5,
+        1
+      ],
+      [
+        8,
+        1
+      ],
+      [
+        8,
+        2
+      ],
+      [
+        8,
+        3
+      ],
+      [
+        8,
+        4
+      ],
+      [
+        8,
+        5
+      ],
+      [
+        8,
+        6
+      ],
+      [
+        14,
+        7
+      ],
+      [
+        15,
+        7
+      ],
+      [
+        16,
+        7
+      ],
+      [
+        17,
+        7
+      ],
+      [
+        18,
+        7
+      ],
+      [
+        1,
+        11
+      ],
+      [
+        2,
+        11
+      ],
+      [
+        3,
+        11
+      ],
+      [
+        4,
+        11
+      ],
+      [
+        5,
+        11
+      ],
+      [
+        18,
+        13
+      ],
+      [
+        9,
+        16
+      ],
+      [
+        14,
+        16
+      ],
+      [
+        9,
+        17
+      ],
+      [
+        14,
+        17
+      ],
+      [
+        9,
+        18
+      ],
+      [
+        14,
+        18
+      ]
     ],
-    "start": [1, 18],
-    "exit": [17, 2],
+    "start": [
+      1,
+      18
+    ],
+    "exit": [
+      17,
+      2
+    ],
     "enemies": [
       {
-        "type": "aggressive",
-        "cell": [13, 2]
-      },
-      {
-        "type": "replay",
-        "cell": [15, 3]
-      },
-      {
-        "type": "replay",
-        "cell": [15, 4]
+        "type": "flocker",
+        "cell": [
+          3,
+          1
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [3, 5]
+        "cell": [
+          13,
+          2
+        ]
       },
       {
-        "type": "anemone",
-        "cell": [7, 6]
+        "type": "egg",
+        "cell": [
+          18,
+          2
+        ]
       },
       {
-        "type": "anemone",
-        "cell": [9, 6]
-      },
-      {
-        "type": "anemone",
-        "cell": [14, 6]
+        "type": "static",
+        "cell": [
+          10,
+          6
+        ]
       },
       {
         "type": "patrol",
-        "cell": [9, 7]
+        "cell": [
+          9,
+          7
+        ]
       },
       {
-        "type": "anemone",
-        "cell": [13, 7]
-      },
-      {
-        "type": "anemone",
-        "cell": [14, 8]
-      },
-      {
-        "type": "anemone",
-        "cell": [5, 10]
+        "type": "static",
+        "cell": [
+          4,
+          10
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [14, 11]
+        "cell": [
+          14,
+          11
+        ]
       },
       {
-        "type": "anemone",
-        "cell": [5, 12]
-      },
-      {
-        "type": "anemone",
-        "cell": [18, 12]
-      },
-      {
-        "type": "anemone",
-        "cell": [18, 14]
-      },
-      {
-        "type": "patrol",
-        "cell": [9, 15]
+        "type": "static",
+        "cell": [
+          18,
+          11
+        ]
       },
       {
         "type": "patrol",
-        "cell": [14, 15]
+        "cell": [
+          9,
+          15
+        ]
       },
       {
         "type": "anemone",
-        "cell": [8, 16]
-      },
-      {
-        "type": "anemone",
-        "cell": [10, 16]
-      },
-      {
-        "type": "anemone",
-        "cell": [13, 16]
-      },
-      {
-        "type": "anemone",
-        "cell": [15, 16]
+        "cell": [
+          13,
+          16
+        ]
       }
     ],
-    "beacon": [9, 11]
+    "beacon": null
+  },
+  "hunter": false,
+  "exit_policy": {
+    "type": "type_cleared",
+    "enemy_types": [
+      "egg"
+    ]
+  },
+  "ammo_policy": {
+    "type": "limited"
   }
 }

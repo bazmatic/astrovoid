@@ -222,10 +222,11 @@ def load_student_policy(student):
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
-                 pursue_hunter=False, health=0, duel_separation=False):
+                 pursue_hunter=False, health=0, duel_separation=False, random_maze=False, combat_ruleset="legacy", weapon_tuning=None):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
+    `random_maze` also generates procedural mazes from the episode seed; exact hand-built layouts stay intact.
     `duel_separation` keeps that random start well away from any Rules hunter (runs before it was added did not).
     `health` above zero makes the hunter mortal: it survives that many hits, and the episode ends 'died' when it
     is destroyed (0 keeps it indestructible: hits are counted, not suffered).
@@ -247,7 +248,13 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     game.level, game.state = level, config.STATE_PLAYING
     # A Rules hunter's pilot answers synchronously on the episode clock, like the hunter's own
     game._rules_worker_factory = lambda: SyncWorker(params, clock)
-    game.start_level()
+    from weapons.catalog import RULESET, LEGACY_RULESET, CATALOG, WeaponCatalog, WeaponDefinition
+    if combat_ruleset not in (RULESET, LEGACY_RULESET):
+        raise ValueError('unknown combat ruleset')
+    game.combat_ruleset = combat_ruleset
+    game.weapon_catalog = (WeaponCatalog(WeaponDefinition(**d) for d in weapon_tuning)
+                           if weapon_tuning else CATALOG)
+    game.start_level(maze_seed=seed if random_maze else None)
     random.seed(seed)
     game.player_has_moved = True
     game.ship.game_started = True

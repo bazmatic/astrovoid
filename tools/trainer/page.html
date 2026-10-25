@@ -89,7 +89,7 @@ input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;paddi
   <div class="row">Run <select id="rp-run" aria-label="Run to replay"></select> iteration <input type="number" class="iter" id="rp-iter" step="1" aria-label="Iteration to replay"><button type="button" id="rp-last">Last</button><span class="range" id="rp-range"></span>
    level <select id="rp-level" aria-label="Level"><option value="">All</option></select>
    speed <select id="rp-speed" aria-label="Playback speed"><option value="1">Normal</option><option value="0.5">Half</option><option value="0.25">Quarter</option></select>
-   <button class="primary" id="rp-latest" title="The newest run's last finished iteration, its last episode, at the speed chosen">Watch the last episode</button>
+   <button class="primary" id="rp-latest" title="The newest run's last finished iteration, its last episode matching the selected level, at the speed chosen">Watch the last episode</button>
    <button id="rp-fly" title="Flies the iteration's episodes again to see how each went: takes a while, and slows training while it runs">Find panic</button></div>
   <div class="msg" id="rp-msg">Episodes open in the game window (Esc closes it). A red label shows when the hunter panics.</div>
   <div class="episodes" id="rp-list" hidden></div>
@@ -152,7 +152,7 @@ function render(){
    chart({title:'Training return',sub:'Higher is better. What training maximises. Only comparable within a run.',key:'mean_return',wide:true}),
    chart({title:'Speed',sub:'Higher is better. Average speed as a share of top speed.',key:'speed_fraction'}),
    chart({title:'Powerups per episode',sub:'Higher is better. Crystals the hunter collects.',key:'powerups_per_episode'}),
-   chart({title:'Gun upgraded',sub:'Higher is better. Share of the time the guns are upgraded.',key:'upgraded_fraction'}),
+   chart({title:'Hunter power boost',sub:'Share of time the generic power boost is active.',key:'upgraded_fraction'}),
    chart({title:'Deaths per episode',sub:'Lower is better. Share of episodes in which the hunter is destroyed.',key:'deaths_per_episode'}),
    chart({title:'Follows the enemy compass',sub:'Higher is better. Share of the time with no enemy in sight that the hunter heads within 45° of the compass.',key:'compass_follow'}),
    chart({title:'Hits per episode',sub:'Higher is better. Hunter shots that reach an enemy.',key:'hits_per_episode'}),
@@ -176,7 +176,7 @@ async function loadRules(){
     document.getElementById('rules').innerHTML=
      `<div class="card gain"><h2>Active rewards</h2><ul>${list('+','gain')}</ul></div>`+
      `<div class="card cost"><h2>Active penalties</h2><ul>${list('-','cost')}</ul></div>`+
-     `<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.rules_share?` ${Math.round(e.rules_share*100)}% of episodes are fought against a Rules hunter, which hunts only the hunter.`:''}</p></div>`;
+     `<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.levels?.length?` Levels: ${esc(fmtLevels(e.levels))}.`:''}</p></div>`;
   }catch(e){}
 }
 async function refresh(){if(!VIEW)return;const asked=VIEW;try{const r=await fetch(`api/runs/${VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();n.forEach(d=>{if('free_shots_per_episode' in d&&!('unaimed_shots_per_episode' in d))d.unaimed_shots_per_episode=d.free_shots_per_episode});if(asked===VIEW&&n.length!==D.length){D=n;render()}}}catch(e){}}
@@ -255,7 +255,7 @@ function typed(s,raw){
   if(s.kind==='levels')return raw;
   const t=String(raw).trim();
   if(s.kind==='optional_float'&&(t===''||t.toLowerCase()==='none'||t.toLowerCase()==='off'))return null;
-  return t!==''&&!isNaN(+t)?+t:t;
+  return t!==''&&!isNaN(+t)?+t/(s.display_scale||1):t;
 }
 function edited(s){return s.dest in EDITS?EDITS[s.dest]:BASE[s.dest]?.value}
 function setEdit(s,raw){const v=typed(s,raw);if(same(v,BASE[s.dest]?.value))delete EDITS[s.dest];else EDITS[s.dest]=v;renderChanged()}
@@ -273,7 +273,7 @@ function renderForm(){
   const groups=['Rewards','Episodes','Training'];
   $('form').innerHTML=groups.map(g=>`<fieldset><legend>${g}</legend>${SCHEMA.settings.filter(s=>s.group===g).map(s=>{
     const src=BASE[s.dest]?.source,tag=src&&src!=='recorded'?`<span class="tag" title="This run did not record it: ${src==='recovered'?'worked out from what it did record':'taken from the newest run that recorded it'}">${src}</span>`:'';
-    const v=edited(s),id=`set-${s.dest}`;
+    const raw=edited(s),v=typeof raw==='number'?raw*(s.display_scale||1):raw,id=`set-${s.dest}`;
     const input=s.kind==='bool'?`<input type="checkbox" id="${id}" ${v?'checked':''}>`:s.kind==='levels'?'':`<input type="text" id="${id}" value="${esc(v===null||v===undefined?'none':v)}">`;
     return s.kind==='levels'?`<div class="setting levels" data-dest="${s.dest}"><span>${esc(s.label)} ${tag}</span>${levelPicker(s)}</div>`
       :`<div class="setting" data-dest="${s.dest}" title="${esc(s.help)}"><label for="${id}">${esc(s.label)}</label>${tag}${input}</div>`}).join('')}</fieldset>`).join('');
@@ -300,7 +300,9 @@ $('start').onclick=async()=>{
   const b=$('start');b.disabled=true;
   try{const r=await post('api/start',{from:`${$('from-run').value}/${checkpointName($('from-iter').value)}`,changes:EDITS});
     $('next-msg').className='msg';$('next-msg').textContent=`Started ${r.run} from ${r.started_from}${r.changes.length?`, changing ${r.changes.map(c=>c.setting).join(', ')}`:' with the same settings'}.`;
-    FOLLOW=true;await loadRuns();await loadStatus();$('from-run').value='';fillFrom()}
+    // Keep the submitted settings visible. The new run may not have a checkpoint yet,
+    // so choosing the newest usable source here would reload the previous run's settings.
+    FOLLOW=true;await loadRuns();await loadStatus()}
   catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message;b.disabled=false}
 };
 
@@ -314,7 +316,7 @@ async function loadRuns(){
 function setView(run){if(run===VIEW)return;VIEW=run;D=[];$('rules').innerHTML='';render();refresh();loadRules()}
 $('view-run').onchange=()=>{const v=$('view-run').value;FOLLOW=!v;setView(v||STATUS?.run||null)};
 // Replays: an iteration's episodes, optionally flown again to see how each went, each one watchable.
-let EPISODES=[],FLOWN=false,RP_KEY='';
+let EPISODES=[],FLOWN=false,RP_KEY='',EPISODE_REQUEST=null;
 function fillReplay(){
   const sel=$('rp-run'),keep=sel.value,usable=RUNS.filter(r=>r.replayable&&r.checkpoints.length).reverse();
   sel.innerHTML=usable.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
@@ -325,10 +327,14 @@ function fillReplay(){
 }
 async function loadEpisodes(){
   const run=$('rp-run').value,iteration=$('rp-iter').value,key=`${run}/${iteration}`;
-  if(!run||iteration===''||key===RP_KEY)return;
+  if(!run||iteration==='')return [];
+  if(key===RP_KEY)return EPISODE_REQUEST;
   RP_KEY=key;EPISODES=[];FLOWN=false;renderEpisodes();
-  try{const e=await post('api/episodes',{run,iteration:+iteration});if(RP_KEY===key){EPISODES=e;fillLevels();renderEpisodes()}}
-  catch(e){$('rp-msg').className='msg error';$('rp-msg').textContent=e.message==='not found'?'This training manager is older than the page: close it (ctrl-c) and run ./run-trainer.sh again.':e.message}
+  EPISODE_REQUEST=(async()=>{
+    try{const e=await post('api/episodes',{run,iteration:+iteration});if(RP_KEY===key){EPISODES=e;fillLevels();renderEpisodes()}return e}
+    catch(e){if(RP_KEY===key){RP_KEY='';$('rp-msg').className='msg error';$('rp-msg').textContent=e.message==='not found'?'This training manager is older than the page: close it (ctrl-c) and run ./run-trainer.sh again.':e.message}return null}
+  })();
+  return EPISODE_REQUEST;
 }
 function fillLevels(){
   const sel=$('rp-level'),keep=sel.value,levels=[...new Set(EPISODES.map(e=>e.level))].sort((a,b)=>a-b);
@@ -352,12 +358,15 @@ async function watchEpisode(episode){
   catch(e){m.className='msg error';m.textContent=e.message}
 }
 $('rp-latest').onclick=async()=>{
-  const run=RUNS.filter(r=>r.replayable&&r.checkpoints.length).at(-1),m=$('rp-msg');
+  const run=RUNS.filter(r=>r.replayable&&r.checkpoints.length).at(-1),m=$('rp-msg'),level=$('rp-level').value;
   if(!run){m.className='msg error';m.textContent='No run can be replayed yet.';return}
   const iteration=+run.checkpoints.at(-1).slice(4);
-  $('rp-run').value=run.name;$('rp-iter').value='';fillReplay();$('rp-iter').value=String(iteration);await loadEpisodes();
-  try{const e=EPISODES.length?EPISODES:await post('api/episodes',{run:run.name,iteration});
-    await watchEpisode(e.at(-1).episode)}
+  $('rp-run').value=run.name;$('rp-iter').value='';fillReplay();$('rp-iter').value=String(iteration);
+  try{const e=await loadEpisodes();if(e===null)return;
+    const matching=e.filter(e=>level===''||e.level===+level);
+    if(!matching.length)throw new Error(level===''?'This iteration has no episodes.':`The newest iteration has no episodes on level ${level}. Choose All or another level.`);
+    $('rp-level').value=level;renderEpisodes();
+    await watchEpisode(matching.at(-1).episode)}
   catch(e){m.className='msg error';m.textContent=e.message}
 };
 $('rp-run').onchange=()=>{$('rp-iter').value='';fillReplay()};

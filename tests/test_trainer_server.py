@@ -192,3 +192,29 @@ def test_watching_opens_the_episode_at_the_chosen_speed(setup):
 def test_runs_say_whether_they_can_be_replayed(setup):
     replayable(setup)
     assert [(r['name'], r['replayable']) for r in get_json(setup, '/api/runs')] == [('run51', False), ('run52', True)]
+
+
+def test_explicit_network_bind_accepts_its_own_host_and_origin_only(tmp_path):
+    from types import SimpleNamespace
+    handler = object.__new__(server_module.make_handler(tmp_path, lambda: [], None))
+    handler.server = SimpleNamespace(server_address=('100.76.248.12', 8766))
+    handler.headers = {'Host': '100.76.248.12:8766', 'Origin': 'http://100.76.248.12:8766'}
+    assert handler.from_this_page()
+    handler.headers['Origin'] = 'http://unrelated.example'
+    assert not handler.from_this_page()
+    handler.headers = {'Host': 'unrelated.example:8766'}
+    assert not handler.from_this_page()
+
+
+def test_tailscale_aliases_accept_replays_and_reject_untrusted_origins(tmp_path):
+    from types import SimpleNamespace
+    aliases = ['quiescent', 'quiescent.tailf8052b.ts.net']
+    handler = object.__new__(server_module.make_handler(tmp_path, lambda: [], None, allowed_hosts=aliases))
+    handler.server = SimpleNamespace(server_address=('100.76.248.12', 8766))
+    for name in aliases + ['Quiescent']:
+        handler.headers = {'Host': f'{name}:8766', 'Origin': f'http://{name}:8766'}
+        assert handler.from_this_page()
+        handler.headers['Origin'] = 'http://unrelated.example:8766'
+        assert not handler.from_this_page()
+    handler.headers = {'Host': 'unrelated.example:8766', 'Origin': 'http://unrelated.example:8766'}
+    assert not handler.from_this_page()

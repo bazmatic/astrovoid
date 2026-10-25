@@ -5,61 +5,153 @@
     "grid_size": 14
   },
   "enemies": {
-    "static": 2,
-    "patrol": 1,
-    "aggressive": 2,
+    "static": 3,
+    "patrol": 2,
+    "aggressive": 1,
     "replay": 0,
     "flocker": 0,
     "flighthouse": 0,
     "egg": 0,
     "anemone": 0,
     "split_boss": 0,
-    "mother_boss": 0
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "layout": {
     "walls": [
-      [3, 1],
-      [3, 2],
-      [3, 3],
-      [3, 4],
-      [7, 6],
-      [7, 7],
-      [7, 8],
-      [7, 9],
-      [7, 10],
-      [1, 11],
-      [5, 11],
-      [6, 11],
-      [7, 11],
-      [1, 12],
-      [5, 12],
-      [6, 12],
-      [7, 12]
+      [
+        3,
+        1
+      ],
+      [
+        3,
+        2
+      ],
+      [
+        3,
+        3
+      ],
+      [
+        3,
+        4
+      ],
+      [
+        7,
+        6
+      ],
+      [
+        7,
+        7
+      ],
+      [
+        7,
+        8
+      ],
+      [
+        7,
+        9
+      ],
+      [
+        7,
+        10
+      ],
+      [
+        1,
+        11
+      ],
+      [
+        5,
+        11
+      ],
+      [
+        6,
+        11
+      ],
+      [
+        7,
+        11
+      ],
+      [
+        1,
+        12
+      ],
+      [
+        5,
+        12
+      ],
+      [
+        6,
+        12
+      ],
+      [
+        7,
+        12
+      ]
     ],
-    "start": [1, 1],
-    "exit": [11, 10],
+    "start": [
+      1,
+      1
+    ],
+    "exit": [
+      11,
+      10
+    ],
     "enemies": [
       {
-        "type": "aggressive",
-        "cell": [11, 2]
+        "type": "static",
+        "cell": [
+          12,
+          1
+        ]
       },
       {
         "type": "patrol",
-        "cell": [9, 5]
+        "cell": [
+          9,
+          5
+        ]
       },
       {
         "type": "static",
-        "cell": [2, 7]
+        "cell": [
+          2,
+          7
+        ]
       },
       {
         "type": "static",
-        "cell": [3, 9]
+        "cell": [
+          3,
+          9
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [10, 10]
+        "cell": [
+          10,
+          10
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          12,
+          12
+        ]
       }
     ],
     "beacon": null
+  },
+  "hunter": false,
+  "exit_policy": {
+    "type": "always_open"
+  },
+  "ammo_policy": {
+    "type": "limited"
   }
 }

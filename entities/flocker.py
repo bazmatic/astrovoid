@@ -1,197 +1,142 @@
-"""The Flocker's Body: a swallow, with sickle-moon wings that curve back, a straight tail, a streamlined body, darker
-on top and lighter underneath. Its wings flap as it flies; when it dies they fold and the bird tumbles away, shrinking
-to nothing."""
+"""Flying-fish flockers: ribbed gliding fins, metallic scales, and a forked tail.
 
+Hit recoil and fin folding are visual only, including the first moments of a lethal hit.
+"""
 import math
-from typing import Tuple
-
 import pygame
-
 import config
-from utils import angle_to_radians
 
 
 class FlockerBody:
-    """The look of a Flocker.
-
-    Attributes:
-        wing_phase: Phase of the wing flap.
-    """
-
-    DEATH_DURATION = 48.0  # Frames: wings fold, then the bird tumbles away
+    DEATH_DURATION = 48.0
     DEATH_FRICTION = 0.94
-    WING_SPEED = 3.0       # Wing flap, radians per frame
+    WING_SPEED = 0.18
+    FLINCH_FRAMES = 12.0
+    VISUAL_SCALE = 0.7
 
     def __init__(self, creature):
         self._creature = creature
-        self.wing_phase: float = 0.0
+        self.wing_phase = (creature.x*.013+creature.y*.017)%math.tau
+        self.flinch_remaining = 0.0
 
     x = property(lambda self: self._creature.x)
     y = property(lambda self: self._creature.y)
     radius = property(lambda self: self._creature.radius)
     angle = property(lambda self: self._creature.angle)
 
-    def on_event(self, creature, name: str) -> None:
-        """Its look follows its heading, so events change nothing."""
+    def on_event(self, creature, name):
+        if name in ('hit','flinch'):
+            self.flinch_remaining = self.FLINCH_FRAMES
 
-    def update(self, creature, dt: float, target=None) -> None:
-        """The wings flap."""
-        self.wing_phase += dt * self.WING_SPEED
+    def update(self, creature, dt, target=None):
+        self.wing_phase = (self.wing_phase+dt*self.WING_SPEED)%math.tau
+        self._advance_flinch(dt)
 
-    def update_death(self, creature, dt: float) -> None:
-        """The wings stop; the remains coast to a stop (the Creature moves them)."""
+    def update_death(self, creature, dt):
+        self._advance_flinch(dt)
 
-    def draw(self, screen: pygame.Surface, creature) -> None:
-        """Draw the swallow in flight."""
-        self._draw_bird(screen)
+    def _advance_flinch(self, dt):
+        self.flinch_remaining = max(0.0,self.flinch_remaining-dt)
 
-    def draw_death(self, screen: pygame.Surface, creature) -> None:
-        """Fold the wings and tumble into a shrinking silhouette."""
-        self._draw_bird(screen, creature.death_progress)
+    def draw(self, screen, creature):
+        self._draw_fish(screen)
 
-    def _draw_bird(self, screen: pygame.Surface, death_progress: float = 0.0) -> None:
-        """Draw the same bird geometry in its flying or folded pose."""
-        progress = death_progress
-        fold = min(1.0, progress / 0.45)
-        fold = fold * fold * (3.0 - 2.0 * fold)
-        radius = self.radius * (1.0 - progress ** 2)
-        if radius < 1.0:
+    def draw_death(self, screen, creature):
+        self._draw_fish(screen,creature.death_progress)
+
+    def _draw_fish(self, screen, progress=0.0):
+        radius = self.radius*self.VISUAL_SCALE*(1-progress*progress)
+        if radius < 1:
             return
-        angle = self.angle + 240.0 * progress ** 1.5
-        angle_rad = angle_to_radians(angle)
-        cos_angle = math.cos(angle_rad)
-        sin_angle = math.sin(angle_rad)
-        
-        base_color = config.FLOCKER_ENEMY_COLOR
-        darker_color = tuple(max(0, c - 40) for c in base_color)
-        body_radius = radius * 0.5
-        
-        # Draw glow effect
-        from rendering import visual_effects
-        visual_effects.draw_glow_circle(
-            screen, (self.x, self.y), body_radius, base_color,
-            glow_radius=body_radius * 0.3, intensity=0.2
-        )
-        
-        # Calculate wing animation (subtle flapping)
-        wing_angle_offset = math.sin(self.wing_phase) * 3.0 * (1.0 - fold)  # 3 degree wing movement
-        
-        # Draw body (small oval shape, streamlined)
-        body_length = radius * 0.8
-        body_width = radius * 0.5
-        
-        # Create surface for rotated body
-        surface_size = int(max(body_length, body_width) * 2) + 4
-        body_surface = pygame.Surface((surface_size, surface_size), pygame.SRCALPHA)
-        surface_center = surface_size // 2
-        
-        # Draw body oval
-        body_rect = pygame.Rect(
-            surface_center - int(body_length // 2),
-            surface_center - int(body_width // 2),
-            int(body_length),
-            int(body_width)
-        )
-        pygame.draw.ellipse(body_surface, base_color, body_rect)
-        
-        # Draw darker top (for swallow appearance)
-        top_rect = pygame.Rect(
-            surface_center - int(body_length // 2),
-            surface_center - int(body_width // 2),
-            int(body_length),
-            int(body_width // 2)
-        )
-        pygame.draw.ellipse(body_surface, darker_color, top_rect)
-        
-        # Rotate and blit body
-        rotated_body = pygame.transform.rotate(body_surface, -angle)
-        body_rect = rotated_body.get_rect(center=(int(self.x), int(self.y)))
-        screen.blit(rotated_body, body_rect)
-        
-        # Draw sickle-moon-like, backwards-curving wings
-        wing_span = radius * 1.4  # Wing span
-        wing_curve_radius = radius * 1.2  # Radius of the curved wing
-        wing_base_offset = radius * 0.2  # How far forward the wing attaches
-        
-        # Wing attachment point on body
-        wing_attach_x = self.x + math.cos(angle_rad) * wing_base_offset
-        wing_attach_y = self.y + math.sin(angle_rad) * wing_base_offset
-        
-        # Create curved wing shape (sickle-moon)
-        # Left wing - curves backward and upward
-        left_wing_points = []
-        num_points = 20
-        for i in range(num_points + 1):
-            # Progress along the curve (0.0 to 1.0)
-            t = i / num_points
-            
-            # Angle starts perpendicular to body, curves backward
-            # Start angle: 90 degrees from body direction
-            # End angle: curves backward (more than 90 degrees)
-            start_angle = angle_rad + math.radians(90 + 80 * fold + wing_angle_offset)
-            end_angle = angle_rad + math.radians(135 + 40 * fold + wing_angle_offset)  # Curves backward
-            
-            # Interpolate angle
-            wing_angle = start_angle + (end_angle - start_angle) * t
-            
-            # Distance from attachment point increases along curve
-            # Creates the curved sickle shape
-            distance = wing_curve_radius * (0.3 + 0.7 * t)  # Starts closer, extends further
-            
-            point_x = wing_attach_x + math.cos(wing_angle) * distance
-            point_y = wing_attach_y + math.sin(wing_angle) * distance
-            left_wing_points.append((int(point_x), int(point_y)))
-        
-        # Close the wing shape by adding attachment point
-        left_wing_points.append((int(wing_attach_x), int(wing_attach_y)))
-        
-        # Right wing - curves backward and downward
-        right_wing_points = []
-        for i in range(num_points + 1):
-            t = i / num_points
-            
-            # Start angle: -90 degrees from body direction
-            # End angle: curves backward (more than -90 degrees)
-            start_angle = angle_rad - math.radians(90 + 80 * fold - wing_angle_offset)
-            end_angle = angle_rad - math.radians(135 + 40 * fold - wing_angle_offset)  # Curves backward
-            
-            wing_angle = start_angle + (end_angle - start_angle) * t
-            distance = wing_curve_radius * (0.3 + 0.7 * t)
-            
-            point_x = wing_attach_x + math.cos(wing_angle) * distance
-            point_y = wing_attach_y + math.sin(wing_angle) * distance
-            right_wing_points.append((int(point_x), int(point_y)))
-        
-        right_wing_points.append((int(wing_attach_x), int(wing_attach_y)))
-        
-        # Draw wings
-        if len(left_wing_points) > 2:
-            pygame.draw.polygon(screen, darker_color, left_wing_points)
-        if len(right_wing_points) > 2:
-            pygame.draw.polygon(screen, darker_color, right_wing_points)
-        
-        # Draw straight tail extending backward
-        tail_length = radius * 0.9
-        tail_width = radius * 0.15
-        
-        # Tail base (at rear of body)
-        tail_base_x = self.x - math.cos(angle_rad) * body_radius * 0.6
-        tail_base_y = self.y - math.sin(angle_rad) * body_radius * 0.6
-        
-        # Tail tip (straight backward)
-        tail_tip_x = self.x - math.cos(angle_rad) * (body_radius * 0.6 + tail_length)
-        tail_tip_y = self.y - math.sin(angle_rad) * (body_radius * 0.6 + tail_length)
-        
-        # Perpendicular vector for tail width
-        perp_angle = angle_rad + math.pi / 2
-        perp_x = math.cos(perp_angle) * tail_width / 2
-        perp_y = math.sin(perp_angle) * tail_width / 2
-        
-        # Draw tail as rectangle
-        tail_points = [
-            (int(tail_base_x + perp_x), int(tail_base_y + perp_y)),
-            (int(tail_base_x - perp_x), int(tail_base_y - perp_y)),
-            (int(tail_tip_x - perp_x), int(tail_tip_y - perp_y)),
-            (int(tail_tip_x + perp_x), int(tail_tip_y + perp_y))
-        ]
-        pygame.draw.polygon(screen, base_color, tail_points)
+        flinch = self.flinch_remaining/self.FLINCH_FRAMES
+        fold = min(1.0,progress/.45)
+        fold = fold*fold*(3-2*fold)
+        angle = math.radians(self.angle+240*progress**1.5
+                             +12*flinch*math.sin((1-flinch)*math.tau))
+        cs,sn = math.cos(angle),math.sin(angle)
+        recoil = -.35*radius*flinch
+        center = (self.x+cs*recoil,self.y+sn*recoil)
+
+        def point(x,y):
+            return (center[0]+radius*(x*cs-y*sn),center[1]+radius*(x*sn+y*cs))
+
+        def color(rgb):
+            flash = flinch*.85
+            return tuple(round(channel+(255-channel)*flash) for channel in rgb)
+
+        def polygon(rgb, points, outline=None):
+            vertices = [point(x,y) for x,y in points]
+            pygame.draw.polygon(screen,color(rgb),vertices)
+            if outline:
+                pygame.draw.aalines(screen,color(outline),True,vertices)
+
+        def line(rgb, points, width=1):
+            pygame.draw.lines(screen,color(rgb),False,[point(x,y) for x,y in points],width)
+
+        base = config.FLOCKER_ENEMY_COLOR
+        dark = (75,65,58)
+        fin = (36,139,150)
+        fin_light = (113,224,207)
+        gold = (255,220,120)
+        from rendering.visual_effects import draw_glow_circle
+        draw_glow_circle(screen,center,radius*.45,base,glow_radius=radius*.35,intensity=.2)
+
+        # A flying fish's long lower tail lobe and two smaller pelvic gliding fins.
+        tail_sway = math.sin(self.wing_phase*1.6)*.1*(1-fold)
+        polygon((218,130,54),[(-.72,0),(-1.67,-.43+tail_sway),(-1.25,tail_sway),
+                              (-1.85,.56+tail_sway),(-1.03,.14)],gold)
+        line(dark,[(-.9,0),(-1.55,-.32+tail_sway)])
+        line(dark,[(-.9,0),(-1.69,.43+tail_sway)])
+        for side in (-1,1):
+            polygon((70,168,161),[(-.42,side*.2),(-1.06,side*.65*(1-.65*fold)),
+                                   (-.87,side*.17)],fin_light)
+
+        # Broad pectoral membranes breathe gently, with scalloped edges and visible fin rays.
+        span = (1+.1*math.sin(self.wing_phase))*(1-.76*fold)*(1-.38*flinch)
+        for side in (-1,1):
+            root=(.32,side*.18)
+            edge=[(.05,side*.95*span),(-.35,side*1.62*span),(-.64,side*1.54*span),
+                  (-.78,side*1.25*span),(-1.04,side*1.14*span),(-.9,side*.72*span),
+                  (-1.05,side*.46*span),(-.52,side*.25)]
+            polygon(fin,[root,*edge],fin_light)
+            polygon((55,174,173),[root,edge[0],edge[1],(-.33,side*.46*span)])
+            for tip in edge[1:-1]:
+                line((109,215,190),[root,tip])
+            line(gold,[root,edge[0],edge[1]])
+            line((24,100,120),[(-.45,side*.28),edge[-3]])
+
+        # Streamlined, faceted body: dark metallic back and a warm reflective belly.
+        hull=[(1.2,0),(.88,-.24),(.35,-.38),(-.35,-.3),(-.96,-.1),
+              (-1.04,.08),(-.38,.29),(.32,.38),(.94,.22)]
+        polygon(base,hull,dark)
+        polygon((133,105,57),[(1.15,0),(.72,-.2),(.3,-.3),(-.4,-.23),(-.91,-.06),(.3,-.04)])
+        polygon(gold,[(1.05,.06),(.6,.14),(.2,.29),(-.45,.18),(-.85,.07),(.16,.04)])
+        # Individual scale facets retain detail when inflated by the comedy weapon.
+        for x in (-.48,-.19,.1,.39):
+            for side in (-1,1):
+                y=side*.12
+                polygon((228,173,76),[(x-.1,y),(x,y-.075),(x+.1,y),(x,y+.075)])
+        line((255,240,173),[(-.78,.03),(-.12,.02),(.5,.06),(.84,.03)])
+        line(dark,[(.54,-.27),(.46,-.05),(.57,.26)])  # gill cover
+        line((247,225,151),[(.64,-.25),(.58,-.05),(.66,.23)])
+        polygon((57,134,145),[(.2,-.06),(-.36,-.12),(-.1,-.01)],fin_light)  # dorsal ridge
+
+        # Raised eyes, dark pupils, tiny specular glints, and a pointed mouth.
+        for side in (-1,1):
+            eye=point(.85,side*.16)
+            er=max(1,round(radius*.115))
+            pygame.draw.circle(screen,color((249,242,194)),(round(eye[0]),round(eye[1])),er+1)
+            pygame.draw.circle(screen,(20,38,46),(round(eye[0]),round(eye[1])),er)
+            glint=point(.89,side*.16-.04)
+            screen.set_at((round(glint[0]),round(glint[1])),(255,255,245))
+        line(dark,[(1.2,0),(1.04,.035)])
+
+        if flinch > 0:
+            # A short, deterministic spray makes even a one-hit death read as an impact.
+            for i in range(6):
+                a=i*math.tau/6+.2
+                reach=radius*(1.1+.75*(1-flinch))
+                head=(center[0]+math.cos(a)*reach,center[1]+math.sin(a)*reach)
+                tail=(head[0]+math.cos(a)*radius*.35*flinch,
+                      head[1]+math.sin(a)*radius*.35*flinch)
+                pygame.draw.line(screen,(255,235,175),head,tail,1)

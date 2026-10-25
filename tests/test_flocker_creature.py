@@ -1,4 +1,4 @@
-"""The Flocker as a Creature: a swallow that flocks with its kind, seeks the nearest friend, and fires with its
+"""The Flocker as a Creature: a flying fish that flocks with its kind, seeks the nearest friend, and fires with its
 neighbours."""
 import itertools
 import math
@@ -83,3 +83,32 @@ def test_a_fresh_flocker_draws():
     screen = pygame.Surface((800, 600), pygame.SRCALPHA)
     bird.draw(screen)
     assert screen.get_bounding_rect().width > 0
+
+
+def test_a_surviving_hit_flinches_then_recovers_without_changing_flight():
+    bird=flocker((300,300))
+    enc=encounter(bird)
+    enc.ready()
+    bird.hit_points=3
+    position=bird.get_pos()
+    assert enc.shoot(Projectile(position,0))
+    assert bird.active and bird.body.flinch_remaining == bird.body.FLINCH_FRAMES
+    for _ in range(int(bird.body.FLINCH_FRAMES)):
+        bird.body.update(bird,1)
+    assert bird.body.flinch_remaining == 0
+    assert bird.get_pos() == position
+
+
+def test_lethal_hit_keeps_impact_visible_during_death_then_fades():
+    bird=flocker((300,300))
+    enc=encounter(bird)
+    enc.ready()
+    enc.shoot(Projectile(bird.get_pos(),0))
+    assert not bird.active and bird.is_dying
+    assert bird.body.flinch_remaining > 0
+    surface=pygame.Surface((600,600),pygame.SRCALPHA)
+    bird.draw_death(surface)
+    assert surface.get_bounding_rect().width > 0
+    for _ in range(int(bird.body.FLINCH_FRAMES)):
+        bird.update_death(1)
+    assert bird.body.flinch_remaining == 0 and bird.is_dying

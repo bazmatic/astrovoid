@@ -92,7 +92,10 @@ class DuelArena:
         return self.sides[1] if side is self.sides[0] else self.sides[0]
 
     def update(self, dt):
-        """Advance one frame (dt in frame units, 1.0 = 1/60 s). Does nothing once the duel has ended."""
+        """Advance one frame; after the result, only the ships' death animations continue."""
+        for side in self.sides:
+            if side.hunter.is_dying:
+                side.hunter.update_death(dt)
         if self.result is not None:
             return
         self.elapsed += dt / config.FPS

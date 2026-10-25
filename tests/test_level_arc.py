@@ -1,4 +1,4 @@
-"""The designed arc, levels 1 to 24: every level has a file and the files keep the pacing rules."""
+"""The campaign's effective layouts and files introduce threats gradually."""
 import math
 from unittest.mock import Mock
 
@@ -6,67 +6,67 @@ import pygame
 import pytest
 
 import config
+import enemy_kinds
 import level_config
 import level_rules
 from level_rules import anemones_that_fit
 
 ARC = range(1, 25)
-BOSS_LEVELS = [6, 12, 18, 24]
+BOSS_LEVELS = [12, 18, 24]
 ORDINARY = [level for level in ARC if level not in BOSS_LEVELS]
-BOSSES = ('split_boss', 'mother_boss')
-TYPES = ('static', 'patrol', 'aggressive', 'replay', 'flocker', 'flighthouse', 'egg', 'anemone') + BOSSES
 
 
 def enemies(level):
+    layout = level_config.get_level_layout(level)
+    if layout is not None:
+        return layout.counts()
     return level_config.load_level_config(level)['enemies']
 
 
 def enemy_count(level):
-    return sum(n for name, n in enemies(level).items() if name not in BOSSES)
+    return sum(enemies(level).values())
 
 
 @pytest.mark.parametrize('level', ARC)
-def test_every_arc_level_has_a_complete_file(level):
+def test_every_arc_level_has_a_complete_file_and_valid_layout(level):
     data = level_config.load_level_config(level)
-    assert data is not None, f'levels/{level}.json is missing or does not parse'
     assert data['seed'] == 100 + level
-    assert set(data['enemies']) == set(TYPES)
+    assert set(data['enemies']) == set(enemy_kinds.kinds())
     assert all(type(n) is int and n >= 0 for n in data['enemies'].values())
-    assert data['maze']['complexity'] in ('empty', 'simple', 'normal', 'complex', 'extreme')
-    assert type(data['maze']['grid_size']) is int
+    assert 'layout' not in data or level_config.get_level_layout(level) is not None
+    assert {k:v for k,v in enemies(level).items() if v} == {k:v for k,v in data['enemies'].items() if v}
 
 
-def test_bosses_appear_only_on_the_boss_levels():
-    assert [level for level in ARC if level_config.get_level_split_boss_count(level)
-            + level_config.get_level_mother_boss_count(level) + level_config.get_level_rules_hunter_count(level)
-            + level_config.get_level_neural_hunter_count(level)] == BOSS_LEVELS
-
-
-@pytest.mark.parametrize('level, split, mother', [(6, 1, 0), (12, 2, 0), (18, 0, 1), (24, 1, 1)])
-def test_each_boss_level_has_its_bosses_in_an_open_arena(level, split, mother):
-    assert (enemies(level)['split_boss'], enemies(level)['mother_boss']) == (split, mother)
-    maze = level_config.load_level_config(level)['maze']
-    assert maze['complexity'] == 'empty' and maze['grid_size'] <= 16
+def test_boss_introductions_build_on_the_smaller_creatures():
+    assert enemies(6)['split_boss'] == 0
+    assert enemies(12)['split_boss'] == 1
+    assert enemies(18)['split_boss'] == 2
+    assert enemies(24)['mother_boss'] == 1
+    assert enemies(24)['neural_hunter'] == 0
+    assert enemies(30)['boss_viber'] == 1
 
 
 def test_at_most_one_enemy_type_is_new_on_any_level():
     seen = set()
-    for level in ARC:
-        new = {name for name, n in enemies(level).items() if n} - seen
+    first = {}
+    for level in range(1, 31):
+        new = {name for name,n in enemies(level).items() if n} - seen
         assert len(new) <= 1, f'level {level} introduces {sorted(new)}'
+        for kind in new:
+            first[kind] = level
         seen |= new
-    assert seen == set(TYPES)
+    assert first == {'static':1, 'patrol':2, 'aggressive':3, 'egg':4, 'flocker':5,
+                     'anemone':7, 'replay':8, 'belemnite':9, 'flighthouse':10,
+                     'split_boss':12, 'vibelet':19, 'neural_hunter':21,
+                     'rules_hunter':23, 'mother_boss':24, 'boss_viber':30}
+    # A first encounter is one of the new creature, rather than a swarm or a boss squad.
+    assert all(enemies(level)[kind] == 1 for kind,level in first.items() if kind != 'static')
 
 
 def test_the_enemy_count_rises_gently_between_ordinary_levels():
-    for earlier, later in zip(ORDINARY, ORDINARY[1:]):
-        step = enemy_count(later) - enemy_count(earlier)
-        assert -1 <= step <= 2, f'level {earlier} to {later} changes the count by {step}'
-
-
-def test_the_arc_starts_small_and_ends_at_24():
-    assert enemy_count(1) == 4
-    assert enemy_count(23) == 24
+    for earlier,later in zip(ORDINARY,ORDINARY[1:]):
+        assert 0 <= enemy_count(later)-enemy_count(earlier) <= 2
+    assert enemy_count(1) == 4 and enemy_count(23) == 24
 
 
 def test_ordinary_mazes_never_shrink_and_stop_at_32():
@@ -100,7 +100,7 @@ def game(tmp_path, monkeypatch):
     game._close_hunter()
 
 
-@pytest.mark.parametrize('level', [level for level in ARC if level not in (2, 16)] + [25, 30, 36, 42, 47, 66])
+@pytest.mark.parametrize('level', list(ARC) + [25, 26, 30, 36, 42, 47, 66])
 def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level):
     counts = level_config.get_level_enemy_counts(level) or level_rules.get_enemy_counts(level)
     asked_for = {

@@ -27,6 +27,9 @@ def _parser():
     commands = parser.add_subparsers(dest='command')
     serve = commands.add_parser('serve', help='open the training manager (the default)')
     serve.add_argument('--port', type=int, default=8765)
+    serve.add_argument('--host', default='127.0.0.1', help='address to listen on (use this Mac\'s Tailscale IP for remote access)')
+    serve.add_argument('--allowed-host', action='append', default=[],
+                       help='additional trusted hostname, without a port (repeat for Tailscale names)')
     serve.add_argument('--no-browser', action='store_true')
     commands.add_parser('status', help='what is training').add_argument('--json', action='store_true')
     commands.add_parser('runs', help='every run').add_argument('--json', action='store_true')
@@ -67,7 +70,8 @@ def main(argv=None, out=sys.stdout):
     try:
         if args.command in (None, 'serve'):
             from tools.trainer.server import serve
-            serve(getattr(args, 'port', 8765), open_browser=not getattr(args, 'no_browser', False))
+            serve(getattr(args, 'port', 8765), open_browser=not getattr(args, 'no_browser', False),
+                  host=getattr(args, 'host', '127.0.0.1'), allowed_hosts=getattr(args, 'allowed_host', []))
         elif args.command == 'status':
             s = runs.status()
             say(json.dumps(s, indent=1, default=str) if args.json else _status_text(s))

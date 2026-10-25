@@ -50,8 +50,11 @@ class Ship(RotatingThrusterShip):
         super().__init__(start_pos, config.SHIP_SIZE)
         self.fuel = 0  # Energy used (for scoring), starts at 0
         self.ammo = config.INITIAL_AMMO
+        self.weapon = None
         self.ammo_policy: AmmoPolicy = LimitedAmmo()  # The level sets its own
         self.damaged = False
+        from rendering.ship_impact import ShipImpact
+        self.impact = ShipImpact()
         self.damage_timer = 0
         self.glow_phase = 0.0  # For pulsing glow when damaged
         self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
@@ -96,6 +99,7 @@ class Ship(RotatingThrusterShip):
         """
         # Save thrusting state from previous frame (set by apply_thrust)
         # This allows it to persist through the draw() call
+        self.impact.update(dt)
         was_thrusting = self.thrusting
         
         # Call base class update (handles movement, friction, edge bouncing, particles)
@@ -109,6 +113,8 @@ class Ship(RotatingThrusterShip):
         elif self.trail:
             del self.trail[0]
         
+        if self.weapon is not None:
+            self.weapon.update(dt)
         # Update damage timer
         if self.damaged:
             self.damage_timer -= 1
@@ -171,6 +177,13 @@ class Ship(RotatingThrusterShip):
             List of Projectile instances if fired (single when level 0-1, 3 when level 2+),
             None if out of ammo.
         """
+        if self.weapon is not None:
+            rad = math.radians(self.angle)
+            pos = (self.x + math.cos(rad)*(self.radius+5), self.y + math.sin(rad)*(self.radius+5))
+            result = self.weapon.try_fire(pos, self.angle)
+            if result.projectiles:
+                self.sound_manager.play_weapon_fire(result.weapon_id)
+            return list(result.projectiles) or None
         # Each pull of the trigger costs ammo, a spread no more than a single
         # shot, and less while a powerup lasts, unless the level's ammo policy says shots are free
         if self.ammo_policy.charges_for_shots():
@@ -257,20 +270,32 @@ class Ship(RotatingThrusterShip):
     
     def on_edge_collision(self) -> None:
         """Handle edge collision - set damage state."""
-        self.damaged = True
-        self.damage_timer = 30
+        self.flinch()
     
     def on_wall_collision(self) -> None:
         """Handle wall collision - set damage state unless the shield took the hit."""
         if self.is_shield_active():
             return
-        self.damaged = True
-        self.damage_timer = 30
+        self.flinch()
     
     def on_circle_collision(self) -> None:
         """Handle circle collision - set damage state."""
+        self.flinch()
+
+    def flinch(self) -> None:
+        if self.is_shield_active():
+            return
         self.damaged = True
         self.damage_timer = 30
+        self.impact.hit()
+
+    DEATH_DURATION = 60.0
+
+    def draw_death(self, screen: pygame.Surface) -> None:
+        if self.is_dying:
+            from rendering.ship_impact import draw_ship_breakup
+            draw_ship_breakup(screen, self.get_pos(), self.radius, self.get_vertices(),
+                              config.COLOR_SHIP, self.death_progress)
     
     def activate_shield(self) -> None:
         """Activate shield (called by game logic, not directly by player)."""
@@ -288,6 +313,12 @@ class Ship(RotatingThrusterShip):
         """
         return self.shield_active or self.observer
     
+    def equip_weapon(self, weapon_id):
+        self.weapon.equip(weapon_id)
+        self.weapon_notice = self.weapon.definition.name
+        self._start_powerup_flash()
+        self.sound_manager.play_powerup_activation()
+
     def activate_gun_upgrade(self) -> None:
         """Activate gun upgrade (called when crystal is collected)."""
         # Increment level (no cap), restart the clock and top up the ammo
@@ -430,6 +461,8 @@ class Ship(RotatingThrusterShip):
         Args:
             screen: The pygame Surface to draw on.
         """
+        if not self.active:
+            return
         self._draw_trail(screen)
         
         # Draw shield glow effect when shield is active
@@ -441,7 +474,7 @@ class Ship(RotatingThrusterShip):
                 fade_factor = 1.0  # Full intensity after initial period
             self._draw_shine_effect(screen, self.x, self.y, fade_factor, self.shield_phase)
         
-        vertices = self.get_vertices()
+        vertices = self.impact.vertices(self.get_vertices(), self.angle)
         flash_factor = 0.0
         if self.powerup_flash_timer > 0:
             flash_factor = self.powerup_flash_timer / float(config.POWERUP_FLASH_DURATION_FRAMES)
@@ -472,6 +505,14 @@ class Ship(RotatingThrusterShip):
                 config.SHIP_GLOW_INTENSITY * (1.0 + config.POWERUP_FLASH_GLOW_MULTIPLIER * flash_factor)
             )
             self._draw_shine_effect(screen, self.x, self.y, flash_factor, self.powerup_flash_phase)
+            if self.weapon is not None:
+                from rendering.fonts import get_font
+                label = get_font(18).render(getattr(self, 'weapon_notice', self.weapon.definition.name),
+                                            True, self.weapon.definition.color)
+                rect = label.get_rect(midbottom=(round(self.x), round(self.y-self.radius-18)))
+                rect.clamp_ip(pygame.Rect(config.UI_ZONE_WIDTH,0,
+                                         max(1,screen.get_width()-config.UI_ZONE_WIDTH),screen.get_height()))
+                screen.blit(label,rect)
         
         # Draw glow effect
         visual_effects.draw_glow_polygon(
@@ -584,6 +625,7 @@ class Ship(RotatingThrusterShip):
                            (int(vertices[2][0]), int(vertices[2][1])), 1)
         
         self.draw_thrust_plume(screen)
+        self.impact.draw(screen, self.get_pos(), self.radius, vertices)
     
     def draw_ui(self, screen: pygame.Surface, font: pygame.font.Font, potential_score: Optional[float] = None, max_score: float = 100.0, level: Optional[int] = None, time_seconds: Optional[float] = None, level_score: Optional[float] = None, progress_score: Optional[int] = None) -> None:
         """Draw ship UI (level, time, ammo, score) using circular gauges.
@@ -676,7 +718,14 @@ class Ship(RotatingThrusterShip):
             )
         
         # Ammo gauge
-        if not self.ammo_policy.charges_for_shots():
+        if self.weapon is not None:
+            view = self.weapon.view
+            definition = self.weapon.catalog[view.id]
+            ammo_percent = view.ammo_fraction
+            ammo_text = "∞" if view.ammo is None else str(view.ammo)
+            ammo_color = definition.color
+            ammo_text_color = config.COLOR_TEXT
+        elif not self.ammo_policy.charges_for_shots():
             ammo_percent = 1.0
             ammo_text = "∞"
             ammo_color = (100, 200, 255)
@@ -709,8 +758,17 @@ class Ship(RotatingThrusterShip):
             screen.blit(label_image, label_rect)
             screen.blit(value_image, value_image.get_rect(midright=(config.UI_ZONE_WIDTH - 12, y)))
 
-        # Gun upgrade indicator (below gauges, centered)
-        if self.gun_upgrade_level > 0:
+        # Equipped weapon replaces the old stacked-upgrade indicator.
+        if self.weapon is not None:
+            from weapons.presentation import draw_symbol
+            definition = self.weapon.definition
+            label = get_font(20).render(definition.name.upper(), True, definition.color)
+            available = max(1, config.UI_ZONE_WIDTH - 48)
+            if label.get_width() > available:
+                label = pygame.transform.smoothscale(label, (available, label.get_height()))
+            screen.blit(label, label.get_rect(midleft=(36, GUN_UPGRADE_Y)))
+            draw_symbol(screen, (20, GUN_UPGRADE_Y), 8, definition)
+        elif self.gun_upgrade_level > 0:
             upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)
             text_rect = upgrade_text.get_rect(center=(GAUGE_CENTER_X, GUN_UPGRADE_Y))
             screen.blit(upgrade_text, text_rect)

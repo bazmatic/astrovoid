@@ -184,6 +184,8 @@
     "flashTintStrength": 0.85,
     "flashGlowMultiplier": 1.6,
     "durationSeconds": 10,
+    "inflationDurationSeconds": 10,
+    "inflationSizeMultiplier": 3,
     "ammoRefill": 25,
     "ammoCostMultiplier": 0.5,
     "fireRateBaseCooldown": 200,
@@ -265,9 +267,9 @@
     "parTimerMargin": 2.0
   },
   "autoplay": {
-    "firstLevel": 10,
-    "lastLevel": 30,
-    "timeLimitSeconds": 120,
+    "firstLevel": 1,
+    "lastLevel": 40,
+    "timeLimitSeconds": 240,
     "hidePlayer": true,
     "noKillSeconds": 20
   },

@@ -80,8 +80,8 @@ def test_ordinary_mazes_grow_steadily_and_stop_at_32(level, grid, complexity):
 
 @pytest.mark.parametrize('level', [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 13, 17, 23])
 def test_an_arc_level_without_a_file_uses_only_types_already_introduced(level):
-    first = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 5, 'anemone': 7,
-             'flocker': 8, 'flighthouse': 10, 'egg': 13}
+    first = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 8, 'anemone': 7,
+             'flocker': 5, 'flighthouse': 10, 'egg': 4}
     level_mix = mix(level)
     assert sum(level_mix.values()) == min(24, 3 + level)
     assert all(level >= first[name] for name, n in level_mix.items() if n)

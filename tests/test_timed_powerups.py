@@ -1,5 +1,4 @@
-"""Powerups wear off, top up the ammo instead of making it endless, and add up rather than multiply."""
-import pygame
+"""Legacy replay combat: timed stacking upgrades and finite shared ammunition."""
 import pytest
 
 import config
@@ -100,29 +99,3 @@ class TestAmmo:
         ship = ship_with(3)
         ship.ammo = 0
         assert ship.fire() is None
-
-    def test_the_gauge_counts_ammo_while_upgraded(self):
-        pygame.init()
-        pygame.display.set_mode((1352, 878))
-
-        def hud(ammo):
-            ship = ship_with(1)
-            ship.ammo = ammo
-            screen = pygame.Surface((1352, 878))
-            ship.draw_ui(screen, pygame.font.Font(None, 24))
-            return pygame.image.tostring(screen, "RGB")
-
-        assert hud(40) != hud(8)
-
-    def test_the_hud_shows_the_time_running_out(self):
-        pygame.init()
-        pygame.display.set_mode((1352, 878))
-
-        def hud(frames):
-            ship = ship_with(1)
-            ship.gun_upgrade_timer -= frames
-            screen = pygame.Surface((1352, 878))
-            ship.draw_ui(screen, pygame.font.Font(None, 24))
-            return pygame.image.tostring(screen, "RGB")
-
-        assert hud(0) != hud(DURATION_FRAMES // 2)

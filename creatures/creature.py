@@ -39,6 +39,8 @@ class Creature(GameEntity):
 
     def __init__(self, kind, pos, body, traits: Sequence, level: int = 1, recorder=None, angle=None):
         super().__init__(pos, kind.tuning['size'])
+        from creatures.inflation import Inflation
+        self.inflation = Inflation()
         self.kind = kind
         self.type = kind.key
         self.allegiance = kind.allegiance
@@ -56,6 +58,30 @@ class Creature(GameEntity):
         self.has_spawned = False
         self.gun_range = 0.0    # how far it can shoot; 0 without a gun
         self.gun_charge = 0.0   # how far its gun is through reloading, 0 to 1
+
+    @property
+    def effective_hit_points(self):
+        return 1 if self.inflation.active else self.hit_points
+
+    @property
+    def hit_radius(self):
+        return self.radius*self.inflation.scale
+
+    def _draw_body(self, screen, draw):
+        # Grow the body and shooting target without making it unable to fit its corridor.
+        if not self.inflation.active:
+            draw(screen,self)
+            return
+        radius = self.radius
+        clip = screen.get_clip()
+        try:
+            screen.set_clip(clip.clip((config.UI_ZONE_WIDTH,0,
+                                      max(0,screen.get_width()-config.UI_ZONE_WIDTH),screen.get_height())))
+            self.radius = self.hit_radius
+            draw(screen,self)
+        finally:
+            self.radius = radius
+            screen.set_clip(clip)
 
     @property
     def DEATH_DURATION(self) -> float:
@@ -89,14 +115,15 @@ class Creature(GameEntity):
     def draw(self, screen) -> None:
         if not self.active:
             return
-        if (self.x < -DRAW_MARGIN or self.x > config.SCREEN_WIDTH + DRAW_MARGIN or
-                self.y < -DRAW_MARGIN or self.y > config.SCREEN_HEIGHT + DRAW_MARGIN):
+        margin = max(DRAW_MARGIN,self.hit_radius*3) if self.inflation.active else DRAW_MARGIN
+        if (self.x < -margin or self.x > config.SCREEN_WIDTH + margin or
+                self.y < -margin or self.y > config.SCREEN_HEIGHT + margin):
             return
-        self.body.draw(screen, self)
+        self._draw_body(screen,self.body.draw)
 
     def draw_death(self, screen) -> None:
         if self.is_dying:
-            self.body.draw_death(screen, self)
+            self._draw_body(screen,self.body.draw_death)
 
     def check_circle_collision(self, other_pos, other_radius, other_entity=None) -> bool:
         """Whether it overlaps another circle; with the other entity given, the two bounce apart."""

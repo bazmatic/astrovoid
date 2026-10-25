@@ -8,11 +8,11 @@ import math
 from typing import List, Tuple
 import pygame
 from entities.hunter_ship_body import DEFAULT_COLOURS, HULL_POINTS
-from entities.powerup_crystal import PowerupCrystal
+from entities.powerup_crystal import Pickup
 from rendering import visual_effects
 
 
-class JevBeacon(PowerupCrystal):
+class JevBeacon(Pickup):
     """A collectible that calls in the Jev hunter.
 
     It moves and is collected like a powerup crystal, but is drawn as the
@@ -27,6 +27,41 @@ class JevBeacon(PowerupCrystal):
     RING_ARC_SWEEP = 80.0  # Degrees covered by each arc
     RING_ARC_STEPS = 8  # Straight pieces making up each arc
     EMBLEM_SCALE = 1.1  # Size of the arrowhead
+    FORMATION_FRAMES = 72.0
+    ARRIVAL_FRAMES = 132.0
+    LIFETIME_FRAMES = None  # Earned ally summons remain available until collected.
+
+    @property
+    def formed(self):
+        return self.age >= self.FORMATION_FRAMES
+
+    @property
+    def spawn_scale(self):
+        elapsed = self.age - self.FORMATION_FRAMES
+        if elapsed <= 0:
+            return 0.0
+        if elapsed >= self.SPAWN_FRAMES:
+            return 1.0
+        swing = math.pi / 2 * self.SPAWN_OVERSHOOT
+        return math.sin(elapsed / self.SPAWN_FRAMES * swing) / math.sin(swing)
+
+    def update(self, dt, player_pos=None):
+        # Light converges on a fixed point; attraction begins once the beacon exists.
+        super().update(dt, player_pos if self.formed else None)
+
+    def check_circle_collision(self, other_pos, other_radius):
+        return self.formed and super().check_circle_collision(other_pos, other_radius)
+
+    def _draw_arrival(self, screen):
+        if self.age >= self.ARRIVAL_FRAMES:
+            self._arrival_layer = None
+            return
+        from rendering.beacon_arrival import draw_arrival
+        layer = getattr(self, '_arrival_layer', None)
+        if layer is None or layer.get_size() != screen.get_size():
+            self._arrival_layer = layer = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+        draw_arrival(screen, layer, self.get_pos(), self.age, self.FORMATION_FRAMES,
+                     self.ARRIVAL_FRAMES, self.emblem_points)
 
     def emblem_points(self, center: Tuple[float, float], size: float) -> List[Tuple[float, float]]:
         """The hunter's arrowhead, nose up, with its centre at center."""
@@ -43,6 +78,7 @@ class JevBeacon(PowerupCrystal):
         """
         if not self.active:
             return
+        self._draw_arrival(screen)
         scale = self.spawn_scale
         if scale <= 0.0:
             return

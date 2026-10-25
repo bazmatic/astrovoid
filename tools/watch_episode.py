@@ -27,8 +27,23 @@ def episode_jobs(run, iteration):
     weights = Path(run) / f'iter{iteration - 1:04d}.npz' if iteration else Path(config['start'])
     levels = tuple(episode['levels']) if episode.get('levels') else None
     jobs = make_jobs(iteration, episode['episodes_per_iteration'], weights, config.get('decision_frames', 6),
-                     config.get('turn_rate', 1.0), episode.get('rules_share', 0.0), levels)
-    return jobs, config['shaping']
+                     config.get('turn_rate', 1.0), levels)
+    # Historical runs recorded a separate Rules-level share. Reproduce those jobs exactly;
+    # new training uses only the selected level cycle and never writes this field.
+    share = episode.get('rules_share', 0.0)
+    if share > 0.0 and iteration < episode.get('level_cycle_from_iteration', float('inf')):
+        from experiments.run import TUNE_LEVELS
+        others = tuple(level for level in (levels or TUNE_LEVELS) if level != 25)
+        if others:
+            count = episode['episodes_per_iteration']
+            jobs = [(25 if int((iteration * count + i + 1) * share + 1e-9)
+                     > int((iteration * count + i) * share + 1e-9)
+                     else others[(iteration * count + i) % len(others)], seed, spec)
+                    for i, (_, seed, spec) in enumerate(jobs)]
+    shaping = dict(config['shaping'])
+    if iteration < episode.get('random_maze_from_iteration', 0):
+        shaping['random_maze'] = False
+    return jobs, shaping
 
 
 def _fly(item):

@@ -21,9 +21,9 @@ def no_level_files(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: None)
 
 
-def test_no_hunter_before_its_first_level(monkeypatch):
+def test_generated_levels_have_no_starting_hunter_beacon(monkeypatch):
     no_level_files(monkeypatch)
-    assert [level for level in range(1, 6) if level_config.level_has_hunter(level)] == [4, 5]
+    assert [level for level in range(1, 6) if level_config.level_has_hunter(level)] == []
 
 
 def test_a_level_file_can_forbid_the_hunter(monkeypatch):
@@ -40,12 +40,12 @@ def test_a_level_file_can_place_a_hunter_early(monkeypatch):
     assert level_config.level_has_hunter(6)
 
 
-def test_the_hunter_interval_still_applies_from_the_first_level(monkeypatch):
+def test_generated_beacons_are_earned_regardless_of_the_old_starting_interval(monkeypatch):
     no_level_files(monkeypatch)
     monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 0)
     assert not level_config.level_has_hunter(9)
     monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 5)
-    assert [level for level in range(1, 21) if level_config.level_has_hunter(level)] == [5, 10, 15, 20]
+    assert [level for level in range(1, 21) if level_config.level_has_hunter(level)] == []
 from unittest.mock import Mock
 
 import pygame
@@ -163,7 +163,7 @@ def test_the_ammo_policy_comes_from_the_level_file(game, monkeypatch):
 def test_a_jev_beacon_can_lie_on_a_level_with_a_boss(game, monkeypatch):
     from entities.jev_beacon import JevBeacon
     monkeypatch.setattr(config, 'HUNTER_LEVEL_INTERVAL', 1)
-    monkeypatch.setattr(level_config, 'load_level_config', level_file(split_boss=1))
+    monkeypatch.setattr(level_config, 'load_level_config', level_file({'hunter': {'spawn_cell': [4, 4]}}, split_boss=1))
     assert level_config.level_allows_jev_beacon(6)
     start(game, 6)
     assert any(isinstance(crystal, JevBeacon) for crystal in game.powerup_crystals)

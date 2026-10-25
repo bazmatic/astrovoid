@@ -8,30 +8,65 @@
     "static": 0,
     "patrol": 0,
     "aggressive": 0,
-    "replay": 2,
+    "replay": 0,
     "flocker": 2,
     "flighthouse": 0,
     "egg": 2,
     "anemone": 0,
-    "split_boss": 1,
-    "mother_boss": 1
+    "split_boss": 0,
+    "mother_boss": 1,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "layout": {
     "walls": [],
-    "start": [1, 14],
-    "exit": [14, 1],
+    "start": [
+      1,
+      14
+    ],
+    "exit": [
+      14,
+      1
+    ],
     "enemies": [
       {
-        "type": "neural_hunter",
-        "cell": [9, 5]
+        "type": "egg",
+        "cell": [
+          3,
+          1
+        ]
       },
       {
-        "type": "neural_hunter",
-        "cell": [8, 6]
+        "type": "flocker",
+        "cell": [
+          8,
+          1
+        ]
       },
       {
-        "type": "neural_hunter",
-        "cell": [7, 9]
+        "type": "mother_boss",
+        "cell": [
+          13,
+          2
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          6,
+          9
+        ]
+      },
+      {
+        "type": "egg",
+        "cell": [
+          11,
+          14
+        ]
       }
     ],
     "beacon": null
@@ -41,5 +76,6 @@
   },
   "ammo_policy": {
     "type": "unlimited"
-  }
+  },
+  "hunter": false
 }

@@ -108,3 +108,31 @@ def test_a_resumed_run_starts_its_log_on_a_new_line_after_a_crash_mid_write(tmp_
     train(start, out, 3, resume=True)
     lines = (out / 'train.log').read_text().splitlines()
     assert lines[1] == 'policy_loss=0.1 iteration=1 kl=0.2 upd' and 'iteration=1 ' in lines[2] + ' '
+
+
+def test_resuming_an_old_run_records_when_normal_level_cycling_begins(tmp_path, start):
+    out = tmp_path / 'old-run'
+    train(start, out, 1)
+    (out / 'config.json').write_text(json.dumps({'episode': {'rules_share': 0.05, 'levels': [1, 2, 3]}}))
+    train(start, out, 2, resume=True)
+    episode = json.loads((out / 'config.json').read_text())['episode']
+    assert episode['level_cycle_from_iteration'] == 1
+    train(start, out, 3, resume=True)
+    assert json.loads((out / 'config.json').read_text())['episode']['level_cycle_from_iteration'] == 1
+
+
+def test_new_runs_record_random_maze_generation(tmp_path):
+    args = ppo.build_parser().parse_args(['--out', str(tmp_path), '--levels', '25'])
+    ppo.write_run_config(args)
+    assert json.loads((tmp_path / 'config.json').read_text())['shaping']['random_maze'] is True
+
+
+def test_resuming_a_fixed_maze_run_records_the_maze_seed_change(tmp_path, start):
+    out = tmp_path / 'old-maze'
+    train(start, out, 1)
+    (out / 'config.json').write_text(json.dumps({'episode': {'levels': [25]}, 'shaping': {}}))
+    ppo.train_rl(start, out, iterations=2, episodes=6, workers=1, levels=[25],
+                 shaping={'random_maze': True}, rollout=fake_rollout_factory(), log=quiet, resume=True)
+    config = json.loads((out / 'config.json').read_text())
+    assert config['shaping']['random_maze'] is True
+    assert config['episode']['random_maze_from_iteration'] == 1

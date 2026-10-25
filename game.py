@@ -90,6 +90,8 @@ class Game:
     def __init__(self, screen: pygame.Surface):
         """Initialize game."""
         self.screen = screen
+        from weapons.catalog import RULESET
+        self.combat_ruleset = RULESET
         self.clock = pygame.time.Clock()
         self.font = get_font(36)
         self.small_font = get_font(24)
@@ -171,6 +173,7 @@ class Game:
         self.game_frozen = False  # Track if game action is frozen (score reached zero)
         self.game_over_start_time = 0.0  # Time when game over sequence started
         self.game_over_fade_duration = 0.5  # Duration of fade to black (seconds)
+        self.game_over_death_duration = Ship.DEATH_DURATION / config.FPS
         self.game_over_text_delay = 0.0  # Delay before showing "GAME OVER" text (seconds)
         self.game_over_text_duration = 0.6  # Duration to show "GAME OVER" text (seconds)
         self.profile_selection_menu = ProfileSelectionMenu(screen, self.profile_manager)
@@ -265,13 +268,15 @@ class Game:
         # first clear has already unlocked the next level in the profile.
         self.replaying = replaying
 
-    def start_level(self) -> None:
+    def start_level(self, *, maze_seed: Optional[int] = None) -> None:
         """Start a new level."""
         self._close_hunter()
         self._close_enemy_hunters()
         self.collision_handler.last_player_kill = None
         self.collision_handler.level_kills = 0
         self.collision_handler.level_crystals_collected = 0
+        self.collision_handler.weapon_kills.clear()
+        self.collision_handler.weapon_pickups.clear()
         self.collision_handler.explosions.clear()
         self.finish_tally = None
         self.replaying = self.level < self.profile_manager.get_active_level()
@@ -296,8 +301,8 @@ class Game:
         self.star_animation = None
         self.level_complete_quit_confirm = False
         
-        # Set random seed from level config or use level number as default
-        seed = level_config.get_level_seed(self.level)
+        # Training can supply an episode seed; ordinary play uses the level's seed.
+        seed = level_config.get_level_seed(self.level) if maze_seed is None else maze_seed
         random.seed(seed)
         # Note: Seed is set before maze generation to ensure reproducible mazes
         
@@ -315,6 +320,13 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
+        from weapons import EquippedWeapon, RULESET, CATALOG
+        if getattr(self, 'combat_ruleset', 'legacy') == RULESET:
+            self.ship.weapon = EquippedWeapon(getattr(self, "weapon_catalog", CATALOG))
+        self.collision_handler.combat_ruleset = getattr(self, 'combat_ruleset', 'legacy')
+        self.collision_handler.weapon_catalog = getattr(self, 'weapon_catalog', CATALOG)
+        data = level_config.load_level_config(self.level) or {}
+        self.collision_handler.weapon_allowlist = data.get('weapons')
         self.ship.observer = config.observer_mode_enabled()
         # Explicitly reset velocity and previous position to prevent visual jumps
         self.ship.vx = 0.0
@@ -384,6 +396,8 @@ class Game:
                 self.spawn_manager.spawn_from_layout(layout, self.maze, self.level, self.command_recorder))
         # Creatures are set up before the player first moves, so they show it from the start (an anemone its reach)
         self.encounter.ready()
+        # Earn the ally by clearing most of the opening encounter; later spawns cannot lower this bar.
+        self.hunter_unlock_kills = max(4, math.ceil(sum(self.roster.counts().values()) * 0.65))
         self.base_par_seconds = self._base_par_seconds()
         
         # Clear projectiles and crystals
@@ -499,7 +513,10 @@ class Game:
 
     def jev_beacon_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
-        return self.jev_beacon_level and (self.hunter is None or not self.hunter.active)
+        hunter = level_config.get_level_hunter_config(self.level)
+        earned = hunter is None or (isinstance(hunter, dict) and hunter.get('earned'))
+        unlocked = not earned or self.collision_handler.level_kills >= self.hunter_unlock_kills
+        return self.jev_beacon_level and unlocked and (self.hunter is None or not self.hunter.active)
 
     def _update_hunter(self, dt) -> None:
         if self.hunter_flight is None:
@@ -647,7 +664,14 @@ class Game:
         random.seed(level_config.get_level_seed(DUEL_MAZE_LEVEL))
         self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize)
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
-        self.ship = Ship(self.maze.start_pos)    # the hidden spectator: only here so spawns keep clear of it
+        self.ship = Ship(self.maze.start_pos)
+        from weapons import EquippedWeapon, RULESET, CATALOG
+        if getattr(self, 'combat_ruleset', 'legacy') == RULESET:
+            self.ship.weapon = EquippedWeapon(getattr(self, "weapon_catalog", CATALOG))
+        self.collision_handler.combat_ruleset = getattr(self, 'combat_ruleset', 'legacy')
+        self.collision_handler.weapon_catalog = getattr(self, 'weapon_catalog', CATALOG)
+        data = level_config.load_level_config(self.level) or {}
+        self.collision_handler.weapon_allowlist = data.get('weapons')    # the hidden spectator: only here so spawns keep clear of it
         self.projectiles = []
         worker = self._make_duel_worker()
         try:
@@ -783,8 +807,10 @@ class Game:
             return  # Don't update if not playing (including quit confirmation)
         
         if self.game_over_active:
+            if self.ship is not None and self.ship.is_dying:
+                self.ship.update_death(dt)
             elapsed = time.time() - self.game_over_start_time
-            if elapsed >= self.game_over_fade_duration + self.game_over_text_duration:
+            if elapsed >= self.game_over_death_duration + self.game_over_fade_duration + self.game_over_text_duration:
                 self.complete_level(success=False)
             return
 
@@ -955,7 +981,7 @@ class Game:
             current_time = pygame.time.get_ticks()
             fire_cooldown = calculate_fire_cooldown(self.ship)
             
-            if current_time - self.last_shot_time > fire_cooldown:
+            if self.ship.weapon is not None or current_time - self.last_shot_time > fire_cooldown:
                 projectiles = self.ship.fire()
                 if projectiles:
                     # fire() now returns a list (single or multiple projectiles)
@@ -996,6 +1022,15 @@ class Game:
         # Update projectiles and handle collisions
         active_projectiles = []
         for projectile in self.projectiles:
+            from weapons.projectile import WeaponProjectile
+            if isinstance(projectile, WeaponProjectile):
+                from weapons.simulation import advance
+                targets = [c for c in self.encounter.creatures() if c.allegiance == 'enemy']
+                advance(projectile, dt, self.maze, targets, self.encounter.apply_hit,
+                        self.collision_handler.explosions.trigger, self.obstacles)
+                if projectile.active:
+                    active_projectiles.append(projectile)
+                continue
             projectile.update(dt)
             
             if not projectile.active:
@@ -1097,6 +1132,8 @@ class Game:
         """Start the game over sequence: freeze action, fade to black, power down sound, then GAME OVER text."""
         self.game_over_active = True
         self.game_over_start_time = current_time
+        if self.ship is not None and self.ship.active:
+            self.ship.die()
         # Stop all sounds for dramatic effect
         self.sound_manager.stop_all_sounds()
         self.critical_warning_active = False
@@ -1329,6 +1366,7 @@ class Game:
         # Draw game over sequence (fade to black and text)
         if self.game_over_active:
             self._draw_game_over_sequence()
+            self.ship.draw_death(self.screen)
 
         if not self.exit_explosion_active:
             hint = self.restart_hints[bool(self.input_handler.get_controllers())]
@@ -1344,7 +1382,7 @@ class Game:
     def _draw_game_over_sequence(self) -> None:
         """Draw game over sequence: fade to black and GAME OVER text."""
         current_time = time.time()
-        elapsed = current_time - self.game_over_start_time
+        elapsed = max(0.0, current_time - self.game_over_start_time - self.game_over_death_duration)
         
         # Calculate fade progress (0.0 to 1.0)
         fade_progress = min(1.0, elapsed / self.game_over_fade_duration)

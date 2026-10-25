@@ -172,6 +172,45 @@ class TestCollect:
         assert screen.get_bounding_rect().width == 0
 
 
+class TestExpiry:
+    def test_fades_then_expires_without_collection_burst(self):
+        crystal = make_crystal(settled=False)
+        crystal.update(240)
+        assert crystal.visibility == 1.0
+        crystal.update(60)
+        assert crystal.active
+        assert crystal.visibility == pytest.approx(0.5)
+        crystal.update(60)
+        assert not crystal.active
+        assert not crystal.is_dying
+        assert not crystal.sparks
+        assert not crystal.check_circle_collision(POS, 10)
+
+    def test_collectible_during_fade(self):
+        crystal = make_crystal(settled=False)
+        crystal.update(359)
+        assert crystal.check_circle_collision(POS, 10)
+        assert crystal.is_dying
+
+    def test_fade_dims_the_whole_drawing_without_moving_crystal(self):
+        crystal = make_crystal()
+        crystal.trail = [(POS[0] - 20, POS[1]), POS]
+        bright, faint = blank_screen(), blank_screen()
+        crystal.age = 240
+        crystal.draw(bright)
+        crystal.age = 330
+        crystal.draw(faint)
+        assert pygame.surfarray.array_alpha(faint).sum() < pygame.surfarray.array_alpha(bright).sum() / 2
+        assert crystal.get_pos() == POS
+
+    def test_earned_beacon_does_not_expire(self):
+        from entities.jev_beacon import JevBeacon
+        beacon = JevBeacon(POS)
+        beacon.update(3600)
+        assert beacon.active and beacon.visibility == 1.0
+        assert beacon.check_circle_collision(POS, 10)
+
+
 class TestGameLoop:
     """The game keeps a collected crystal around until its burst has played."""
 
@@ -180,7 +219,7 @@ class TestGameLoop:
         game = Game.__new__(Game)
         game.scoring = Mock()
         game.collision_handler = CollisionHandler(Mock(), game.scoring, Mock())
-        game.ship = Mock(x=POS[0], y=POS[1], radius=10.0)
+        game.ship = Mock(x=POS[0], y=POS[1], radius=10.0, weapon=None)
         game.powerup_crystals = []
         game.hunter_flight = None
         return game
@@ -205,3 +244,10 @@ class TestGameLoop:
             game._update_powerup_crystals(1.0)
         assert game.powerup_crystals == [crystal]
         assert crystal.active
+
+    def test_expired_crystal_removed_without_upgrade(self, game):
+        crystal = PowerupCrystal(POS)
+        game.powerup_crystals.append(crystal)
+        game._update_powerup_crystals(crystal.LIFETIME_FRAMES)
+        assert game.powerup_crystals == []
+        game.ship.activate_gun_upgrade.assert_not_called()

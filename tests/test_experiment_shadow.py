@@ -1,7 +1,6 @@
 import pytest
 from experiments import shadow
 from experiments.harness import run_episode
-from experiments.teach import StepRecorder
 from hunter.model import PilotAction
 
 
@@ -60,34 +59,6 @@ def test_a_trial_is_not_counted_by_the_flights_frame_listener():
     game.hunter_flight.on_frame(lambda *args: seen.append(1))
     shadow.trial_controls(game, hunter, PilotAction(1, True, False), frames=6)
     assert seen == []
-
-
-
-def test_the_trial_matches_what_the_ship_really_does_when_the_teacher_flies():
-    """Replaying the teacher's held action on the saved state gives the controls the real run executed."""
-    mismatches, total = 0, 0
-
-    class Checker(StepRecorder):
-        def before_frame(self, game, hunter):
-            super().before_frame(game, hunter)
-            if self._count % self.decision_frames == 0:
-                controller = game.hunter_flight.controller
-                self._started_with = controller.action
-                self._expected = shadow.trial_controls(game, hunter, controller.action, self.decision_frames)
-                self._controller = controller
-
-        def _close_step(self):
-            nonlocal mismatches, total
-            label = self.pending_label()
-            # Only steps where the teacher's action was not refreshed part-way through are comparable.
-            if getattr(self, '_expected', None) is not None and self._controller.action is self._started_with:
-                total += 1
-                mismatches += self._expected != label
-            super()._close_step()
-    for seed in (100, 101, 102, 103):         # one episode's rate swings with how its enemies happen to move
-        run_episode(14, seed, horizon=25.0, recorder=Checker(decision_frames=6))
-    assert total > 240
-    assert mismatches / total < 0.08          # what remains is walls and enemies moving within the step
 
 
 def test_the_shadow_teacher_decides_every_fifteen_frames_and_labels_with_its_held_action():

@@ -9,17 +9,24 @@
     "patrol": 0,
     "aggressive": 0,
     "replay": 0,
-    "flocker": 6,
+    "flocker": 2,
     "flighthouse": 0,
     "egg": 0,
     "anemone": 0,
-    "split_boss": 2,
-    "mother_boss": 0
+    "split_boss": 1,
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "exit_policy": {
     "type": "all_cleared"
   },
   "ammo_policy": {
     "type": "unlimited"
-  }
+  },
+  "hunter": false
 }

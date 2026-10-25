@@ -5,22 +5,25 @@
     "grid_size": 32
   },
   "enemies": {
-    "static": 4,
+    "static": 3,
     "patrol": 3,
-    "aggressive": 4,
+    "aggressive": 3,
     "replay": 3,
     "flocker": 3,
-    "flighthouse": 2,
+    "flighthouse": 1,
     "egg": 1,
-    "anemone": 4,
+    "anemone": 2,
     "split_boss": 0,
-    "mother_boss": 0
+    "mother_boss": 0,
+    "rules_hunter": 1,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 2,
+    "baby": 0,
+    "belemnite": 2
   },
   "exit_policy": {
-    "type": "type_cleared",
-    "enemy_types": [
-      "egg"
-    ]
+    "type": "all_cleared"
   },
   "layout": {
     "walls": [],
@@ -72,6 +75,90 @@
     ],
     "enemies": [
       {
+        "type": "aggressive",
+        "cell": [
+          22,
+          1
+        ]
+      },
+      {
+        "type": "replay",
+        "cell": [
+          1,
+          2
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          10,
+          2
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          30,
+          2
+        ]
+      },
+      {
+        "type": "flighthouse",
+        "cell": [
+          16,
+          6
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          25,
+          9
+        ]
+      },
+      {
+        "type": "rules_hunter",
+        "cell": [
+          1,
+          10
+        ]
+      },
+      {
+        "type": "anemone",
+        "cell": [
+          22,
+          10
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          19,
+          11
+        ]
+      },
+      {
+        "type": "vibelet",
+        "cell": [
+          30,
+          12
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          7,
+          14
+        ]
+      },
+      {
+        "type": "replay",
+        "cell": [
+          24,
+          14
+        ]
+      },
+      {
         "type": "egg",
         "cell": [
           15,
@@ -86,20 +173,6 @@
         ]
       },
       {
-        "type": "anemone",
-        "cell": [
-          22,
-          10
-        ]
-      },
-      {
-        "type": "flighthouse",
-        "cell": [
-          16,
-          6
-        ]
-      },
-      {
         "type": "flocker",
         "cell": [
           12,
@@ -107,16 +180,9 @@
         ]
       },
       {
-        "type": "flocker",
+        "type": "belemnite",
         "cell": [
-          13,
-          17
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          12,
+          1,
           18
         ]
       },
@@ -125,48 +191,6 @@
         "cell": [
           13,
           18
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          25,
-          9
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          7,
-          14
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          20,
-          26
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          10,
-          2
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          22,
-          30
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          19,
-          11
         ]
       },
       {
@@ -177,24 +201,49 @@
         ]
       },
       {
-        "type": "replay",
+        "type": "belemnite",
+        "cell": [
+          20,
+          21
+        ]
+      },
+      {
+        "type": "vibelet",
         "cell": [
           15,
-          26
+          25
         ]
       },
       {
         "type": "replay",
         "cell": [
-          24,
-          14
+          30,
+          29
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          10,
+          30
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          19,
+          30
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          22,
+          30
         ]
       }
     ],
-    "beacon": [
-      30,
-      30
-    ],
+    "beacon": null,
     "gates": [
       {
         "cell": [
@@ -573,5 +622,9 @@
         "motor": "ccw"
       }
     ]
+  },
+  "hunter": false,
+  "ammo_policy": {
+    "type": "unlimited"
   }
 }

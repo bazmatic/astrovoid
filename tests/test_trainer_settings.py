@@ -12,7 +12,7 @@ def args_for(argv):
 
 
 NEW_ARGV = ['--iterations', '1000', '--levels', '1-30', '--speed-penalty', '3', '--compass-reward', '100',
-            '--health', '10', '--panic-score', '-50', '--boredom-window', '12', '--rules-share', '0.05']
+            '--health', '10', '--panic-score', '-50', '--boredom-window', '12']
 
 
 def make_run(root, name, config):
@@ -73,7 +73,7 @@ def test_a_run_with_no_config_takes_everything_from_the_newest(tmp_path):
     old = make_run(tmp_path, 'run3', None)
     newest = new_run(tmp_path)
     s = read_settings(old, [old, newest])
-    assert all(v.source == 'guessed' for v in s.values())
+    assert all(v.source == 'guessed' for k, v in s.items() if k not in ('gamma', 'gae_lambda'))
     assert s['compass_reward'].value == 100.0
 
 
@@ -124,3 +124,32 @@ def test_the_command_line_round_trips_through_the_trainer_parser(tmp_path):
 def test_every_parser_flag_is_a_setting():
     assert {s.dest for s in SETTINGS} == {a.dest for a in ppo.build_parser()._actions} - {'start', 'out', 'resume', 'help'}
     assert {s.group for s in SETTINGS} <= {'Rewards', 'Episodes', 'Training'}
+
+
+def test_old_rules_share_is_not_a_setting_or_a_new_training_argument(tmp_path):
+    args = args_for(['--levels', '25'])
+    args['rules_share'] = 0.05
+    run = make_run(tmp_path, 'run68', {'args': args})
+    values = read_settings(run, [run])
+    assert 'rules_share' not in values
+    assert '--rules-share' not in to_argv(values)
+    assert values['levels'].value == [25]
+
+
+@pytest.mark.parametrize('name', ['gamma', 'gae_lambda'])
+@pytest.mark.parametrize('value', ['-0.1', '1.1', 'nan', 'inf'])
+def test_credit_settings_reject_values_outside_zero_to_one(tmp_path, name, value):
+    run = new_run(tmp_path)
+    with pytest.raises(ValueError, match='between 0 and 1'):
+        apply_changes(read_settings(run, [run]), {name: value})
+
+
+def test_credit_settings_round_trip_and_old_runs_keep_their_actual_defaults(tmp_path):
+    old = make_run(tmp_path, 'run51', {'args': {'levels': [25]}})
+    newer = new_run(tmp_path, argv=NEW_ARGV + ['--gamma', '0.995', '--gae-lambda', '0.98'])
+    values = read_settings(old, [old, newer])
+    assert values['gamma'] == Value(0.99, 'recovered')
+    assert values['gae_lambda'] == Value(0.95, 'recovered')
+    changed_values = apply_changes(values, {'gamma': '0.995', 'gae_lambda': '0.98'})
+    args = args_for(to_argv(changed_values))
+    assert args['gamma'] == 0.995 and args['gae_lambda'] == 0.98

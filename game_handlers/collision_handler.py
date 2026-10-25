@@ -13,6 +13,7 @@ from entities.powerup_crystal import PowerupCrystal
 from entities.jev_beacon import JevBeacon
 from entities.explosion import Explosions, push, reaches
 from entities.projectile import Projectile
+from collections import Counter
 from creatures.traits.energy import damage, register_hit
 
 
@@ -50,6 +51,8 @@ class CollisionHandler:
         # This level's kills and crystals by the player and the Jev hunter, for the stars
         self.level_kills = 0
         self.level_crystals_collected = 0
+        self.weapon_kills = Counter()
+        self.weapon_pickups = Counter()
         # Blasts lit and fireballs burning; the game applies each blast with handle_blast as it goes off
         self.explosions = Explosions()
     
@@ -57,6 +60,9 @@ class CollisionHandler:
         """Count a kill for whoever fired the shot (or lit the blast), and light the blast of anything that explodes."""
         if projectile.source in ('player', 'hunter'):
             self.level_kills += 1
+            weapon_id = getattr(projectile, 'weapon_id', None)
+            if weapon_id:
+                self.weapon_kills[weapon_id] += 1
         if projectile.source == 'player':
             self.scoring.record_enemy_destroyed()
             self.last_player_kill = deepcopy(enemy)
@@ -84,8 +90,12 @@ class CollisionHandler:
                 and not any(isinstance(pickup, JevBeacon) and pickup.active for pickup in powerup_crystals)
                 and random.random() < config.JEV_BEACON_SPAWN_CHANCE):
             powerup_crystals.append(JevBeacon(pos))
+            self.sound_manager.play_beacon_arrival()
         elif random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-            powerup_crystals.append(PowerupCrystal(pos))
+            from weapons.catalog import CATALOG, RULESET
+            catalog = getattr(self, 'weapon_catalog', CATALOG)
+            weapon_id = catalog.choose_drop(random, getattr(self, 'weapon_allowlist', None)) if getattr(self, 'combat_ruleset', 'legacy') == RULESET else None
+            powerup_crystals.append(PowerupCrystal(pos, weapon_id, catalog))
 
     def handle_projectile_ship_collision(
         self,
@@ -110,6 +120,7 @@ class CollisionHandler:
             return False
         
         if projectile.check_circle_collision((ship.x, ship.y), ship.radius):
+            ship.flinch()
             scoring.record_enemy_bullet_hit(projectile.strength)  # a bullet costs the bullet penalty, nothing more
             self.sound_manager.play_bad_hit()
             # Apply physics-based collision (projectile has very small mass)
@@ -142,6 +153,7 @@ class CollisionHandler:
             ship.vx += dvx
             ship.vy += dvy
             if not ship.is_shield_active():
+                ship.flinch()
                 self.scoring.record_enemy_collision()   # it costs what touching an enemy does
                 self.sound_manager.play_bad_hit()
         if hunter is not None and hunter.active and reaches(blast, hunter.get_pos(), hunter.radius):
@@ -150,7 +162,7 @@ class CollisionHandler:
             hunter.vy += dvy
             register_hit(hunter, dvx, dvy)
             _damage_hunter(hunter)
-        caught = [e for e in enemies if e.active and reaches(blast, e.get_pos(), e.radius)]
+        caught = [e for e in enemies if e.active and reaches(blast, e.get_pos(), getattr(e,'hit_radius',e.radius))]
         for enemy in caught:
             dvx, dvy = push(blast, enemy.get_pos())
             if hasattr(enemy, 'apply_momentum'):
@@ -173,6 +185,9 @@ class CollisionHandler:
         shot.vx = shot.vy = 0.0
         shot.source = blast.source            # may be 'enemy': still a hit on enemies, but a kill for no one
         shot.is_enemy = False
+        shot.weapon_id = blast.weapon_id
+        if blast.weapon_id is not None:
+            shot._blast_target = enemy
         return shot
 
     @staticmethod
@@ -237,7 +252,11 @@ class CollisionHandler:
             return False
         
         if crystal.check_circle_collision((ship.x, ship.y), ship.radius):
-            ship.activate_gun_upgrade()
+            if getattr(ship, 'weapon', None) is not None:
+                ship.equip_weapon(crystal.weapon_id or 'twin_blaster')
+                self.weapon_pickups[ship.weapon.view.id] += 1
+            else:
+                ship.activate_gun_upgrade()
             scoring.record_powerup_collected()
             self.level_crystals_collected += 1
             return True
@@ -245,7 +264,7 @@ class CollisionHandler:
         return False
     
     def handle_hunter_crystal_collision(self, hunter, crystal: 'PowerupCrystal') -> bool:
-        """The hunter collects a crystal it touches; it upgrades the hunter's guns, not the player's score."""
+        """Any weapon pickup refreshes the hunter's generic power boost; no weapon is equipped."""
         if hunter is None or not hunter.active or not crystal.active:
             return False
         if not crystal.check_circle_collision(hunter.get_pos(), hunter.radius):

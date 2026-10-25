@@ -5,114 +5,206 @@
     "grid_size": 18
   },
   "enemies": {
-    "static": 2,
-    "patrol": 1,
+    "static": 3,
+    "patrol": 2,
     "aggressive": 1,
-    "replay": 2,
-    "flocker": 0,
+    "replay": 0,
+    "flocker": 1,
     "flighthouse": 0,
-    "egg": 0,
+    "egg": 1,
     "anemone": 0,
     "split_boss": 0,
-    "mother_boss": 0
+    "mother_boss": 0,
+    "rules_hunter": 0,
+    "neural_hunter": 0,
+    "boss_viber": 0,
+    "vibelet": 0,
+    "baby": 0,
+    "belemnite": 0
   },
   "layout": {
     "walls": [
-      [11, 5],
-      [12, 5],
-      [11, 6],
-      [12, 6],
-      [12, 7],
-      [12, 8],
-      [12, 9],
-      [12, 10],
-      [13, 10],
-      [14, 10],
-      [15, 10],
-      [16, 10],
-      [4, 11],
-      [4, 12],
-      [4, 13],
-      [5, 13],
-      [6, 13],
-      [7, 13],
-      [8, 13],
-      [9, 13],
-      [10, 13],
-      [11, 13],
-      [12, 13],
-      [12, 14],
-      [12, 15],
-      [12, 16]
+      [
+        11,
+        5
+      ],
+      [
+        12,
+        5
+      ],
+      [
+        11,
+        6
+      ],
+      [
+        12,
+        6
+      ],
+      [
+        12,
+        7
+      ],
+      [
+        12,
+        8
+      ],
+      [
+        12,
+        9
+      ],
+      [
+        12,
+        10
+      ],
+      [
+        13,
+        10
+      ],
+      [
+        14,
+        10
+      ],
+      [
+        15,
+        10
+      ],
+      [
+        16,
+        10
+      ],
+      [
+        4,
+        11
+      ],
+      [
+        4,
+        12
+      ],
+      [
+        4,
+        13
+      ],
+      [
+        5,
+        13
+      ],
+      [
+        6,
+        13
+      ],
+      [
+        7,
+        13
+      ],
+      [
+        8,
+        13
+      ],
+      [
+        9,
+        13
+      ],
+      [
+        10,
+        13
+      ],
+      [
+        11,
+        13
+      ],
+      [
+        12,
+        13
+      ],
+      [
+        12,
+        14
+      ],
+      [
+        12,
+        15
+      ],
+      [
+        12,
+        16
+      ]
     ],
-    "start": [1, 1],
-    "exit": [15, 14],
+    "start": [
+      1,
+      1
+    ],
+    "exit": [
+      15,
+      14
+    ],
     "enemies": [
       {
         "type": "static",
-        "cell": [8, 2]
-      },
-      {
-        "type": "static",
-        "cell": [15, 8]
-      },
-      {
-        "type": "patrol",
-        "cell": [4, 9]
-      },
-      {
-        "type": "static",
-        "cell": [7, 9]
-      },
-      {
-        "type": "static",
-        "cell": [13, 9]
-      },
-      {
-        "type": "static",
-        "cell": [14, 9]
-      },
-      {
-        "type": "static",
-        "cell": [16, 9]
+        "cell": [
+          8,
+          2
+        ]
       },
       {
         "type": "patrol",
-        "cell": [11, 10]
+        "cell": [
+          4,
+          9
+        ]
       },
       {
-        "type": "replay",
-        "cell": [10, 12]
+        "type": "static",
+        "cell": [
+          7,
+          9
+        ]
       },
       {
-        "type": "replay",
-        "cell": [2, 13]
+        "type": "static",
+        "cell": [
+          13,
+          9
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          11,
+          10
+        ]
       },
       {
         "type": "aggressive",
-        "cell": [15, 13]
+        "cell": [
+          15,
+          13
+        ]
       },
       {
-        "type": "static",
-        "cell": [4, 14]
+        "type": "egg",
+        "cell": [
+          16,
+          15
+        ]
       },
       {
-        "type": "static",
-        "cell": [8, 14]
-      },
-      {
-        "type": "static",
-        "cell": [9, 15]
-      },
-      {
-        "type": "static",
-        "cell": [11, 15]
-      },
-      {
-        "type": "static",
-        "cell": [11, 16]
+        "type": "flocker",
+        "cell": [
+          4,
+          16
+        ]
       }
     ],
-    "beacon": [6, 6]
+    "beacon": null
+  },
+  "hunter": false,
+  "exit_policy": {
+    "type": "type_cleared",
+    "enemy_types": [
+      "egg"
+    ]
+  },
+  "ammo_policy": {
+    "type": "limited"
   }
 }

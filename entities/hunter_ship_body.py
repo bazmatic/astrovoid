@@ -4,6 +4,7 @@ import pygame
 
 import config
 from rendering.thrust_plume import advance_thrust_particles, draw_thrust_plume
+from rendering.ship_impact import ShipImpact, draw_ship_breakup
 
 DEFAULT_COLOURS = {'color': (120, 255, 90), 'fill': (25, 110, 40), 'noseColor': (215, 255, 200),
             'cockpitColor': (15, 60, 30), 'engineColor': (170, 95, 20), 'engineLitColor': (255, 200, 80)}
@@ -18,26 +19,29 @@ class HunterShipBody:
     BAR_WIDTH, BAR_HEIGHT = 40, 4
 
     def __init__(self, creature):
+        self.impact = ShipImpact()
         creature.thrust_particles = []
         creature.thrusting = False
         self.colours = {key: tuple(creature.kind.tuning.get(key, value)) for key, value in DEFAULT_COLOURS.items()}
         self._shows_hit_points = creature.kind.tuning.get('showsHitPoints', False)
 
     def on_event(self, creature, name):
+        if name == 'damaged':
+            self.impact.hit()
         if name == 'integrated':
             advance_thrust_particles(creature, creature.integration_dt)
 
     def update(self, creature, dt, target=None):
-        pass
+        self.impact.update(dt)
 
     def update_death(self, creature, dt):
         pass
 
-    @staticmethod
-    def _place(c, x, y):
+    def _place(self, c, x, y):
         heading = math.radians(c.angle)
         cs, sn = math.cos(heading), math.sin(heading)
-        return c.x + (x * cs - y * sn) * c.radius, c.y + (x * sn + y * cs) * c.radius
+        dx, dy = self.impact.offset(c.angle)
+        return c.x + dx + (x * cs - y * sn) * c.radius, c.y + dy + (x * sn + y * cs) * c.radius
 
     def outline(self, c):
         return [self._place(c, x, y) for x, y in HULL_POINTS]
@@ -66,12 +70,10 @@ class HunterShipBody:
         draw_thrust_plume(c, screen, config.THRUST_PLUME_LENGTH * 0.6 if burning else 0)
         if self._shows_hit_points:
             self._draw_hit_points(screen, c)
+        self.impact.draw(screen, c.get_pos(), c.radius, outline)
 
     def draw_death(self, screen, c):
-        progress = c.death_progress
-        radius = round(c.radius * (1.5 + 4 * progress))
-        pygame.draw.circle(screen, self.colours['color'], (round(c.x), round(c.y)), radius,
-                           max(1, round(3 * (1 - progress))))
+        draw_ship_breakup(screen, c.get_pos(), c.radius, self.outline(c), self.colours['color'], c.death_progress)
 
     def _draw_hit_points(self, screen, c):
         bar = pygame.Rect(0, 0, round(self.BAR_WIDTH * c.radius / config.SHIP_SIZE), self.BAR_HEIGHT)

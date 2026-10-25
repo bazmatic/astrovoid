@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 import numpy as np
 from hunter.neural.policy import HEAD_SIZES, NeuralPolicy
-from hunter.senses import SENSE_SIZE
+from hunter.senses import SENSE_SIZE, OBSERVATION_VERSION
 from tools.train_neural import _load_into, _torch_net_class, to_numpy_policy
 
 HEADS = ('turn', 'thrust', 'fire')
@@ -158,28 +158,17 @@ TRAIN_SEEDS = 100             # seeds 300-399
 DEFAULT_HORIZON = 90.0        # seconds of game time per training episode unless the shaping says otherwise
 
 
-RULES_LEVEL = 25          # the level with a Rules hunter on it (levels/25.json)
-
-
-def make_jobs(iteration, count, weights, decision_frames, turn_rate, rules_share=0.0, levels=None):
-    """One job per episode: the training levels (`levels`, default the tune set) in turn, with `rules_share` of the
-    episodes (spread evenly through the batch) flown on the Rules hunter's level and the other levels never
-    including it."""
+def make_jobs(iteration, count, weights, decision_frames, turn_rate, levels=None):
+    """One job per episode, cycling evenly through the selected levels (default: the tune set)."""
     from experiments.run import TUNE_LEVELS
     from experiments.student import StudentSpec
     levels = tuple(levels or TUNE_LEVELS)
-    others = tuple(level for level in levels if level != RULES_LEVEL)
     jobs = []
     for i in range(count):
         n = iteration * count + i
         spec = StudentSpec(weights=str(weights), decision_frames=decision_frames, turn_rate=turn_rate,
                            greedy=False, sample_seed=n)
-        if rules_share > 0.0:
-            rules_episode = int((n + 1) * rules_share + 1e-9) > int(n * rules_share + 1e-9)
-            level = RULES_LEVEL if rules_episode else others[n % len(others)]
-        else:
-            level = levels[n % len(levels)]
-        jobs.append((level, 300 + n % TRAIN_SEEDS, spec))
+        jobs.append((levels[n % len(levels)], 300 + n % TRAIN_SEEDS, spec))
     return jobs
 
 
@@ -252,8 +241,8 @@ def log_line(*parts):
 
 
 def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=0, decision_frames=6,
-             turn_rate=1.0, rollout=None, log=log_line, shaping=None, rules_share=0.0,
-             levels=None, resume=False):
+             turn_rate=1.0, rollout=None, log=log_line, shaping=None,
+             levels=None, resume=False, gamma=0.99, gae_lambda=0.95):
     """PPO on the lab's own score, with optional reward shaping. No gate: every iteration saves a checkpoint.
 
     Each iteration also saves the resume state, and a PAUSE file in `out_dir` stops the run once the iteration is
@@ -274,11 +263,42 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
     optimiser = torch.optim.Adam(net.parameters(), lr=lr)
     first = 0
     if saved is not None:
+        # Explicit legacy observation adapter, including Adam's moment buffers.
+        old_weight = saved['net']['embed.weight']
+        width = net.state_dict()['embed.weight'].shape[1]
+        if old_weight.shape[1] < width:
+            from hunter.senses import FEATURE_NAMES
+            if old_weight.shape[1] != FEATURE_NAMES.index('power_boost'):
+                raise ValueError('unsupported resume observation schema')
+            saved['net']['embed.weight'] = torch.nn.functional.pad(old_weight, (0, width-old_weight.shape[1]))
+            parameter_ids = [key for group in saved['optimiser']['param_groups'] for key in group['params']]
+            embedding_index = list(dict(net.named_parameters())).index('embed.weight')
+            item = saved['optimiser']['state'].get(parameter_ids[embedding_index], {})
+            for key, value in list(item.items()):
+                if hasattr(value, 'shape') and value.shape == old_weight.shape:
+                    item[key] = torch.nn.functional.pad(value, (0, width-old_weight.shape[1]))
         net.load_state_dict(saved['net'])
         optimiser.load_state_dict(saved['optimiser'])
         torch.set_rng_state(saved['torch_rng'])
         rng.bit_generator.state = saved['numpy_rng']
         first = saved['next_iteration']
+        config_path = out_dir / 'config.json'
+        if config_path.exists():
+            import json
+            run_config = json.loads(config_path.read_text())
+            # Combat rules/tuning are immutable within a run. Old runs keep legacy combat.
+            prior = run_config.get('shaping', {})
+            if shaping is not None:
+                shaping = dict(shaping)
+                shaping['combat_ruleset'] = prior.get('combat_ruleset', 'legacy')
+                shaping['weapon_tuning'] = prior.get('weapon_tuning')
+            episode = run_config.get('episode', {})
+            if episode.get('rules_share') and 'level_cycle_from_iteration' not in episode:
+                episode['level_cycle_from_iteration'] = first
+            if (shaping or {}).get('random_maze') and not run_config.get('shaping', {}).get('random_maze'):
+                run_config.setdefault('episode', {})['random_maze_from_iteration'] = first
+                run_config.setdefault('shaping', {})['random_maze'] = True
+            config_path.write_text(json.dumps(run_config, indent=1))
         current = out_dir / f'iter{first - 1:04d}.npz'
         log_file = out_dir / 'train.log'
         if log_file.exists() and not log_file.read_bytes().endswith(b'\n'):
@@ -293,13 +313,12 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
     paused = False
     try:
         for iteration in range(first, iterations):
-            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, rules_share,
-                             levels)
+            jobs = make_jobs(iteration, episodes, current, decision_frames, turn_rate, levels)
             t0 = time.perf_counter()
             flown = rollout(jobs, workers)
             t1 = time.perf_counter()
             stats = improve(net, ref, optimiser, flown, policy.mean, policy.scale,
-                            kl_coefficient(iteration, iterations), rng)
+                            kl_coefficient(iteration, iterations), rng, gamma=gamma, lam=gae_lambda)
             summary = mean_components([e['result'] for e in flown])
             stats.update(iteration=iteration, mean_return=float(np.mean([e['rewards'].sum() for e in flown])),
                          score=summary['score'], kills_per_min=summary['kills_per_min'],
@@ -356,7 +375,8 @@ def save_resume_state(out_dir, net, optimiser, rng, next_iteration, iterations):
     import torch
     temporary = out_dir / (RESUME_FILE + '.tmp')
     torch.save({'net': net.state_dict(), 'optimiser': optimiser.state_dict(), 'torch_rng': torch.get_rng_state(),
-                'numpy_rng': rng.bit_generator.state, 'next_iteration': next_iteration, 'iterations': iterations},
+                'numpy_rng': rng.bit_generator.state, 'next_iteration': next_iteration, 'iterations': iterations,
+                'observation_version': OBSERVATION_VERSION},
                temporary)
     os.replace(temporary, out_dir / RESUME_FILE)
 
@@ -374,7 +394,7 @@ def reward_summary(args):
     w = Weights()
     rows = [('Kills', '+', KILL_REWARD_TOTAL, 'points shared across all the enemies in an episode'),
             ('Powerup collected', '+', args.powerup_reward, 'points each'),
-            ('Gun upgraded', '+', args.upgrade_bonus, 'points per second'),
+            ('Gun upgraded', '+', args.upgrade_bonus, 'points per second with a hunter power boost'),
             ('Wall impact', '-', w.quotient * args.wall_scale, 'points per full-speed hit (scales with the speed lost)'),
             ('Enemy hit', '-', w.hit * args.hit_scale, 'points each'),
             ('Idle', '-', w.idle / 60.0, f'points per second beyond {IDLE_AFTER_SECONDS:.0f} s without a kill, until the field is clear'),
@@ -411,6 +431,7 @@ def parse_levels(text):
 
 def shaping_from(args):
     """The episode shaping a run's arguments ask for: what fly_rollout is called with."""
+    from weapons.catalog import RULESET, CATALOG
     return {'wall_scale': args.wall_scale,
             'hit_scale': args.hit_scale,
             'still_penalty': args.still_penalty,
@@ -435,7 +456,9 @@ def shaping_from(args):
             'hit_reward': args.hit_reward,
             'panic_score': args.panic_score,
             'panic_temperature': args.panic_temperature,
-            'duel_separation': True}
+            'duel_separation': True, 'random_maze': True,
+            'combat_ruleset': RULESET,
+            'weapon_tuning': CATALOG.snapshot()}
 
 
 def write_run_config(args):
@@ -448,11 +471,19 @@ def write_run_config(args):
         'episode': {'horizon_seconds': args.horizon, 'after_clear_seconds': args.after_clear,
                     'episodes_per_iteration': args.episodes, 'learning_rate': args.lr,
                     'health': args.health, 'wall_energy': _wall_energy() if args.health else 0,
-                    'rules_share': args.rules_share, 'levels': args.levels,
+                    'levels': args.levels,
                     'panic_score': args.panic_score, 'panic_temperature': args.panic_temperature},
         'start': str(args.start), 'shaping': shaping_from(args),
+        'observation_version': OBSERVATION_VERSION,
         'decision_frames': 6, 'turn_rate': 1.0,
         'args': {k: (list(v) if isinstance(v, tuple) else v) for k, v in vars(args).items()}}, indent=1))
+
+
+def unit_interval(value):
+    number = float(value)
+    if not 0 <= number <= 1:
+        raise argparse.ArgumentTypeError('must be between 0 and 1')
+    return number
 
 
 def build_parser():
@@ -463,6 +494,10 @@ def build_parser():
     parser.add_argument('--episodes', type=int, default=96)
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
     parser.add_argument('--lr', type=float, default=1e-4)
+    parser.add_argument('--gamma', type=unit_interval, default=0.99,
+                        help='future reward discount, 0–1; higher values give distant rewards more weight')
+    parser.add_argument('--gae-lambda', type=unit_interval, default=0.95,
+                        help='GAE credit assignment, 0–1; higher values carry credit further back with more noise')
     parser.add_argument('--wall-scale', type=float, default=1.0,
                         help='multiplies the wall-collision penalty in the training reward (the score is unchanged)')
     parser.add_argument('--fixed-start', action='store_true',
@@ -493,8 +528,6 @@ def build_parser():
                         help='seconds an episode keeps going after the last enemy dies (less if no crystal is left)')
     parser.add_argument('--hit-scale', type=float, default=1.0,
                         help='multiplies the enemy-hit penalty in the training reward (the score is unchanged)')
-    parser.add_argument('--rules-share', type=float, default=0.25,
-                        help='share of episodes flown on the Rules hunter level (25); 0 keeps the old level cycle')
     parser.add_argument('--rules-bounty', type=float, default=50.0,
                         help='points gained for destroying the Rules hunter in the training reward')
     parser.add_argument('--compass-reward', type=float, default=0.0,
@@ -528,7 +561,7 @@ def main(argv=None):
     run._use_dummy_drivers()
     result = train_rl(args.start, args.out, args.iterations, args.episodes, args.workers, lr=args.lr,
                       shaping=shaping_from(args),
-                      rules_share=args.rules_share, levels=args.levels, resume=args.resume)
+                      levels=args.levels, resume=args.resume, gamma=args.gamma, gae_lambda=args.gae_lambda)
     if result['paused']:
         print('paused | at iteration', result['history'][-1]['iteration'] if result['history'] else '-')
     else:

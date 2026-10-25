@@ -17,12 +17,12 @@ DEFAULT_ITERATIONS = 1000     # what run52 uses: the guess for a run that never 
 # dest: (group, label). A trainer option missing here still appears, under Training.
 LABELS = {
     'powerup_reward': ('Rewards', 'Powerup collected'),
-    'upgrade_bonus': ('Rewards', 'Gun upgraded, per second'),
+    'upgrade_bonus': ('Rewards', 'Hunter power boost, per second'),
     'rules_bounty': ('Rewards', 'Rules hunter destroyed'),
     'compass_reward': ('Rewards', 'Following the enemy compass'),
     'hit_reward': ('Rewards', 'Hit on an enemy'),
     'wall_scale': ('Rewards', 'Wall impact scale'),
-    'hit_scale': ('Rewards', 'Enemy hit scale'),
+    'hit_scale': ('Rewards', 'Enemy hit penalty (points)'),
     'death_penalty': ('Rewards', 'Death'),
     'speed_penalty': ('Rewards', 'Flying below top speed'),
     'still_penalty': ('Rewards', 'Crawling under the still speed'),
@@ -38,13 +38,14 @@ LABELS = {
     'horizon': ('Episodes', 'Fighting time (s)'),
     'after_clear': ('Episodes', 'Time after the field is clear (s)'),
     'health': ('Episodes', 'Hunter health (0: indestructible)'),
-    'rules_share': ('Episodes', 'Share of Rules hunter episodes'),
     'fixed_start': ('Episodes', 'Start beside the player'),
     'decoy_player': ('Episodes', 'Leave the player as a decoy'),
     'panic_score': ('Episodes', 'Panic score (none: off)'),
     'panic_temperature': ('Episodes', 'Panic temperature'),
     'iterations': ('Training', 'Iterations'),
     'lr': ('Training', 'Learning rate'),
+    'gamma': ('Training', 'Discount (gamma)'),
+    'gae_lambda': ('Training', 'Credit assignment (GAE lambda)'),
     'workers': ('Training', 'Workers'),
 }
 
@@ -65,7 +66,7 @@ def _reward_rows():
 
 # The episode block of older runs: its key -> dest.
 EPISODE_KEYS = {'episodes_per_iteration': 'episodes', 'learning_rate': 'lr', 'horizon_seconds': 'horizon',
-                'after_clear_seconds': 'after_clear', 'health': 'health', 'rules_share': 'rules_share',
+                'after_clear_seconds': 'after_clear', 'health': 'health',
                 'levels': 'levels', 'panic_score': 'panic_score', 'panic_temperature': 'panic_temperature'}
 
 
@@ -78,6 +79,7 @@ class Setting:
     help: str
     group: str
     label: str
+    display_scale: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -97,14 +99,17 @@ def _kind(action):
 
 
 def _settings():
+    from experiments.score import Weights
     out = []
     for action in ppo_neural.build_parser()._actions:
         if action.dest in NOT_SETTINGS:
             continue
         group, label = LABELS.get(action.dest, ('Training', action.dest.replace('_', ' ').capitalize()))
         default = list(action.default) if isinstance(action.default, tuple) else action.default
-        out.append(Setting(action.dest, action.option_strings[0], _kind(action), default, action.help or '',
-                           group, label))
+        help_text = ('Reward points lost per enemy collision or projectile hit; 0 disables this penalty.'
+                     if action.dest == 'hit_scale' else action.help or '')
+        out.append(Setting(action.dest, action.option_strings[0], _kind(action), default, help_text,
+                           group, label, Weights().hit if action.dest == 'hit_scale' else 1.0))
     return out
 
 
@@ -171,6 +176,9 @@ def read_settings(run_dir, all_runs):
             out[s.dest] = Value(_normal(s, recorded[s.dest]), 'recorded')
         elif s.dest in recovered:
             out[s.dest] = Value(_normal(s, recovered[s.dest]), 'recovered')
+        elif s.dest in ('gamma', 'gae_lambda'):
+            # Older runs used these hardcoded values; do not borrow a newer run's experiment.
+            out[s.dest] = Value(s.default, 'recovered')
         else:
             guess = next((o[s.dest] for o in others if s.dest in o), None)
             if guess is not None or any(s.dest in o for o in others):
@@ -236,9 +244,12 @@ def parse_value(setting, value):
         except ValueError:
             raise bad('is not a whole number') from None
     try:
-        return float(value)
+        number = float(value)
     except (TypeError, ValueError):
         raise bad('is not a number') from None
+    if setting.dest in ('gamma', 'gae_lambda') and not 0 <= number <= 1:
+        raise bad('must be between 0 and 1')
+    return number
 
 
 def apply_changes(base, changes):

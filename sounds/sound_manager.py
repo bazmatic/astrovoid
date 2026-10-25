@@ -400,6 +400,71 @@ class SoundManager:
         
         powerup_channel = pygame.mixer.Channel(4)
         powerup_channel.play(self.powerup_sound)
+
+    def play_weapon_fire(self, weapon_id):
+        """Distinct deterministic tones, cached without consuming simulation randomness."""
+        if not _audible():
+            return
+        from weapons.catalog import CATALOG
+        d = CATALOG[weapon_id]
+        cache = getattr(self, '_weapon_sounds', None)
+        if cache is None:
+            self._weapon_sounds = cache = {}
+        if weapon_id not in cache:
+            rate, _, channels = pygame.mixer.get_init()
+            from sounds.weapon_fire import samples
+            pcm=(np.clip(samples(d,rate),-1,1)*32767).astype(np.int16)
+            if channels > 1:
+                pcm = np.repeat(pcm[:, None], channels, axis=1)
+            cache[weapon_id] = pygame.sndarray.make_sound(pcm)
+        pygame.mixer.Channel(1).play(cache[weapon_id])
+
+    def play_inflation(self) -> None:
+        """A rubbery rising swell when a creature balloons in size."""
+        if not _audible():
+            return
+        sound = getattr(self, '_inflation_sound', None)
+        if sound is None:
+            rate, _, channels = pygame.mixer.get_init()
+            duration = .65
+            t = np.arange(round(rate*duration))/rate
+            progress = t/duration
+            frequency = 110*np.power(7, progress)*(1+.045*np.sin(math.tau*9*t))
+            phase = math.tau*np.cumsum(frequency)/rate
+            # Rounded harmonics give the upward slide a stretchy balloon character.
+            tone = np.sin(phase)+.28*np.sin(2*phase)+.12*np.sin(3*phase)
+            envelope = np.minimum(1,t/.025)*np.minimum(1,(duration-t)/.12)
+            pcm = (tone*envelope*.42*32767).astype(np.int16)
+            if channels > 1:
+                pcm = np.repeat(pcm[:, None], channels, axis=1)
+            self._inflation_sound = sound = pygame.sndarray.make_sound(pcm)
+            sound.set_volume(config.POWERUP_ACTIVATION_SOUND_VOLUME)
+        pygame.mixer.Channel(3).play(sound)
+
+    def play_beacon_arrival(self) -> None:
+        """A gathering shimmer, resolving into four bright notes as the beacon materializes."""
+        if not _audible():
+            return
+        sound = getattr(self, 'beacon_arrival_sound', None)
+        if sound is None:
+            rate, _, channels = pygame.mixer.get_init()
+            samples = np.zeros(round(rate * 1.95), dtype=np.float64)
+            gather = np.arange(round(rate * 1.2)) / rate
+            phase = math.tau * np.cumsum(180 + 650 * (gather / 1.2)**2) / rate
+            samples[:len(gather)] = (np.sin(phase) + 0.3 * np.sin(phase * 2.01)) * np.sin(math.pi*gather/1.2)**2 * 0.09
+            for i, frequency in enumerate((523.25, 659.25, 783.99, 1046.5)):
+                start = round((0.96 + i * 0.08) * rate)
+                t = np.arange(len(samples) - start) / rate
+                envelope = np.minimum(1, t / 0.008) * np.exp(-t * 7)
+                samples[start:] += (np.sin(math.tau * frequency * t)
+                                    + 0.25 * np.sin(math.tau * frequency * 2 * t)) * envelope * 0.22
+            pcm = (np.clip(samples, -1, 1) * 32767).astype(np.int16)
+            if channels > 1:
+                pcm = np.repeat(pcm[:, None], channels, axis=1)
+            sound = pygame.sndarray.make_sound(pcm)
+            sound.set_volume(config.POWERUP_ACTIVATION_SOUND_VOLUME)
+            self.beacon_arrival_sound = sound
+        pygame.mixer.Channel(6).play(sound)
     
     def _generate_enemy_destroy(
         self,

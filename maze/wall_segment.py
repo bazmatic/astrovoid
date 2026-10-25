@@ -37,7 +37,7 @@ class WallSegment:
         self.destructible = destructible
         self.cell = cell
     
-    def damage(self) -> bool:
+    def damage(self, damage: int = 1) -> bool:
         """Damage the wall segment by reducing hit points.
         
         Returns:
@@ -46,7 +46,7 @@ class WallSegment:
         """
         if not self.destructible:
             return False
-        self.hit_points -= 1
+        self.hit_points -= damage
         if self.hit_points <= 0:
             self.active = False
             return True

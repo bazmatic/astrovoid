@@ -69,6 +69,7 @@ class Encounter:
         self._spawn(creature)
         if not creature.active:
             return
+        creature.inflation.update(dt)
         for trait in creature.traits:
             trait.on_frame(creature, self, dt)
             if not creature.active:
@@ -106,17 +107,35 @@ class Encounter:
         """Offer a friendly shot to each live enemy creature in roster order; the first it reaches takes it, and the
         shot is spent (True). Return False when no creature takes it."""
         if not projectile.is_enemy and projectile.active:
+            target = getattr(projectile, '_blast_target', None)
+            if target is not None:
+                if target.active:
+                    self.apply_hit(target, projectile)
+                    projectile.active = False
+                    return True
+                return False
             for creature in self.creatures():
                 if (creature.active and creature.allegiance == 'enemy'
-                        and projectile.check_circle_collision(creature.get_pos(), creature.radius)):
-                    self._spawn(creature)   # shot before its first frame
-                    self.hits[projectile.source] += 1
-                    for trait in creature.traits:
-                        trait.on_shot(creature, projectile, self)
-                        if not creature.active:
-                            break
+                        and projectile.check_circle_collision(creature.get_pos(), creature.hit_radius)):
+                    self.apply_hit(creature, projectile)
                     return True
         return False
+
+    def apply_hit(self, creature, projectile, damage=1):
+        """Trait-aware hit application shared by consuming and piercing projectiles."""
+        if not creature.active:
+            return
+        self._spawn(creature)
+        self.hits[projectile.source] += 1
+        if creature.inflation.on_hit(creature,projectile,self):
+            return
+        for _ in range(damage):
+            if not creature.active:
+                break
+            for trait in creature.traits:
+                trait.on_shot(creature, projectile, self)
+                if not creature.active:
+                    break
 
     def target_for(self, creature) -> Optional[Tuple[float, float]]:
         """Where the creature's target is: the nearest friend, or None."""
@@ -127,6 +146,7 @@ class Encounter:
         if not creature.active:
             return
         creature.killed_by = shot.source if shot is not None else 'enemy'
+        creature.killed_by_weapon = getattr(shot, 'weapon_id', None)
         creature.die()
         if creature.allegiance == 'enemy':
             self.world.sound_manager.play_enemy_destroy()

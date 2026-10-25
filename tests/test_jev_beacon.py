@@ -6,6 +6,7 @@ import pygame
 import pytest
 import config
 import level_config
+import level_rules
 import creatures
 from tests.creature_parts import encounter, world
 from entities.jev_beacon import JevBeacon
@@ -117,6 +118,7 @@ def test_beacon_does_not_look_like_a_gun_crystal():
 
 
 def test_placed_beacon_lies_a_third_of_the_way_to_the_exit(game, monkeypatch):
+    monkeypatch.setattr(level_config, 'level_has_hunter', lambda _: True)
     monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: None)
     game.level = 4
     game.start_level()
@@ -127,3 +129,94 @@ def test_placed_beacon_lies_a_third_of_the_way_to_the_exit(game, monkeypatch):
     assert math.dist(beacon.get_pos(), third) <= cell
     # Well clear of the exit portal, which would hide it
     assert math.dist(beacon.get_pos(), exit_pos) > 3 * cell
+
+
+def test_earned_beacons_have_no_free_pickup_and_unlock_after_most_enemies_die(game, monkeypatch):
+    from tests.test_exit_policies_game import level_file
+    monkeypatch.setattr(level_config, 'load_level_config',
+                        level_file({'hunter': {'earned': True}}, static=10))
+    monkeypatch.setattr(level_config, 'get_level_hunter_config', lambda _: {'earned': True})
+    monkeypatch.setattr(level_config, 'get_level_enemy_counts', lambda _: level_rules.EnemyCounts(
+        total=10, static=10, patrol=0, aggressive=0, replay=0, flocker=0, flighthouse=0, egg=0))
+    game.level = 10
+    game.start_level()
+    assert level_config.level_allows_jev_beacon(10)
+    assert not level_config.level_has_hunter(10)
+    assert not beacons(game)
+    assert game.hunter_unlock_kills == 7
+    game.collision_handler.level_kills = 6
+    assert not game.jev_beacon_allowed()
+    game.collision_handler.level_kills = 7
+    assert game.jev_beacon_allowed()
+
+
+def test_the_campaign_has_no_starting_beacons_and_teaches_basics_without_an_ally():
+    for level in range(1, 31):
+        assert not level_config.level_has_hunter(level)
+        layout = level_config.get_level_layout(level)
+        assert layout is None or layout.beacon is None
+    assert not any(level_config.level_allows_jev_beacon(level) for level in range(1, 10))
+
+
+def test_earned_beacon_drop_plays_one_arrival_fanfare(handler, monkeypatch):
+    monkeypatch.setattr(config, 'JEV_BEACON_SPAWN_CHANCE', 1.0)
+    pickups = []
+    shoot(handler, pickups, True)
+    assert len([p for p in pickups if isinstance(p, JevBeacon)]) == 1
+    handler.sound_manager.play_beacon_arrival.assert_called_once()
+    shoot(handler, pickups, True)
+    handler.sound_manager.play_beacon_arrival.assert_called_once()
+
+
+def test_beacon_arrival_is_immediate_larger_than_the_pickup_and_fades():
+    beacon = JevBeacon((160, 140))
+    before = random.getstate()
+    surface = pygame.Surface((320, 280), pygame.SRCALPHA)
+    beacon.draw(surface)
+    assert surface.get_bounding_rect().width > beacon.radius * 5
+    first = pygame.image.tostring(surface, 'RGBA')
+    surface.fill((0, 0, 0, 0))
+    beacon.age = beacon.ARRIVAL_FRAMES
+    beacon.draw(surface)
+    assert pygame.image.tostring(surface, 'RGBA') != first
+    assert random.getstate() == before
+
+
+def test_fanfare_respects_mute_and_does_not_change_randomness(monkeypatch):
+    from sounds import sound_manager as audio
+    pygame.mixer.init()
+    manager = audio.SoundManager.__new__(audio.SoundManager)
+    monkeypatch.setattr(audio, '_audible', lambda: False)
+    manager.play_beacon_arrival()
+    assert not hasattr(manager, 'beacon_arrival_sound')
+    monkeypatch.setattr(audio, '_audible', lambda: True)
+    before = random.getstate()
+    manager.play_beacon_arrival()
+    sound = manager.beacon_arrival_sound
+    assert 1.9 < sound.get_length() < 2.0
+    manager.play_beacon_arrival()
+    assert manager.beacon_arrival_sound is sound
+    assert random.getstate() == before
+
+
+def test_beacon_stays_put_and_cannot_be_collected_until_formed():
+    beacon = JevBeacon((300, 300))
+    assert not beacon.check_circle_collision((300, 300), 20)
+    assert beacon.active and beacon.spawn_scale == 0
+    beacon.update(beacon.FORMATION_FRAMES - 1, (301, 300))
+    assert beacon.get_pos() == (300, 300)
+    assert not beacon.formed
+    beacon.update(1, (301, 300))
+    assert beacon.formed
+    assert beacon.check_circle_collision((300, 300), 20)
+
+
+def test_arrival_light_paths_start_on_each_boundary_and_share_a_destination():
+    from rendering.beacon_arrival import light_paths
+    bounds = pygame.Rect(200, 0, 1152, 878)
+    target = (830, 450)
+    paths = list(light_paths(bounds, target))
+    assert len(paths) == 16
+    for start, control, finish in paths:
+        assert start[0] in (bounds.left, bounds.right-1) or start[1] in (bounds.top, bounds.bottom-1)
+        assert finish == target
