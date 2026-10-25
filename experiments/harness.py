@@ -222,7 +222,7 @@ def load_student_policy(student):
 
 def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
-                 pursue_hunter=False, health=0, duel_separation=False, random_maze=False, combat_ruleset="legacy", weapon_tuning=None):
+                 pursue_hunter=False, health=0, duel_separation=False, random_maze=False, combat_ruleset="legacy", weapon_tuning=None, curved_walls=False):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
@@ -252,6 +252,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     if combat_ruleset not in (*PICKUP_RULESETS, LEGACY_RULESET):
         raise ValueError('unknown combat ruleset')
     game.combat_ruleset = combat_ruleset
+    game.curved_walls = curved_walls
     game.weapon_catalog = (WeaponCatalog(WeaponDefinition(**d) for d in weapon_tuning)
                            if weapon_tuning else default_catalog(combat_ruleset))
     game.start_level(maze_seed=seed if random_maze else None)

@@ -92,6 +92,7 @@ class Game:
         self.screen = screen
         from weapons.catalog import RULESET
         self.combat_ruleset = RULESET
+        self.curved_walls = config.CAVE.enabled     # training runs recorded on square walls replay on square walls
         self.clock = pygame.time.Clock()
         self.font = get_font(36)
         self.small_font = get_font(24)
@@ -315,7 +316,7 @@ class Game:
         # Generate maze
         layout = level_config.get_level_layout(self.level)
         self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout,
-                         seed=seed)
+                         seed=seed, curved=getattr(self, 'curved_walls', None))
         self.obstacles = ObstacleWorld(self.maze, layout.gates) if layout is not None and layout.gates else None
         self.maze.gate_segments = self.obstacles.segments() if self.obstacles else []
         
@@ -668,7 +669,8 @@ class Game:
         self._close_hunter()
         seed = level_config.get_level_seed(DUEL_MAZE_LEVEL)
         random.seed(seed)
-        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize, seed=seed)
+        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize, seed=seed,
+                         curved=getattr(self, 'curved_walls', None))
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
         self.ship = Ship(self.maze.start_pos)
         from weapons import EquippedWeapon, WeaponInventory, RULESET

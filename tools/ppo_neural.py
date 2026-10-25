@@ -291,6 +291,7 @@ def train_rl(start, out_dir, iterations, episodes=96, workers=12, lr=1e-4, seed=
             if shaping is not None:
                 shaping = dict(shaping)
                 shaping['combat_ruleset'] = prior.get('combat_ruleset', 'legacy')
+                shaping['curved_walls'] = prior.get('curved_walls', False)
                 shaping['weapon_tuning'] = prior.get('weapon_tuning')
             episode = run_config.get('episode', {})
             if episode.get('rules_share') and 'level_cycle_from_iteration' not in episode:
@@ -458,6 +459,7 @@ def shaping_from(args):
             'panic_temperature': args.panic_temperature,
             'duel_separation': True, 'random_maze': True,
             'combat_ruleset': RULESET,
+            'curved_walls': True,
             'weapon_tuning': CATALOG.snapshot()}
 
 

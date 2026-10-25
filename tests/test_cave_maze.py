@@ -440,3 +440,58 @@ def test_batched_destroy_skips_stale_segments():
     assert faces(maze, cluster[0]) == []
     assert all(not w.active for w in stale)
     assert_index_consistent(maze)
+
+
+def _harness_maze_cave(**kw):
+    from experiments import harness
+    seen = []
+    harness.run_episode(13, 0, horizon=0.1, trace=lambda t, g, h: seen.append(g.maze.cave), **kw)
+    harness.reset()
+    return seen[0]
+
+
+def test_harness_defaults_to_square_walls():
+    assert _harness_maze_cave() is None
+
+
+def test_harness_curves_walls_when_asked():
+    assert _harness_maze_cave(curved_walls=True) is not None
+
+
+def test_new_run_records_curved_walls_and_old_runs_stay_square(tmp_path):
+    import json
+    from tools import ppo_neural as ppo
+    args = ppo.build_parser().parse_args(['--out', str(tmp_path), '--levels', '25'])
+    assert ppo.shaping_from(args)['curved_walls'] is True
+    ppo.write_run_config(args)
+    assert json.loads((tmp_path / 'config.json').read_text())['shaping']['curved_walls'] is True
+
+
+def test_resuming_a_run_without_the_record_stays_square(tmp_path, monkeypatch):
+    import json
+    pytest.importorskip('torch')
+    from hunter.neural.policy import random_policy
+    from tests.test_ppo_loop import fake_rollout_factory
+    from tools import ppo_neural as ppo
+    start = tmp_path / 'start.npz'
+    random_policy(0, hidden=16, embed=8).save(start)
+    out = tmp_path / 'old'
+    ppo.train_rl(start, out, iterations=1, episodes=6, workers=1, rollout=fake_rollout_factory(), log=lambda *_: None)
+    (out / 'config.json').write_text(json.dumps({'episode': {'levels': [25]}, 'shaping': {}}))
+    seen = []
+
+    class Spy:
+        def __init__(self, workers, shaping=None, job=None):
+            seen.append(shaping)
+            self.inner = fake_rollout_factory()
+
+        def __call__(self, jobs):
+            return self.inner(jobs, 1)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(ppo, 'PoolRollout', Spy)
+    ppo.train_rl(start, out, iterations=2, episodes=6, workers=1, levels=[25], shaping={'curved_walls': True},
+                 log=lambda *_: None, resume=True)
+    assert seen[0]['curved_walls'] is False
