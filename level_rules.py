@@ -43,6 +43,7 @@ class EnemyCounts:
     flighthouse: int
     egg: int
     anemone: int = 0
+    vibehouse: int = 0
 
 
 @dataclass

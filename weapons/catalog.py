@@ -3,7 +3,9 @@ from dataclasses import asdict, dataclass, replace
 import math
 import config
 
-RULESET = 'weapon-pickups-v1'
+RULESET = 'weapon-inventory-v2'
+REPLACEMENT_RULESET = 'weapon-pickups-v1'
+PICKUP_RULESETS = (RULESET, REPLACEMENT_RULESET)
 LEGACY_RULESET = 'legacy'
 
 @dataclass(frozen=True)
@@ -48,7 +50,7 @@ class WeaponCatalog:
             if d.capacity is not None and (type(d.capacity) is not int or d.capacity <= 0):
                 raise ValueError('weapon capacity must be a positive integer')
             from weapons.projectile import PROJECTILE_TYPES
-            if d.behaviour not in PROJECTILE_TYPES:
+            if d.behaviour not in PROJECTILE_TYPES and d.behaviour != 'shield':
                 raise ValueError('unknown projectile behaviour')
             from sounds.weapon_fire import PROFILES
             if d.sound_profile not in PROFILES:
@@ -104,9 +106,18 @@ CATALOG = WeaponCatalog([
     WeaponDefinition('railgun', 'Railgun', 12, 25.5, (200, 110, 255), 'needle', 'rail', speed=3.5, damage=2, sound_pitch=2400, sound_duration=.2),
     WeaponDefinition('seeker', 'Seeker', 18, 30, (90, 245, 145), 'fork', 'seeker', speed=0.8, lifetime=150, sound_pitch=650, sound_duration=.16),
     WeaponDefinition('inflator', 'The Inflator', 18, 30, (255, 110, 210), 'balloon', 'inflator',
-                     speed=.9, radius=5, sound_pitch=480, sound_duration=.2, sound_body=.5,
+                     speed=.9, radius=5, drop_weight=.25, sound_pitch=480, sound_duration=.2, sound_body=.5,
                      inflation_seconds=config.SETTINGS.powerups.inflationDurationSeconds,
                      inflation_scale=config.SETTINGS.powerups.inflationSizeMultiplier),
     WeaponDefinition('grenade_launcher', 'Grenade Launcher', 10, 45, (255, 205, 75), 'shell', 'grenade',
                      speed=0.65, lifetime=72, damage=2, radius=5, sound_pitch=110, sound_duration=.22, proximity_radius=28),
+    WeaponDefinition('shield', 'Shield', round(config.SETTINGS.powerups.shieldDurationSeconds*config.FPS),
+                     1, (100, 220, 255), 'shield', 'shield'),
 ])
+
+
+def default_catalog(ruleset):
+    """Old recorded rules never introduce the new shield drop."""
+    if ruleset == REPLACEMENT_RULESET:
+        return WeaponCatalog(CATALOG[key] for key in CATALOG.ids if key != 'shield')
+    return CATALOG

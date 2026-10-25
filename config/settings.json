@@ -6,7 +6,7 @@
     "fullscreen": true
   },
   "ship": {
-    "size": 8,
+    "size": 9,
     "rotationSpeed": 5.0,
     "thrustForce": 0.15,
     "friction": 0.998,
@@ -184,6 +184,7 @@
     "flashTintStrength": 0.85,
     "flashGlowMultiplier": 1.6,
     "durationSeconds": 10,
+    "shieldDurationSeconds": 10.0,
     "inflationDurationSeconds": 10,
     "inflationSizeMultiplier": 3,
     "ammoRefill": 25,

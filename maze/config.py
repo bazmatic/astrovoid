@@ -24,11 +24,11 @@ class MazeGenerationConfig:
     """Configuration for maze generation algorithm.
     
     Attributes:
-        step_size: Step size for recursive backtracking (larger = wider passages)
-        passage_width: Width of passages to clear around connections
-        clear_radius: Radius for clearing extra paths
-        corner_clear_size: Size of cleared area around corners
-        extra_paths_multiplier: Multiplier for number of extra paths (applied to level)
+        step_size: Legacy preset density setting; larger values now mean more junctions.
+        passage_width: Legacy clearing setting, retained to recognise empty presets.
+        clear_radius: Shortcut restraint; larger values leave fewer alternate routes.
+        corner_clear_size: Legacy setting; connected corner rooms need no extra clearing.
+        extra_paths_multiplier: Legacy clearing setting, retained to recognise empty presets.
         grid_size_base: Base grid size
         grid_size_increment: Grid size increment per level
     """

@@ -262,7 +262,8 @@ class SpawnManager:
             List of SpawnConfig objects.
         """
         counts = (('replay', enemy_counts.replay), ('flocker', enemy_counts.flocker),
-                  ('flighthouse', enemy_counts.flighthouse), ('split_boss', split_boss_count),
+                  ('flighthouse', enemy_counts.flighthouse), ('vibehouse', enemy_counts.vibehouse),
+                  ('split_boss', split_boss_count),
                   ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone),
                   ('belemnite', belemnite_count))
         # Big enemies need their whole body clear of walls, not just their centre

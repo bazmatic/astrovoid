@@ -17,7 +17,7 @@ from tests.creature_parts import creature, encounter, world
 from tests.test_level_arc import game
 
 
-@pytest.mark.parametrize('weapon_id', CATALOG.drops)
+@pytest.mark.parametrize('weapon_id', [key for key in CATALOG.drops if key != 'shield'])
 def test_replacement_ammo_and_final_volley(weapon_id):
     state = EquippedWeapon()
     state.equip(weapon_id)

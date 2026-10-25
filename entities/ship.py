@@ -145,7 +145,7 @@ class Ship(RotatingThrusterShip):
                 self.powerup_flash_phase -= 2 * math.pi
         
         # Update shield phase and track energy when shield is active
-        if self.shield_active:
+        if self.shield_active or self.weapon_shield_active:
             self.shield_phase += 0.3  # Speed of pulse animation
             if self.shield_phase >= 2 * math.pi:
                 self.shield_phase -= 2 * math.pi
@@ -156,7 +156,7 @@ class Ship(RotatingThrusterShip):
                 # After initial period, automatically deactivate shield
                 if self.shield_initial_timer <= 0:
                     self.shield_active = False
-            elif self.game_started:
+            elif self.game_started and not hasattr(self.weapon, 'inventory'):
                 # Track energy used while shield is active (only after initial period)
                 self.fuel += config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
         
@@ -180,7 +180,10 @@ class Ship(RotatingThrusterShip):
         if self.weapon is not None:
             rad = math.radians(self.angle)
             pos = (self.x + math.cos(rad)*(self.radius+5), self.y + math.sin(rad)*(self.radius+5))
+            shield_was_active = self.weapon_shield_active
             result = self.weapon.try_fire(pos, self.angle)
+            if self.weapon_shield_active and not shield_was_active:
+                self.sound_manager.play_powerup_activation()
             if result.projectiles:
                 self.sound_manager.play_weapon_fire(result.weapon_id)
             return list(result.projectiles) or None
@@ -311,8 +314,17 @@ class Ship(RotatingThrusterShip):
         Returns:
             True if shield is active, False otherwise.
         """
-        return self.shield_active or self.observer
+        return self.shield_active or self.weapon_shield_active or self.observer
     
+    @property
+    def weapon_shield_active(self):
+        return bool(getattr(self.weapon, 'shield_active', False))
+
+    def cycle_weapon(self, pressed):
+        if self.weapon.cycle(pressed):
+            self.weapon_notice = self.weapon.definition.name
+            self._start_powerup_flash()
+
     def equip_weapon(self, weapon_id):
         self.weapon.equip(weapon_id)
         self.weapon_notice = self.weapon.definition.name
@@ -466,7 +478,7 @@ class Ship(RotatingThrusterShip):
         self._draw_trail(screen)
         
         # Draw shield glow effect when shield is active
-        if self.shield_active:
+        if self.shield_active or self.weapon_shield_active:
             # During initial activation, fade out over time
             if self.shield_initial_timer > 0:
                 fade_factor = self.shield_initial_timer / 60.0
@@ -646,20 +658,23 @@ class Ship(RotatingThrusterShip):
         
         # UI zone constants
         hud_scale = min(1.0, screen.get_height() / 878)
-        GAUGE_RADIUS = round(60 * hud_scale)
+        has_inventory = hasattr(self.weapon, 'inventory')
+        GAUGE_RADIUS = round((45 if has_inventory else 60) * hud_scale)
         GAUGE_CENTER_X = config.UI_ZONE_WIDTH // 2  # Center of UI zone
         LEVEL_Y = round(60 * hud_scale)  # Level indicator at top
         TIME_Y = round(180 * hud_scale)
         
         # Calculate equal spacing for radial gauges
         # Start after time indicator, shift all gauges downward
-        GAUGE_START_Y = round(350 * hud_scale)
-        GAUGE_SPACING = round(170 * hud_scale)
+        GAUGE_START_Y = round((300 if has_inventory else 350) * hud_scale)
+        GAUGE_SPACING = round((130 if has_inventory else 170) * hud_scale)
         GAUGE_Y_POSITIONS = {
             'score': GAUGE_START_Y,
             'ammo': GAUGE_START_Y + GAUGE_SPACING
         }
         GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 2)  # Below all gauges
+        if has_inventory:
+            GUN_UPGRADE_Y = round(574 * hud_scale)
         LOW_POWER_THRESHOLD = 0.2  # Power gauge pulses at or below this
         
         def draw_gauge(
@@ -722,7 +737,8 @@ class Ship(RotatingThrusterShip):
             view = self.weapon.view
             definition = self.weapon.catalog[view.id]
             ammo_percent = view.ammo_fraction
-            ammo_text = "∞" if view.ammo is None else str(view.ammo)
+            ammo_text = (f"{view.ammo / config.FPS:.1f}s" if definition.behaviour == 'shield'
+                         else "∞" if view.ammo is None else str(view.ammo))
             ammo_color = definition.color
             ammo_text_color = config.COLOR_TEXT
         elif not self.ammo_policy.charges_for_shots():
@@ -745,7 +761,8 @@ class Ship(RotatingThrusterShip):
                                                 ("PROGRESS SCORE", progress_score))):
             if value is None:
                 continue
-            y = GAUGE_Y_POSITIONS['ammo'] + round((100 + index * 40) * hud_scale)
+            score_offset = 80 + index*30 if has_inventory else 100 + index*40
+            y = GAUGE_Y_POSITIONS['ammo'] + round(score_offset * hud_scale)
             label_image = label_font.render(label, True, (150, 160, 195))
             label_rect = label_image.get_rect(midleft=(12, y))
             value_image = value_font.render(f"{int(value):,}", True, (235, 242, 255))
@@ -768,6 +785,10 @@ class Ship(RotatingThrusterShip):
                 label = pygame.transform.smoothscale(label, (available, label.get_height()))
             screen.blit(label, label.get_rect(midleft=(36, GUN_UPGRADE_Y)))
             draw_symbol(screen, (20, GUN_UPGRADE_Y), 8, definition)
+            if hasattr(self.weapon, 'inventory'):
+                from weapons.presentation import draw_inventory
+                draw_inventory(screen,self.weapon,pygame.Rect(12,GUN_UPGRADE_Y+round(22*hud_scale),
+                               config.UI_ZONE_WIDTH-24,round(112*hud_scale)))
         elif self.gun_upgrade_level > 0:
             upgrade_text = font.render(f"GUN UPGRADE x{self.gun_upgrade_level}", True, config.COLOR_UPGRADED_SHIP_GLOW)
             text_rect = upgrade_text.get_rect(center=(GAUGE_CENTER_X, GUN_UPGRADE_Y))

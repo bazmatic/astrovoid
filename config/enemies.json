@@ -1,6 +1,9 @@
 {
   "static": {
-    "name": ["Urchin", "Urchins"],
+    "name": [
+      "Urchin",
+      "Urchins"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -17,12 +20,17 @@
       "bouncesOffWalls": {},
       "ramsShip": {},
       "shovedByShots": {},
-      "takesHits": {"hitPoints": 3},
+      "takesHits": {
+        "hitPoints": 3
+      },
       "dropsPickup": {}
     }
   },
   "patrol": {
-    "name": ["Crab", "Crabs"],
+    "name": [
+      "Crab",
+      "Crabs"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -36,16 +44,23 @@
     "body": "crab",
     "traits": {
       "patrol": {},
-      "drift": {"speed": "patrol_speed"},
+      "drift": {
+        "speed": "patrol_speed"
+      },
       "gun": {},
       "bouncesOffWalls": {},
       "ramsShip": {},
-      "takesHits": {"hitPoints": 1},
+      "takesHits": {
+        "hitPoints": 1
+      },
       "dropsPickup": {}
     }
   },
   "aggressive": {
-    "name": ["Jelly", "Jellies"],
+    "name": [
+      "Jelly",
+      "Jellies"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -59,16 +74,25 @@
     "body": "jelly",
     "traits": {
       "chase": {},
-      "drift": {"speed": "aggressive_speed"},
+      "drift": {
+        "speed": "aggressive_speed"
+      },
       "bouncesOffWalls": {},
       "ramsShip": {},
-      "takesHits": {"hitPoints": 1},
+      "takesHits": {
+        "hitPoints": 1
+      },
       "dropsPickup": {},
-      "keepsApart": {"crowd": "chasers"}
+      "keepsApart": {
+        "crowd": "chasers"
+      }
     }
   },
   "replay": {
-    "name": ["Squiddler", "Squiddlers"],
+    "name": [
+      "Squiddler",
+      "Squiddlers"
+    ],
     "anchored": false,
     "replaysPlayer": true,
     "parWeight": "enemy",
@@ -77,22 +101,43 @@
     "tuning": {
       "windowSize": 100,
       "size": 15,
-      "color": [150, 100, 255]
+      "color": [
+        150,
+        100,
+        255
+      ]
     },
     "allegiance": "enemy",
     "body": "squid",
     "traits": {
       "replaysPlayer": {},
-      "thrusters": {"speedShare": 0.3},
+      "thrusters": {
+        "speedShare": 0.3
+      },
       "ramsShip": {},
-      "gun": {"strengthLevel": 1, "startsLoaded": true},
-      "flinchesWhenHit": {"frames": 30, "on": ["hit", "hit_wall", "rammed"]},
-      "takesHits": {"hitPoints": 3},
+      "gun": {
+        "strengthLevel": 1,
+        "startsLoaded": true
+      },
+      "flinchesWhenHit": {
+        "frames": 30,
+        "on": [
+          "hit",
+          "hit_wall",
+          "rammed"
+        ]
+      },
+      "takesHits": {
+        "hitPoints": 3
+      },
       "dropsPickup": {}
     }
   },
   "flocker": {
-    "name": ["Flocker", "Flockers"],
+    "name": [
+      "Flocker",
+      "Flockers"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -100,25 +145,53 @@
     "layer": 2,
     "tuning": {
       "size": 12,
-      "color": [255, 180, 50],
+      "color": [
+        255,
+        180,
+        50
+      ],
       "clusterRadius": 300
     },
     "allegiance": "enemy",
     "body": "flocker",
     "traits": {
-      "flocks": {"separationRadius": 50, "alignmentRadius": 80, "cohesionRadius": 100, "separationWeight": 1.5,
-                 "alignmentWeight": 1.0, "cohesionWeight": 1.0, "seekWeight": 0.8, "closeRange": 150,
-                 "closeAngle": 30, "syncChance": 0.8},
-      "thrusters": {"speedShare": 0.4},
-      "gun": {"intervalMin": 300, "intervalMax": 300, "strengthLevel": 1},
+      "flocks": {
+        "separationRadius": 50,
+        "alignmentRadius": 80,
+        "cohesionRadius": 100,
+        "separationWeight": 1.5,
+        "alignmentWeight": 1.0,
+        "cohesionWeight": 1.0,
+        "seekWeight": 0.8,
+        "closeRange": 150,
+        "closeAngle": 30,
+        "syncChance": 0.8
+      },
+      "thrusters": {
+        "speedShare": 0.4
+      },
+      "gun": {
+        "intervalMin": 300,
+        "intervalMax": 300,
+        "strengthLevel": 1
+      },
       "ramsShip": {},
-      "tweets": {"chance": 0.01, "quietMin": 3, "quietMax": 8},
-      "takesHits": {"hitPoints": 1},
+      "tweets": {
+        "chance": 0.01,
+        "quietMin": 3,
+        "quietMax": 8
+      },
+      "takesHits": {
+        "hitPoints": 1
+      },
       "dropsPickup": {}
     }
   },
   "flighthouse": {
-    "name": ["Flighthouse", "Flighthouses"],
+    "name": [
+      "Flighthouse",
+      "Flighthouses"
+    ],
     "anchored": true,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -126,21 +199,77 @@
     "layer": 4,
     "tuning": {
       "size": 14,
-      "color": [120, 240, 200]
+      "color": [
+        120,
+        240,
+        200
+      ]
     },
     "allegiance": "enemy",
     "body": "flighthouse",
     "traits": {
       "anchored": {},
-      "scans": {"coneDegrees": 45, "range": 600, "scanSpeed": 90, "trackSpeed": 240},
-      "launchesFlock": {"into": "flocker", "speed": 0.8},
+      "scans": {
+        "coneDegrees": 45,
+        "range": 600,
+        "scanSpeed": 90,
+        "trackSpeed": 240
+      },
+      "launchesFlock": {
+        "into": "flocker",
+        "speed": 0.8
+      },
       "ramsShip": {},
-      "takesHits": {"hitPoints": 5},
+      "takesHits": {
+        "hitPoints": 5
+      },
+      "dropsPickup": {}
+    }
+  },
+  "vibehouse": {
+    "name": [
+      "Vibehouse",
+      "Vibehouses"
+    ],
+    "anchored": true,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "layer": 4,
+    "tuning": {
+      "size": 14,
+      "color": [
+        255,
+        90,
+        230
+      ]
+    },
+    "allegiance": "enemy",
+    "body": "flighthouse",
+    "traits": {
+      "anchored": {},
+      "scans": {
+        "coneDegrees": 45,
+        "range": 600,
+        "scanSpeed": 90,
+        "trackSpeed": 240
+      },
+      "launchesFlock": {
+        "into": "vibelet",
+        "speed": 0.5
+      },
+      "ramsShip": {},
+      "takesHits": {
+        "hitPoints": 5
+      },
       "dropsPickup": {}
     }
   },
   "egg": {
-    "name": ["Egg", "Eggs"],
+    "name": [
+      "Egg",
+      "Eggs"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -148,7 +277,11 @@
     "layer": 9,
     "tuning": {
       "size": 8,
-      "color": [255, 200, 100]
+      "color": [
+        255,
+        200,
+        100
+      ]
     },
     "allegiance": "enemy",
     "body": "egg",
@@ -157,14 +290,29 @@
       "bouncesOffWalls": {},
       "ramsShip": {},
       "shovedByShots": {},
-      "takesHits": {"hitPoints": 2},
-      "grows": {"to": 24, "rateMin": 0.01, "rateMax": 0.04, "hitPointsGrown": 4},
-      "hatches": {"into": "baby", "countMin": 1, "countMax": 3, "spread": 60},
+      "takesHits": {
+        "hitPoints": 2
+      },
+      "grows": {
+        "to": 24,
+        "rateMin": 0.01,
+        "rateMax": 0.04,
+        "hitPointsGrown": 4
+      },
+      "hatches": {
+        "into": "baby",
+        "countMin": 1,
+        "countMax": 3,
+        "spread": 60
+      },
       "dropsPickup": {}
     }
   },
   "anemone": {
-    "name": ["Anemone", "Anemones"],
+    "name": [
+      "Anemone",
+      "Anemones"
+    ],
     "anchored": true,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -174,23 +322,44 @@
       "size": 14,
       "firstLevel": 7,
       "maxCoverage": 0.4,
-      "color": [255, 110, 170],
-      "tipColor": [90, 230, 210]
+      "color": [
+        255,
+        110,
+        170
+      ],
+      "tipColor": [
+        90,
+        230,
+        210
+      ]
     },
     "allegiance": "enemy",
     "body": "anemone",
     "traits": {
       "anchored": {},
-      "flinchesWhenHit": {"frames": 90},
+      "flinchesWhenHit": {
+        "frames": 90
+      },
       "ramsShip": {},
-      "flingsShip": {"speed": 5.0, "releaseFrames": 60},
-      "pullsShip": {"reachCells": 3.5, "strength": 0.8},
-      "takesHits": {"hitPoints": 4},
+      "flingsShip": {
+        "speed": 5.0,
+        "releaseFrames": 60
+      },
+      "pullsShip": {
+        "reachCells": 3.5,
+        "strength": 0.8
+      },
+      "takesHits": {
+        "hitPoints": 4
+      },
       "dropsPickup": {}
     }
   },
   "split_boss": {
-    "name": ["Squiddler Boss", "Squiddler Bosses"],
+    "name": [
+      "Squiddler Boss",
+      "Squiddler Bosses"
+    ],
     "anchored": false,
     "replaysPlayer": true,
     "parWeight": "spawningBoss",
@@ -203,16 +372,31 @@
     "body": "squid",
     "traits": {
       "replaysPlayer": {},
-      "thrusters": {"speedShare": 0.3},
+      "thrusters": {
+        "speedShare": 0.3
+      },
       "ramsShip": {},
-      "gun": {"strengthLevel": 1, "startsLoaded": true},
-      "takesHits": {"hitPoints": 8},
-      "splitsOnDeath": {"into": "baby", "count": 6, "spread": 80, "speed": 2.0},
+      "gun": {
+        "strengthLevel": 1,
+        "startsLoaded": true
+      },
+      "takesHits": {
+        "hitPoints": 8
+      },
+      "splitsOnDeath": {
+        "into": "baby",
+        "count": 6,
+        "spread": 80,
+        "speed": 2.0
+      },
       "dropsPickup": {}
     }
   },
   "mother_boss": {
-    "name": ["Mother", "Mothers"],
+    "name": [
+      "Mother",
+      "Mothers"
+    ],
     "anchored": false,
     "replaysPlayer": true,
     "parWeight": "spawningBoss",
@@ -228,18 +412,43 @@
     "body": "squid",
     "traits": {
       "replaysPlayer": {},
-      "thrusters": {"speedShare": 0.15},
+      "thrusters": {
+        "speedShare": 0.15
+      },
       "ramsShip": {},
-      "gun": {"strengthLevel": 1, "startsLoaded": true, "shotSpeed": 1.6, "impact": 1.4,
-              "glowColor": [255, 160, 100], "glowRadius": 1.8, "glowIntensity": 0.65},
-      "takesHits": {"hitPoints": 20},
-      "laysEggs": {"interval": 180},
-      "splitsOnDeath": {"into": "baby", "count": 6, "spread": 80, "speed": 2.0},
+      "gun": {
+        "strengthLevel": 1,
+        "startsLoaded": true,
+        "shotSpeed": 1.6,
+        "impact": 1.4,
+        "glowColor": [
+          255,
+          160,
+          100
+        ],
+        "glowRadius": 1.8,
+        "glowIntensity": 0.65
+      },
+      "takesHits": {
+        "hitPoints": 20
+      },
+      "laysEggs": {
+        "interval": 180
+      },
+      "splitsOnDeath": {
+        "into": "baby",
+        "count": 6,
+        "spread": 80,
+        "speed": 2.0
+      },
       "dropsPickup": {}
     }
   },
   "rules_hunter": {
-    "name": ["Terminator", "Terminators"],
+    "name": [
+      "Terminator",
+      "Terminators"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -247,28 +456,67 @@
     "layer": 7,
     "tuning": {
       "size": 8,
-      "color": [255, 90, 90],
-      "fill": [110, 25, 25],
-      "noseColor": [255, 215, 200],
-      "cockpitColor": [60, 10, 10],
-      "engineColor": [170, 60, 20],
-      "engineLitColor": [255, 150, 80],
+      "color": [
+        255,
+        90,
+        90
+      ],
+      "fill": [
+        110,
+        25,
+        25
+      ],
+      "noseColor": [
+        255,
+        215,
+        200
+      ],
+      "cockpitColor": [
+        60,
+        10,
+        10
+      ],
+      "engineColor": [
+        170,
+        60,
+        20
+      ],
+      "engineLitColor": [
+        255,
+        150,
+        80
+      ],
       "showsHitPoints": false
     },
     "allegiance": "enemy",
     "body": "hunterShip",
     "traits": {
-      "pilot": {"mode": "rules"},
+      "pilot": {
+        "mode": "rules"
+      },
       "energy": {},
-      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "thrusters": {
+        "speedShare": 1,
+        "mode": "hunter"
+      },
       "burstFire": {},
-      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true,
+        "shotStrength": 1
+      },
       "ramsShip": {},
-      "takesHits": {"hitPoints": 12}
+      "takesHits": {
+        "hitPoints": 12
+      }
     }
   },
   "neural_hunter": {
-    "name": ["Viber", "Vibers"],
+    "name": [
+      "Viber",
+      "Vibers"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -276,28 +524,67 @@
     "layer": 7,
     "tuning": {
       "size": 8,
-      "color": [255, 90, 230],
-      "fill": [100, 20, 95],
-      "noseColor": [255, 210, 245],
-      "cockpitColor": [55, 10, 50],
-      "engineColor": [170, 50, 140],
-      "engineLitColor": [255, 140, 230],
+      "color": [
+        255,
+        90,
+        230
+      ],
+      "fill": [
+        100,
+        20,
+        95
+      ],
+      "noseColor": [
+        255,
+        210,
+        245
+      ],
+      "cockpitColor": [
+        55,
+        10,
+        50
+      ],
+      "engineColor": [
+        170,
+        50,
+        140
+      ],
+      "engineLitColor": [
+        255,
+        140,
+        230
+      ],
       "showsHitPoints": false
     },
     "allegiance": "enemy",
     "body": "hunterShip",
     "traits": {
-      "pilot": {"mode": "neural"},
+      "pilot": {
+        "mode": "neural"
+      },
       "energy": {},
-      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "thrusters": {
+        "speedShare": 1,
+        "mode": "hunter"
+      },
       "burstFire": {},
-      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true,
+        "shotStrength": 1
+      },
       "ramsShip": {},
-      "takesHits": {"hitPoints": 12}
+      "takesHits": {
+        "hitPoints": 12
+      }
     }
   },
   "boss_viber": {
-    "name": ["Boss Viber", "Boss Vibers"],
+    "name": [
+      "Boss Viber",
+      "Boss Vibers"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -305,57 +592,135 @@
     "layer": 7,
     "tuning": {
       "size": 16,
-      "color": [255, 90, 230],
-      "fill": [100, 20, 95],
-      "noseColor": [255, 210, 245],
-      "cockpitColor": [55, 10, 50],
-      "engineColor": [170, 50, 140],
-      "engineLitColor": [255, 140, 230],
+      "color": [
+        255,
+        90,
+        230
+      ],
+      "fill": [
+        100,
+        20,
+        95
+      ],
+      "noseColor": [
+        255,
+        210,
+        245
+      ],
+      "cockpitColor": [
+        55,
+        10,
+        50
+      ],
+      "engineColor": [
+        170,
+        50,
+        140
+      ],
+      "engineLitColor": [
+        255,
+        140,
+        230
+      ],
       "showsHitPoints": true
     },
     "allegiance": "enemy",
     "body": "hunterShip",
     "traits": {
-      "pilot": {"mode": "neural"},
+      "pilot": {
+        "mode": "neural"
+      },
       "energy": {},
-      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "thrusters": {
+        "speedShare": 1,
+        "mode": "hunter"
+      },
       "burstFire": {},
-      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 1},
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true,
+        "shotStrength": 1
+      },
       "ramsShip": {},
-      "takesHits": {"hitPoints": 24}
+      "takesHits": {
+        "hitPoints": 24
+      }
     }
   },
   "vibelet": {
-    "name": ["Vibelet", "Vibelets"],
+    "name": [
+      "Vibelet",
+      "Vibelets"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
     "spawnRadius": 0,
     "layer": 7,
     "tuning": {
-      "size": 4,
-      "color": [255, 90, 230],
-      "fill": [100, 20, 95],
-      "noseColor": [255, 210, 245],
-      "cockpitColor": [55, 10, 50],
-      "engineColor": [170, 50, 140],
-      "engineLitColor": [255, 140, 230],
+      "size": 4.5,
+      "color": [
+        255,
+        90,
+        230
+      ],
+      "fill": [
+        100,
+        20,
+        95
+      ],
+      "noseColor": [
+        255,
+        210,
+        245
+      ],
+      "cockpitColor": [
+        55,
+        10,
+        50
+      ],
+      "engineColor": [
+        170,
+        50,
+        140
+      ],
+      "engineLitColor": [
+        255,
+        140,
+        230
+      ],
       "showsHitPoints": false
     },
     "allegiance": "enemy",
     "body": "hunterShip",
     "traits": {
-      "pilot": {"mode": "neural"},
+      "pilot": {
+        "mode": "neural"
+      },
       "energy": {},
-      "thrusters": {"speedShare": 1, "mode": "hunter"},
+      "thrusters": {
+        "speedShare": 0.3,
+        "mode": "hunter"
+      },
       "burstFire": {},
-      "gun": {"cadence": "burst", "aimMode": "nose", "upgrades": true, "shotStrength": 0.1},
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true,
+        "shotStrength": 0.1
+      },
       "ramsShip": {},
-      "takesHits": {"hitPoints": 1}
+      "takesHits": {
+        "hitPoints": 1
+      }
     }
   },
   "baby": {
-    "name": ["Squidlet", "Squidlets"],
+    "name": [
+      "Squidlet",
+      "Squidlets"
+    ],
     "anchored": false,
     "replaysPlayer": true,
     "parWeight": "enemy",
@@ -368,15 +733,25 @@
     "body": "squid",
     "traits": {
       "replaysPlayer": {},
-      "thrusters": {"speedShare": 0.5},
+      "thrusters": {
+        "speedShare": 0.5
+      },
       "ramsShip": {},
-      "gun": {"strengthLevel": 1, "startsLoaded": true},
-      "takesHits": {"hitPoints": 1},
+      "gun": {
+        "strengthLevel": 1,
+        "startsLoaded": true
+      },
+      "takesHits": {
+        "hitPoints": 1
+      },
       "dropsPickup": {}
     }
   },
   "belemnite": {
-    "name": ["Belemnite", "Belemnites"],
+    "name": [
+      "Belemnite",
+      "Belemnites"
+    ],
     "anchored": false,
     "replaysPlayer": false,
     "parWeight": "enemy",
@@ -389,13 +764,30 @@
     "body": "belemnite",
     "traits": {
       "chase": {},
-      "drift": {"speed": "aggressive_speed"},
+      "drift": {
+        "speed": "aggressive_speed"
+      },
       "bouncesOffWalls": {},
       "ramsShip": {},
-      "takesHits": {"hitPoints": 3},
+      "takesHits": {
+        "hitPoints": 3
+      },
       "dropsPickup": {},
-      "explodes": {"reach": 7.0, "damage": 3, "push": 7.0, "wallHits": 1, "fuse": 8.0, "color": [240, 120, 60]},
-      "keepsApart": {"crowd": "chasers"}
+      "explodes": {
+        "reach": 7.0,
+        "damage": 3,
+        "push": 7.0,
+        "wallHits": 1,
+        "fuse": 8.0,
+        "color": [
+          240,
+          120,
+          60
+        ]
+      },
+      "keepsApart": {
+        "crowd": "chasers"
+      }
     }
   },
   "allied_hunter": {

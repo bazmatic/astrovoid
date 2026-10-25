@@ -180,7 +180,7 @@ class FlighthouseBody:
         """
 
         alert = self.alert_level
-        base_color = config.FLIGHTHOUSE_ENEMY_COLOR
+        base_color = tuple(self._creature.kind.tuning['color'])
         center = (int(self.x), int(self.y))
         angle_rad = angle_to_radians(self.angle)
         cos_angle = math.cos(angle_rad)
@@ -237,7 +237,7 @@ class FlighthouseBody:
     def draw_death(self, screen: pygame.Surface, creature) -> None:
         """Sputter out the beam, scatter the base and collapse the lamp."""
         progress = creature.death_progress
-        color = config.FLIGHTHOUSE_ENEMY_COLOR
+        color = tuple(self._creature.kind.tuning['color'])
         # A short, flickering last sweep; the dead scanner never tracks or spawns.
         beam_strength = max(0.0, 1.0 - progress / 0.3)
         if int(progress * 40) % 2 == 0:

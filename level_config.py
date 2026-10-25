@@ -121,7 +121,7 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         return EnemyCounts(total=counts['static'] + counts['patrol'] + counts['aggressive'],
                            static=counts['static'], patrol=counts['patrol'], aggressive=counts['aggressive'],
                            replay=counts['replay'], flocker=counts['flocker'], flighthouse=counts['flighthouse'],
-                           egg=counts['egg'], anemone=counts['anemone'])
+                           egg=counts['egg'], anemone=counts['anemone'], vibehouse=counts['vibehouse'])
     config = load_level_config(level)
     if not config or 'enemies' not in config:
         return None
@@ -152,7 +152,8 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
         flocker=flocker,
         flighthouse=flighthouse,
         egg=egg,
-        anemone=anemone
+        anemone=anemone,
+        vibehouse=enemies_config.get('vibehouse', 0)
     )
 
 

@@ -248,12 +248,12 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     game.level, game.state = level, config.STATE_PLAYING
     # A Rules hunter's pilot answers synchronously on the episode clock, like the hunter's own
     game._rules_worker_factory = lambda: SyncWorker(params, clock)
-    from weapons.catalog import RULESET, LEGACY_RULESET, CATALOG, WeaponCatalog, WeaponDefinition
-    if combat_ruleset not in (RULESET, LEGACY_RULESET):
+    from weapons.catalog import PICKUP_RULESETS, LEGACY_RULESET, default_catalog, WeaponCatalog, WeaponDefinition
+    if combat_ruleset not in (*PICKUP_RULESETS, LEGACY_RULESET):
         raise ValueError('unknown combat ruleset')
     game.combat_ruleset = combat_ruleset
     game.weapon_catalog = (WeaponCatalog(WeaponDefinition(**d) for d in weapon_tuning)
-                           if weapon_tuning else CATALOG)
+                           if weapon_tuning else default_catalog(combat_ruleset))
     game.start_level(maze_seed=seed if random_maze else None)
     random.seed(seed)
     game.player_has_moved = True

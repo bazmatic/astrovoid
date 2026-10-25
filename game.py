@@ -320,11 +320,15 @@ class Game:
         
         # Create ship at start position
         self.ship = Ship(self.maze.start_pos)
-        from weapons import EquippedWeapon, RULESET, CATALOG
-        if getattr(self, 'combat_ruleset', 'legacy') == RULESET:
-            self.ship.weapon = EquippedWeapon(getattr(self, "weapon_catalog", CATALOG))
+        from weapons import EquippedWeapon, WeaponInventory, RULESET
+        from weapons.catalog import PICKUP_RULESETS, default_catalog
+        ruleset = getattr(self, 'combat_ruleset', 'legacy')
+        catalog = getattr(self, 'weapon_catalog', None) or default_catalog(ruleset)
+        if ruleset in PICKUP_RULESETS:
+            state_type = WeaponInventory if ruleset == RULESET else EquippedWeapon
+            self.ship.weapon = state_type(catalog)
         self.collision_handler.combat_ruleset = getattr(self, 'combat_ruleset', 'legacy')
-        self.collision_handler.weapon_catalog = getattr(self, 'weapon_catalog', CATALOG)
+        self.collision_handler.weapon_catalog = catalog
         data = level_config.load_level_config(self.level) or {}
         self.collision_handler.weapon_allowlist = data.get('weapons')
         self.ship.observer = config.observer_mode_enabled()
@@ -359,7 +363,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + level_config.get_level_belemnite_count(self.level) + 5,  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.vibehouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + level_config.get_level_belemnite_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
         # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
@@ -665,11 +669,15 @@ class Game:
         self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize)
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
         self.ship = Ship(self.maze.start_pos)
-        from weapons import EquippedWeapon, RULESET, CATALOG
-        if getattr(self, 'combat_ruleset', 'legacy') == RULESET:
-            self.ship.weapon = EquippedWeapon(getattr(self, "weapon_catalog", CATALOG))
+        from weapons import EquippedWeapon, WeaponInventory, RULESET
+        from weapons.catalog import PICKUP_RULESETS, default_catalog
+        ruleset = getattr(self, 'combat_ruleset', 'legacy')
+        catalog = getattr(self, 'weapon_catalog', None) or default_catalog(ruleset)
+        if ruleset in PICKUP_RULESETS:
+            state_type = WeaponInventory if ruleset == RULESET else EquippedWeapon
+            self.ship.weapon = state_type(catalog)
         self.collision_handler.combat_ruleset = getattr(self, 'combat_ruleset', 'legacy')
-        self.collision_handler.weapon_catalog = getattr(self, 'weapon_catalog', CATALOG)
+        self.collision_handler.weapon_catalog = catalog
         data = level_config.load_level_config(self.level) or {}
         self.collision_handler.weapon_allowlist = data.get('weapons')    # the hidden spectator: only here so spawns keep clear of it
         self.projectiles = []
@@ -917,23 +925,17 @@ class Game:
                 CommandType.ROTATE_RIGHT
             )]
         
-        # Handle shield activation (only active while button is held down)
-        # Shield is active only while DOWN/S is pressed OR controller shield button (not a toggle)
-        shield_key_pressed = keys[pygame.K_DOWN] or keys[pygame.K_s]
-        shield_controller_pressed = self.input_handler.is_controller_shield_pressed()
-        shield_pressed = shield_key_pressed or shield_controller_pressed
-        
-        # Only allow manual shield control after initial activation period
-        if self.ship.shield_initial_timer <= 0:
-            if shield_pressed:
-                # Key/button is held - activate shield
-                if not self.ship.is_shield_active():
-                    self.ship.shield_active = True
-            else:
-                # Key/button is not held - deactivate shield
-                if self.ship.is_shield_active():
-                    self.ship.shield_active = False
-        
+        # Down/S (or controller A) advances once per press in inventory games.
+        cycle_pressed = (keys[pygame.K_DOWN] or keys[pygame.K_s]
+                         or self.input_handler.is_controller_shield_pressed())
+        from weapons import WeaponInventory
+        inventory = isinstance(self.ship.weapon, WeaponInventory)
+        if inventory:
+            self.ship.cycle_weapon(cycle_pressed and not should_filter_commands
+                                   and self.autoplay is None)
+        elif self.ship.shield_initial_timer <= 0:
+            self.ship.shield_active = bool(cycle_pressed)
+
         # Handle fire separately (has rate limiting)
         # Check both keyboard and controller for fire input
         # Ignore fire input during ignore period OR if SPACE was pressed at start and still pressed
@@ -968,13 +970,15 @@ class Game:
                 self.ship.game_started = True  # Allow shield timer to countdown
         
         # Execute movement commands on ship and record them
-        # Filter out shield command since it's handled separately above
+        # Down/S is handled above as cycling (or shielding in historical rules).
         for cmd in commands:
             if cmd == CommandType.ACTIVATE_SHIELD:
-                continue  # Shield already handled above
+                continue
             self._execute_ship_command(cmd)
             self.command_recorder.record_command(cmd)
         
+        if inventory and not fire_pressed:
+            self.ship.weapon.release_trigger()
         if fire_pressed:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0

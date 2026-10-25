@@ -268,6 +268,7 @@ class PowerupSettings:
     beyondLevel3: PowerupBeyondLevel3
     rotationSpeedMultiplier: float
     inflationDurationSeconds: float = 5.0
+    shieldDurationSeconds: float = 10.0
     inflationSizeMultiplier: float = 5.0
 
 
@@ -472,6 +473,7 @@ def load_settings() -> Settings:
         ,
         rotationSpeedMultiplier=powerup_raw["rotationSpeedMultiplier"],
         inflationDurationSeconds=powerup_raw.get("inflationDurationSeconds", 5.0),
+        shieldDurationSeconds=powerup_raw.get("shieldDurationSeconds", 10.0),
         inflationSizeMultiplier=powerup_raw.get("inflationSizeMultiplier", 5.0)
     )
 

@@ -28,7 +28,7 @@ from rendering.fonts import get_font
 from rendering.menu_components import (TEXT_DIM, TEXT_LABEL, AnimatedBackground, build_menu_backdrop, build_panel,
                                        build_panel_glow, menu_scale, render_hint_row, render_pill, render_title)
 
-LEVELS_SHOWN = 30
+LEVELS_SHOWN = 31
 REPEAT_DELAY = 0.25          # seconds a cursor key is held before it repeats
 REPEAT_INTERVAL = 0.05
 FLASH_SECONDS = 2.0
@@ -39,7 +39,7 @@ LABELS = {'wall': 'Wall', 'strong_wall': 'Strong wall', **{kind: enemy_kinds.nam
 
 # The chip beside each palette entry, in the colours the things have in play
 CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
-         'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'egg': (240, 220, 200),
+         'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'vibehouse': (255, 90, 230), 'egg': (240, 220, 200),
          'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
          'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
          'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'baby': (215, 170, 255), 'belemnite': (240, 120, 60), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),

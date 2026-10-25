@@ -5,7 +5,7 @@ A skill-based space navigation game built with Pygame. Navigate procedurally-gen
 ## Features
 
 - **Momentum-Based Physics**: Zero-G flight mechanics with realistic momentum and low friction
-- **Procedural Maze Generation**: Each level features a unique procedurally-generated maze. Levels are deterministic - each level number always generates the same maze layout
+- **Procedural Maze Generation**: Generated levels use connected, aligned corridors and continuous walls, with a few alternate routes for flanking. Higher complexity adds more turns and junctions, while passages retain space to fly. A given seed reproduces the same layout; training can vary the seed between episodes.
 - **Multiple Enemy Types**:
   - Static enemies that remain stationary (but move when hit by projectiles)
   - Patrol enemies that move in straight lines
@@ -194,12 +194,12 @@ A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squi
 
 ### Resources
 
-- **Power / fuel**: Movement, shielding, hits, and time retain their existing costs.
+- **Power / fuel**: Movement, hits, and time retain their existing costs. The collectible shield uses its own charge instead of fuel.
 - **Weapon ammunition**: The basic gun is unlimited. Special weapons have their own finite ammo supply; emptying one returns you to basic.
 
 ### Weapon Pickups
 
-Destroyed enemies can leave a weapon pickup. Flying near one pulls it in; touching it immediately replaces your current weapon and discards its remaining ammo. Collecting the same weapon gives a fresh supply, never stacks. Pickups disappear after six seconds, fading during the last two. Equipped weapons have no expiry timer.
+Destroyed enemies can leave a weapon pickup. Flying near one pulls it in; touching it adds that weapon to your inventory and selects it. Other weapons keep their remaining ammo. Press **Down / S** (controller **A**) to select the next loaded weapon. Empty weapons remain visible and are skipped when cycling; collecting that weapon again refills its slot without adding a duplicate. Collecting a partially used weapon also refills it to capacity. Pickups disappear after six seconds, fading during the last two. Equipped weapons have no expiry timer.
 
 | Weapon | Behaviour | Ammo per pickup |
 |---|---|---:|
@@ -209,8 +209,11 @@ Destroyed enemies can leave a weapon pickup. Flying near one pulls it in; touchi
 | Seeker | Green missiles with bounded homing toward visible enemies | 18 missiles |
 | The Inflator | Pink balloons make creatures enormous; any follow-up hit pops them | 18 shots |
 | Grenade Launcher | Bouncing fused shells; shared Belemnite explosions | 10 grenades |
+| Shield | Fire toggles protection; charge drains only while active | 10 seconds |
 
-Grenades detonate when an enemy comes within 28 pixels of their proximity sensor (measured from the enemy hull), on contact, or after 1.2 seconds. Walls block the proximity sensor. Their blasts can hurt you and your ally, destroy walls, and start Belemnite chain reactions. Distinct symbols identify weapons as well as colours. The HUD shows the equipped weapon and remaining volleys/shots. A new level starts with basic; swapping weapons cannot bypass the current firing cooldown.
+Grenades detonate when an enemy comes within 28 pixels of their proximity sensor (measured from the enemy hull), on contact, or after 1.2 seconds. Walls block the proximity sensor. Their blasts can hurt you and your ally, destroy walls, and start Belemnite chain reactions. Distinct symbols identify weapons as well as colours. The HUD highlights the selected weapon and shows every owned weapon’s ammo, including empty slots. Hold Fire to shoot; with Shield selected, press Fire once to turn protection on and again to turn it off. Switching weapons turns the shield off and preserves its charge. Shield depletion returns you to basic. Set `powerups.shieldDurationSeconds` in `config/settings.json` to tune its capacity. Normal level-start protection still applies.
+
+Each level and retry starts fresh with only the basic gun. Swapping weapons cannot bypass the current firing cooldown.
 
 Weapon tuning and drop weights live in `weapons/catalog.py`; optional level `weapons` lists restrict drops to named special weapon IDs. Drop chance remains under `powerups.crystalSpawnChance` in `config/settings.json`. Old ammo policies and timed upgrade settings apply only to legacy training/replays. New training runs record the weapon ruleset and tuning; resumed historical runs keep their recorded combat rules.
 

@@ -92,9 +92,9 @@ class CollisionHandler:
             powerup_crystals.append(JevBeacon(pos))
             self.sound_manager.play_beacon_arrival()
         elif random.random() < config.POWERUP_CRYSTAL_SPAWN_CHANCE:
-            from weapons.catalog import CATALOG, RULESET
+            from weapons.catalog import CATALOG, PICKUP_RULESETS
             catalog = getattr(self, 'weapon_catalog', CATALOG)
-            weapon_id = catalog.choose_drop(random, getattr(self, 'weapon_allowlist', None)) if getattr(self, 'combat_ruleset', 'legacy') == RULESET else None
+            weapon_id = catalog.choose_drop(random, getattr(self, 'weapon_allowlist', None)) if getattr(self, 'combat_ruleset', 'legacy') in PICKUP_RULESETS else None
             powerup_crystals.append(PowerupCrystal(pos, weapon_id, catalog))
 
     def handle_projectile_ship_collision(

@@ -136,9 +136,9 @@ class Gun(Trait):
             c.gun_cooldown = 0.0
         c.just_fired = False
         c.shots_fired = 0
-        from weapons.catalog import RULESET
+        from weapons.catalog import PICKUP_RULESETS
         c.nonstacking_powerups = (self.upgrades
-                                 and getattr(enc.world, 'combat_ruleset', 'legacy') == RULESET)
+                                 and getattr(enc.world, 'combat_ruleset', 'legacy') in PICKUP_RULESETS)
         if self.upgrades:
             c.gun_upgrade_level = 0
             c.upgrade_remaining = 0.0

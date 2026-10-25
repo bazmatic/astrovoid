@@ -23,11 +23,23 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
 - **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
 - **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
+- **vibehouse**: a pink Flighthouse variant that launches Neural-piloted Vibelets when its searchlight sees the player or an ally. It has five hit points and uses the Flighthouse launch cadence. Add it through the editor or an `enemies.vibehouse` count.
 - **rules_hunter**: Rules hunters on the level (the Rules pilot's hunter ship as an enemy, hostile only to the player). A level with one is a boss level. Level 25 has one.
 - **neural_hunter**: Neural hunters on the level (the neural pilot's hunter ship as an enemy, in magenta, hostile only to the player). Like the Rules hunter it takes 12 hits and makes a boss level. Without an installed neural model (`assets/neural/hunter.npz`) the level starts without it.
 - **belemnite**: Belemnites on the level: spiky squids in pointed shells that chase the player as Jellies do, never overlapping one another. They have no guns, take 3 hits, and explode when they die, hurting the player, the hunter, nearby walls and other enemies (so one can set off the next).
 - **hunter**: `false` forbids an ally. `{"earned": true}` allows enemy kills to drop a beacon only after 65% of the starting enemies have been defeated (at least four kills). The usual 3% drop chance still applies after that threshold. No beacon starts on an earned level. An explicit `{"spawn_cell": [col, row]}` remains available for custom encounters.
 - **layout**: an exact, hand-made level, written by the level editor (see the main README). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
+
+Generated mazes carve a connected network of broad corridors with continuous wall runs.
+Complexity controls corridor density and the number of alternate routes; openings stay
+at least roughly 70 pixels wide where the arena size allows. Corner rooms connect to
+the same network as the rest of the maze. Seeds reproduce layouts, and training can
+supply a different seed for each episode. Exact `layout` maps keep their authored geometry.
+
+Level 31 introduces a Vibehouse in a central courtyard, with four offset entrances,
+short walls for searchlight cover, and outer approach lanes. Two Crabs, two Flockers,
+and two Belemnites guard the approaches. Destroy the Vibehouse to open the exit;
+ammo is unlimited, and there are no gates or allied beacons.
 
 ```json
 "layout": {
@@ -45,7 +57,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 
   **gates** (optional): each is a plank on a pin at the centre of `cell`. `angle` is in degrees clockwise on screen, a multiple of 45 from 0 up to but not including 180 (default 0, horizontal). `motor` is `"cw"` or `"ccw"` for a motor gate, and left out for a free gate. A gate may not share a cell with a wall, the start, the exit, the beacon, an enemy or another gate, and its plank (three cells long, so it covers its own cell and the one either side) may not cross a wall, leave the interior, cover the start, the exit, an anemone or a flighthouse, or share a cell with, cross or touch another gate's plank (planks that overlap would creep at rest); a layout that breaks this is ignored. Cells are not square on screen, so the game also measures each plank in pixels when the level starts: a gate whose plank would touch a wall or another plank there is left out (with a warning in the log). The level editor makes the same check on its own screen, so a gate placed there fits screens of that shape. A gate that doesn't fit the editor's screen (from a level saved on another screen, or written by hand) doesn't stop other edits; the cursor says "doesn't fit" over it, and R turns it to an angle that does.
 
-  Cells are `[col, row]`; the border ring is always wall. Types: static, patrol, aggressive, replay, flocker, flighthouse, egg, anemone, split_boss, mother_boss, rules_hunter, neural_hunter, boss_viber, vibelet, belemnite. The editor does not check that the exit can be reached. A file the editor creates for a level that had none carries `"created_by_editor": true`, so reverting deletes it again.
+  Cells are `[col, row]`; the border ring is always wall. Types: static, patrol, aggressive, replay, flocker, flighthouse, vibehouse, egg, anemone, split_boss, mother_boss, rules_hunter, neural_hunter, boss_viber, vibelet, belemnite. The editor does not check that the exit can be reached. A file the editor creates for a level that had none carries `"created_by_editor": true`, so reverting deletes it again.
 
 ## Boss levels
 
