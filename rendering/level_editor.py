@@ -332,7 +332,9 @@ class LevelEditor:
         if self._preview is not None and key == self._preview_key:
             return self._preview
         layout = model.to_layout()
-        maze = Maze(model.level, complexity=MazeComplexity.EMPTY, grid_size=model.grid_size, layout=layout)
+        # The level's seed, so the cave rock bulges as it will in play
+        maze = Maze(model.level, complexity=MazeComplexity.EMPTY, grid_size=model.grid_size, layout=layout,
+                    seed=level_config.get_level_seed(model.level))
         centre = maze.position_calculator.grid_center_to_screen
         recorder = CommandRecorder()
         sprites = []

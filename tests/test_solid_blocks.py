@@ -13,8 +13,11 @@ GRID = 10
 
 
 def maze_with(*cells):
-    """An empty maze with wall blocks added at the given grid cells."""
-    maze = Maze(1, MazeComplexity.EMPTY, GRID)
+    """An empty maze with wall blocks added at the given grid cells.
+
+    Square walls (curved=False): these tests pin the square faces, their counts and coordinates, and
+    the square renderer's wounds and repaints."""
+    maze = Maze(1, MazeComplexity.EMPTY, GRID, curved=False)
     for x, y in cells:
         maze.grid[y][x] = 1
     maze.rebuild_walls()
@@ -63,7 +66,7 @@ class TestFaces:
         assert (4, 4) in maze.blocks
 
     def test_every_wall_is_a_face_of_a_block(self):
-        maze = Maze(5, MazeComplexity.NORMAL, GRID)
+        maze = Maze(5, MazeComplexity.NORMAL, GRID, curved=False)
         assert maze.walls
         assert all(wall.cell in maze.blocks for wall in maze.walls)
 

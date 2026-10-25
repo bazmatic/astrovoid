@@ -17,6 +17,7 @@ from maze.wall_segment import WallSegment
 from maze.config import MazeComplexity, MazeGenerationConfig, MazeComplexityPresets
 from maze.positioning import MazePositionCalculator
 from maze.converter import GridToWallsConverter, SIDES
+from maze.cave import CaveShape
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
 from rendering.wall_renderer import WallRenderer
@@ -143,7 +144,8 @@ class RecursiveBacktrackingGenerator:
 class Maze:
     """Procedurally generated maze."""
     
-    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0, layout=None):
+    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0, layout=None,
+                 seed: Optional[int] = None, curved: Optional[bool] = None):
         """Generate a maze for the given level.
         
         Args:
@@ -151,8 +153,14 @@ class Maze:
             complexity: Optional maze complexity level. If None, calculated from level.
             grid_size: Grid size (width/height in cells). Always provided by level_config.get_maze_grid_size().
             layout: A level_layout.Layout to build the maze from instead of generating one (optional).
+            seed: Seed for the cave rock's bulges (the level number if None). The global random is not used.
+            curved: Curved cave walls (config.CAVE.enabled if None); False keeps the square block faces.
         """
         self.level = level
+        self.curved = config.CAVE.enabled if curved is None else curved
+        self.cave_seed = level if seed is None else seed
+        self.layout = layout
+        self.cave: Optional[CaveShape] = None
         
         # Determine complexity
         if complexity is None:
@@ -230,15 +238,33 @@ class Maze:
         """Check if player reached the exit."""
         return self.exit.check_circle_collision(pos, radius)
     
+    def _gate_keep_clear(self) -> List[Tuple[Tuple[float, float], float]]:
+        """Circles the cave rock must stay out of: each gate's swing, with a little room to spare."""
+        if self.layout is None or not self.layout.gates:
+            return []
+        from physics.obstacle_world import plank_size  # here, not at the top: obstacle_world imports this module
+        half, thickness = plank_size(self)
+        radius = half + thickness / 2 + 2
+        return [(self.position_calculator.grid_center_to_screen(*gate.cell), radius) for gate in self.layout.gates]
+
     def rebuild_walls(self) -> None:
         """Build the blocks, their exposed faces and the collision index from the grid."""
-        self.walls = self.converter.convert(self.grid)
         # Hit points left in each wall block, keyed by grid cell (x, y). A
         # block is solid rock: shots at any of its faces wear down the block
         self.blocks: Dict[Tuple[int, int], int] = {
             (x, y): config.WALL_HIT_POINTS
             for y, row in enumerate(self.grid) for x, value in enumerate(row) if value == 1
         }
+        if self.curved:
+            # Curved rock: many short segments per block, each knowing the block it damages
+            self.cave = CaveShape(
+                self.grid, self.position_calculator, self.converter, strong=self.strong_cells,
+                keep_clear=self._gate_keep_clear(), seed=self.cave_seed, settings=config.CAVE,
+                hit_points=lambda cell: self.blocks.get(cell, config.WALL_HIT_POINTS))
+            self.walls = self.cave.segments()
+        else:
+            self.cave = None
+            self.walls = self.converter.convert(self.grid)
         # Screen areas of the outer ring's blocks, which wear down but are never destroyed
         self.unbreakable_blocks = frozenset(
             self.converter.cell_rect(x, y) for x, y in self.blocks if self.converter.on_perimeter(self.grid, x, y)
@@ -285,7 +311,8 @@ class Maze:
         Returns:
             True if the block was destroyed (hit points reached 0), False otherwise.
         """
-        if wall not in self.walls:
+        if not wall.active or wall not in self.walls:
+            # Gone already, perhaps replaced by a segment with the same ends when the rock was rebuilt
             return False
 
         cell = wall.cell
@@ -320,6 +347,9 @@ class Maze:
         self.wounds.pop(cell, None)
         self.wall_debris.destroy(self.converter.cell_rect(*cell))
         self.grid[cell[1]][cell[0]] = 0
+        if self.cave is not None:
+            self._reshape_cave(cell)
+            return True
         for face in faces:
             face.active = False
             self.spatial_grid.update_wall(face)
@@ -335,6 +365,22 @@ class Maze:
         self._refresh_block_fills()
         return True
     
+    def _reshape_cave(self, cell: Tuple[int, int]) -> None:
+        """Rebuild the curved rock around a destroyed block and patch the walls and their index."""
+        removed, added = self.cave.open_cell(cell)
+        # Removed first: a segment whose owner alone changed comes back with the same ends, and the
+        # spatial grid finds walls by their ends, so adding first would let the removal take the new one
+        for segment in removed:
+            segment.active = False
+            self.spatial_grid.update_wall(segment)
+        self.walls = [w for w in self.walls if w.active]
+        for segment in added:
+            segment.hit_points = self.blocks[segment.cell]
+            self.walls.append(segment)
+            self.spatial_grid.add_wall(segment)
+        self.wall_generation += 1
+        self._refresh_block_fills()
+
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100,
                                   start_clearance: Optional[float] = None) -> List[Tuple[float, float]]:
         """Get valid spawn positions for enemies, avoiding walls.
@@ -402,6 +448,8 @@ class Maze:
         """Whether a circle of this radius at pos sits in open space: centre inside the maze and outside every block, touching no wall."""
         cell = (int((pos[0] - self.offset_x) // self.cell_size_x), int((pos[1] - self.offset_y) // self.cell_size_y))
         if not (0 <= cell[0] < self.grid_width and 0 <= cell[1] < self.grid_height) or cell in self.blocks:
+            return False
+        if self.cave is not None and self.cave.is_rock(pos):
             return False
         for wall in self.spatial_grid.get_nearby_walls(pos, radius):
             if wall.active:

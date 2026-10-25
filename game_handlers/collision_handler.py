@@ -202,6 +202,10 @@ class CollisionHandler:
             if circle_line_collision(blast.pos, blast.radius, start, end):
                 faces.setdefault(wall.cell if wall.cell is not None else id(wall), (wall, get_closest_point_on_line(blast.pos, start, end)))
         for wall, impact in faces.values():
+            if not wall.active and wall.cell is not None:
+                # Destroying a block before it rebuilt the curved rock around it: hit the block through
+                # one of its current segments
+                wall = next((w for w in maze.walls if w.cell == wall.cell), wall)
             for _ in range(blast.wall_hits):
                 if maze.damage_wall(wall, impact):
                     break

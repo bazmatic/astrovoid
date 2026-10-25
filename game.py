@@ -314,7 +314,8 @@ class Game:
         
         # Generate maze
         layout = level_config.get_level_layout(self.level)
-        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout)
+        self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout,
+                         seed=seed)
         self.obstacles = ObstacleWorld(self.maze, layout.gates) if layout is not None and layout.gates else None
         self.maze.gate_segments = self.obstacles.segments() if self.obstacles else []
         
@@ -665,8 +666,9 @@ class Game:
             self.state = config.STATE_FUN
             return
         self._close_hunter()
-        random.seed(level_config.get_level_seed(DUEL_MAZE_LEVEL))
-        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize)
+        seed = level_config.get_level_seed(DUEL_MAZE_LEVEL)
+        random.seed(seed)
+        self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize, seed=seed)
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
         self.ship = Ship(self.maze.start_pos)
         from weapons import EquippedWeapon, WeaponInventory, RULESET

@@ -18,7 +18,8 @@ SHORTEST_TIMER = 10
 
 def _empty_maze(level, layout):
     """The maze a layout makes on this screen: the pixels a gate's plank must fit in."""
-    return Maze(level, complexity=MazeComplexity.EMPTY, grid_size=layout.grid_size, layout=layout)
+    # Square walls: only the cells and their pixels matter here, and the cave rock is slow to build
+    return Maze(level, complexity=MazeComplexity.EMPTY, grid_size=layout.grid_size, layout=layout, curved=False)
 
 
 class EditorModel:

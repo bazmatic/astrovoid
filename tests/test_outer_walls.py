@@ -15,7 +15,8 @@ RIM = (0, 4)  # A block in the outer ring
 
 
 def empty_maze():
-    return Maze(1, MazeComplexity.EMPTY, GRID)
+    # Square walls: these tests pin the square rim faces and the square renderer's bites and ridges
+    return Maze(1, MazeComplexity.EMPTY, GRID, curved=False)
 
 
 def rim_face(maze):
@@ -158,7 +159,12 @@ class TestShieldAndWalls:
         assert ship.damaged
 
     def _play(self, game):
-        game.start_level()
+        # Square walls: the check below is against the square inner face of the left outer wall
+        curved, config.CAVE.enabled = config.CAVE.enabled, False
+        try:
+            game.start_level()
+        finally:
+            config.CAVE.enabled = curved
         game.state = config.STATE_PLAYING
         game.game_frozen = game.game_over_active = False
         game.input_handler = Mock(key_mappings={})
