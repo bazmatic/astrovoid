@@ -323,3 +323,27 @@ def test_editor_preview_matches_play(game, monkeypatch, level):  # noqa: F811
     editor._open_level(level)
     preview, _ = editor._preview_scene()
     assert keys(preview.walls) == keys(level_maze(level).walls)
+
+
+def _episode_seconds(monkeypatch, curved, level, horizon, runs=2):
+    from experiments.harness import run_episode
+    monkeypatch.setattr(config.CAVE, 'enabled', curved)
+    best = math.inf
+    for _ in range(runs):
+        began = time.perf_counter()
+        run_episode(level, 0, horizon=horizon)
+        best = min(best, time.perf_counter() - began)
+    return best
+
+
+def test_curved_walls_cost_little_frame_time(monkeypatch):
+    """A crowded level (27, the farming level) plays about as fast on curved rock as on square walls.
+    Relative, best of two short episodes each, at the real screen size the harness plays at."""
+    from experiments import harness
+    try:
+        square = _episode_seconds(monkeypatch, False, 27, 3.0)
+        curved = _episode_seconds(monkeypatch, True, 27, 3.0)
+    finally:
+        harness.reset()  # the harness's Game changes the screen size for the whole process
+    assert curved <= 1.3 * square, (curved, square)
+
