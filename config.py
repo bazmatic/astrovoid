@@ -82,6 +82,24 @@ class MazeComplexityPreset:
 
 
 @dataclass
+class CaveSettings:
+    # Curved cave rock: a blurred, noisy field over the wall cells, traced at 0.5.
+    # Shape tuning is in cell fractions (of sqrt(cell_w*cell_h)), so the curve scales with the cell.
+    enabled: bool = True
+    maxSampleSpacing: float = 6.0  # px between field samples, at most
+    minSamplesPerCell: int = 6
+    blurCells: float = 0.34
+    noiseAmplitude: float = 0.48
+    noiseScalesCells: Tuple[float, ...] = (0.85, 0.35)
+    noiseWeights: Tuple[float, ...] = (1.0, 0.5)
+    # px: the largest corridor-travelling creature radius (replay/Squiddler 15) plus 1
+    clearanceRadius: float = 16.0
+    linkClearance: float = 2.0  # px kept open around every open-cell link
+    wallCoreCells: float = 0.15
+    simplifyTolerance: float = 0.75
+
+
+@dataclass
 class MazeSettings:
     wallThickness: int
     cellSize: Optional[int]
@@ -89,6 +107,7 @@ class MazeSettings:
     wallHitPoints: int
     shipSpawnOffset: float
     complexityPresets: Dict[str, MazeComplexityPreset]
+    cave: CaveSettings = field(default_factory=CaveSettings)
 
 
 @dataclass
@@ -491,7 +510,9 @@ def load_settings() -> Settings:
             minPassageWidth=raw["maze"]["minPassageWidth"],
             wallHitPoints=raw["maze"]["wallHitPoints"],
             shipSpawnOffset=raw["maze"]["shipSpawnOffset"],
-            complexityPresets=_preset_map(raw["maze"]["complexityPresets"])
+            complexityPresets=_preset_map(raw["maze"]["complexityPresets"]),
+            cave=CaveSettings(**{k: tuple(v) if isinstance(v, list) else v
+                                 for k, v in raw["maze"].get("cave", {}).items()}),
         ),
         enemies=EnemySettings(**raw["enemies"]),
         replayEnemy=ReplayEnemySettings(
@@ -636,6 +657,7 @@ CELL_SIZE = SETTINGS.maze.cellSize
 MIN_PASSAGE_WIDTH = SETTINGS.maze.minPassageWidth
 WALL_HIT_POINTS = SETTINGS.maze.wallHitPoints
 SHIP_SPAWN_OFFSET = SETTINGS.maze.shipSpawnOffset
+CAVE = SETTINGS.maze.cave
 
 STATIC_ENEMY_SIZE = enemy_kinds.kind("static").tuning["size"]
 # The larger of the Crab and the Jelly
