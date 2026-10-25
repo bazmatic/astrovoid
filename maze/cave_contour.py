@@ -5,6 +5,7 @@ Marching squares on the sample grid at THRESHOLD. Segments run with rock on the 
 points are interpolated along a sample edge in a fixed direction, so the two tiles sharing an
 edge compute identical points.
 """
+import math
 from typing import Dict, List, Tuple
 
 import numpy as np
@@ -106,35 +107,36 @@ def _chain(segments: Dict[tuple, Tuple[tuple, Point, Point]]) -> List[List[Point
 def _simplify(line: List[Point], tolerance: float) -> List[Point]:
     if tolerance <= 0 or len(line) <= 2:
         return line
-    pts = np.asarray(line)
     if line[0] == line[-1]:
         # A loop: split at the point farthest from its start so both halves have fixed ends
-        far = int(np.argmax(np.hypot(*(pts - pts[0]).T)))
-        keep = _rdp(pts[:far+1], tolerance) + _rdp(pts[far:], tolerance)[1:]
+        x0, y0 = line[0]
+        far = max(range(len(line)), key=lambda i: math.hypot(line[i][0]-x0, line[i][1]-y0))
+        keep = _rdp(line[:far+1], tolerance) + _rdp(line[far:], tolerance)[1:]
     else:
-        keep = _rdp(pts, tolerance)
+        keep = _rdp(line, tolerance)
     return keep
 
 
-def _rdp(pts: np.ndarray, tolerance: float) -> List[Point]:
-    """Ramer-Douglas-Peucker; the end points always stay. Returns tuples of the original floats."""
-    keep = np.zeros(len(pts), bool)
+def _rdp(pts: List[Point], tolerance: float) -> List[Point]:
+    """Ramer-Douglas-Peucker; the end points always stay. Plain Python: the lines are short,
+    so this beats numpy's per-call overhead."""
+    keep = [False]*len(pts)
     keep[0] = keep[-1] = True
     stack = [(0, len(pts)-1)]
     while stack:
         a, b = stack.pop()
         if b - a < 2:
             continue
-        d = pts[b] - pts[a]
-        rel = pts[a+1:b] - pts[a]
-        length = np.hypot(*d)
-        if length == 0:
-            dist = np.hypot(rel[:, 0], rel[:, 1])
-        else:
-            dist = np.abs(d[0]*rel[:, 1] - d[1]*rel[:, 0]) / length
-        i = int(np.argmax(dist))
-        if dist[i] > tolerance:
-            m = a + 1 + i
+        (ax, ay), (bx, by) = pts[a], pts[b]
+        dx, dy = bx - ax, by - ay
+        length = math.hypot(dx, dy)
+        best, m = -1.0, a
+        for i in range(a+1, b):
+            rx, ry = pts[i][0] - ax, pts[i][1] - ay
+            dist = math.hypot(rx, ry) if length == 0 else abs(dx*ry - dy*rx) / length
+            if dist > best:
+                best, m = dist, i
+        if best > tolerance:
             keep[m] = True
             stack += [(a, m), (m, b)]
-    return [(float(x), float(y)) for x, y in pts[keep]]
+    return [(float(x), float(y)) for (x, y), k in zip(pts, keep) if k]

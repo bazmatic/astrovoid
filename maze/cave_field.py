@@ -68,10 +68,14 @@ class SampleGrid:
 
 
 class _Axis:
-    """Per-axis sample bookkeeping (x or y), so 2D work is broadcasting of 1D arrays."""
+    """Per-axis sample bookkeeping (x or y), so 2D work is broadcasting of 1D arrays. It covers
+    samples lo..hi-1 (all of them by default); per-sample arrays and sample indices in
+    touched_runs are relative to lo, cell numbers are the grid's."""
 
-    def __init__(self, count: int, per: int, cells: int, size: float, start: float):
-        index = np.arange(count)
+    def __init__(self, count: int, per: int, cells: int, size: float, start: float,
+                 lo: int = 0, hi: Optional[int] = None):
+        self.args = (count, per, cells, size, start)
+        index = np.arange(lo, count if hi is None else hi)
         self.pos = start + index * (size / per)  # px
         self.cell = np.minimum(index // per, cells-1)  # containing cell, clamped
         self.local = self.pos - (start + self.cell*size)  # px from the containing cell's start
@@ -81,7 +85,10 @@ class _Axis:
         # The cells a sample touches, as (cell per sample, sample indices) runs: every sample's
         # own cell, then the previous cell for samples on a cell border. A cell may be -1 or
         # `cells`, outside the grid.
-        self.touched_runs = ((index // per, index), (border // per - 1, border))
+        self.touched_runs = ((index // per, index - lo), (border // per - 1, border - lo))
+
+    def window(self, lo: int, hi: int) -> '_Axis':
+        return _Axis(*self.args, lo, hi)
 
 
 class CaveField:
@@ -99,6 +106,13 @@ class CaveField:
         self._y = _Axis(rows, samples.per_y, samples.rows, samples.cell_h, samples.origin[1])
         self._unit = math.sqrt(samples.cell_w * samples.cell_h)  # px in one "cell" of tuning
         self._noise = self._make_noise()
+        self._kernels = self._blur_kernels()
+        # Per-sample state before the global cleanup, kept so a rebuild redoes only a window
+        self._walls: Optional[np.ndarray] = None
+        self._base: Optional[np.ndarray] = None
+        self._core: Optional[np.ndarray] = None
+        self._kept_open: Optional[np.ndarray] = None
+        self._open_sample: Optional[np.ndarray] = None
         self.values: Optional[np.ndarray] = None
         self.rock: Optional[np.ndarray] = None
         self.owner: Optional[np.ndarray] = None
@@ -127,71 +141,123 @@ class CaveField:
     # Building
 
     def rebuild(self) -> np.ndarray:
-        """Recompute after `grid` changed; returns a (rows, cols) mask of tiles whose rock changed."""
-        s, cfg = self.samples, self.settings
+        """Recompute after `grid` changed; returns a (rows, cols) mask of tiles whose rock changed.
+
+        The per-sample clamps only reach a few cells, so they are redone in a window around the
+        changed cells; the cleanup and corridor passes, which are global, run on the whole field."""
+        s = self.samples
         walls = np.asarray(self.grid) == 1
         steel = np.zeros_like(walls)
         for c, r in self.strong:
             steel[r, c] = True
+        rows, cols = s.shape
+        if self._walls is None:
+            window = owner_window = (0, rows, 0, cols)
+            self._base = np.zeros(s.shape, np.float32)
+            self._core, self._kept_open, self._open_sample = (np.zeros(s.shape, bool) for _ in range(3))
+            self.owner = np.full(s.shape, -1, np.int32)
+        else:
+            changed_cells = np.argwhere(walls != self._walls)
+            if not len(changed_cells):
+                return np.zeros(walls.shape, bool)
+            box = (*changed_cells.min(axis=0), *changed_cells.max(axis=0))
+            # The blur reaches 3 sigma (plus a sample); skeletons and owners one cell
+            reach = 3*self.settings.blurCells*self._unit
+            window = self._sample_window(box, math.ceil(reach / s.cell_w) + 1,
+                                         math.ceil(reach / s.cell_h) + 1)
+            owner_window = self._sample_window(box, 1, 1)
+            self.owner = self.owner.copy()  # a new array, so callers can diff against the old one
+        self._walls = walls
+        y0, y1, x0, x1 = window
+        at = (slice(y0, y1), slice(x0, x1))
+        self._base[at], self._core[at], self._kept_open[at], self._open_sample[at] = \
+            self._local(walls, steel, window, self._x.window(x0, x1), self._y.window(y0, y1))
+        y0, y1, x0, x1 = owner_window
+        self.owner[y0:y1, x0:x1] = self._nearest_cell(
+            walls & ~steel, self._x.window(x0, x1), self._y.window(y0, y1))[1]
 
-        wall_sample = self._touches(walls, outside=True)  # occupancy
-        open_sample = ~wall_sample
-        values = self._blur(wall_sample.astype(np.float32)) + self._noise
-
-        # Wall cores: the skeleton through wall centres, linked to wall neighbours and the outside
-        core = wall_sample & self._near_skeleton(walls, True, cfg.wallCoreCells*self._unit)
-        np.maximum(values, _ROCK, out=values, where=core)
-
-        # Open space the clamps promise (gate swings, steel faces) must survive the hole cleanup
-        kept_open = np.zeros(s.shape, bool)
-        for (cx, cy), radius in self.keep_clear:
-            kept_open |= ((self._x.pos[None, :]-cx)**2 + (self._y.pos[:, None]-cy)**2) <= radius**2
-        kept_open &= open_sample
-        np.minimum(values, _OPEN, out=values, where=kept_open)
-
-        links = self._near_skeleton(~walls, False, cfg.linkClearance)
-        np.minimum(values, _OPEN, out=values, where=links & open_sample)
-
-        if steel.any():
-            values[self._touches(steel, outside=False)] = 1.0
-            near_steel, _ = self._nearest_cell(steel)
-            steel_face = open_sample & (near_steel <= 0.5*min(s.cell_w, s.cell_h))
-            np.minimum(values, _OPEN, out=values, where=steel_face)
-            kept_open |= steel_face
-
+        values = self._base.copy()
         centres = self._open_centres(walls)
-        self._cleanup(values, core, centres, kept_open)
-        self._clear_corridors(values, walls, open_sample)
-        self._cleanup(values, core, centres, kept_open)
+        self._cleanup(values, self._core, centres, self._kept_open)
+        if self._clear_corridors(values, walls, self._open_sample):
+            self._cleanup(values, self._core, centres, self._kept_open)  # else unchanged: idempotent
 
         rock = values >= THRESHOLD
         changed = np.ones_like(rock) if self.rock is None else rock != self.rock
         self.values, self.rock = values, rock
-        self.owner = self._nearest_cell(walls & ~steel)[1]
-        return self._tiles(changed)
+        return self.tiles_of(changed)
 
-    def _touches(self, cells: np.ndarray, outside: bool) -> np.ndarray:
+    def _sample_window(self, box, kx: int, ky: int) -> Tuple[int, int, int, int]:
+        """Sample range (y0, y1, x0, x1) of the cells in box (r0, c0, r1, c1) grown by kx, ky."""
+        s = self.samples
+        rows, cols = s.shape
+        r0, c0, r1, c1 = box
+        return (max(0, (r0-ky)*s.per_y), min(rows, (r1+ky+1)*s.per_y + 1),
+                max(0, (c0-kx)*s.per_x), min(cols, (c1+kx+1)*s.per_x + 1))
+
+    def _local(self, walls: np.ndarray, steel: np.ndarray, window, x: '_Axis', y: '_Axis'):
+        """The field before cleanup over a sample window, with the per-sample masks the global
+        passes need: (values, core, kept_open, open_sample)."""
+        s, cfg = self.samples, self.settings
+        y0, y1, x0, x1 = window
+        blurred, wall_sample = self._blur(walls, window)
+        open_sample = ~wall_sample
+        values = blurred + self._noise[y0:y1, x0:x1]
+
+        # Wall cores: the skeleton through wall centres, linked to wall neighbours and the outside
+        core = wall_sample & self._near_skeleton(walls, True, cfg.wallCoreCells*self._unit, x, y)
+        np.maximum(values, _ROCK, out=values, where=core)
+
+        # Open space the clamps promise (gate swings, steel faces) must survive the hole cleanup
+        kept_open = np.zeros(values.shape, bool)
+        for (cx, cy), radius in self.keep_clear:
+            kept_open |= ((x.pos[None, :]-cx)**2 + (y.pos[:, None]-cy)**2) <= radius**2
+        kept_open &= open_sample
+        np.minimum(values, _OPEN, out=values, where=kept_open)
+
+        links = self._near_skeleton(~walls, False, cfg.linkClearance, x, y)
+        np.minimum(values, _OPEN, out=values, where=links & open_sample)
+
+        if steel.any():
+            values[self._touches(steel, False, x, y)] = 1.0
+            near_steel, _ = self._nearest_cell(steel, x, y)
+            steel_face = open_sample & (near_steel <= 0.5*min(s.cell_w, s.cell_h))
+            np.minimum(values, _OPEN, out=values, where=steel_face)
+            kept_open |= steel_face
+        return values, core, kept_open, open_sample
+
+    def _touches(self, cells: np.ndarray, outside: bool, x: '_Axis', y: '_Axis') -> np.ndarray:
         """Per sample: does it touch (lie in or on the border of) any cell in `cells`?"""
         padded = np.pad(cells, 1, constant_values=outside)
-        out = np.zeros(self.samples.shape, bool)
-        for ty, rows in self._y.touched_runs:
-            for tx, cols in self._x.touched_runs:
+        out = np.zeros((len(y.pos), len(x.pos)), bool)
+        for ty, rows in y.touched_runs:
+            for tx, cols in x.touched_runs:
                 out[np.ix_(rows, cols)] |= padded[np.ix_(ty+1, tx+1)]
         return out
 
-    def _blur(self, occupancy: np.ndarray) -> np.ndarray:
+    def _blur_kernels(self):
+        """Gaussian kernels and their radii in samples, x then y."""
         sigma = self.settings.blurCells * self._unit
-        kernels, pads = [], []
+        out = []
         for h in (self.samples.h_x, self.samples.h_y):
             sd = sigma / h
             radius = max(1, math.ceil(3*sd))
             k = np.exp(-0.5*(np.arange(-radius, radius+1)/sd)**2)
-            kernels.append((k/k.sum()).astype(np.float32))
-            pads.append(radius)
-        px, py = pads
-        padded = np.pad(occupancy, ((py, py), (px, px)), constant_values=1.0)  # outside is rock
-        blurred = cv2.sepFilter2D(padded, cv2.CV_32F, kernels[0], kernels[1], borderType=cv2.BORDER_REPLICATE)
-        return blurred[py:-py, px:-px]
+            out.append(((k/k.sum()).astype(np.float32), radius))
+        return out
+
+    def _blur(self, walls: np.ndarray, window) -> Tuple[np.ndarray, np.ndarray]:
+        """Blurred wall occupancy over a sample window (outside the grid is rock), and the
+        occupancy itself (samples touching a wall cell) over the window."""
+        (kx, px), (ky, py) = self._kernels
+        rows, cols = self.samples.shape
+        y0, y1, x0, x1 = window
+        ey0, ey1, ex0, ex1 = max(0, y0-py), min(rows, y1+py), max(0, x0-px), min(cols, x1+px)
+        occupancy = self._touches(walls, True, self._x.window(ex0, ex1), self._y.window(ey0, ey1))
+        pad = ((py - (y0-ey0), py - (ey1-y1)), (px - (x0-ex0), px - (ex1-x1)))
+        padded = np.pad(occupancy.astype(np.float32), pad, constant_values=1.0)
+        blurred = cv2.sepFilter2D(padded, cv2.CV_32F, kx, ky, borderType=cv2.BORDER_REPLICATE)
+        return blurred[py:-py, px:-px], occupancy[y0-ey0:y1-ey0, x0-ex0:x1-ex0]
 
     def _make_noise(self) -> np.ndarray:
         cfg = self.settings
@@ -211,38 +277,39 @@ class CaveField:
             total += (weight * (n - 0.5)).astype(np.float32)
         return cfg.noiseAmplitude * total
 
-    def _near_skeleton(self, cells: np.ndarray, outside: bool, reach: float) -> np.ndarray:
+    def _near_skeleton(self, cells: np.ndarray, outside: bool, reach: float, x: '_Axis',
+                       y: '_Axis') -> np.ndarray:
         """Per sample: within `reach` px of the skeleton of `cells`? The skeleton is each centre,
         plus lines to the centres of orthogonal neighbours in `cells` (`outside` says whether
         the virtual cells beyond the grid count). Only cells the sample touches are considered."""
         padded = np.pad(cells, 1, constant_values=outside)
         left, right = padded[1:-1, :-2] & cells, padded[1:-1, 2:] & cells
         up, down = padded[:-2, 1:-1] & cells, padded[2:, 1:-1] & cells
-        out = np.zeros(self.samples.shape, bool)
+        out = np.zeros((len(y.pos), len(x.pos)), bool)
         # The containing cell for every sample; the previous cell only matters on borders
-        for ty, rows in self._y.touched_runs:
-            dy = (self._y.pos[rows] - (self._y.start + (ty+0.5)*self._y.size))[:, None]
-            row = np.clip(ty, 0, self._y.cells-1)
-            valid_y = ((ty >= 0) & (ty < self._y.cells))[:, None]
-            for tx, cols in self._x.touched_runs:
-                dx = (self._x.pos[cols] - (self._x.start + (tx+0.5)*self._x.size))[None, :]
-                col = np.clip(tx, 0, self._x.cells-1)
+        for ty, rows in y.touched_runs:
+            dy = (y.pos[rows] - (y.start + (ty+0.5)*y.size))[:, None]
+            row = np.clip(ty, 0, y.cells-1)
+            valid_y = ((ty >= 0) & (ty < y.cells))[:, None]
+            for tx, cols in x.touched_runs:
+                dx = (x.pos[cols] - (x.start + (tx+0.5)*x.size))[None, :]
+                col = np.clip(tx, 0, x.cells-1)
                 at = np.ix_(row, col)
                 near = (dx*dx + dy*dy <= reach*reach)
                 near |= (np.abs(dy) <= reach) & (((dx < 0) & left[at]) | ((dx > 0) & right[at]))
                 near |= (np.abs(dx) <= reach) & (((dy < 0) & up[at]) | ((dy > 0) & down[at]))
-                near &= cells[at] & valid_y & ((tx >= 0) & (tx < self._x.cells))[None, :]
+                near &= cells[at] & valid_y & ((tx >= 0) & (tx < x.cells))[None, :]
                 out[np.ix_(rows, cols)] |= near
         return out
 
-    def _nearest_cell(self, cells: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _nearest_cell(self, cells: np.ndarray, x: '_Axis', y: '_Axis') -> Tuple[np.ndarray, np.ndarray]:
         """Per sample: px rect distance to the nearest cell in `cells` among the 3x3 around its
         containing cell, and that cell's row*cols + col (inf and -1 if none). The containing cell
         wins ties."""
         rows, cols = cells.shape
-        x, y = self._x, self._y
-        dist2 = np.full(self.samples.shape, np.inf, np.float32)
-        owner = np.full(self.samples.shape, -1, np.int32)
+        shape = (len(y.pos), len(x.pos))
+        dist2 = np.full(shape, np.inf, np.float32)
+        owner = np.full(shape, -1, np.int32)
         gap_x = {-1: x.local, 0: np.zeros_like(x.local), 1: x.size - x.local}
         gap_y = {-1: y.local, 0: np.zeros_like(y.local), 1: y.size - y.local}
         for dr, dc in [(0, 0)] + [(dr, dc) for dr in (-1, 0, 1) for dc in (-1, 0, 1) if dr or dc]:
@@ -267,7 +334,8 @@ class CaveField:
         anchored = np.zeros(count, bool)
         anchored[labels[core]] = True
         anchored[0] = True  # the open background
-        np.minimum(values, _OPEN, out=values, where=~anchored[labels])
+        if not anchored.all():
+            np.minimum(values, _OPEN, out=values, where=~anchored[labels])
 
         space = values < THRESHOLD
         count, labels = cv2.connectedComponents(space.astype(np.uint8), connectivity=4)
@@ -275,11 +343,13 @@ class CaveField:
         reached[labels[centres]] = True
         reached[labels[kept_open]] = True
         reached[0] = True  # the rock background
-        np.maximum(values, _ROCK, out=values, where=~reached[labels])
+        if not reached.all():
+            np.maximum(values, _ROCK, out=values, where=~reached[labels])
 
-    def _clear_corridors(self, values: np.ndarray, walls: np.ndarray, open_sample: np.ndarray) -> None:
+    def _clear_corridors(self, values: np.ndarray, walls: np.ndarray, open_sample: np.ndarray) -> bool:
         """Clamp a tube between adjacent open cells whose centres a disc of required_clearance()
-        cannot travel between, staying inside the two cells."""
+        cannot travel between, staying inside the two cells. Returns whether any was clamped."""
+        clamped = False
         s = self.samples
         radius = self.required_clearance()
         free = self._free_space(values >= THRESHOLD, radius)
@@ -313,6 +383,8 @@ class CaveField:
                 tube = (np.hypot(gx, gy) <= radius) & open_sample[y0:y1, x0:x1]
                 window = values[y0:y1, x0:x1]
                 np.minimum(window, _OPEN, out=window, where=tube)
+                clamped = True
+        return clamped
 
     def _free_space(self, rock: np.ndarray, radius: float) -> np.ndarray:
         """Samples with no rock sample closer than `radius` px. The samples are not square, so
@@ -323,7 +395,7 @@ class CaveField:
         kernel = (((oy*s.h_y)**2 + (ox*s.h_x)**2) < radius**2).astype(np.uint8)
         return cv2.dilate(rock.astype(np.uint8), kernel) == 0
 
-    def _tiles(self, changed: np.ndarray) -> np.ndarray:
+    def tiles_of(self, changed: np.ndarray) -> np.ndarray:
         """(rows, cols) mask of tiles with a changed sample in their closed rect."""
         s = self.samples
         per_row = changed[:-1].reshape(s.rows, s.per_y, -1).any(axis=1) | changed[s.per_y::s.per_y]
