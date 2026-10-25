@@ -142,9 +142,12 @@ class CaveField:
         core = wall_sample & self._near_skeleton(walls, True, cfg.wallCoreCells*self._unit)
         np.maximum(values, _ROCK, out=values, where=core)
 
+        # Open space the clamps promise (gate swings, steel faces) must survive the hole cleanup
+        kept_open = np.zeros(s.shape, bool)
         for (cx, cy), radius in self.keep_clear:
-            inside = ((self._x.pos[None, :]-cx)**2 + (self._y.pos[:, None]-cy)**2) <= radius**2
-            np.minimum(values, _OPEN, out=values, where=inside & open_sample)
+            kept_open |= ((self._x.pos[None, :]-cx)**2 + (self._y.pos[:, None]-cy)**2) <= radius**2
+        kept_open &= open_sample
+        np.minimum(values, _OPEN, out=values, where=kept_open)
 
         links = self._near_skeleton(~walls, False, cfg.linkClearance)
         np.minimum(values, _OPEN, out=values, where=links & open_sample)
@@ -152,12 +155,14 @@ class CaveField:
         if steel.any():
             values[self._touches(steel, outside=False)] = 1.0
             near_steel, _ = self._nearest_cell(steel)
-            np.minimum(values, _OPEN, out=values, where=open_sample & (near_steel <= 0.5*min(s.cell_w, s.cell_h)))
+            steel_face = open_sample & (near_steel <= 0.5*min(s.cell_w, s.cell_h))
+            np.minimum(values, _OPEN, out=values, where=steel_face)
+            kept_open |= steel_face
 
         centres = self._open_centres(walls)
-        self._cleanup(values, core, centres)
+        self._cleanup(values, core, centres, kept_open)
         self._clear_corridors(values, walls, open_sample)
-        self._cleanup(values, core, centres)
+        self._cleanup(values, core, centres, kept_open)
 
         rock = values >= THRESHOLD
         changed = np.ones_like(rock) if self.rock is None else rock != self.rock
@@ -254,8 +259,9 @@ class CaveField:
         r, c = np.nonzero(~walls)
         return self._y.centres[r], self._x.centres[c]
 
-    def _cleanup(self, values: np.ndarray, core: np.ndarray, centres) -> None:
-        """Rock with no wall core becomes open; open space with no open-cell centre becomes rock."""
+    def _cleanup(self, values: np.ndarray, core: np.ndarray, centres, kept_open: np.ndarray) -> None:
+        """Rock with no wall core becomes open; open space with no open-cell centre and nothing
+        kept open by a clamp becomes rock."""
         rock = values >= THRESHOLD
         count, labels = cv2.connectedComponents(rock.astype(np.uint8), connectivity=4)
         anchored = np.zeros(count, bool)
@@ -267,6 +273,7 @@ class CaveField:
         count, labels = cv2.connectedComponents(space.astype(np.uint8), connectivity=4)
         reached = np.zeros(count, bool)
         reached[labels[centres]] = True
+        reached[labels[kept_open]] = True
         reached[0] = True  # the rock background
         np.maximum(values, _ROCK, out=values, where=~reached[labels])
 

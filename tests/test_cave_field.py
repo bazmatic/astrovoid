@@ -1,4 +1,5 @@
 """The cave field: a smooth rock/open field over the maze cells that later becomes curved walls."""
+import dataclasses
 import math
 import random
 
@@ -35,11 +36,18 @@ def bordered(size):
     return [[1 if r in (0, size-1) or c in (0, size-1) else 0 for c in range(size)] for r in range(size)]
 
 
-def build(grid, *, strong=frozenset(), keep_clear=(), seed=7):
+def build(grid, *, strong=frozenset(), keep_clear=(), seed=7, settings=config.CAVE):
     rows, cols = len(grid), len(grid[0])
-    samples = SampleGrid.for_maze(MazePositionCalculator(cols, rows), cols, rows, config.CAVE)
+    samples = SampleGrid.for_maze(MazePositionCalculator(cols, rows), cols, rows, settings)
     return CaveField(grid, samples, strong=frozenset(strong), keep_clear=keep_clear, seed=seed,
-                     settings=config.CAVE)
+                     settings=settings)
+
+
+SMOOTH = dataclasses.replace(config.CAVE, noiseAmplitude=0.0)  # deterministic shapes from blur alone
+
+
+def walled(cols, rows, open_cells):
+    return [[0 if (c, r) in open_cells else 1 for c in range(cols)] for r in range(rows)]
 
 
 def centre(field, cell):
@@ -151,19 +159,35 @@ def test_steel_cells_stay_square():
     steel = {(4, 4), (5, 4), (4, 5)}
     for c, r in steel:
         grid[r][c] = 1
-    field = build(grid, strong=steel)
-    s = field.samples
-    for c, r in steel:
-        assert field.rock[r*s.per_y:(r+1)*s.per_y+1, c*s.per_x:(c+1)*s.per_x+1].all()
-    # The open cell right of (5, 4): samples within half a cell of the steel face are open
-    reach = 0.5 * min(s.cell_w, s.cell_h)
-    face_x = s.origin[0] + 6*s.cell_w
-    top, bottom = 4*s.per_y + 1, 5*s.per_y  # off the borders shared with other walls
-    for iy in range(top, bottom):
-        for ix in range(6*s.per_x + 1, 7*s.per_x):
-            x, _ = s.point(iy, ix)
-            if x - face_x <= reach:
-                assert not field.rock[iy, ix], (iy, ix)
+    assert cave_checks.steel_face_violations(build(grid, strong=steel)) == []
+
+
+def test_gate_swing_cut_off_by_rock_stays_clear():
+    # A small swing in the inner corner of an open room: the blurred corner fill is rock all
+    # round it, so without the anchor the hole cleanup would refill the clamped swing
+    grid = bordered(10)
+    plain = build(grid, settings=SMOOTH)
+    s = plain.samples
+    corner = (s.origin[0] + s.cell_w, s.origin[1] + s.cell_h)
+    keep_clear = [(corner, 0.25*min(s.cell_w, s.cell_h))]
+    assert cave_checks.gate_swing_violations(plain, keep_clear) != []
+    assert cave_checks.gate_swing_violations(build(grid, keep_clear=keep_clear, settings=SMOOTH)) == []
+
+
+# One-cell corridors so narrow (against the blur) that their middles are rock except the
+# centre-line tubes, ending at steel. The clamped band at the steel face is far from the tubes,
+# so without the anchor the hole cleanup would refill it.
+STEEL_FACES = {
+    'beside': (walled(10, 40, {(c, 20) for c in range(2, 9)}), {(1, 20)}),
+    'above': (walled(100, 10, {(50, r) for r in range(2, 9)}), {(50, 1)}),
+    'below': (walled(100, 10, {(50, r) for r in range(1, 8)}), {(50, 8)}),
+}
+
+
+@pytest.mark.parametrize('side', STEEL_FACES)
+def test_steel_face_cut_off_by_rock_stays_clear(side):
+    grid, steel = STEEL_FACES[side]
+    assert cave_checks.steel_face_violations(build(grid, strong=steel, settings=SMOOTH)) == []
 
 
 def test_rebuild_matches_fresh_build():

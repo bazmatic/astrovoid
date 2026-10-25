@@ -137,3 +137,23 @@ def gate_swing_violations(field, keep_clear: Optional[Sequence[Tuple[Tuple[float
         inside = (xs[None, :]-cx)**2 + (ys[:, None]-cy)**2 <= radius**2
         bad.extend(map(tuple, np.argwhere(inside & open_samples & field.rock)))
     return bad
+
+
+def steel_face_violations(field) -> List[Tuple[int, int]]:
+    """(iy, ix) of samples breaking square steel: open samples touching a strong cell, or rock
+    samples in open cells within half a cell of a strong cell's rect."""
+    s = field.samples
+    rows, cols = s.shape
+    xs = s.origin[0] + np.arange(cols)*s.h_x
+    ys = s.origin[1] + np.arange(rows)*s.h_y
+    open_samples = _samples_of_open_cells(field)
+    reach = 0.5 * min(s.cell_w, s.cell_h)
+    bad = []
+    for c, r in field.strong:
+        x0, y0 = s.origin[0] + c*s.cell_w, s.origin[1] + r*s.cell_h
+        gx = np.maximum(0, np.maximum(x0 - xs, xs - (x0 + s.cell_w)))
+        gy = np.maximum(0, np.maximum(y0 - ys, ys - (y0 + s.cell_h)))
+        d = np.hypot(gx[None, :], gy[:, None])
+        bad.extend(map(tuple, np.argwhere((d <= 1e-6) & ~field.rock)))
+        bad.extend(map(tuple, np.argwhere((d <= reach) & open_samples & field.rock)))
+    return bad
