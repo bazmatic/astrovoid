@@ -18,6 +18,7 @@ from maze.wall_segment import WallSegment
 from maze.config import MazeComplexity, MazeGenerationConfig, MazeComplexityPresets
 from maze.positioning import MazePositionCalculator
 from maze.converter import GridToWallsConverter, SIDES
+from hunter.visibility import simplify_outline
 from maze.cave import CaveShape
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
@@ -223,6 +224,7 @@ class Maze:
             cell_size=CURVED_BUCKET if self.curved else 150.0  # square walls keep the bucket they always had
         )
         self.wall_generation = 0  # Goes up each time a block is destroyed
+        self._sight_cache = None  # (walls list, its length, wall_generation, sight segments)
         # Curved blocks destroyed inside batched_destroys(), whose rock is rebuilt when it ends
         self._batch_depth = 0
         self._pending_opens: Dict[Tuple[int, int], None] = {}
@@ -414,6 +416,20 @@ class Maze:
             self.spatial_grid.add_wall(segment)
         self.wall_generation += len(cells)  # one per destroyed block, as for square walls
         self._refresh_block_fills()
+
+    def sight_segments(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """The active walls as (start, end) for line of sight. Curved rock's short segments are
+        merged within hunter.visibility.SIGHT_TOLERANCE, which makes sight several times cheaper;
+        square walls are passed through. Cached until the walls change."""
+        walls = self.walls
+        cached = self._sight_cache
+        if cached is not None and cached[0] is walls and cached[1] == len(walls) and cached[2] == self.wall_generation:
+            return cached[3]
+        segments = [(w.start, w.end) for w in walls if w.active]
+        if self.curved:
+            segments = simplify_outline(segments)
+        self._sight_cache = (walls, len(walls), self.wall_generation, segments)
+        return segments
 
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100,
                                   start_clearance: Optional[float] = None) -> List[Tuple[float, float]]:

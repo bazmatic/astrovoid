@@ -3,6 +3,7 @@ import json
 import math
 import weakref
 from collections import deque
+from types import FunctionType
 from hunter.pilot_sensors import pilot_state
 from dataclasses import asdict
 import config
@@ -48,7 +49,10 @@ class HunterPerception:
                 powerups=()):
         origin = hunter.get_pos()
         radius = self.settings.sensor_range(maze)
-        sight = [(w.start,w.end) for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ())) if w.active]
+        # The maze's walls as merged for sight (curved rock has many short ones), and the gates as they stand
+        rock = maze.sight_segments() if isinstance(getattr(type(maze), 'sight_segments', None), FunctionType) else [
+            (w.start,w.end) for w in maze.walls if w.active]
+        sight = list(rock) + [(w.start,w.end) for w in getattr(maze, 'gate_segments', ()) if w.active]
         walls = local_segments(origin, sight, radius)
         contacts = []
         visible_ids = set()
