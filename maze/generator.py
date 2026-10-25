@@ -372,8 +372,10 @@ class Maze:
     def _reshape_cave(self, cell: Tuple[int, int]) -> None:
         """Rebuild the curved rock around a destroyed block and patch the walls and their index."""
         removed, added = self.cave.open_cell(cell)
-        # Removed first: a segment whose owner alone changed comes back with the same ends, and the
-        # spatial grid finds walls by their ends, so adding first would let the removal take the new one
+        # Removed first: a segment whose owner alone changed comes back with the same ends. WallSegment
+        # equality and hashing use only the ends, so the spatial grid's wall_to_index maps both to one
+        # entry; update_wall looks the index up there and drops it from the segment's cells. Added
+        # first, the new segment's index would be the one dropped, and the old one would stay indexed
         for segment in removed:
             segment.active = False
             self.spatial_grid.update_wall(segment)

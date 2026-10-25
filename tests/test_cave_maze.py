@@ -3,6 +3,7 @@ import copy
 import math
 import pathlib
 import random
+import statistics
 import time
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -325,25 +326,72 @@ def test_editor_preview_matches_play(game, monkeypatch, level):  # noqa: F811
     assert keys(preview.walls) == keys(level_maze(level).walls)
 
 
-def _episode_seconds(monkeypatch, curved, level, horizon, runs=2):
+def _episode_seconds(monkeypatch, curved, level, horizon):
     from experiments.harness import run_episode
     monkeypatch.setattr(config.CAVE, 'enabled', curved)
-    best = math.inf
-    for _ in range(runs):
-        began = time.perf_counter()
-        run_episode(level, 0, horizon=horizon)
-        best = min(best, time.perf_counter() - began)
-    return best
+    began = time.perf_counter()
+    run_episode(level, 0, horizon=horizon)
+    return time.perf_counter() - began
 
 
 def test_curved_walls_cost_little_frame_time(monkeypatch):
     """A crowded level (27, the farming level) plays about as fast on curved rock as on square walls.
-    Relative, best of two short episodes each, at the real screen size the harness plays at."""
+
+    Relative, at the real screen size the harness plays at. One untimed short run of each first (the
+    harness builds its Game once per process), then the two modes alternate, best of two each."""
     from experiments import harness
     try:
-        square = _episode_seconds(monkeypatch, False, 27, 3.0)
-        curved = _episode_seconds(monkeypatch, True, 27, 3.0)
+        for curved in (False, True):
+            _episode_seconds(monkeypatch, curved, 27, 0.5)
+        times = {False: math.inf, True: math.inf}
+        for curved in (False, True, True, False):
+            times[curved] = min(times[curved], _episode_seconds(monkeypatch, curved, 27, 3.0))
     finally:
         harness.reset()  # the harness's Game changes the screen size for the whole process
-    assert curved <= 1.3 * square, (curved, square)
+    assert times[True] <= 1.3 * times[False], times
 
+
+def _destroy_times(curved, cells, count=12):
+    """Seconds per destroy of the same blocks through Maze.damage_wall, and per CaveShape.open_cell."""
+    random.seed(9)
+    maze = Maze(1, complexity=MazeComplexity.COMPLEX, grid_size=32, seed=9, curved=curved)
+    opens = []
+    if maze.cave is not None:
+        real_open = maze.cave.open_cell
+
+        def timed_open(cell):
+            began = time.perf_counter()
+            result = real_open(cell)
+            opens.append(time.perf_counter() - began)
+            return result
+        maze.cave.open_cell = timed_open
+    destroys = []
+    for cell in cells:
+        if len(destroys) == count:
+            break
+        exposed = faces(maze, cell)
+        if not exposed:
+            continue
+        began = time.perf_counter()
+        assert maze.damage_wall(exposed[0], damage=config.WALL_HIT_POINTS)
+        destroys.append(time.perf_counter() - began)
+    assert len(destroys) == count
+    return statistics.median(destroys), (statistics.median(opens) if opens else 0.0)
+
+
+def test_destroying_blocks_stays_within_budget(monkeypatch):
+    """Grenades and rails destroy blocks: on the real screen, the same 12 blocks of a grid-32 maze,
+    curved against square. A curved destroy rebuilds the rock (CaveShape.open_cell, whose own budget
+    is 10 ms in test_cave_shape); the Maze's bookkeeping around it stays close to a square destroy,
+    and the whole destroy within the brief's 10 ms a block (40 ms for a 4-block blast)."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    random.seed(9)
+    square_maze = Maze(1, complexity=MazeComplexity.COMPLEX, grid_size=32, seed=9, curved=False)
+    cells = [c for c in sorted(square_maze.blocks) if not square_maze.converter.on_perimeter(square_maze.grid, *c)]
+    random.Random(1).shuffle(cells)
+    _destroy_times(True, cells, count=2)  # warm up
+    square, _ = _destroy_times(False, cells)
+    curved, open_cell = _destroy_times(True, cells)
+    assert curved - open_cell <= 2.0 * square + 0.0005, (curved, open_cell, square)
+    assert curved < 0.010, (curved, open_cell, square)
