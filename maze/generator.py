@@ -3,7 +3,8 @@
 import random
 import pygame
 import math
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from contextlib import contextmanager
+from typing import Dict, FrozenSet, Iterator, List, Optional, Set, Tuple
 import config
 from utils import (
     distance,
@@ -222,6 +223,9 @@ class Maze:
             cell_size=CURVED_BUCKET if self.curved else 150.0  # square walls keep the bucket they always had
         )
         self.wall_generation = 0  # Goes up each time a block is destroyed
+        # Curved blocks destroyed inside batched_destroys(), whose rock is rebuilt when it ends
+        self._batch_depth = 0
+        self._pending_opens: Dict[Tuple[int, int], None] = {}
         # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
         self.gate_segments: List[WallSegment] = []
         self.rebuild_walls()
@@ -277,6 +281,7 @@ class Maze:
         self.strong_blocks = frozenset(self.converter.cell_rect(x, y) for x, y in self.strong_cells)
         # Where each block has been hit, as points on its edge, oldest first
         self.wounds: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        self._pending_opens = {}
         self.spatial_grid.add_walls(self.walls)
         self._refresh_block_fills()
     
@@ -320,6 +325,9 @@ class Maze:
             return False
 
         cell = wall.cell
+        if cell in self._pending_opens:
+            # Destroyed earlier in this batch: its old segments wait for the rebuild at the end
+            return False
         if cell in self.strong_cells:
             # Metal: the shot strikes sparks and leaves no mark
             self.wall_debris.spark(impact if impact is not None else wall.start)
@@ -352,7 +360,10 @@ class Maze:
         self.wall_debris.destroy(self.converter.cell_rect(*cell))
         self.grid[cell[1]][cell[0]] = 0
         if self.cave is not None:
-            self._reshape_cave(cell)
+            if self._batch_depth:
+                self._pending_opens[cell] = None
+            else:
+                self._reshape_cave([cell])
             return True
         for face in faces:
             face.active = False
@@ -369,9 +380,26 @@ class Maze:
         self._refresh_block_fills()
         return True
     
-    def _reshape_cave(self, cell: Tuple[int, int]) -> None:
-        """Rebuild the curved rock around a destroyed block and patch the walls and their index."""
-        removed, added = self.cave.open_cell(cell)
+    @contextmanager
+    def batched_destroys(self) -> Iterator[None]:
+        """Defer the curved rock rebuild for blocks destroyed inside the block to its end, so a
+        blast that breaks several blocks rebuilds the rock once. Until then a destroyed block's
+        old segments stay in place, and damage_wall ignores them. Square walls are unaffected."""
+        self._batch_depth += 1
+        try:
+            yield
+        finally:
+            self._batch_depth -= 1
+            if not self._batch_depth and self._pending_opens:
+                cells, self._pending_opens = list(self._pending_opens), {}
+                self._reshape_cave(cells)
+
+    def _reshape_cave(self, cells: List[Tuple[int, int]]) -> None:
+        """Rebuild the curved rock around destroyed blocks and patch the walls and their index."""
+        if len(cells) == 1:
+            removed, added = self.cave.open_cell(cells[0])
+        else:
+            removed, added = self.cave.open_cells(cells)
         # Removed first: a segment whose owner alone changed comes back with the same ends. WallSegment
         # equality and hashing use only the ends, so the spatial grid's wall_to_index maps both to one
         # entry; update_wall looks the index up there and drops it from the segment's cells. Added
@@ -384,7 +412,7 @@ class Maze:
             segment.hit_points = self.blocks[segment.cell]
             self.walls.append(segment)
             self.spatial_grid.add_wall(segment)
-        self.wall_generation += 1
+        self.wall_generation += len(cells)  # one per destroyed block, as for square walls
         self._refresh_block_fills()
 
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100,

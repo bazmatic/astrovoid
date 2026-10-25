@@ -178,3 +178,59 @@ def test_segment_count_reasonable(maze):
     grid, shape, calc, _ = maze
     square = GridToWallsConverter(calc).convert(grid)
     assert len(shape.segments()) < 6 * len(square)
+
+
+def _multi_cases(grid, case):
+    """Interior wall cells to open together: a run along a wall, two far apart, or two blocks
+    added against the rim (the grid is changed for those)."""
+    rows, cols = len(grid), len(grid[0])
+    walls = interior_exposed_walls(grid)
+    if case == 'adjacent':
+        return next([(c, r), (c+1, r), (c+2, r)] for c, r in walls
+                    if c+2 < cols-2 and grid[r][c+1] == grid[r][c+2] == 1)
+    if case == 'apart':
+        return [walls[0], walls[-1]]
+    r = next(r for r in range(1, rows-3) if grid[r][1] == grid[r+1][1] == 0)
+    grid[r][1] = grid[r+1][1] = 1
+    return [(1, r), (1, r+1)]
+
+
+@pytest.mark.parametrize('case', ['adjacent', 'apart', 'rim', 'steel'])
+def test_open_cells_matches_fresh_build(case):
+    grid = generated()
+    rows, cols = len(grid), len(grid[0])
+    strong = frozenset()
+    if case == 'steel':
+        steel, a, b = next(((c, r), (c+1, r), (c+2, r)) for r in range(2, rows-2) for c in range(2, cols-4)
+                           if grid[r][c] == grid[r][c+1] == grid[r][c+2] == 1)
+        strong, cells = frozenset({steel}), [a, b]
+    else:
+        cells = _multi_cases(grid, case)
+    shape, calc, _ = build(grid, strong)
+    before = shape.segments()
+    rebuilds = []
+    real = shape.field.rebuild
+    shape.field.rebuild = lambda: rebuilds.append(1) or real()
+    for c, r in cells:
+        grid[r][c] = 0
+    removed, added = shape.open_cells(cells)
+    after = shape.segments()
+
+    fresh, _, _ = build([row[:] for row in grid], strong)
+    assert sorted(map(key, after)) == sorted(map(key, fresh.segments()))
+    assert len(rebuilds) == 1 and shape.version == 1
+    after_ids = {id(s) for s in after}
+    assert {id(s) for s in before} - {id(s) for s in removed} | {id(s) for s in added} == after_ids
+    assert not any(s.cell in cells for s in after)
+    assert cave_checks.watertight_violations(grid, calc, after) == []
+
+
+def test_open_cell_is_open_cells_of_one():
+    grid = generated()
+    shape, _, _ = build(grid)
+    cell = interior_exposed_walls(grid)[5]
+    grid[cell[1]][cell[0]] = 0
+    removed, added = shape.open_cell(cell)
+    other, _, _ = build([row[:] for row in grid])
+    assert sorted(map(key, shape.segments())) == sorted(map(key, other.segments()))
+    assert removed and added

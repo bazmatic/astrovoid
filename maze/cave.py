@@ -7,7 +7,7 @@ is rebuilt and only the tiles around the change are re-traced; unchanged segment
 objects, so callers can patch spatial indexes and caches with the (removed, added) diff.
 """
 import math
-from typing import Callable, Dict, FrozenSet, List, Optional, Sequence, Tuple
+from typing import Callable, Dict, FrozenSet, Iterable, List, Optional, Sequence, Tuple
 
 import cv2
 import numpy as np
@@ -80,6 +80,11 @@ class CaveShape:
     def open_cell(self, cell: Cell) -> Tuple[List[WallSegment], List[WallSegment]]:
         """Rebuild after the caller set grid[row][col] = 0 for `cell`. Returns (removed, added):
         the segment objects that no longer exist, and the new ones."""
+        return self.open_cells([cell])
+
+    def open_cells(self, cells: Iterable[Cell]) -> Tuple[List[WallSegment], List[WallSegment]]:
+        """open_cell for several cells at once (a blast): one field rebuild and one re-trace."""
+        cells = list(dict.fromkeys(cells))
         field = self.field
         old_values, old_owner = field.values, field.owner
         field.rebuild()
@@ -89,13 +94,14 @@ class CaveShape:
         # tiles and their 8 neighbours, but at sample rather than tile granularity.
         moved = (field.values != old_values) | (field.owner != old_owner)
         retrace = field.tiles_of(_dilate(moved))
-        retrace[cell[1], cell[0]] = True
-        for side in SIDES:
-            beside = (cell[0]+side[0], cell[1]+side[1])
-            if beside in self.strong:
-                retrace[beside[1], beside[0]] = True  # a newly exposed steel face
-        for tile in self._fallback.pop(cell, ()):
-            retrace[tile[1], tile[0]] = True  # owners found by _nearest_wall can sit further away
+        for cell in cells:
+            retrace[cell[1], cell[0]] = True
+            for side in SIDES:
+                beside = (cell[0]+side[0], cell[1]+side[1])
+                if beside in self.strong:
+                    retrace[beside[1], beside[0]] = True  # a newly exposed steel face
+            for tile in self._fallback.pop(cell, ()):
+                retrace[tile[1], tile[0]] = True  # owners found by _nearest_wall can sit further away
 
         removed: List[WallSegment] = []
         added: List[WallSegment] = []

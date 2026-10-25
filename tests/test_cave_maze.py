@@ -395,3 +395,48 @@ def test_destroying_blocks_stays_within_budget(monkeypatch):
     curved, open_cell = _destroy_times(True, cells)
     assert curved - open_cell <= 2.0 * square + 0.0005, (curved, open_cell, square)
     assert curved < 0.010, (curved, open_cell, square)
+
+
+def test_blast_rebuilds_the_rock_once(monkeypatch):
+    """A grenade taking out 4 adjacent blocks on the real screen: one field rebuild for the whole
+    blast, within a frame-friendly budget, with the same hits and a consistent index."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    scoring = ScoringSystem()
+    scoring.start_level(1)
+    handler = CollisionHandler(Mock(), scoring, Mock())
+    times = []
+    for _ in range(5):
+        maze, cluster = _cluster_maze()
+        rebuilds = []
+        real = maze.cave.field.rebuild
+        maze.cave.field.rebuild = lambda: rebuilds.append(1) or real()
+        left, top = maze.position_calculator.grid_to_screen(10, 10)
+        centre = (left + maze.cell_size_x, top + maze.cell_size_y)
+        generation = maze.wall_generation
+        began = time.perf_counter()
+        handler.handle_blast(Blast(centre, maze.cell_size * 1.6, wall_hits=config.WALL_HIT_POINTS),
+                             None, None, [], lambda shot: False, maze)
+        times.append(time.perf_counter() - began)
+        assert len(rebuilds) == 1
+        assert all(cell not in maze.blocks for cell in cluster)
+        assert maze.wall_generation > generation
+        assert_index_consistent(maze)
+        fresh, _ = _cluster_maze()
+        fresh.grid = copy.deepcopy(maze.grid)
+        fresh.rebuild_walls()
+        assert keys(maze.walls) == keys(fresh.walls)
+    assert statistics.median(times) < 0.012, times
+
+
+def test_batched_destroy_skips_stale_segments():
+    """Inside a batch a destroyed block's old segments stay until the end; hitting them again does nothing."""
+    maze, cluster = _cluster_maze()
+    stale = faces(maze, cluster[0])
+    with maze.batched_destroys():
+        assert maze.damage_wall(stale[0], damage=config.WALL_HIT_POINTS) is True
+        assert maze.damage_wall(stale[-1], damage=config.WALL_HIT_POINTS) is False
+        assert maze.blocks[cluster[1]] == config.WALL_HIT_POINTS
+    assert faces(maze, cluster[0]) == []
+    assert all(not w.active for w in stale)
+    assert_index_consistent(maze)
