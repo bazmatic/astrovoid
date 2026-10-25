@@ -286,7 +286,43 @@ class Maze:
         self._pending_opens = {}
         self.spatial_grid.add_walls(self.walls)
         self._refresh_block_fills()
+        self._refresh_territories()
     
+    # Blocks this many cells from a destroyed one may have their rock re-formed
+    TERRITORY_REACH = 2
+
+    @property
+    def block_territories(self) -> Optional[Dict[Tuple[int, int, int, int], Tuple[pygame.Rect, pygame.mask.Mask]]]:
+        """Each block's curved rock, keyed like block_fills, for the renderer: (screen area, mask of its
+        pixels). None for square walls. Worked out when first asked for after the rock changes, so a
+        destroy does not pay for it; then only blocks near those destroyed are worked out again."""
+        if self.cave is None:
+            return None
+        if self._territories is None or self._stale_territories:
+            if self._territories is None:
+                by_cell, cells = {}, list(self.blocks)
+            else:
+                by_cell = {cell: value for cell, value in self._territories_by_cell.items() if cell in self.blocks}
+                reach, destroyed = self.TERRITORY_REACH, self._stale_territories
+                cells = [cell for cell in self.blocks
+                         if any(abs(cell[0] - x) <= reach and abs(cell[1] - y) <= reach for x, y in destroyed)]
+            for cell in cells:
+                by_cell[cell] = self.cave.territory(cell)
+            self._territories_by_cell = by_cell
+            self._stale_territories = []
+            self._territories = {
+                self.converter.cell_rect(*cell): value for cell, value in by_cell.items() if value is not None}
+        return self._territories
+
+    def _refresh_territories(self, destroyed: Optional[List[Tuple[int, int]]] = None) -> None:
+        """Mark the curved rock's territories out of date: all of them, or those near destroyed blocks."""
+        if destroyed is None:
+            self._territories = None
+            self._territories_by_cell = {}
+            self._stale_territories = []
+        else:
+            self._stale_territories = self._stale_territories + list(destroyed)
+
     def _refresh_block_fills(self) -> None:
         """Rebuild the screen areas of the blocks, which the renderer fills with rock."""
         self.block_fills = {self.converter.cell_rect(x, y): hit_points for (x, y), hit_points in self.blocks.items()}
@@ -416,6 +452,7 @@ class Maze:
             self.spatial_grid.add_wall(segment)
         self.wall_generation += len(cells)  # one per destroyed block, as for square walls
         self._refresh_block_fills()
+        self._refresh_territories(cells)
 
     def sight_segments(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
         """The active walls as (start, end) for line of sight. Curved rock's short segments are
@@ -530,7 +567,7 @@ class Maze:
         """Draw the maze."""
         self.wall_renderer.draw(
             screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks,
-            strong=self.strong_blocks
+            strong=self.strong_blocks, territories=self.block_territories, strong_cells=self.strong_cells
         )
         self.wall_debris.draw(screen)
         

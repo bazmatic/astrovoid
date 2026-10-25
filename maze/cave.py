@@ -193,10 +193,11 @@ class CaveShape:
         if self.grid[r][c] != 1 or cell in self.strong:
             return None
         # Rock is owned by the nearest wall among the 3x3 around it, so it lies in c's 3x3
-        left = max(int(math.floor(s.origin[0] + (c-1)*s.cell_w)), int(math.ceil(s.origin[0])))
-        top = max(int(math.floor(s.origin[1] + (r-1)*s.cell_h)), int(math.ceil(s.origin[1])))
-        right = min(int(math.ceil(s.origin[0] + (c+2)*s.cell_w)), int(s.origin[0] + s.cols*s.cell_w))
-        bottom = min(int(math.ceil(s.origin[1] + (r+2)*s.cell_h)), int(s.origin[1] + s.rows*s.cell_h))
+        # The first pixels whose centres lie inside the maze
+        left = max(int(math.floor(s.origin[0] + (c-1)*s.cell_w)), int(math.ceil(s.origin[0] - 0.5)))
+        top = max(int(math.floor(s.origin[1] + (r-1)*s.cell_h)), int(math.ceil(s.origin[1] - 0.5)))
+        right = min(int(math.ceil(s.origin[0] + (c+2)*s.cell_w)), int(math.floor(s.origin[0] + s.cols*s.cell_w + 0.5)))
+        bottom = min(int(math.ceil(s.origin[1] + (r+2)*s.cell_h)), int(math.floor(s.origin[1] + s.rows*s.cell_h + 0.5)))
         if right <= left or bottom <= top:
             return None
         fy = (np.arange(top, bottom) + 0.5 - s.origin[1]) / s.h_y
