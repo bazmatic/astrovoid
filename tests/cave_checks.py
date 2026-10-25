@@ -157,3 +157,37 @@ def steel_face_violations(field) -> List[Tuple[int, int]]:
         bad.extend(map(tuple, np.argwhere((d <= 1e-6) & ~field.rock)))
         bad.extend(map(tuple, np.argwhere((d <= reach) & open_samples & field.rock)))
     return bad
+
+
+def watertight_violations(grid, calc, segments) -> List[Tuple[Tuple[int, int], Tuple[int, int]]]:
+    """(open cell, wall cell) pairs of orthogonal neighbours where the line between their centres
+    crosses no wall segment, i.e. a gap in the outline. `calc` is the MazePositionCalculator;
+    `segments` anything with .start and .end."""
+    from utils.math_utils import line_line_collision
+    rows, cols = len(grid), len(grid[0])
+    if not segments:
+        return [((c, r), (c, r)) for r in range(rows) for c in range(cols) if grid[r][c] == 1]
+    ends = np.array([(s.start[0], s.start[1], s.end[0], s.end[1]) for s in segments], float)
+    lo_x, hi_x = np.minimum(ends[:, 0], ends[:, 2]), np.maximum(ends[:, 0], ends[:, 2])
+    lo_y, hi_y = np.minimum(ends[:, 1], ends[:, 3]), np.maximum(ends[:, 1], ends[:, 3])
+
+    def centre(c, r):
+        x, y = calc.grid_to_screen(c, r)
+        return (x + 0.5*calc.cell_size_x, y + 0.5*calc.cell_size_y)
+
+    bad = []
+    for r in range(rows):
+        for c in range(cols):
+            if grid[r][c] != 1:
+                continue
+            q = centre(c, r)
+            for dc, dr in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+                oc, orow = c + dc, r + dr
+                if not (0 <= oc < cols and 0 <= orow < rows) or grid[orow][oc] == 1:
+                    continue
+                p = centre(oc, orow)
+                near = np.nonzero((hi_x >= min(p[0], q[0])) & (lo_x <= max(p[0], q[0]))
+                                  & (hi_y >= min(p[1], q[1])) & (lo_y <= max(p[1], q[1])))[0]
+                if not any(line_line_collision(p, q, segments[i].start, segments[i].end) for i in near):
+                    bad.append(((oc, orow), (c, r)))
+    return bad
