@@ -326,29 +326,37 @@ def test_editor_preview_matches_play(game, monkeypatch, level):  # noqa: F811
     assert keys(preview.walls) == keys(level_maze(level).walls)
 
 
-def _episode_seconds(monkeypatch, curved, level, horizon):
-    from experiments.harness import run_episode
-    monkeypatch.setattr(config.CAVE, 'enabled', curved)
+def _episode_seconds(curved, level, horizon):
+    from experiments import harness
     began = time.perf_counter()
-    run_episode(level, 0, horizon=horizon)
-    return time.perf_counter() - began
+    harness.run_episode(level, 0, horizon=horizon, curved_walls=curved)
+    seconds = time.perf_counter() - began
+    assert (harness._game.maze.cave is not None) == curved, (level, curved)  # really the walls asked for
+    return seconds
 
 
-def test_curved_walls_cost_little_frame_time(monkeypatch):
-    """A crowded level (27, the farming level) plays about as fast on curved rock as on square walls.
+# (level, episode seconds, the most curved rock may cost against square walls). Level 27, the
+# farming level, is crowded. Level 13 has the hunter, whose sight of curved rock costs most: it
+# measured 1.36-1.39x (6 s episodes, best of two, 2026-10-26), so its cap is 1.25 times that.
+FRAME_TIME_GATES = [(27, 3.0, 1.3), (13, 6.0, 1.75)]
+
+
+@pytest.mark.parametrize('level, horizon, limit', FRAME_TIME_GATES)
+def test_curved_walls_cost_little_frame_time(level, horizon, limit):
+    """A level plays about as fast on curved rock as on square walls.
 
     Relative, at the real screen size the harness plays at. One untimed short run of each first (the
     harness builds its Game once per process), then the two modes alternate, best of two each."""
     from experiments import harness
     try:
         for curved in (False, True):
-            _episode_seconds(monkeypatch, curved, 27, 0.5)
+            _episode_seconds(curved, level, 0.5)
         times = {False: math.inf, True: math.inf}
         for curved in (False, True, True, False):
-            times[curved] = min(times[curved], _episode_seconds(monkeypatch, curved, 27, 3.0))
+            times[curved] = min(times[curved], _episode_seconds(curved, level, horizon))
     finally:
         harness.reset()  # the harness's Game changes the screen size for the whole process
-    assert times[True] <= 1.3 * times[False], times
+    assert times[True] <= limit * times[False], times
 
 
 def _destroy_times(curved, cells, count=12):
