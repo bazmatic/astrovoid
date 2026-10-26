@@ -335,6 +335,7 @@ def test_all_levels_meet_anti_goals(monkeypatch, screen):
 
 
 def _cluster_maze():
+    random.seed(5)  # the same start and exit corners every time: the rock keeps them clear
     maze = Maze(1, MazeComplexity.EMPTY, 32)
     cluster = [(10, 10), (11, 10), (10, 11), (11, 11)]
     for x, y in cluster:
