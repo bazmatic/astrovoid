@@ -183,16 +183,80 @@ def test_owner_only_change_keeps_spatial_index():
     assert_index_consistent(maze)
 
 
-def test_spawns_never_inside_rock():
-    mazes = [level_maze(level) for level in LEVELS]
-    random.seed(1)
-    mazes.append(Maze(1, complexity=REAL['get_maze_complexity'](1), grid_size=REAL['get_maze_grid_size'](1), seed=1))
-    for maze in mazes:
-        random.seed(3)
-        for pos in maze.get_valid_spawn_positions(30):
-            assert not maze.cave.is_rock(pos), (maze.level, pos)
-        assert not maze.cave.is_rock(maze.start_pos), maze.level
-        assert not maze.cave.is_rock(maze.exit.get_pos()), maze.level
+def _clearance(maze, pos):
+    """px from pos to the nearest wall segment, and to the nearest wall cell's square (the outline
+    square walls would have there)."""
+    import numpy as np
+    ends = np.array([(w.start[0], w.start[1], w.end[0], w.end[1]) for w in maze.walls], float)
+    a, d = ends[:, :2], ends[:, 2:] - ends[:, :2]
+    p = np.array(pos, float)
+    t = np.clip(((p - a) * d).sum(1) / np.maximum((d * d).sum(1), 1e-12), 0, 1)
+    outline = float(np.hypot(*(a + d * t[:, None] - p).T).min())
+    calc = maze.position_calculator
+    square = math.inf
+    for x, y in maze.blocks:
+        left, top = calc.grid_to_screen(x, y)
+        gap_x = max(0.0, left - pos[0], pos[0] - (left + calc.cell_size_x))
+        gap_y = max(0.0, top - pos[1], pos[1] - (top + calc.cell_size_y))
+        square = min(square, math.hypot(gap_x, gap_y))
+    return outline, square
+
+
+def _layout_spawns(maze):
+    """(what, pixel position, radius) for everything a layout places: the ship, the exit, the beacon
+    and each creature, at its cell's centre."""
+    from entities.jev_beacon import JevBeacon
+    import enemy_kinds
+    layout, calc = maze.layout, maze.position_calculator
+    out = [('ship', maze.start_pos, config.SHIP_SIZE), ('exit', maze.exit.get_pos(), maze.exit.radius)]
+    if layout.beacon is not None:
+        out.append(('beacon', calc.grid_center_to_screen(*layout.beacon),
+                    JevBeacon.RING_RADIUS * config.POWERUP_CRYSTAL_SIZE))
+    out.extend((f'{kind} {cell}', calc.grid_center_to_screen(*cell), enemy_kinds.kind(kind).tuning['size'])
+               for kind, cell in layout.enemies)
+    return out
+
+
+# The outline may sit this far inside a disc whose clearance the cell's square walls only just give
+SPAWN_TOLERANCE = 0.5
+
+
+def test_layout_spawns_keep_their_disc_clear(monkeypatch):
+    """On the real display, curved rock leaves every hand-placed spawn's whole disc clear: as clear
+    as the square walls would (which already cut into a few big discs: the exit portal, a large
+    creature in a narrow cell)."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    short = []
+    for level in LEVELS:
+        maze = level_maze(level)
+        if maze.layout is None:
+            continue
+        assert maze.cave is not None
+        for what, pos, radius in _layout_spawns(maze):
+            outline, square = _clearance(maze, pos)
+            if maze.cave.is_rock(pos) or outline < min(radius, square) - SPAWN_TOLERANCE:
+                short.append((level, what, radius, round(outline, 1), round(square, 1)))
+    assert short == []
+
+
+@pytest.mark.parametrize('screen', [(3840, 2160), (1352, 878)])
+def test_generated_spawns_keep_their_disc_clear(monkeypatch, screen):
+    """A generated maze's ship start, exit and enemy spawns (which is_open checks with a 15 px disc)."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', screen[0])
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', screen[1])
+    short = []
+    for seed in range(4):
+        for complexity in (MazeComplexity.NORMAL, MazeComplexity.EXTREME):
+            maze = generated_maze(complexity, 32, seed)
+            random.seed(3)
+            spawns = [('ship', maze.start_pos, config.SHIP_SIZE), ('exit', maze.exit.get_pos(), maze.exit.radius)]
+            spawns += [('enemy', pos, 15) for pos in maze.get_valid_spawn_positions(30)]
+            for what, pos, radius in spawns:
+                outline, square = _clearance(maze, pos)
+                if maze.cave.is_rock(pos) or outline < min(radius, square) - SPAWN_TOLERANCE:
+                    short.append((seed, complexity.name, what, round(outline, 1), round(square, 1)))
+    assert short == []
 
 
 def test_is_open_rejects_rock():

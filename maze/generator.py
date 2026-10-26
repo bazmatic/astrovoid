@@ -213,6 +213,18 @@ class Maze:
             self.strong_cells = layout.strong_walls
             start_grid, exit_grid = layout.start, layout.exit
         
+        # Set start position (before the walls: the cave rock keeps it clear)
+        if layout is None:
+            self.start_pos = self.position_calculator.get_start_position(start_grid)
+        else:
+            self.start_pos = self.position_calculator.grid_center_to_screen(*start_grid)
+        
+        # Create exit object
+        exit_pos = self.position_calculator.grid_center_to_screen(exit_grid[0], exit_grid[1])
+        # Use average cell size for exit radius
+        exit_radius = (self.cell_size_x + self.cell_size_y) / 4
+        self.exit = ExitPortal(exit_pos, exit_radius)
+
         # Convert grid to blocks and their wall segments
         self.converter = GridToWallsConverter(self.position_calculator, self.strong_cells)
         self.wall_renderer = WallRenderer()
@@ -231,18 +243,7 @@ class Maze:
         # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
         self.gate_segments: List[WallSegment] = []
         self.rebuild_walls()
-        
-        # Set start position
-        if layout is None:
-            self.start_pos = self.position_calculator.get_start_position(start_grid)
-        else:
-            self.start_pos = self.position_calculator.grid_center_to_screen(*start_grid)
-        
-        # Create exit object
-        exit_pos = self.position_calculator.grid_center_to_screen(exit_grid[0], exit_grid[1])
-        # Use average cell size for exit radius
-        exit_radius = (self.cell_size_x + self.cell_size_y) / 4
-        self.exit = ExitPortal(exit_pos, exit_radius)
+
     
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
         """Check if player reached the exit."""
@@ -257,6 +258,23 @@ class Maze:
         radius = half + thickness / 2 + 2
         return [(self.position_calculator.grid_center_to_screen(*gate.cell), radius) for gate in self.layout.gates]
 
+    def _spawn_keep_clear(self) -> List[Tuple[Tuple[float, float], float]]:
+        """Circles the cave rock must stay out of so nothing starts inside a bulge: the ship's start,
+        the exit portal, and a layout's beacon and creatures (each its own size, plus a pixel)."""
+        out = [(self.start_pos, config.SHIP_SIZE + 1), (self.exit.get_pos(), self.exit.radius)]
+        if self.layout is None:
+            return out  # generated mazes place creatures later, only where is_open finds room
+        import enemy_kinds  # here, not at the top: it loads the enemy catalogue
+        from entities.jev_beacon import JevBeacon
+        calc = self.position_calculator
+        if self.layout.beacon is not None:
+            # The beacon's turning ring, the widest part of it
+            out.append((calc.grid_center_to_screen(*self.layout.beacon),
+                        JevBeacon.RING_RADIUS * config.POWERUP_CRYSTAL_SIZE + 1))
+        out.extend((calc.grid_center_to_screen(*cell), enemy_kinds.kind(kind).tuning['size'] + 1)
+                   for kind, cell in self.layout.enemies)
+        return out
+
     def rebuild_walls(self) -> None:
         """Build the blocks, their exposed faces and the collision index from the grid."""
         # Hit points left in each wall block, keyed by grid cell (x, y). A
@@ -269,7 +287,7 @@ class Maze:
             # Curved rock: many short segments per block, each knowing the block it damages
             self.cave = CaveShape(
                 self.grid, self.position_calculator, self.converter, strong=self.strong_cells,
-                keep_clear=self._gate_keep_clear(), seed=self.cave_seed, settings=config.CAVE,
+                keep_clear=self._gate_keep_clear() + self._spawn_keep_clear(), seed=self.cave_seed, settings=config.CAVE,
                 hit_points=lambda cell: self.blocks.get(cell, config.WALL_HIT_POINTS))
             self.walls = self.cave.segments()
         else:
