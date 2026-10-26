@@ -58,7 +58,6 @@
       "noiseAmplitude": 0.48,
       "noiseScalesCells": [0.85, 0.35],
       "noiseWeights": [1.0, 0.5],
-      "clearanceRadius": 16.0,
       "linkClearance": 2.0,
       "wallCoreCells": 0.15,
       "simplifyTolerance": 0.75

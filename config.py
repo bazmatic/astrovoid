@@ -92,8 +92,6 @@ class CaveSettings:
     noiseAmplitude: float = 0.48
     noiseScalesCells: Tuple[float, ...] = (0.85, 0.35)
     noiseWeights: Tuple[float, ...] = (1.0, 0.5)
-    # px: the largest corridor-travelling creature radius (replay/Squiddler 15) plus 1
-    clearanceRadius: float = 16.0
     linkClearance: float = 2.0  # px kept open around every open-cell link
     wallCoreCells: float = 0.15
     simplifyTolerance: float = 0.75

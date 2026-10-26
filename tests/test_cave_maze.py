@@ -300,7 +300,6 @@ def test_ship_bounces_off_the_curve():
 def _anti_goal_violations(maze):
     field = maze.cave.field
     return {
-        'clearance': cave_checks.corridor_clearance_violations(field, maze.walls),
         'links': cave_checks.centre_and_link_violations(field),
         'islands': cave_checks.rock_island_violations(field),
         'gates': cave_checks.gate_swing_violations(field),

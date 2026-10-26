@@ -18,7 +18,6 @@ def test_cave_settings_load_from_settings_json():
     assert config.CAVE.enabled is True
     assert config.CAVE.blurCells == 0.34
     assert config.CAVE.noiseScalesCells == (0.85, 0.35)
-    assert config.CAVE.clearanceRadius == 16.0
 
 
 def generated(size=26, seed=125):
@@ -130,15 +129,9 @@ SERPENTINE = ["1111111111",
               "1111111111"]
 
 
-def test_corridor_clearance(maze_field):
-    assert cave_checks.corridor_clearance_violations(maze_field) == []
-    corridors = build([[int(ch) for ch in line] for line in SERPENTINE])
-    assert cave_checks.corridor_clearance_violations(corridors) == []
-
-
 def test_anti_goals_on_the_real_display(monkeypatch):
     """The checks above, on the real fullscreen display (1352x878), where cells are about a third
-    of the default screen's and the clearance is capped by the cell."""
+    of the default screen's."""
     monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
     monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
     grid = generated(32)  # the largest grids, whose cells are about 26 px tall here
@@ -156,7 +149,6 @@ def test_anti_goals_on_the_real_display(monkeypatch):
               'steel': build(steel_grid, strong=steel)}
     assert fields['maze'].samples.cell_h < 27
     for name, field in fields.items():
-        assert cave_checks.corridor_clearance_violations(field) == [], name
         assert cave_checks.centre_and_link_violations(field) == [], name
         assert cave_checks.wall_core_violations(field) == [], name
         assert cave_checks.rock_island_violations(field) == [], name
