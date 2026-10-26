@@ -101,6 +101,10 @@ class WallRenderer:
     SAMPLE_SPACING = 7.0  # Pixels between points along a ridge
     THICKNESS_RANGE = (0.75, 1.35)  # Multiples of half the wall thickness
     WOBBLE = 0.3  # Sideways wander, as a multiple of the wall thickness
+    # Curved rock is many short segments: a gentler ridge whose ends all meet at the same width,
+    # so the outline reads as one smooth line rather than a chain of lumps
+    CURVED_THICKNESS_RANGE = (0.9, 1.15)
+    CURVED_WOBBLE = 0.1
     COVER_MARGIN = 1.2  # Pixels of rock always kept either side of the true line
     # Rock tints, as multiples of the configured wall color
     TINTS = ((0.62, 0.80, 0.87), (0.78, 0.70, 0.83), (0.57, 0.87, 0.77))
@@ -933,10 +937,14 @@ class WallRenderer:
         # the true segment uncovered
         spans = max(2, int(round(length / self.SAMPLE_SPACING)))
         centres, widths = [], []
+        thickness_range, wobble = ((self.CURVED_THICKNESS_RANGE, self.CURVED_WOBBLE) if curved
+                                   else (self.THICKNESS_RANGE, self.WOBBLE))
         for i in range(spans + 1):
             t = i / spans
-            width = half * rng.uniform(*self.THICKNESS_RANGE)
-            wander = rng.uniform(-1.0, 1.0) * self.WOBBLE * config.WALL_THICKNESS * math.sin(math.pi * t) ** 0.5
+            width = half * rng.uniform(*thickness_range)
+            if curved:
+                width = half + (width - half) * math.sin(math.pi * t)  # every end exactly half
+            wander = rng.uniform(-1.0, 1.0) * wobble * config.WALL_THICKNESS * math.sin(math.pi * t) ** 0.5
             limit = max(0.0, width - self.COVER_MARGIN)
             centres.append(max(-limit, min(limit, wander)))
             widths.append(width)

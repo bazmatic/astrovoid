@@ -223,7 +223,7 @@ The Inflator makes a creature five times its normal size for five seconds. Its f
 
 The maze is built from solid blocks of rock. A block has walls only where it faces open space, so blocks packed together form one mass with nothing inside to fly through.
 
-The rock is drawn and felt as curved cave walls: smooth, water-worn outlines with gentle bulges and dips, laid over the same grid of blocks. Collision follows the curve, so you bounce off a bulge's surface, not the square block behind it. The curve never makes a level harder: every passage the grid leaves open stays wide enough for the largest creature that travels it, one-cell corridors on small cells keep straight walls, rock stays out of gate swings, and the ship's start, the exit, the beacon and every hand-placed creature get as much room as square walls would give them. Strong (metal) walls stay square. When a block is destroyed the rock around the hole re-forms smoothly. The bulges come from the level's seed, so a level looks and plays the same every time.
+The rock is drawn and felt as curved cave walls: smooth, water-worn outlines with gentle bulges and dips, laid over the same grid of blocks. Collision follows the curve, so you bounce off a bulge's surface, not the square block behind it. Seeded bulges may narrow passages and make traversal harder. Rock stays out of gate swings, and the ship's start, the exit, the beacon and every hand-placed creature get as much room as square walls would give them. Strong (metal) walls stay square. When a block is destroyed the rock around the hole re-forms smoothly. The bulges come from the level's seed, so a level looks and plays the same every time.
 
 The shape is tuned under `maze.cave` in `config/settings.json`. Lengths ending in `Cells` are fractions of a cell (of the square root of a cell's width times height, so the curve scales with the cell); the rest are pixels or plain numbers:
 
@@ -232,11 +232,10 @@ The shape is tuned under `maze.cave` in `config/settings.json`. Lengths ending i
 | `enabled` | `true` for curved cave rock; `false` gives the old square block walls |
 | `maxSampleSpacing` | Largest spacing of the rock field's samples, in pixels (finer is smoother and slower) |
 | `minSamplesPerCell` | Fewest samples across a cell, whatever its size |
-| `blurCells` | How far the blocks' corners round off: the blur's spread, in cells |
+| `blurCells` | Corner rounding spread in cells; currently `0.42` |
 | `noiseAmplitude` | How strongly the bulges and dips push the outline (in the field's own units, where 0.5 is the outline; 0 gives smooth rounded blocks) |
-| `noiseScalesCells` | The size of the bulges, in cells, one per layer of noise (large first) |
+| `noiseScalesCells` | Bulge scale in cells; currently one broad layer at `[2.5]`, without fine noise |
 | `noiseWeights` | Each noise layer's share, in the same order |
-| `clearanceRadius` | Pixels of room kept in every passage: the radius of the largest corridor-travelling creature plus one (never more than half a cell less a pixel) |
 | `linkClearance` | Pixels kept open around the line joining each pair of neighbouring open cells |
 | `wallCoreCells` | Radius of the core, in cells, around each block's centre and the lines to its wall neighbours, that is always rock, so thin walls never break |
 | `simplifyTolerance` | Pixels the traced outline may stray when it is simplified into fewer segments |

@@ -16,8 +16,8 @@ from tests import cave_checks
 
 def test_cave_settings_load_from_settings_json():
     assert config.CAVE.enabled is True
-    assert config.CAVE.blurCells == 0.34
-    assert config.CAVE.noiseScalesCells == (0.85, 0.35)
+    assert config.CAVE.blurCells == 0.42
+    assert config.CAVE.noiseScalesCells == (2.5,)
 
 
 def generated(size=26, seed=125):
@@ -163,13 +163,15 @@ def test_no_rock_islands(maze_field):
 def test_gate_swing_kept_clear():
     grid = generated()
     rows, cols = len(grid), len(grid[0])
-    # An open cell beside a wall, so rock would bulge into the swing without the clamp
-    pin = next((c, r) for r in range(2, rows-2) for c in range(2, cols-2)
-               if not grid[r][c] and grid[r][c+2] and not grid[r][c+1])
     plain = build(grid)
     radius = 1.5 * math.sqrt(plain.samples.cell_w * plain.samples.cell_h)
-    keep_clear = [(centre(plain, pin), radius)]
-    assert cave_checks.gate_swing_violations(plain, keep_clear) != []  # the clamp is what keeps it clear
+    # Pick a swing that actually meets a bulge: broad seeded noise need not bulge at the
+    # first open cell beside a wall. Keep the negative control so this tests the clamp.
+    candidates = ((c, r) for r in range(2, rows-2) for c in range(2, cols-2)
+                  if not grid[r][c] and grid[r][c+2] and not grid[r][c+1])
+    keep_clear = next(([(centre(plain, pin), radius)] for pin in candidates
+                       if cave_checks.gate_swing_violations(plain, [(centre(plain, pin), radius)])), None)
+    assert keep_clear is not None, 'fixture needs a bulge in an unclamped gate swing'
     gated = build(grid, keep_clear=keep_clear)
     assert cave_checks.gate_swing_violations(gated) == []
 

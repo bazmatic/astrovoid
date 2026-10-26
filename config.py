@@ -88,10 +88,10 @@ class CaveSettings:
     enabled: bool = True
     maxSampleSpacing: float = 6.0  # px between field samples, at most
     minSamplesPerCell: int = 6
-    blurCells: float = 0.34
-    noiseAmplitude: float = 0.48
-    noiseScalesCells: Tuple[float, ...] = (0.85, 0.35)
-    noiseWeights: Tuple[float, ...] = (1.0, 0.5)
+    blurCells: float = 0.42
+    noiseAmplitude: float = 0.7
+    noiseScalesCells: Tuple[float, ...] = (2.5,)
+    noiseWeights: Tuple[float, ...] = (1.0,)
     linkClearance: float = 2.0  # px kept open around every open-cell link
     wallCoreCells: float = 0.15
     simplifyTolerance: float = 0.75

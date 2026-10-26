@@ -1,6 +1,6 @@
 # Curved cave walls
 
-Date: 2026-10-25. Status: design, agreed in conversation; awaiting review of this document.
+Date: 2026-10-25. Status: approved design, updated 2026-10-26 for the user’s broader, smoother curves and acceptance of seeded passage narrowing.
 
 ## Purpose
 
@@ -13,7 +13,7 @@ practical, even if just an approximation" (the user's words). Collision must not
 grid.
 
 Success: every level, generated or hand-made, loads as curved cave rock; flying into a bulge bounces the ship off
-that bulge's surface; every level can still be finished the way it could before.
+that bulge's surface; seeded bulges may make traversal harder; report any truly unfinishable level rather than restoring a corridor-width clamp.
 
 ## Goals
 
@@ -33,20 +33,13 @@ that bulge's surface; every level can still be finished the way it could before.
 
 ## Anti-goals
 
-- **A level must never become harder to finish because the rock is lumpy** (agreed in playback). Specifically:
-  - No passage the cell layout leaves open may pinch below what the **largest creature that has to travel it** can
-    fly through: the player's ship, and also creatures whose routes are planned on cells (hunters, bosses,
-    flockers), since `hunter/maze_route.py` would otherwise route them through gaps they no longer fit. Rock may
-    bulge into a corridor only as far as that clearance allows. In practice one-cell corridors on the big grids
-    (about 26 px tall against an 18 px ship) stay nearly straight-walled, and the curve shows at bends, junctions
-    and open areas. (My proposal; put to the user, not objected to.) Note `maze.minPassageWidth` /
-    `config.MIN_PASSAGE_WIDTH` exist but nothing reads them and their unit is undefined; don't rely on them. The
-    builder chooses where the clearance figure comes from.
-  - Gates must keep their whole swing: rock stays out of each gate's swing circle (pin at a cell centre, plank 3
-    cells long), so a bulge can never stop a gate part-way and shut a route. (My call.)
-  - No route that is open in the cell grid may be closed by the rock.
-  - Thin (one-cell) walls must not break into floating islands or open gaps that are not in the cell grid. A wall
-    the grid says is solid stays a barrier.
+- Gates keep their whole swing: rock stays out of each gate's swing circle.
+- Wall cores and their links stay solid, so thin walls remain barriers rather than floating islands.
+- Open-cell centres and small links stay open. These preserve the field's topology, not a creature-sized
+  passage guarantee. Bulges may narrow passages and make traversal harder; the user withdrew the earlier
+  anti-goal because the game fixes the seed. No corridor-clearance clamp or corridor-face pinning remains.
+- Ship start, exit, beacon and placed creatures keep their discs clear as far as square walls allow.
+- Steel stays square; generation is deterministic and rebuilds match fresh construction.
 - Collision must not visibly disagree with the drawing: no bouncing off empty-looking space, no flying into rock.
 - No noticeable frame-rate drop on the real fullscreen display (1352x878), including when grenades destroy blocks.
 
@@ -59,6 +52,13 @@ that bulge's surface; every level can still be finished the way it could before.
   stay as they are.
 
 ## The look
+
+Latest direction (2026-10-26): curves should sweep on a larger scale, without small irregularities.
+Current tuning uses `blurCells: 0.42`, `noiseAmplitude: 0.7`, one noise scale of `2.5` cells and weight `1.0`.
+The fine noise octave is removed. Curved ridge widths meet at a common endpoint width and use gentler
+wander so rendering does not add a chain of small lumps. The earlier mockups below are historical references;
+the user still judges the final look from real-display screenshots.
+
 
 The mockups (in `.superpowers/brainstorm/`, not committed) drew one sample wall grid by blurring the cell
 occupancy and thresholding at 0.5, with value noise added for irregularity. 26 px cells, two noise octaves at
@@ -121,7 +121,7 @@ These come from reading the code (not running it). Line numbers are approximate.
 
 - How to compute the curved outline from the cells (blurred field and contour, smoothed polylines, or otherwise)
   and how many segments per curve, trading smoothness against collision and sight cost.
-- How to guarantee the anti-goals (passage width, no closed routes, no broken thin walls), and how to test them,
+- How to guarantee the remaining anti-goals (gate swings, spawn discs, no broken thin walls), and how to test them,
   e.g. across many generated seeds and all `levels/*.json`.
 - How to localise the rebuild after a block is destroyed so it stays cheap and the surrounding rock does not
   visibly jump.

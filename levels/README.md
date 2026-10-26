@@ -53,7 +53,7 @@ ammo is unlimited, and there are no gates or allied beacons.
 }
 ```
 
-  **walls** are drawn as curved cave rock over their cells (see Walls in the main README); the cells still decide what is open. The rock never pinches a passage or a gate's swing, and leaves the start, the exit, the beacon and each enemy as much room as square walls would.
+  **walls** are drawn as curved cave rock over their cells (see Walls in the main README); the cells still decide what is open. Seeded bulges may narrow passages; rock keeps gate swings clear and leaves the start, the exit, the beacon and each enemy as much room as square walls would.
 
   **strong_walls** (optional): wall blocks that no shot can destroy, drawn as riveted metal plate, and square (never curved). Use them where the player must not blast a way round, such as the walls of a pen whose only way in is its door. Everything that sees walls sees them; a shot at one strikes sparks and leaves no mark. A cell may be a wall or a strong wall, not both, and everywhere this page says "a wall" below, a strong wall counts too.
 

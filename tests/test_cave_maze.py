@@ -259,6 +259,44 @@ def test_generated_spawns_keep_their_disc_clear(monkeypatch, screen):
     assert short == []
 
 
+def _outline_shape(maze):
+    """(share of the outline's length that is neither horizontal nor vertical, radians the outline
+    turns per cell of its length). Wiggles turn a lot for little length; long sweeping curves
+    turn little."""
+    unit = math.sqrt(maze.cell_size_x * maze.cell_size_y)
+    point = lambda p: (round(p[0], 3), round(p[1], 3))
+    starts = {point(w.start): w for w in maze.walls}
+    total = slanted = turned = 0.0
+    for w in maze.walls:
+        dx, dy = w.end[0] - w.start[0], w.end[1] - w.start[1]
+        length = math.hypot(dx, dy)
+        total += length
+        if min(abs(dx), abs(dy)) > 0.05 * length:
+            slanted += length
+        after = starts.get(point(w.end))
+        if after is not None and length:
+            ex, ey = after.end[0] - after.start[0], after.end[1] - after.start[1]
+            turned += abs(math.atan2(dx*ey - dy*ex, dx*ex + dy*ey))
+    return slanted / total, turned / total * unit
+
+
+# level: (least slanted share, most turning per cell), on the real display. Measured 2026-10-26
+# with the tuning in settings.json (L13 0.73/0.83, L21 0.74/0.65, L26 0.81/0.90, L27 0.34/0.37);
+# floors about 87% of those, ceilings 15% over. The rough two-octave tuning before turned
+# 1.4 rad per cell on L13 and L26.
+OUTLINE_SHAPE = {13: (0.64, 0.95), 21: (0.64, 0.75), 26: (0.70, 1.05), 27: (0.30, 0.43)}
+
+
+def test_curved_rock_is_smooth_large_scale_curve(monkeypatch):
+    """Curved rock sweeps in long gentle curves: plenty of it is slanted (it is curved at all), but
+    it turns little per length (no small wiggles)."""
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    found = {level: tuple(round(v, 2) for v in _outline_shape(level_maze(level))) for level in OUTLINE_SHAPE}
+    assert all(found[level][0] >= least and found[level][1] <= most
+               for level, (least, most) in OUTLINE_SHAPE.items()), found
+
+
 def test_is_open_rejects_rock():
     maze = maze_with((4, 4))
     centre = maze.position_calculator.grid_center_to_screen(4, 4)
