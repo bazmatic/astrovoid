@@ -553,6 +553,8 @@ class Game:
         """Start the FUN-list entry with this key."""
         if key == 'pilot_duel':
             self.start_duel()
+        elif key == 'demo':
+            self._start_autoplay()
 
     # How a Rules hunter's pilot worker is made. None: a threaded one answering on the real clock. The lab sets an
     # instance attribute to give a synchronous worker on its own clock.
@@ -1332,8 +1334,9 @@ class Game:
         for projectile in self.projectiles:
             projectile.draw(self.screen)
         
-        # Draw ship (hide during exit explosion); an observer shows only faintly
-        if not self.exit_explosion_active:
+        # Hide the parked player in autoplay; an observer otherwise shows faintly.
+        hide_player = self.autoplay is not None and config.SETTINGS.autoplay.hidePlayer
+        if not self.exit_explosion_active and not hide_player:
             if self.ship.observer:
                 self.ship.draw_as_observer(self.screen)
             else:

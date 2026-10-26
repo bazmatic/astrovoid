@@ -35,6 +35,14 @@ class ShipSettings:
 
 
 @dataclass
+class HunterShipSettings:
+    rotationSpeed: float = 5.0
+    thrustForce: float = 0.15
+    friction: float = 0.998
+    maxSpeed: float = 8.0
+
+
+@dataclass
 class ResourceSettings:
     initialFuel: int
     initialAmmo: int
@@ -432,6 +440,7 @@ class Settings:
     starAnimation: StarAnimationSettings
     ui: UISettings
     game: GameSettings
+    hunterShip: HunterShipSettings = field(default_factory=HunterShipSettings)
     autoplay: AutoplaySettings = field(default_factory=AutoplaySettings)
     obstacles: ObstacleSettings = field(default_factory=ObstacleSettings)
 
@@ -584,6 +593,7 @@ def load_settings() -> Settings:
             fonts=fonts
         ),
         game=GameSettings(**raw["game"]),
+        hunterShip=HunterShipSettings(**raw.get("hunterShip", {})),
         autoplay=AutoplaySettings(**raw.get("autoplay", {})),
         obstacles=ObstacleSettings(**raw.get("obstacles", {})),
     )

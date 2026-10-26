@@ -436,6 +436,7 @@ asterdroids/
 - Each kind of enemy (its names, how it behaves in the maze and its own tuning) has one entry in `config/enemies.json`.
 - `config.py` loads the JSON into typed dataclasses and exposes the legacy uppercase names for backward compatibility (e.g., `config.SCREEN_WIDTH`) while also providing `config.SETTINGS` for new code that prefers structured access.
 - When updating `config/settings.json`, rerun the game or tests to reload the new configuration.
+- Tune player movement in `ship` and hunter movement independently in `hunterShip`: `rotationSpeed`, `thrustForce`, `friction`, and `maxSpeed`. Hunter pilot thrust and turn multipliers still apply to the hunter values. Allied and enemy hunters share this movement baseline; their sizes and colors remain in `config/enemies.json`. Other enemy kinds may still scale their movement from `ship`.
 
 ## Documentation
 

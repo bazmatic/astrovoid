@@ -1,6 +1,7 @@
 """Propulsion: traits that turn a creature's controls into motion."""
 import math
 from dataclasses import fields
+from typing import Optional
 
 import config
 import level_rules
@@ -77,21 +78,22 @@ class Drift(Trait):
 class Thrusters(Trait):
     """Flies like a ship: it turns toward its brain's heading (or by its brain's turn) and thrusts along its own
     heading, coasting with friction between thrusts, bouncing off the screen edges, and sweeping into walls so it
-    never passes through one. Its top speed is `speedShare` of the player ship's."""
+    never passes through one. Its top speed is `speedShare` of the player's unless `maxSpeed` is supplied."""
     NAME = 'thrusters'
 
     def __init__(self, speedShare: float, thrust: float = config.SHIP_THRUST_FORCE,
                  turnRate: float = config.SHIP_ROTATION_SPEED, friction: float = config.SHIP_FRICTION,
-                 mode: str = 'standard'):
+                 mode: str = 'standard', maxSpeed: Optional[float] = None):
         if mode not in ('standard', 'hunter'):
             raise ValueError('thrusters: unknown mode')
         self.mode = mode
-        self.max_speed = speedShare * config.SHIP_MAX_SPEED
+        self.max_speed = speedShare * config.SHIP_MAX_SPEED if maxSpeed is None else maxSpeed
         self.force, self.turn_rate, self.friction = thrust, turnRate, friction
 
     def on_spawn(self, c, enc):
         c.prev_x, c.prev_y = c.x, c.y
         c.max_speed, c.thrust_force, c.current_rotation_speed = self.max_speed, self.force, self.turn_rate
+        c.friction = self.friction
         c.pilot_thrusting = False
         c.thrust_frames = 0
         c._decision = c._burn_left = None

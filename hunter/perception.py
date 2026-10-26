@@ -105,7 +105,7 @@ class HunterPerception:
             'physics': {'fps':config.FPS,'speed_limit':hunter.max_speed,
                         'rotation_per_frame':hunter.current_rotation_speed,
                         'thrust_per_frame':hunter.thrust_force,
-                        'friction_per_frame':config.SHIP_FRICTION,
+                        'friction_per_frame':hunter.friction,
                         'projectile_speed':config.PROJECTILE_SPEED,
                         'projectile_lifetime':config.PROJECTILE_LIFETIME,
                         'projectile_radius':config.PROJECTILE_SIZE},
