@@ -26,7 +26,7 @@ from tests.test_hunter_integration import game  # noqa: F401 - pytest fixture
 from tests.test_layout_play import REAL, real_level_config
 
 LEVELS = sorted(int(p.stem) for p in pathlib.Path(__file__).resolve().parent.parent.glob('levels/*.json'))
-SEEDS_PER_PRESET = 20
+SEEDS_PER_PRESET = 10  # per screen size: the sweep runs on two
 
 
 def key(segment):
@@ -236,7 +236,7 @@ def test_ship_bounces_off_the_curve():
 def _anti_goal_violations(maze):
     field = maze.cave.field
     return {
-        'clearance': cave_checks.corridor_clearance_violations(field),
+        'clearance': cave_checks.corridor_clearance_violations(field, maze.walls),
         'links': cave_checks.centre_and_link_violations(field),
         'islands': cave_checks.rock_island_violations(field),
         'gates': cave_checks.gate_swing_violations(field),
@@ -246,7 +246,16 @@ def _anti_goal_violations(maze):
     }
 
 
-def test_all_levels_meet_anti_goals():
+SCREENS = {'default 3840x2160': (3840, 2160), 'real display 1352x878': (1352, 878)}
+
+
+@pytest.mark.parametrize('screen', SCREENS)
+def test_all_levels_meet_anti_goals(monkeypatch, screen):
+    """Every level and SEEDS_PER_PRESET generated mazes per preset and size, on the default screen
+    and on the real fullscreen display (where cells are about a third the size)."""
+    width, height = SCREENS[screen]
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', width)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', height)
     mazes = [(f'level {level}', lambda level=level: level_maze(level)) for level in LEVELS]
     for complexity in MazeComplexity:
         for size in (18, 32):

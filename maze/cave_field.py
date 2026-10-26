@@ -23,6 +23,9 @@ THRESHOLD = 0.5
 MARGIN = 0.05
 _OPEN = THRESHOLD - MARGIN
 _ROCK = THRESHOLD + MARGIN
+# A clamped wall face: rock, but so barely that the outline between it and a clamped open sample
+# sits within a twentieth of a sample of the face (rather than up to a whole sample out from it)
+_FACE = THRESHOLD + MARGIN/20
 
 
 @dataclass(frozen=True)
@@ -113,6 +116,7 @@ class CaveField:
         self._core: Optional[np.ndarray] = None
         self._kept_open: Optional[np.ndarray] = None
         self._open_sample: Optional[np.ndarray] = None
+        self._face: Optional[np.ndarray] = None
         self.values: Optional[np.ndarray] = None
         self.rock: Optional[np.ndarray] = None
         self.owner: Optional[np.ndarray] = None
@@ -138,6 +142,11 @@ class CaveField:
         s = self.samples
         return min(self.settings.clearanceRadius, 0.5*min(s.cell_w, s.cell_h) - 1.0)
 
+    def outline_margin(self) -> float:
+        """How far inside a clamped disc the outline can still reach: it runs between samples, so
+        it can lie up to one sample spacing nearer than the nearest rock sample."""
+        return max(self.samples.h_x, self.samples.h_y)
+
     # Building
 
     def rebuild(self) -> np.ndarray:
@@ -154,7 +163,7 @@ class CaveField:
         if self._walls is None:
             window = owner_window = (0, rows, 0, cols)
             self._base = np.zeros(s.shape, np.float32)
-            self._core, self._kept_open, self._open_sample = (np.zeros(s.shape, bool) for _ in range(3))
+            self._core, self._kept_open, self._open_sample, self._face = (np.zeros(s.shape, bool) for _ in range(4))
             self.owner = np.full(s.shape, -1, np.int32)
         else:
             changed_cells = np.argwhere(walls != self._walls)
@@ -170,7 +179,7 @@ class CaveField:
         self._walls = walls
         y0, y1, x0, x1 = window
         at = (slice(y0, y1), slice(x0, x1))
-        self._base[at], self._core[at], self._kept_open[at], self._open_sample[at] = \
+        self._base[at], self._core[at], self._kept_open[at], self._open_sample[at], self._face[at] = \
             self._local(walls, steel, window, self._x.window(x0, x1), self._y.window(y0, y1))
         y0, y1, x0, x1 = owner_window
         self.owner[y0:y1, x0:x1] = self._nearest_cell(
@@ -179,7 +188,7 @@ class CaveField:
         values = self._base.copy()
         centres = self._open_centres(walls)
         self._cleanup(values, self._core, centres, self._kept_open)
-        if self._clear_corridors(values, walls, self._open_sample):
+        if self._clear_corridors(values, walls, self._open_sample, self._face):
             self._cleanup(values, self._core, centres, self._kept_open)  # else unchanged: idempotent
 
         rock = values >= THRESHOLD
@@ -197,7 +206,7 @@ class CaveField:
 
     def _local(self, walls: np.ndarray, steel: np.ndarray, window, x: '_Axis', y: '_Axis'):
         """The field before cleanup over a sample window, with the per-sample masks the global
-        passes need: (values, core, kept_open, open_sample)."""
+        passes need: (values, core, kept_open, open_sample, face)."""
         s, cfg = self.samples, self.settings
         y0, y1, x0, x1 = window
         blurred, wall_sample = self._blur(walls, window)
@@ -208,23 +217,31 @@ class CaveField:
         core = wall_sample & self._near_skeleton(walls, True, cfg.wallCoreCells*self._unit, x, y)
         np.maximum(values, _ROCK, out=values, where=core)
 
-        # Open space the clamps promise (gate swings, steel faces) must survive the hole cleanup
-        kept_open = np.zeros(values.shape, bool)
+        # Wall-cell samples on a face towards open space, which a clamp may pin to the face
+        steel_sample = self._touches(steel, False, x, y) if steel.any() else np.zeros_like(core)
+        face = wall_sample & self._touches(~walls, False, x, y) & ~core & ~steel_sample
+
+        # Open space the clamps promise (gate swings, spawns, steel faces) must survive the hole
+        # cleanup. The outline stays out of each disc: open samples within it, plus the outline
+        # margin, are clamped open, and wall faces there are pinned so the outline lies on them.
+        pinned = np.zeros(values.shape, bool)
+        margin = self.outline_margin()
         for (cx, cy), radius in self.keep_clear:
-            kept_open |= ((x.pos[None, :]-cx)**2 + (y.pos[:, None]-cy)**2) <= radius**2
-        kept_open &= open_sample
+            pinned |= ((x.pos[None, :]-cx)**2 + (y.pos[:, None]-cy)**2) <= (radius + margin)**2
+        kept_open = pinned & open_sample
         np.minimum(values, _OPEN, out=values, where=kept_open)
+        np.minimum(values, _FACE, out=values, where=pinned & face)
 
         links = self._near_skeleton(~walls, False, cfg.linkClearance, x, y)
         np.minimum(values, _OPEN, out=values, where=links & open_sample)
 
         if steel.any():
-            values[self._touches(steel, False, x, y)] = 1.0
+            values[steel_sample] = 1.0
             near_steel, _ = self._nearest_cell(steel, x, y)
             steel_face = open_sample & (near_steel <= 0.5*min(s.cell_w, s.cell_h))
             np.minimum(values, _OPEN, out=values, where=steel_face)
             kept_open |= steel_face
-        return values, core, kept_open, open_sample
+        return values, core, kept_open, open_sample, face
 
     def _touches(self, cells: np.ndarray, outside: bool, x: '_Axis', y: '_Axis') -> np.ndarray:
         """Per sample: does it touch (lie in or on the border of) any cell in `cells`?"""
@@ -346,15 +363,20 @@ class CaveField:
         if not reached.all():
             np.maximum(values, _ROCK, out=values, where=~reached[labels])
 
-    def _clear_corridors(self, values: np.ndarray, walls: np.ndarray, open_sample: np.ndarray) -> bool:
+    def _clear_corridors(self, values: np.ndarray, walls: np.ndarray, open_sample: np.ndarray,
+                         face: np.ndarray) -> bool:
         """Clamp a tube between adjacent open cells whose centres a disc of required_clearance()
-        cannot travel between, staying inside the two cells. Returns whether any was clamped."""
-        clamped = False
+        cannot travel between, staying inside the two cells. Returns whether any was clamped.
+
+        The test on samples uses the clearance plus the outline margin, so the outline itself
+        keeps the clearance. Where that reaches past the cells (one-cell corridors on small
+        cells), the tube pins the wall faces, so those corridors keep straight, square walls."""
         s = self.samples
-        radius = self.required_clearance()
+        radius = self.required_clearance() + self.outline_margin()
         free = self._free_space(values >= THRESHOLD, radius)
         open_cells = ~walls
         x, y = self._x, self._y
+        tubes = np.zeros(values.shape, bool)
         for horizontal in (True, False):
             if horizontal:
                 ra, ca = np.nonzero(open_cells[:, :-1] & open_cells[:, 1:])
@@ -366,25 +388,28 @@ class CaveField:
                 lines, start, end = blocked[ca], y.centres[ra], y.centres[ra] + s.per_y
             # A straight free run between the centres is a path; only the rest need components
             count = lines[np.arange(len(ra)), end] - np.where(start > 0, lines[np.arange(len(ra)), start-1], 0)
+            # Every pair's crop has the same shape and the same tube within it
+            h, w = (s.per_y + 1, 2*s.per_x + 1) if horizontal else (2*s.per_y + 1, s.per_x + 1)
+            px, py = np.arange(w)[None, :]*s.h_x, np.arange(h)[:, None]*s.h_y
+            ax, ay = (s.per_x//2)*s.h_x, (s.per_y//2)*s.h_y
+            bx, by = (ax + s.cell_w, ay) if horizontal else (ax, ay + s.cell_h)
+            gx = np.maximum(0, np.maximum(ax - px, px - bx))
+            gy = np.maximum(0, np.maximum(ay - py, py - by))
+            tube = np.hypot(gx, gy) <= radius
             for r, c in zip(ra[count > 0], ca[count > 0]):
                 rb, cb = (r, c+1) if horizontal else (r+1, c)
-                y0, y1, x0, x1 = r*s.per_y, (rb+1)*s.per_y + 1, c*s.per_x, (cb+1)*s.per_x + 1
-                crop = free[y0:y1, x0:x1].astype(np.uint8)
-                _, labels = cv2.connectedComponents(crop, connectivity=4)
-                la = labels[y.centres[r]-y0, x.centres[c]-x0]
-                lb = labels[y.centres[rb]-y0, x.centres[cb]-x0]
-                if la and la == lb:
-                    continue
-                ax, ay = x.pos[x.centres[c]], y.pos[y.centres[r]]
-                bx, by = x.pos[x.centres[cb]], y.pos[y.centres[rb]]
-                px, py = x.pos[x0:x1][None, :], y.pos[y0:y1][:, None]
-                gx = np.maximum(0, np.maximum(ax - px, px - bx))
-                gy = np.maximum(0, np.maximum(ay - py, py - by))
-                tube = (np.hypot(gx, gy) <= radius) & open_sample[y0:y1, x0:x1]
-                window = values[y0:y1, x0:x1]
-                np.minimum(window, _OPEN, out=window, where=tube)
-                clamped = True
-        return clamped
+                y0, x0 = r*s.per_y, c*s.per_x
+                ia, ja, ib, jb = y.centres[r], x.centres[c], y.centres[rb], x.centres[cb]
+                if free[ia, ja] and free[ib, jb]:  # else no path between them: no need to look
+                    _, labels = cv2.connectedComponents(free[y0:y0+h, x0:x0+w].astype(np.uint8), connectivity=4)
+                    if labels[ia-y0, ja-x0] == labels[ib-y0, jb-x0]:
+                        continue
+                tubes[y0:y0+h, x0:x0+w] |= tube
+        if not tubes.any():
+            return False
+        np.minimum(values, _OPEN, out=values, where=tubes & open_sample)
+        np.minimum(values, _FACE, out=values, where=tubes & face)
+        return True
 
     def _free_space(self, rock: np.ndarray, radius: float) -> np.ndarray:
         """Samples with no rock sample closer than `radius` px. The samples are not square, so
