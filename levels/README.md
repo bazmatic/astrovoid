@@ -19,7 +19,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 }
 ```
 
-- **seed**: random seed for the maze and enemy positions. Default: the level number. Arc levels use `100 + level`.
+- **seed**: random seed for the maze, enemy positions and the bulges of the curved cave rock (so a level's rock is the same every time, hand-made layouts included). Default: the level number. Arc levels use `100 + level`.
 - **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
 - **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
 - **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
@@ -53,7 +53,9 @@ ammo is unlimited, and there are no gates or allied beacons.
 }
 ```
 
-  **strong_walls** (optional): wall blocks that no shot can destroy, drawn as riveted metal plate. Use them where the player must not blast a way round, such as the walls of a pen whose only way in is its door. Everything that sees walls sees them; a shot at one strikes sparks and leaves no mark. A cell may be a wall or a strong wall, not both, and everywhere this page says "a wall" below, a strong wall counts too.
+  **walls** are drawn as curved cave rock over their cells (see Walls in the main README); the cells still decide what is open. The rock never pinches a passage or a gate's swing, and leaves the start, the exit, the beacon and each enemy as much room as square walls would.
+
+  **strong_walls** (optional): wall blocks that no shot can destroy, drawn as riveted metal plate, and square (never curved). Use them where the player must not blast a way round, such as the walls of a pen whose only way in is its door. Everything that sees walls sees them; a shot at one strikes sparks and leaves no mark. A cell may be a wall or a strong wall, not both, and everywhere this page says "a wall" below, a strong wall counts too.
 
   **gates** (optional): each is a plank on a pin at the centre of `cell`. `angle` is in degrees clockwise on screen, a multiple of 45 from 0 up to but not including 180 (default 0, horizontal). `motor` is `"cw"` or `"ccw"` for a motor gate, and left out for a free gate. A gate may not share a cell with a wall, the start, the exit, the beacon, an enemy or another gate, and its plank (three cells long, so it covers its own cell and the one either side) may not cross a wall, leave the interior, cover the start, the exit, an anemone or a flighthouse, or share a cell with, cross or touch another gate's plank (planks that overlap would creep at rest); a layout that breaks this is ignored. Cells are not square on screen, so the game also measures each plank in pixels when the level starts: a gate whose plank would touch a wall or another plank there is left out (with a warning in the log). The level editor makes the same check on its own screen, so a gate placed there fits screens of that shape. A gate that doesn't fit the editor's screen (from a level saved on another screen, or written by hand) doesn't stop other edits; the cursor says "doesn't fit" over it, and R turns it to an angle that does.
 
