@@ -21,6 +21,13 @@ points, so it looks the same every frame.
 A strong wall, which nothing can destroy, is a riveted plate of metal
 instead: no ridge of rock, no weed, and shots leave no mark on it.
 
+Curved cave rock comes as many short segments around each block's territory:
+the rock it owns, as a mask. Its fill, stains, cracks and bites are painted
+into that mask instead of the block's square, each bite opening inward from
+the segment nearest where the shot landed. Ridges follow the segments, with
+knobbly joints only where the outline turns sharply or ends, and weed grows as
+thickly per pixel of ridge as it does on square walls.
+
 Walls are painted once onto a cached surface. When one is damaged or destroyed
 only the patch around it is repainted. Weed is the only part drawn fresh each
 frame.
@@ -43,6 +50,8 @@ Color = Tuple[int, int, int]
 SegmentKey = Tuple[Tuple[int, int], Tuple[int, int]]
 BlockRect = Tuple[int, int, int, int]  # Left, top, width, height
 Wound = Tuple[int, int]  # Point on a block's edge where a shot landed
+Cell = Tuple[int, int]
+Territory = Tuple[pygame.Rect, pygame.mask.Mask]  # Screen area of a block's curved rock, and which pixels
 
 
 @dataclass
@@ -58,10 +67,10 @@ class Weed:
 @dataclass
 class Bite:
     """A chunk broken out of one edge of a block by one or more shots."""
-    start: Tuple[int, int]  # Corner the edge runs from
-    along: Tuple[int, int]  # Unit step along the edge
-    inward: Tuple[int, int]  # Unit step into the block
-    length: int  # Of the edge
+    start: Tuple[float, float]  # Corner the edge runs from
+    along: Tuple[float, float]  # Unit step along the edge
+    inward: Tuple[float, float]  # Unit step into the block
+    length: float  # Of the edge
     distance: float  # Along the edge to the first shot that landed here
     hits: int = 1
     seed: int = 0
@@ -92,6 +101,10 @@ class WallRenderer:
     SAMPLE_SPACING = 7.0  # Pixels between points along a ridge
     THICKNESS_RANGE = (0.75, 1.35)  # Multiples of half the wall thickness
     WOBBLE = 0.3  # Sideways wander, as a multiple of the wall thickness
+    # Curved rock is many short segments: a gentler ridge whose ends all meet at the same width,
+    # so the outline reads as one smooth line rather than a chain of lumps
+    CURVED_THICKNESS_RANGE = (0.9, 1.15)
+    CURVED_WOBBLE = 0.1
     COVER_MARGIN = 1.2  # Pixels of rock always kept either side of the true line
     # Rock tints, as multiples of the configured wall color
     TINTS = ((0.62, 0.80, 0.87), (0.78, 0.70, 0.83), (0.57, 0.87, 0.77))
@@ -135,6 +148,8 @@ class WallRenderer:
     RIVET_INSET = 5  # Pixels from each corner to its rivet
     # Never produced by the palette, so it can mark empty space in the cache
     TRANSPARENT = (255, 0, 255)
+    JOINT_TURN = 35.0  # Degrees an outline must turn at a corner for curved rock to get a joint there
+    PROBE = 2.0  # Pixels beside a curved segment looked at to find which side is its block's rock
 
     def __init__(self):
         """Initialize an empty renderer."""
@@ -151,6 +166,15 @@ class WallRenderer:
         self._surface: Optional[pygame.Surface] = None
         self._origin = (0, 0)
         self._signature: Optional[Tuple[int, ...]] = None
+        # Curved rock (None for square walls)
+        self._territories: Optional[Dict[BlockRect, Territory]] = None
+        self._territory_rects: Dict[BlockRect, pygame.Rect] = {}  # Last screen area each block's rock held
+        self._strong_cells: FrozenSet[Cell] = frozenset()
+        self._fixed_keys: Set[SegmentKey] = set()  # Curved segments that never take damage
+        self._joints: Set[Tuple[int, int]] = set()  # Corners of curved rock that get a joint
+        self._buckets: Dict[Tuple[int, int], List[SegmentKey]] = {}  # Curved segments by where their middle is
+        self._edge_length = 1.0  # Average side of a block: square walls' segment length
+        self._patches: Dict[SegmentKey, Tuple[Tuple[int, int], pygame.Rect]] = {}  # Each segment's patch, and the origin it was for
 
     def draw(
         self,
@@ -161,7 +185,9 @@ class WallRenderer:
         blocks: Optional[Mapping[BlockRect, int]] = None,
         wounds: Optional[Mapping[BlockRect, Sequence[Wound]]] = None,
         unbreakable: Iterable[BlockRect] = (),
-        strong: Iterable[BlockRect] = ()
+        strong: Iterable[BlockRect] = (),
+        territories: Optional[Mapping[BlockRect, Territory]] = None,
+        strong_cells: FrozenSet[Cell] = frozenset()
     ) -> None:
         """Draw the walls.
 
@@ -174,8 +200,16 @@ class WallRenderer:
             wounds: Where shots have landed on each block's edge, oldest first.
             unbreakable: Blocks that can never be destroyed, which show their damage differently.
             strong: Strong walls, drawn as metal plate rather than rock.
+            territories: For curved rock, each block's rock: its screen area and a mask of its pixels.
+                Without it the walls are square block faces.
+            strong_cells: Cells of the strong walls; curved segments belonging to them are steel.
         """
         blocks = blocks or {}
+        strong_cells = frozenset(strong_cells)
+        if (territories is None) != (self._territories is None) or strong_cells != self._strong_cells:
+            self._strong_cells = strong_cells
+            self._territories = None if territories is None else {}
+            self._surface = self._signature = None
         unbreakable = frozenset(unbreakable)
         if unbreakable != self._unbreakable:
             self._unbreakable = unbreakable
@@ -196,9 +230,11 @@ class WallRenderer:
                 hit_points += wall.hit_points
                 identity ^= id(wall)
         signature = (count, hit_points, identity, len(blocks), sum(blocks.values()))
+        if territories is not None:
+            signature += (id(territories),)
         if signature != self._signature:
             self._signature = signature
-            self._repaint(walls, blocks, wounds or {})
+            self._repaint(walls, blocks, wounds or {}, territories)
 
         if self._surface is not None:
             screen.blit(self._surface, self._origin)
@@ -231,7 +267,8 @@ class WallRenderer:
         self,
         walls: Sequence['WallSegment'],
         blocks: Mapping[BlockRect, int],
-        wounds: Mapping[BlockRect, Sequence[Wound]]
+        wounds: Mapping[BlockRect, Sequence[Wound]],
+        territories: Optional[Mapping[BlockRect, Territory]] = None
     ) -> None:
         """Bring the cached picture up to date with the walls and blocks."""
         self.repaint_count += 1
@@ -241,7 +278,10 @@ class WallRenderer:
             if wall.active:
                 key = self._key(wall)
                 segments[key] = min(segments.get(key, wall.hit_points), wall.hit_points)
-        
+        changed_territories: List[BlockRect] = []
+        if territories is not None:
+            changed_territories = self._take_territories(walls, segments, territories)
+
         previous, self._segments = self._segments, segments
         changed = [key for key in previous.keys() | segments.keys() if previous.get(key) != segments.get(key)]
         patches = [self._patch(key) for key in changed]
@@ -252,9 +292,18 @@ class WallRenderer:
             self._block_patch(rect) for rect in previous_blocks.keys() | self._blocks.keys()
             if previous_blocks.get(rect) != self._blocks.get(rect)
         ]
+        # A block's rock can re-form when a neighbour is destroyed
+        patches += [self._block_patch(rect) for rect in changed_territories]
+        for rect in self._blocks:
+            if self._territories is not None and rect in self._territories:
+                self._territory_rects[rect] = self._territories[rect][0]
         if self._surface is None or not all(self._surface.get_rect().contains(patch) for patch in patches):
             self._paint_everything()
         else:
+            if self._territories is not None:
+                # A curved block has many segments, and a hit changes them all: one patch each would
+                # repaint the same rock over and over
+                patches = self._merged(patches)
             # Walls only crack or vanish mid-level, so repainting the patch
             # around each change is far cheaper than starting again
             for patch in patches:
@@ -264,16 +313,118 @@ class WallRenderer:
                 self._weed_by_segment.pop(key, None)
         self.weeds = list(self._weed_by_segment.values())
     
+    @staticmethod
+    def _merged(patches: List[pygame.Rect]) -> List[pygame.Rect]:
+        """Patches covering the same area, with any that overlap joined into one."""
+        merged: List[pygame.Rect] = []
+        for patch in patches:
+            patch = pygame.Rect(patch)
+            while True:
+                index = patch.collidelist(merged)
+                if index < 0:
+                    break
+                patch.union_ip(merged.pop(index))
+            merged.append(patch)
+        return merged
+
     def _patch(self, key: SegmentKey) -> pygame.Rect:
         """Area of the cached surface a segment can paint on."""
+        cached = self._patches.get(key)
+        if cached is not None and cached[0] == self._origin:
+            return cached[1]
         margin = int(math.ceil(self.MAX_REACH)) + 2
         (ax, ay), (bx, by) = key
         patch = pygame.Rect(min(ax, bx), min(ay, by), abs(bx - ax) + 1, abs(by - ay) + 1)
-        return patch.inflate(2 * margin, 2 * margin).move(-self._origin[0], -self._origin[1])
+        patch = patch.inflate(2 * margin, 2 * margin).move(-self._origin[0], -self._origin[1])
+        self._patches[key] = (self._origin, patch)
+        return patch
     
     def _block_patch(self, rect: BlockRect) -> pygame.Rect:
         """Area of the cached surface a block's fill paints on."""
-        return pygame.Rect(rect).move(-self._origin[0], -self._origin[1])
+        area = pygame.Rect(rect)
+        if self._territories is not None:
+            # Its rock, as it is now and as it was, and the ridge a bite clears beyond it
+            territory = self._territories.get(rect)
+            for known in (self._territory_rects.get(rect), territory[0] if territory else None):
+                if known is not None:
+                    area = area.union(known)
+            margin = int(math.ceil(self.MAX_REACH)) + 2
+            area = area.inflate(2 * margin, 2 * margin)
+        return area.move(-self._origin[0], -self._origin[1])
+
+    def _take_territories(
+        self,
+        walls: Sequence['WallSegment'],
+        segments: Mapping[SegmentKey, int],
+        territories: Mapping[BlockRect, Territory]
+    ) -> List[BlockRect]:
+        """Take on curved rock's territories and segments. Returns the blocks whose rock changed shape."""
+        previous = self._territories or {}
+        changed = []
+        for rect in previous.keys() | territories.keys():
+            old, new = previous.get(rect), territories.get(rect)
+            if old is None or new is None:
+                changed.append(rect)
+            elif old is not new and (old[0] != new[0] or not self._same_mask(old[1], new[1])):
+                changed.append(rect)
+        self._territories = dict(territories)
+        self._fixed_keys = {self._key(wall) for wall in walls if wall.active and not wall.destructible}
+        self._strong_edges = {edge[0] for rect in self._strong for edge in self._edges(rect)} | {
+            self._key(wall) for wall in walls if wall.active and wall.cell in self._strong_cells}
+        if territories:
+            self._edge_length = sum((rect[2] + rect[3]) / 2 for rect in territories) / len(territories)
+        # Where the outline ends or turns sharply, a joint; elsewhere the ridges flow on
+        ends: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        for start, end in segments:
+            if start != end:
+                ends.setdefault(start, []).append(end)
+                ends.setdefault(end, []).append(start)
+        self._joints = {corner for corner, others in ends.items() if self._sharp(corner, others)}
+        self._buckets = {}
+        for key in segments:
+            (ax, ay), (bx, by) = key
+            self._buckets.setdefault((int((ax + bx) / 2) // 32, int((ay + by) / 2) // 32), []).append(key)
+        return changed
+
+    @staticmethod
+    def _same_mask(first: pygame.mask.Mask, second: pygame.mask.Mask) -> bool:
+        """Whether two masks of the same size have the same bits set."""
+        count = first.count()
+        return count == second.count() and first.overlap_area(second, (0, 0)) == count
+
+    def _sharp(self, corner: Tuple[int, int], others: List[Tuple[int, int]]) -> bool:
+        """Whether curved rock's outline ends, forks or turns sharply at a corner."""
+        if len(others) != 2:
+            return True
+        (ax, ay), (bx, by) = others
+        x, y = corner
+        # Turning is the angle between carrying straight on and the next segment
+        incoming = math.atan2(y - ay, x - ax)
+        outgoing = math.atan2(by - y, bx - x)
+        turn = abs((outgoing - incoming + math.pi) % (2 * math.pi) - math.pi)
+        return math.degrees(turn) > self.JOINT_TURN
+
+    def _in_rock(self, territory: Territory, point: Point) -> bool:
+        """Whether a screen point is in a block's rock."""
+        area, mask = territory
+        x, y = int(math.floor(point[0])) - area.x, int(math.floor(point[1])) - area.y
+        return 0 <= x < area.width and 0 <= y < area.height and bool(mask.get_at((x, y)))
+
+    def _paint_masked(self, territory: Territory, paint) -> None:
+        """Run paint(surface) with the cache swapped for a scratch surface over a block's rock, then copy
+        across only the pixels in its rock that paint drew on."""
+        area, mask = territory
+        scratch = pygame.Surface(area.size)
+        scratch.fill(self.TRANSPARENT)
+        cache, origin = self._surface, self._origin
+        self._surface, self._origin = scratch, area.topleft
+        try:
+            paint(scratch)
+        finally:
+            self._surface, self._origin = cache, origin
+        mask.to_surface(scratch, setcolor=None, unsetcolor=self.TRANSPARENT)
+        scratch.set_colorkey(self.TRANSPARENT)
+        cache.blit(scratch, (area.x - origin[0], area.y - origin[1]))
     
     def _paint_everything(self) -> None:
         """Paint every wall onto a fresh cached surface."""
@@ -287,7 +438,11 @@ class WallRenderer:
         for left, top, width, height in self._blocks:
             xs += [left, left + width]
             ys += [top, top + height]
+        for area, _ in (self._territories or {}).values():
+            xs += [area.left, area.right]
+            ys += [area.top, area.bottom]
         self._origin = (min(xs) - margin, min(ys) - margin)
+        self._patches = {}
         # One pixel more than the walls span, so the patch around a wall on the
         # far edge still fits and does not force everything to be repainted
         size = (max(xs) - min(xs) + 2 * margin + 1, max(ys) - min(ys) + 2 * margin + 1)
@@ -330,6 +485,11 @@ class WallRenderer:
             left, top, width, height = rect
             if width < 1 or height < 1 or rect in self._strong:
                 continue
+            if self._territories is not None:
+                territory = self._territories.get(rect)
+                if territory is not None:
+                    self._paint_masked(territory, lambda scratch, rect=rect: self._fill_rock(scratch, rect))
+                continue
             shade = self.FILL_SHADE * self._damage_shade(self._darkening(rect))
             rng = self._rng(left, top, width, height)
             x, y = left - self._origin[0], top - self._origin[1]
@@ -349,6 +509,25 @@ class WallRenderer:
                 self._paint_cracks(surface, bite, min(width, height), edge)
             surface.set_clip(None)
     
+    def _fill_rock(self, surface: pygame.Surface, rect: BlockRect) -> None:
+        """Fill a block's curved rock, on a scratch surface covering it, as _paint_blocks does a square."""
+        left, top, width, height = rect
+        area = self._territories[rect][0]
+        shade = self.FILL_SHADE * self._damage_shade(self._darkening(rect))
+        rng = self._rng(left, top, width, height)
+        base = self._tint(rng, shade)
+        surface.fill(base)
+        for _ in range(max(3, self._territories[rect][1].count() // self.FILL_BLOTCH_AREA)):
+            centre = (rng.randrange(area.width), rng.randrange(area.height))
+            pygame.draw.circle(surface, self._tint(rng, shade * rng.uniform(0.75, 1.2)), centre, rng.randint(2, 5))
+        edge = interpolate_color(base, (254, 254, 254), 0.22)
+        bites = self._bites(rect)
+        if rect in self._unbreakable:
+            for bite in bites:
+                self._paint_stain(surface, bite, min(width, height), shade)
+        for bite in bites:
+            self._paint_cracks(surface, bite, min(width, height), edge)
+
     def _paint_plates(self, rects) -> None:
         """Paint the strong walls among the given blocks as riveted steel plates, over any rock that meets them."""
         surface = self._surface
@@ -384,7 +563,7 @@ class WallRenderer:
 
     def _paint_stain(self, surface: pygame.Surface, bite: Bite, size: int, shade: float) -> None:
         """Darken the rock around a bite in a ragged patch that fades out. The surface is clipped to the block."""
-        rng = self._rng(bite.start[0], bite.start[1], bite.seed, int(bite.distance), 15485863)
+        rng = self._rng(int(bite.start[0]), int(bite.start[1]), bite.seed, int(bite.distance), 15485863)
         origin_x, origin_y = self._origin
         spread = size * self.STAIN_SPREAD * (1 + self.STAIN_GROWTH * (bite.hits - 1))
         # Narrower near the end of an edge, so the stain stays within its block
@@ -418,7 +597,69 @@ class WallRenderer:
         Shots that landed close together on one edge share a bite, which is
         wider and deeper for each of them but keeps its shape.
         """
-        left, top, width, height = rect
+        if self._territories is not None:
+            bites = self._curved_wounds(rect)
+        else:
+            bites = self._square_wounds(rect)
+        return self._shape_bites(rect, bites)
+
+    def _curved_wounds(self, rect: BlockRect) -> List[Bite]:
+        """Group a curved block's wounds into bites, each opening from the nearest segment of its rock.
+
+        A bite runs along a stretch as long as the block's shorter side, centred on the shot, so it
+        has the same size as on a square block's edge."""
+        territory = self._territories.get(rect)
+        if territory is None:
+            return []
+        length = float(min(rect[2], rect[3]))
+        bites: List[Bite] = []
+        wounds: List[Point] = []
+        for x, y in self._wounds.get(rect, ()):
+            face = self._nearest_face(territory, (x, y))
+            if face is None:
+                continue
+            along, inward = face
+            for bite, (wx, wy) in zip(bites, wounds):
+                if (bite.inward[0] * inward[0] + bite.inward[1] * inward[1] > 0.5
+                        and math.hypot(wx - x, wy - y) <= length * self.BITE_MERGE):
+                    bite.hits += 1
+                    break
+            else:
+                start = (x - along[0] * length / 2, y - along[1] * length / 2)
+                seed = int(round(math.degrees(math.atan2(inward[1], inward[0])))) % 360
+                bites.append(Bite(start, along, inward, length, length / 2, seed=seed))
+                wounds.append((x, y))
+        return bites
+
+    def _nearest_face(self, territory: Territory, point: Point) -> Optional[Tuple[Point, Point]]:
+        """The segment of a block's curved rock nearest a point: its direction, and the way into the rock."""
+        x, y = point
+        column, row = int(x) // 32, int(y) // 32
+        best, found = None, None
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for key in self._buckets.get((column + dx, row + dy), ()):
+                    (ax, ay), (bx, by) = key
+                    ex, ey = bx - ax, by - ay
+                    length = math.hypot(ex, ey)
+                    if length < 1.0:
+                        continue
+                    t = max(0.0, min(1.0, ((x - ax) * ex + (y - ay) * ey) / (length * length)))
+                    distance = math.hypot(ax + ex * t - x, ay + ey * t - y)
+                    if best is not None and distance >= best:
+                        continue
+                    along = (ex / length, ey / length)
+                    middle = ((ax + bx) / 2, (ay + by) / 2)
+                    for side in (1.0, -1.0):
+                        inward = (-along[1] * side, along[0] * side)
+                        probe = (middle[0] + inward[0] * self.PROBE, middle[1] + inward[1] * self.PROBE)
+                        if self._in_rock(territory, probe):
+                            best, found = distance, (along, inward)
+                            break
+        return found
+
+    def _square_wounds(self, rect: BlockRect) -> List[Bite]:
+        """Group a square block's wounds into bites, each on the edge it landed on."""
         # Only a face onto open space can have been hit
         edges = [edge for edge in self._edges(rect) if edge[0] in self._segments]
         bites: List[Bite] = []
@@ -436,7 +677,11 @@ class WallRenderer:
             else:
                 seed = (inward[0] + 1) * 3 + inward[1] + 1
                 bites.append(Bite(start, along, inward, length, distance, seed=seed))
+        return bites
 
+    def _shape_bites(self, rect: BlockRect, bites: List[Bite]) -> List[Bite]:
+        """Give each bite its size and broken face."""
+        left, top, width, height = rect
         unbreakable = rect in self._unbreakable
         width_range = self.UNBREAKABLE_BITE_WIDTH if unbreakable else self.BITE_WIDTH
         depth_range = self.UNBREAKABLE_BITE_DEPTH if unbreakable else self.BITE_DEPTH
@@ -444,7 +689,7 @@ class WallRenderer:
         for bite in bites:
             rng = self._rng(left, top, width, height, 104723, bite.seed, int(bite.distance))
             further = bite.hits - 1
-            across = height if bite.along[0] else width
+            across = min(width, height) if self._territories is not None else (height if bite.along[0] else width)
             bite.half = bite.length * rng.uniform(*width_range) / 2 * (1 + self.BITE_WIDENING * further)
             bite.depth = min(width, height) * rng.uniform(*depth_range) * (1 + self.BITE_DEEPENING * further)
             bite.depth = min(bite.depth, across * 0.6)
@@ -477,7 +722,7 @@ class WallRenderer:
 
     def _paint_cracks(self, surface: pygame.Surface, bite: Bite, size: int, edge: Color) -> None:
         """Run cracks into the rock from the broken face of a bite. The surface is clipped to the block."""
-        rng = self._rng(bite.start[0], bite.start[1], bite.seed, int(bite.distance), 7919)
+        rng = self._rng(int(bite.start[0]), int(bite.start[1]), bite.seed, int(bite.distance), 7919)
         origin_x, origin_y = self._origin
         mouth = bite.place(bite.middle, 0.0)
         reach = 1 + 0.3 * (bite.hits - 1)
@@ -516,6 +761,14 @@ class WallRenderer:
             )
             hollow = interpolate_color(base, (0, 0, 0), self.BITE_DARKNESS)
             face = interpolate_color(base, (0, 0, 0), 0.45)
+            if self._territories is not None:
+                territory = self._territories.get(rect)
+                if territory is not None:
+                    for bite in bites:
+                        self._clear_ridge(territory, bite, reach)
+                        self._paint_masked(territory, lambda scratch, bite=bite: self._paint_hollow(
+                            scratch, bite, base, hollow, face, -float(reach)))
+                continue
             inside = pygame.Rect(left - origin_x, top - origin_y, width, height)
             for bite in bites:
                 def place(distance: float, depth: float) -> Point:
@@ -560,6 +813,73 @@ class WallRenderer:
                     pygame.draw.line(surface, color, first, second, 1)
                 surface.set_clip(None)
 
+    def _clear_ridge(self, territory: Territory, bite: Bite, reach: int) -> None:
+        """Clear the ridge out of a curved bite's mouth: open space beside the block's rock, never other rock."""
+        origin_x, origin_y = self._origin
+        corners = [bite.place(bite.middle - bite.half, 0), bite.place(bite.middle + bite.half, 0),
+                   bite.place(bite.middle + bite.half + 1, -reach), bite.place(bite.middle - bite.half - 1, -reach)]
+        area = pygame.Rect(
+            int(min(x for x, _ in corners)) - 1, int(min(y for _, y in corners)) - 1,
+            int(max(x for x, _ in corners) - min(x for x, _ in corners)) + 3,
+            int(max(y for _, y in corners) - min(y for _, y in corners)) + 3)
+        shape = pygame.Surface(area.size)
+        shape.fill((0, 0, 0))
+        pygame.draw.polygon(shape, (255, 255, 255), [(x - area.x, y - area.y) for x, y in corners])
+        clear = pygame.mask.from_threshold(shape, (255, 255, 255), (1, 1, 1, 255))
+        # Only within reach of this block's rock
+        own_area, own_mask = territory
+        circle = pygame.Surface((2 * reach + 1, 2 * reach + 1))
+        circle.fill((0, 0, 0))
+        pygame.draw.circle(circle, (255, 255, 255), (reach, reach), reach)
+        disc = pygame.mask.from_threshold(circle, (255, 255, 255), (1, 1, 1, 255))
+        near = own_mask.convolve(disc)  # Grown by reach: its (0, 0) sits at own_area's corner less reach
+        clear = clear.overlap_mask(near, (own_area.x - reach - area.x, own_area.y - reach - area.y))
+        # Never any block's rock
+        for other_area, other_mask in self._territories.values():
+            if other_area.colliderect(area):
+                clear.erase(other_mask, (other_area.x - area.x, other_area.y - area.y))
+        clear.to_surface(self._surface, setcolor=self.TRANSPARENT, unsetcolor=None,
+                         dest=(area.x - origin_x, area.y - origin_y))
+
+    def _paint_hollow(self, surface: pygame.Surface, bite: Bite, base: Color, hollow: Color, face: Color,
+                      mouth_depth: float = -2.0) -> None:
+        """Paint a bite's broken rock face and hollow, and light its edge. The surface is clipped to the block."""
+        origin_x, origin_y = self._origin
+
+        def place(distance: float, depth: float) -> Point:
+            x, y = bite.place(distance, depth)
+            return (x - origin_x, y - origin_y)
+
+        mouth = [(bite.middle + bite.half, mouth_depth), (bite.middle - bite.half, mouth_depth)]
+        # A band of broken rock face, then the hollow itself set back from it towards the mouth
+        pygame.draw.polygon(surface, face, [place(*point) for point in mouth + bite.broken])
+        hollowed = []
+        for distance, depth in bite.broken:
+            away = math.hypot(distance - bite.middle, depth)
+            keep = max(0.0, away - self.BITE_FACE) / away if away > 0 else 0.0
+            hollowed.append((bite.middle + (distance - bite.middle) * keep, depth * keep))
+        pygame.draw.polygon(surface, hollow, [place(*point) for point in mouth + hollowed])
+
+        # Each stretch of the broken face is lit by how squarely it is turned to the light, and
+        # shadowed if turned away
+        points = [place(*point) for point in bite.broken]
+        centre = place(bite.middle, bite.depth * 0.3)
+        for first, second in zip(points, points[1:]):
+            span = math.hypot(second[0] - first[0], second[1] - first[1])
+            if span < 0.5:
+                continue
+            normal = ((second[1] - first[1]) / span, (first[0] - second[0]) / span)
+            middle = ((first[0] + second[0]) / 2, (first[1] + second[1]) / 2)
+            # Facing out of the rock, into the hollow
+            if normal[0] * (centre[0] - middle[0]) + normal[1] * (centre[1] - middle[1]) < 0:
+                normal = (-normal[0], -normal[1])
+            light = normal[0] * self.LIGHT[0] + normal[1] * self.LIGHT[1]
+            if light > 0.15:
+                color = interpolate_color(base, (254, 254, 254), 0.25 + 0.45 * light)
+            else:
+                color = interpolate_color(base, (0, 0, 0), 0.7)
+            pygame.draw.line(surface, color, first, second, 1)
+
     def _paint_segments(self, keys) -> None:
         """Paint the given segments and the joints at their ends."""
         # A strong wall's faces are the edges of its plate, with no rock along them
@@ -567,7 +887,11 @@ class WallRenderer:
         for key in keys:
             self._paint_ridge(self._surface, key, self._segments[key])
         # Knobbly joints go on top so corners look the same from every wall
-        for corner in {point for key in keys for point in key}:
+        corners = {point for key in keys for point in key}
+        if self._territories is not None:
+            # Curved rock flows on round gentle bends; joints only where it ends or turns sharply
+            corners &= self._joints
+        for corner in corners:
             self._paint_joint(self._surface, corner)
     
     def _damage_shade(self, damage: int) -> float:
@@ -594,8 +918,12 @@ class WallRenderer:
         along_x, along_y = (bx - ax) / length, (by - ay) / length
         normal_x, normal_y = -along_y, along_x
         origin_x, origin_y = self._origin
+        curved = self._territories is not None
         # The face of an unbreakable block only shows damage where it was hit
-        damage = 0 if key in self._unbreakable_edges else max(0, config.WALL_HIT_POINTS - hit_points)
+        fixed = key in self._fixed_keys if curved else key in self._unbreakable_edges
+        damage = 0 if fixed else max(0, config.WALL_HIT_POINTS - hit_points)
+        # Curved rock has many short segments: barnacles and weed as often per pixel as on square walls
+        share = min(1.0, length / self._edge_length) if curved else 1.0
         shade = self._damage_shade(damage)
         half = config.WALL_THICKNESS / 2
 
@@ -609,10 +937,14 @@ class WallRenderer:
         # the true segment uncovered
         spans = max(2, int(round(length / self.SAMPLE_SPACING)))
         centres, widths = [], []
+        thickness_range, wobble = ((self.CURVED_THICKNESS_RANGE, self.CURVED_WOBBLE) if curved
+                                   else (self.THICKNESS_RANGE, self.WOBBLE))
         for i in range(spans + 1):
             t = i / spans
-            width = half * rng.uniform(*self.THICKNESS_RANGE)
-            wander = rng.uniform(-1.0, 1.0) * self.WOBBLE * config.WALL_THICKNESS * math.sin(math.pi * t) ** 0.5
+            width = half * rng.uniform(*thickness_range)
+            if curved:
+                width = half + (width - half) * math.sin(math.pi * t)  # every end exactly half
+            wander = rng.uniform(-1.0, 1.0) * wobble * config.WALL_THICKNESS * math.sin(math.pi * t) ** 0.5
             limit = max(0.0, width - self.COVER_MARGIN)
             centres.append(max(-limit, min(limit, wander)))
             widths.append(width)
@@ -637,13 +969,13 @@ class WallRenderer:
             target = (0, 0, 0) if rng.random() < 0.6 else (254, 254, 254)
             surface.set_at((int(fleck[0]), int(fleck[1])), interpolate_color(colors[i], target, 0.35))
 
-        if rng.random() < self.BARNACLE_CHANCE:
+        if rng.random() < self.BARNACLE_CHANCE * share:
             i = rng.randrange(spans)
             barnacle = place(length * (i + 0.5) / spans, centres[i])
             pygame.draw.circle(surface, self.BARNACLE_COLOR, (int(barnacle[0]), int(barnacle[1])), 2)
             surface.set_at((int(barnacle[0]), int(barnacle[1])), self.CRACK_COLOR)
 
-        if rng.random() < self.WEED_CHANCE:
+        if rng.random() < self.WEED_CHANCE * share:
             i = rng.randrange(1, spans)
             side = rng.choice((-1.0, 1.0))
             base = place(length * i / spans, centres[i] + side * widths[i])
@@ -658,7 +990,13 @@ class WallRenderer:
         if damage:
             # A separate stream, so cracks appear without reshaping the rock
             crack_rng = self._rng(ax, ay, bx, by, 7919)
-            for _ in range(damage * max(1, int(length / self.CRACK_SPACING))):
+            if curved:
+                # As many cracks per pixel as a long square face, though a segment is shorter than the spacing
+                expected = damage * length / self.CRACK_SPACING
+                count = int(expected) + (crack_rng.random() < expected - int(expected))
+            else:
+                count = damage * max(1, int(length / self.CRACK_SPACING))
+            for _ in range(count):
                 i = crack_rng.randrange(spans)
                 distance = length * (i + crack_rng.random()) / spans
                 jog = crack_rng.uniform(-3.0, 3.0)

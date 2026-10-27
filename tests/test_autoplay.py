@@ -205,6 +205,21 @@ def test_autoplay_starts_playing_at_once_with_a_hunter(make_game):
     assert game.player_has_moved
 
 
+def test_fun_demo_starts_autoplay(make_game):
+    game = make_game(autoplay=False)
+    game.state = config.STATE_FUN
+    game.fun_menu.selected_index = next(
+        i for i, entry in enumerate(game.fun_menu.entries) if entry.key == 'demo')
+    pygame.event.clear()
+    pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN, unicode=''))
+    game.handle_events()
+    assert game.autoplay is not None
+    assert game.state == config.STATE_PLAYING
+    assert game.level == 4
+    assert game.hunter is not None and game.hunter.active
+    assert game.player_has_moved
+
+
 def test_the_parked_player_never_moves(make_game):
     game = make_game()
     start = (game.ship.x, game.ship.y)
@@ -266,6 +281,24 @@ def test_the_player_is_visible_when_hiding_is_off(make_game, monkeypatch):
 def test_the_player_is_always_visible_outside_autoplay(make_game):
     game = make_game(autoplay=False)
     assert game._hunter_sees_player() is True
+
+
+@pytest.mark.parametrize('demo,hide_player,drawn', [
+    (True, True, False),
+    (True, False, True),
+    (False, True, True),
+])
+def test_demo_player_rendering_respects_hide_player(make_game, monkeypatch, demo, hide_player, drawn):
+    monkeypatch.setattr(SETTINGS.autoplay, 'hidePlayer', hide_player)
+    game = make_game(autoplay=False)
+    if demo:
+        game.start_fun_entry('demo')
+    else:
+        game.state = config.STATE_PLAYING
+        game.start_level()
+    game.ship.draw = Mock()
+    game.draw()
+    assert game.ship.draw.called is drawn
 
 
 def test_no_kill_for_twenty_seconds_ends_the_level(make_game, monkeypatch):

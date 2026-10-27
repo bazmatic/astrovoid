@@ -15,7 +15,8 @@ RIM = (0, 4)  # A block in the outer ring
 
 
 def empty_maze():
-    return Maze(1, MazeComplexity.EMPTY, GRID)
+    # Square walls: these tests pin the square rim faces and the square renderer's bites and ridges
+    return Maze(1, MazeComplexity.EMPTY, GRID, curved=False)
 
 
 def rim_face(maze):
@@ -158,7 +159,15 @@ class TestShieldAndWalls:
         assert ship.damaged
 
     def _play(self, game):
-        game.start_level()
+        # Square walls: the check below is against the square inner face of the left outer wall
+        curved, config.CAVE.enabled = config.CAVE.enabled, False
+        try:
+            game.start_level()
+        finally:
+            config.CAVE.enabled = curved
+        return self._play_started(game)
+
+    def _play_started(self, game):
         game.state = config.STATE_PLAYING
         game.game_frozen = game.game_over_active = False
         game.input_handler = Mock(key_mappings={})
@@ -181,6 +190,42 @@ class TestShieldAndWalls:
         assert game.ship.is_shield_active()
         assert game.ship.x > inner_face
         assert game.scoring.wall_collisions == 0
+
+    def _play_on_rock(self, game):
+        curved, config.CAVE.enabled = config.CAVE.enabled, True
+        try:
+            game.start_level()
+        finally:
+            config.CAVE.enabled = curved
+        self._play_started(game)
+        assert game.maze.cave is not None
+
+    def _fly_left_on_rock(self, game, frames=60):
+        """Fly left into the curved rim; the ship's centre must stay in open space every frame.
+
+        (Not maze.is_open: that also refuses a wall cell's square, and curved rock can leave part of
+        the rim's cells open, which is where the ship ends up resting.)"""
+        maze = game.maze
+        for _ in range(frames):
+            game.ship.vx = -6.0
+            game.update(1)
+            pos = (game.ship.x, game.ship.y)
+            assert not maze.cave.is_rock(pos)
+            assert pos[0] > maze.offset_x + game.ship.radius  # never through the rim
+
+    def test_the_shield_keeps_the_ship_out_of_curved_rock(self, game):
+        self._play_on_rock(game)
+        assert game.ship.is_shield_active()
+        self._fly_left_on_rock(game)
+        assert game.ship.is_shield_active()
+        assert game.scoring.wall_collisions == 0
+
+    def test_an_unshielded_ship_stays_out_of_curved_rock_and_the_hit_counts(self, game):
+        self._play_on_rock(game)
+        game.ship.shield_initial_timer = 0
+        game.ship.deactivate_shield()
+        self._fly_left_on_rock(game)
+        assert game.scoring.wall_collisions > 0
 
     def test_an_unshielded_wall_hit_still_counts(self, game):
         inner_face = self._play(game)

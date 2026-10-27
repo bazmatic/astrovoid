@@ -14,6 +14,12 @@
     "spawnOffset": 0.35,
     "collisionRestitution": 0.85
   },
+  "hunterShip": {
+    "rotationSpeed": 5.0,
+    "thrustForce": 0.15,
+    "friction": 0.998,
+    "maxSpeed": 8.0
+  },
   "resources": {
     "initialFuel": 1000,
     "initialAmmo": 50,
@@ -50,6 +56,18 @@
     "minPassageWidth": 3,
     "wallHitPoints": 4,
     "shipSpawnOffset": 0.35,
+    "cave": {
+      "enabled": true,
+      "maxSampleSpacing": 6.0,
+      "minSamplesPerCell": 6,
+      "blurCells": 0.42,
+      "noiseAmplitude": 0.7,
+      "noiseScalesCells": [2.5],
+      "noiseWeights": [1.0],
+      "linkClearance": 2.0,
+      "wallCoreCells": 0.15,
+      "simplifyTolerance": 0.75
+    },
     "complexityPresets": {
       "EMPTY": {
         "stepSize": 1,

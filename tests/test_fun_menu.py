@@ -37,10 +37,12 @@ def test_fun_sits_between_levels_and_select_profile(game):
 def test_fun_opens_the_list_with_the_pilot_fight_and_cancel_goes_back(game):
     to_fun(game)
     assert game.state == config.STATE_FUN
-    assert [e.title for e in game.fun_menu.entries] == ['Pilot fight: Rules vs Vibes']
+    assert [e.title for e in game.fun_menu.entries] == ['Pilot fight: Rules vs Vibes', 'Demo']
     assert game.fun_menu.selected_entry.key == 'pilot_duel'
     key(game, pygame.K_DOWN)
-    assert game.fun_menu.selected_index == 0                      # one entry: it stays put
+    assert game.fun_menu.selected_entry.key == 'demo'
+    key(game, pygame.K_DOWN)
+    assert game.fun_menu.selected_index == 1                      # stop at the last entry
     key(game, pygame.K_ESCAPE)
     assert game.state == config.STATE_MENU
 

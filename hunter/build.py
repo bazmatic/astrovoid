@@ -15,11 +15,13 @@ class PilotSetup:
 
 def flight_kind(kind, settings):
     """Resolve one flight's fixed settings into its reusable traits, without mutating the catalogue."""
+    movement = config.SETTINGS.hunterShip
     overrides = {
         'energy': {'health': settings.health, 'indestructible': settings.indestructible,
                    'immunity': settings.damage_immunity, 'wallEnergy': settings.wall_energy},
-        'thrusters': {'speedShare': 1, 'thrust': config.SHIP_THRUST_FORCE * settings.thrust_multiplier,
-                      'turnRate': config.SHIP_ROTATION_SPEED * settings.turn_rate_multiplier, 'mode': 'hunter'},
+        'thrusters': {'speedShare': 1, 'thrust': movement.thrustForce * settings.thrust_multiplier,
+                      'turnRate': movement.rotationSpeed * settings.turn_rate_multiplier,
+                      'friction': movement.friction, 'maxSpeed': movement.maxSpeed, 'mode': 'hunter'},
         'burstFire': {'rounds': settings.burst_size, 'spacing': settings.burst_spacing,
                       'interval': settings.fire_interval},
     }

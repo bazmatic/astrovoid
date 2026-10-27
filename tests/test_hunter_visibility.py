@@ -89,3 +89,68 @@ def test_fast_visibility_is_much_faster_in_a_dense_maze():
         return best
 
     assert timed(visible_wall_portions) * 4 < timed(reference.visible_wall_portions)
+
+
+def test_visibility_on_curved_maze_stays_fast():
+    """Hunter sight on curved rock, with its many short walls, costs at most 4x what square walls cost."""
+    import pygame
+    from maze.config import MazeComplexity
+    from maze.generator import Maze
+
+    pygame.init()
+
+    def maze(curved):
+        random.seed(125)
+        return Maze(1, complexity=MazeComplexity.COMPLEX, grid_size=32, seed=125, curved=curved)
+
+    curved, square = maze(True), maze(False)
+    assert curved.grid == square.grid
+    opens = [(x, y) for y, row in enumerate(curved.grid) for x, value in enumerate(row) if value == 0]
+    origins = [curved.position_calculator.grid_center_to_screen(*cell) for cell in random.Random(5).sample(opens, 20)]
+
+    def timed(m):
+        walls = m.sight_segments()  # What hunter perception sees by
+        best = float('inf')
+        for _ in range(3):
+            start = time.perf_counter()
+            for origin in origins:
+                visible_wall_portions(origin, walls, 400.0)
+            best = min(best, time.perf_counter() - start)
+        return best
+
+    assert timed(curved) < 4 * timed(square)
+
+
+def test_sight_outline_stays_close_to_the_rock():
+    """Merged sight walls: far fewer on curved rock, every corner they cut off within tolerance,
+    and square walls passed through untouched."""
+    import math
+    import pygame
+    from hunter.visibility import SIGHT_TOLERANCE, simplify_outline
+    from maze.config import MazeComplexity
+    from maze.generator import Maze
+
+    pygame.init()
+    random.seed(125)
+    curved = Maze(1, complexity=MazeComplexity.COMPLEX, grid_size=32, seed=125)
+    raw = [(w.start, w.end) for w in curved.walls if w.active]
+    sight = curved.sight_segments()
+    assert len(sight) < 0.6 * len(raw)
+    assert curved.sight_segments() is sight  # cached until the walls change
+
+    def distance(point, segment):
+        (ax, ay), (bx, by) = segment
+        dx, dy = bx - ax, by - ay
+        t = max(0.0, min(1.0, ((point[0] - ax) * dx + (point[1] - ay) * dy) / (dx * dx + dy * dy)))
+        return math.hypot(point[0] - ax - dx * t, point[1] - ay - dy * t)
+
+    # Every original corner lies within tolerance of some sight wall
+    for start, end in raw:
+        for point in (start, end):
+            assert min(distance(point, wall) for wall in sight) <= SIGHT_TOLERANCE + 1e-6
+
+    random.seed(125)
+    square = Maze(1, complexity=MazeComplexity.COMPLEX, grid_size=32, seed=125, curved=False)
+    assert square.sight_segments() == [(w.start, w.end) for w in square.walls if w.active]
+    walls = random_maze_walls(random.Random(3))
+    assert sorted(simplify_outline(walls)) == sorted(walls)

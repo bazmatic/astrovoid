@@ -164,7 +164,7 @@ class SpatialGrid:
     ) -> List[Tuple[int, int]]:
         """Get all grid cells that a line segment passes through.
         
-        Uses Bresenham-like algorithm to find all cells the line touches.
+        Every cell the line's bounding box touches.
         
         Args:
             start: Line start point (x, y).
@@ -173,49 +173,14 @@ class SpatialGrid:
         Returns:
             List of (row, col) tuples for cells the line passes through.
         """
+        # Every cell the segment's bounding box touches: exact for horizontal and vertical lines, and
+        # never misses a cell a slanted line crosses (it may add a few it does not)
         x1, y1 = start
         x2, y2 = end
-        
-        # Get cell coordinates
-        col1 = int(x1 / self.cell_size)
-        row1 = int(y1 / self.cell_size)
-        col2 = int(x2 / self.cell_size)
-        row2 = int(y2 / self.cell_size)
-        
-        cells = set()
-        
-        # Add start and end cells
-        cells.add((row1, col1))
-        cells.add((row2, col2))
-        
-        # If line is mostly horizontal or vertical, add intermediate cells
-        dx = abs(col2 - col1)
-        dy = abs(row2 - row1)
-        
-        if dx > dy:
-            # Horizontal line - iterate through columns
-            if col1 > col2:
-                col1, col2 = col2, col1
-                row1, row2 = row2, row1
-            for col in range(col1, col2 + 1):
-                # Calculate row at this column
-                if col2 != col1:
-                    t = (col - col1) / (col2 - col1)
-                    row = int(row1 + (row2 - row1) * t)
-                    cells.add((row, col))
-        else:
-            # Vertical line - iterate through rows
-            if row1 > row2:
-                row1, row2 = row2, row1
-                col1, col2 = col2, col1
-            for row in range(row1, row2 + 1):
-                # Calculate column at this row
-                if row2 != row1:
-                    t = (row - row1) / (row2 - row1)
-                    col = int(col1 + (col2 - col1) * t)
-                    cells.add((row, col))
-        
-        return list(cells)
+        col1, col2 = sorted((int(x1 / self.cell_size), int(x2 / self.cell_size)))
+        row1, row2 = sorted((int(y1 / self.cell_size), int(y2 / self.cell_size)))
+        cells = [(row, col) for row in range(row1, row2 + 1) for col in range(col1, col2 + 1)]
+        return cells
     
     def add_wall(self, wall) -> None:
         """Add one more wall to the grid, keeping those already there.
@@ -242,10 +207,11 @@ class SpatialGrid:
         
         wall_index = self.wall_to_index[wall]
         
-        # Remove from all cells
-        for row in self.grid:
-            for cell in row:
-                cell.discard(wall_index)
+        # Remove from the cells it was added to (a wall's ends never move)
+        segment = wall.get_segment() if hasattr(wall, 'get_segment') else wall
+        for row, col in self._get_cells_for_line(segment[0], segment[1]):
+            if 0 <= row < self.grid_rows and 0 <= col < self.grid_cols:
+                self.grid[row][col].discard(wall_index)
         
         # Re-add if still active
         if hasattr(wall, 'active') and wall.active:

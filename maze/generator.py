@@ -3,7 +3,8 @@
 import random
 import pygame
 import math
-from typing import Dict, FrozenSet, List, Optional, Set, Tuple
+from contextlib import contextmanager
+from typing import Dict, FrozenSet, Iterator, List, Optional, Set, Tuple
 import config
 from utils import (
     distance,
@@ -17,6 +18,8 @@ from maze.wall_segment import WallSegment
 from maze.config import MazeComplexity, MazeGenerationConfig, MazeComplexityPresets
 from maze.positioning import MazePositionCalculator
 from maze.converter import GridToWallsConverter, SIDES
+from hunter.visibility import simplify_outline
+from maze.cave import CaveShape
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
 from rendering.wall_renderer import WallRenderer
@@ -140,10 +143,15 @@ class RecursiveBacktrackingGenerator:
         grid[corner[1]][corner[0]]=0
 
 
+# Spatial grid bucket size (px) for curved mazes: their many short segments would crowd 150 px buckets
+CURVED_BUCKET = 50.0
+
+
 class Maze:
     """Procedurally generated maze."""
     
-    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0, layout=None):
+    def __init__(self, level: int, complexity: Optional[MazeComplexity] = None, grid_size: int = 0, layout=None,
+                 seed: Optional[int] = None, curved: Optional[bool] = None):
         """Generate a maze for the given level.
         
         Args:
@@ -151,8 +159,14 @@ class Maze:
             complexity: Optional maze complexity level. If None, calculated from level.
             grid_size: Grid size (width/height in cells). Always provided by level_config.get_maze_grid_size().
             layout: A level_layout.Layout to build the maze from instead of generating one (optional).
+            seed: Seed for the cave rock's bulges (the level number if None). The global random is not used.
+            curved: Curved cave walls (config.CAVE.enabled if None); False keeps the square block faces.
         """
         self.level = level
+        self.curved = config.CAVE.enabled if curved is None else curved
+        self.cave_seed = level if seed is None else seed
+        self.layout = layout
+        self.cave: Optional[CaveShape] = None
         
         # Determine complexity
         if complexity is None:
@@ -199,22 +213,7 @@ class Maze:
             self.strong_cells = layout.strong_walls
             start_grid, exit_grid = layout.start, layout.exit
         
-        # Convert grid to blocks and their wall segments
-        self.converter = GridToWallsConverter(self.position_calculator, self.strong_cells)
-        self.wall_renderer = WallRenderer()
-        self.wall_debris = WallDebris()
-        # Spatial grid for efficient collision detection
-        self.spatial_grid = SpatialGrid(
-            config.SCREEN_WIDTH,
-            config.SCREEN_HEIGHT,
-            cell_size=150.0  # Optimal cell size for this game
-        )
-        self.wall_generation = 0  # Goes up each time a block is destroyed
-        # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
-        self.gate_segments: List[WallSegment] = []
-        self.rebuild_walls()
-        
-        # Set start position
+        # Set start position (before the walls: the cave rock keeps it clear)
         if layout is None:
             self.start_pos = self.position_calculator.get_start_position(start_grid)
         else:
@@ -225,20 +224,75 @@ class Maze:
         # Use average cell size for exit radius
         exit_radius = (self.cell_size_x + self.cell_size_y) / 4
         self.exit = ExitPortal(exit_pos, exit_radius)
+
+        # Convert grid to blocks and their wall segments
+        self.converter = GridToWallsConverter(self.position_calculator, self.strong_cells)
+        self.wall_renderer = WallRenderer()
+        self.wall_debris = WallDebris()
+        # Spatial grid for efficient collision detection
+        self.spatial_grid = SpatialGrid(
+            config.SCREEN_WIDTH,
+            config.SCREEN_HEIGHT,
+            cell_size=CURVED_BUCKET if self.curved else 150.0  # square walls keep the bucket they always had
+        )
+        self.wall_generation = 0  # Goes up each time a block is destroyed
+        self._sight_cache = None  # (walls list, its length, wall_generation, sight segments)
+        # Curved blocks destroyed inside batched_destroys(), whose rock is rebuilt when it ends
+        self._batch_depth = 0
+        self._pending_opens: Dict[Tuple[int, int], None] = {}
+        # Centre lines of the physics gates' planks, for everything that sees walls (set by the game each frame)
+        self.gate_segments: List[WallSegment] = []
+        self.rebuild_walls()
+
     
     def check_exit_reached(self, pos: Tuple[float, float], radius: float) -> bool:
         """Check if player reached the exit."""
         return self.exit.check_circle_collision(pos, radius)
     
+    def _gate_keep_clear(self) -> List[Tuple[Tuple[float, float], float]]:
+        """Circles the cave rock must stay out of: each gate's swing, with a little room to spare."""
+        if self.layout is None or not self.layout.gates:
+            return []
+        from physics.obstacle_world import plank_size  # here, not at the top: obstacle_world imports this module
+        half, thickness = plank_size(self)
+        radius = half + thickness / 2 + 2
+        return [(self.position_calculator.grid_center_to_screen(*gate.cell), radius) for gate in self.layout.gates]
+
+    def _spawn_keep_clear(self) -> List[Tuple[Tuple[float, float], float]]:
+        """Circles the cave rock must stay out of so nothing starts inside a bulge: the ship's start,
+        the exit portal, and a layout's beacon and creatures (each its own size, plus a pixel)."""
+        out = [(self.start_pos, config.SHIP_SIZE + 1), (self.exit.get_pos(), self.exit.radius)]
+        if self.layout is None:
+            return out  # generated mazes place creatures later, only where is_open finds room
+        import enemy_kinds  # here, not at the top: it loads the enemy catalogue
+        from entities.jev_beacon import JevBeacon
+        calc = self.position_calculator
+        if self.layout.beacon is not None:
+            # The beacon's turning ring, the widest part of it
+            out.append((calc.grid_center_to_screen(*self.layout.beacon),
+                        JevBeacon.RING_RADIUS * config.POWERUP_CRYSTAL_SIZE + 1))
+        out.extend((calc.grid_center_to_screen(*cell), enemy_kinds.kind(kind).tuning['size'] + 1)
+                   for kind, cell in self.layout.enemies)
+        return out
+
     def rebuild_walls(self) -> None:
         """Build the blocks, their exposed faces and the collision index from the grid."""
-        self.walls = self.converter.convert(self.grid)
         # Hit points left in each wall block, keyed by grid cell (x, y). A
         # block is solid rock: shots at any of its faces wear down the block
         self.blocks: Dict[Tuple[int, int], int] = {
             (x, y): config.WALL_HIT_POINTS
             for y, row in enumerate(self.grid) for x, value in enumerate(row) if value == 1
         }
+        if self.curved:
+            # Curved rock: many short segments per block, each knowing the block it damages
+            self.cave = CaveShape(
+                self.grid, self.position_calculator, self.converter, strong=self.strong_cells,
+                keep_clear=self._gate_keep_clear() + self._spawn_keep_clear(), seed=self.cave_seed, settings=config.CAVE,
+                hit_points=lambda cell: self.blocks.get(cell, config.WALL_HIT_POINTS))
+            self.walls = self.cave.segments()
+        else:
+            self.cave = None
+            self.walls = self.converter.convert(self.grid)
         # Screen areas of the outer ring's blocks, which wear down but are never destroyed
         self.unbreakable_blocks = frozenset(
             self.converter.cell_rect(x, y) for x, y in self.blocks if self.converter.on_perimeter(self.grid, x, y)
@@ -247,9 +301,46 @@ class Maze:
         self.strong_blocks = frozenset(self.converter.cell_rect(x, y) for x, y in self.strong_cells)
         # Where each block has been hit, as points on its edge, oldest first
         self.wounds: Dict[Tuple[int, int], List[Tuple[int, int]]] = {}
+        self._pending_opens = {}
         self.spatial_grid.add_walls(self.walls)
         self._refresh_block_fills()
+        self._refresh_territories()
     
+    # Blocks this many cells from a destroyed one may have their rock re-formed
+    TERRITORY_REACH = 2
+
+    @property
+    def block_territories(self) -> Optional[Dict[Tuple[int, int, int, int], Tuple[pygame.Rect, pygame.mask.Mask]]]:
+        """Each block's curved rock, keyed like block_fills, for the renderer: (screen area, mask of its
+        pixels). None for square walls. Worked out when first asked for after the rock changes, so a
+        destroy does not pay for it; then only blocks near those destroyed are worked out again."""
+        if self.cave is None:
+            return None
+        if self._territories is None or self._stale_territories:
+            if self._territories is None:
+                by_cell, cells = {}, list(self.blocks)
+            else:
+                by_cell = {cell: value for cell, value in self._territories_by_cell.items() if cell in self.blocks}
+                reach, destroyed = self.TERRITORY_REACH, self._stale_territories
+                cells = [cell for cell in self.blocks
+                         if any(abs(cell[0] - x) <= reach and abs(cell[1] - y) <= reach for x, y in destroyed)]
+            for cell in cells:
+                by_cell[cell] = self.cave.territory(cell)
+            self._territories_by_cell = by_cell
+            self._stale_territories = []
+            self._territories = {
+                self.converter.cell_rect(*cell): value for cell, value in by_cell.items() if value is not None}
+        return self._territories
+
+    def _refresh_territories(self, destroyed: Optional[List[Tuple[int, int]]] = None) -> None:
+        """Mark the curved rock's territories out of date: all of them, or those near destroyed blocks."""
+        if destroyed is None:
+            self._territories = None
+            self._territories_by_cell = {}
+            self._stale_territories = []
+        else:
+            self._stale_territories = self._stale_territories + list(destroyed)
+
     def _refresh_block_fills(self) -> None:
         """Rebuild the screen areas of the blocks, which the renderer fills with rock."""
         self.block_fills = {self.converter.cell_rect(x, y): hit_points for (x, y), hit_points in self.blocks.items()}
@@ -285,10 +376,14 @@ class Maze:
         Returns:
             True if the block was destroyed (hit points reached 0), False otherwise.
         """
-        if wall not in self.walls:
+        if not wall.active or wall not in self.walls:
+            # Gone already, perhaps replaced by a segment with the same ends when the rock was rebuilt
             return False
 
         cell = wall.cell
+        if cell in self._pending_opens:
+            # Destroyed earlier in this batch: its old segments wait for the rebuild at the end
+            return False
         if cell in self.strong_cells:
             # Metal: the shot strikes sparks and leaves no mark
             self.wall_debris.spark(impact if impact is not None else wall.start)
@@ -320,6 +415,12 @@ class Maze:
         self.wounds.pop(cell, None)
         self.wall_debris.destroy(self.converter.cell_rect(*cell))
         self.grid[cell[1]][cell[0]] = 0
+        if self.cave is not None:
+            if self._batch_depth:
+                self._pending_opens[cell] = None
+            else:
+                self._reshape_cave([cell])
+            return True
         for face in faces:
             face.active = False
             self.spatial_grid.update_wall(face)
@@ -335,6 +436,56 @@ class Maze:
         self._refresh_block_fills()
         return True
     
+    @contextmanager
+    def batched_destroys(self) -> Iterator[None]:
+        """Defer the curved rock rebuild for blocks destroyed inside the block to its end, so a
+        blast that breaks several blocks rebuilds the rock once. Until then a destroyed block's
+        old segments stay in place, and damage_wall ignores them. Square walls are unaffected."""
+        self._batch_depth += 1
+        try:
+            yield
+        finally:
+            self._batch_depth -= 1
+            if not self._batch_depth and self._pending_opens:
+                cells, self._pending_opens = list(self._pending_opens), {}
+                self._reshape_cave(cells)
+
+    def _reshape_cave(self, cells: List[Tuple[int, int]]) -> None:
+        """Rebuild the curved rock around destroyed blocks and patch the walls and their index."""
+        if len(cells) == 1:
+            removed, added = self.cave.open_cell(cells[0])
+        else:
+            removed, added = self.cave.open_cells(cells)
+        # Removed first: a segment whose owner alone changed comes back with the same ends. WallSegment
+        # equality and hashing use only the ends, so the spatial grid's wall_to_index maps both to one
+        # entry; update_wall looks the index up there and drops it from the segment's cells. Added
+        # first, the new segment's index would be the one dropped, and the old one would stay indexed
+        for segment in removed:
+            segment.active = False
+            self.spatial_grid.update_wall(segment)
+        self.walls = [w for w in self.walls if w.active]
+        for segment in added:
+            segment.hit_points = self.blocks[segment.cell]
+            self.walls.append(segment)
+            self.spatial_grid.add_wall(segment)
+        self.wall_generation += len(cells)  # one per destroyed block, as for square walls
+        self._refresh_block_fills()
+        self._refresh_territories(cells)
+
+    def sight_segments(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        """The active walls as (start, end) for line of sight. Curved rock's short segments are
+        merged within hunter.visibility.SIGHT_TOLERANCE, which makes sight several times cheaper;
+        square walls are passed through. Cached until the walls change."""
+        walls = self.walls
+        cached = self._sight_cache
+        if cached is not None and cached[0] is walls and cached[1] == len(walls) and cached[2] == self.wall_generation:
+            return cached[3]
+        segments = [(w.start, w.end) for w in walls if w.active]
+        if self.curved:
+            segments = simplify_outline(segments)
+        self._sight_cache = (walls, len(walls), self.wall_generation, segments)
+        return segments
+
     def get_valid_spawn_positions(self, count: int, min_distance: float = 100,
                                   start_clearance: Optional[float] = None) -> List[Tuple[float, float]]:
         """Get valid spawn positions for enemies, avoiding walls.
@@ -403,6 +554,8 @@ class Maze:
         cell = (int((pos[0] - self.offset_x) // self.cell_size_x), int((pos[1] - self.offset_y) // self.cell_size_y))
         if not (0 <= cell[0] < self.grid_width and 0 <= cell[1] < self.grid_height) or cell in self.blocks:
             return False
+        if self.cave is not None and self.cave.is_rock(pos):
+            return False
         for wall in self.spatial_grid.get_nearby_walls(pos, radius):
             if wall.active:
                 segment = wall.get_segment()
@@ -432,7 +585,7 @@ class Maze:
         """Draw the maze."""
         self.wall_renderer.draw(
             screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks,
-            strong=self.strong_blocks
+            strong=self.strong_blocks, territories=self.block_territories, strong_cells=self.strong_cells
         )
         self.wall_debris.draw(screen)
         

@@ -13,7 +13,10 @@ class FunEntry:
 
 
 # Add an experimental level by adding a line here and a branch in Game.start_fun_entry.
-FUN_ENTRIES = (FunEntry('Pilot fight: Rules vs Vibes', 'pilot_duel'),)
+FUN_ENTRIES = (
+    FunEntry('Pilot fight: Rules vs Vibes', 'pilot_duel'),
+    FunEntry('Demo', 'demo'),
+)
 
 
 class FunMenu:

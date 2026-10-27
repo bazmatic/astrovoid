@@ -12,9 +12,13 @@ from rendering.wall_renderer import WallRenderer
 GRID = 10
 
 
-def maze_with(*cells):
-    """An empty maze with wall blocks added at the given grid cells."""
-    maze = Maze(1, MazeComplexity.EMPTY, GRID)
+def maze_with(*cells, curved=False):
+    """An empty maze with wall blocks added at the given grid cells.
+
+    Square walls by default (curved=False): most tests here pin the square faces, their counts and
+    coordinates, and the square renderer's wounds and repaints. Those about blocks rather than
+    faces run on curved rock too."""
+    maze = Maze(1, MazeComplexity.EMPTY, GRID, curved=curved)
     for x, y in cells:
         maze.grid[y][x] = 1
     maze.rebuild_walls()
@@ -57,13 +61,15 @@ class TestFaces:
             ends = {(round(wall.start[0]), round(wall.start[1])), (round(wall.end[0]), round(wall.end[1]))}
             assert ends != shared
 
-    def test_a_buried_block_has_no_faces(self):
-        maze = maze_with(*[(x, y) for x in (3, 4, 5) for y in (3, 4, 5)])
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_a_buried_block_has_no_faces(self, curved):
+        maze = maze_with(*[(x, y) for x in (3, 4, 5) for y in (3, 4, 5)], curved=curved)
         assert faces(maze, (4, 4)) == []
         assert (4, 4) in maze.blocks
 
-    def test_every_wall_is_a_face_of_a_block(self):
-        maze = Maze(5, MazeComplexity.NORMAL, GRID)
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_every_wall_is_a_face_of_a_block(self, curved):
+        maze = Maze(5, MazeComplexity.NORMAL, GRID, curved=curved)
         assert maze.walls
         assert all(wall.cell in maze.blocks for wall in maze.walls)
 
@@ -77,8 +83,9 @@ class TestDestruction:
         assert maze.blocks[(4, 4)] == config.WALL_HIT_POINTS - 2
         assert {w.hit_points for w in (top, right, bottom, left)} == {config.WALL_HIT_POINTS - 2}
 
-    def test_a_block_goes_all_at_once(self):
-        maze = maze_with((4, 4))
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_a_block_goes_all_at_once(self, curved):
+        maze = maze_with((4, 4), curved=curved)
         block_faces = faces(maze, (4, 4))
         hits = [maze.damage_wall(block_faces[i % 4]) for i in range(config.WALL_HIT_POINTS)]
         assert hits == [False] * (config.WALL_HIT_POINTS - 1) + [True]
@@ -100,14 +107,23 @@ class TestDestruction:
         nearby = maze.spatial_grid.get_walls_along_path((left - 20, top + height / 2), (left + 20, top + height / 2), 1)
         assert any(w.cell == (5, 4) and round(w.start[0]) == left == round(w.end[0]) for w in nearby)
 
-    def test_an_exposed_face_carries_its_blocks_damage(self):
-        maze = maze_with((4, 4), (5, 4))
-        maze.damage_wall(faces(maze, (5, 4))[0])
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_an_exposed_face_carries_its_blocks_damage(self, curved):
+        maze = maze_with((4, 4), (5, 4), curved=curved)
+        maze.damage_wall(faces(maze, (5, 4))[0])  # (5, 4) is hit before its side onto (4, 4) is exposed
+        before = {id(w) for w in maze.walls}
         destroy(maze, (4, 4))
+        exposed = [w for w in faces(maze, (5, 4)) if id(w) not in before]
+        assert exposed
+        assert {w.hit_points for w in exposed} == {config.WALL_HIT_POINTS - 1}
         assert {w.hit_points for w in faces(maze, (5, 4))} == {config.WALL_HIT_POINTS - 1}
+        # One more hit on a newly exposed face counts from the damage the block already had
+        maze.damage_wall(exposed[0])
+        assert maze.blocks[(5, 4)] == config.WALL_HIT_POINTS - 2
 
-    def test_the_outer_ring_stays_indestructible_once_exposed(self):
-        maze = maze_with((1, 4))
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_the_outer_ring_stays_indestructible_once_exposed(self, curved):
+        maze = maze_with((1, 4), curved=curved)
         destroy(maze, (1, 4))
         rim = faces(maze, (0, 4))
         assert rim and not any(w.destructible for w in rim)
@@ -116,11 +132,13 @@ class TestDestruction:
                 assert maze.damage_wall(wall) is False
         assert (0, 4) in maze.blocks
 
-    def test_nothing_spawns_inside_a_block(self):
-        maze = maze_with(*[(x, y) for x in range(3, 8) for y in range(3, 8)])
+    @pytest.mark.parametrize('curved', [False, True])
+    def test_nothing_spawns_inside_a_block(self, curved):
+        maze = maze_with(*[(x, y) for x in range(3, 8) for y in range(3, 8)], curved=curved)
         for x, y in maze.get_valid_spawn_positions(40, min_distance=5):
             cell = (int((x - maze.offset_x) // maze.cell_size_x), int((y - maze.offset_y) // maze.cell_size_y))
             assert cell not in maze.blocks
+            assert maze.cave is None or not maze.cave.is_rock((x, y))
 
 
 class TestFill:

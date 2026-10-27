@@ -201,10 +201,15 @@ class CollisionHandler:
             start, end = wall.get_segment()
             if circle_line_collision(blast.pos, blast.radius, start, end):
                 faces.setdefault(wall.cell if wall.cell is not None else id(wall), (wall, get_closest_point_on_line(blast.pos, start, end)))
-        for wall, impact in faces.values():
-            for _ in range(blast.wall_hits):
-                if maze.damage_wall(wall, impact):
-                    break
+        # One curved rock rebuild for every block the blast breaks, once all the hits are in
+        with maze.batched_destroys():
+            for wall, impact in faces.values():
+                if not wall.active and wall.cell is not None:
+                    # Rebuilt since it was found: hit the block through one of its current segments
+                    wall = next((w for w in maze.walls if w.cell == wall.cell), wall)
+                for _ in range(blast.wall_hits):
+                    if maze.damage_wall(wall, impact):
+                        break
 
     def handle_projectile_hunter_collision(self, projectile, hunter) -> bool:
         """Enemy bullets damage the hunter without changing player statistics."""

@@ -2,14 +2,25 @@
 """PyInstaller spec for bundling Squiddler."""
 
 from pathlib import Path
+import ast
 import os
 
 from PyInstaller.building.build_main import Analysis, PYZ, EXE, COLLECT
+from PyInstaller.building.osx import BUNDLE
 
 PROJECT_ROOT = Path.cwd()
 BLOCK_CIPHER = None
 BUILD_MODE = os.environ.get("ASTROVOID_PYINSTALLER_MODE", "onedir").lower()
 ONEFILE_BUILD = BUILD_MODE == "onefile"
+
+# game.py is loaded from bundled data to avoid the game package name collision.
+# Analysis cannot follow that dynamic load, so include its imports explicitly.
+GAME_IMPORTS = set()
+for node in ast.walk(ast.parse((PROJECT_ROOT / "game.py").read_text())):
+    if isinstance(node, ast.Import):
+        GAME_IMPORTS.update(alias.name for alias in node.names)
+    elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        GAME_IMPORTS.add(node.module)
 
 def collect_tree(source: Path, target: str) -> list[tuple[str, str]]:
     items: list[tuple[str, str]] = []
@@ -18,7 +29,7 @@ def collect_tree(source: Path, target: str) -> list[tuple[str, str]]:
         for filename in filenames:
             file_path = root_path / filename
             relative = file_path.relative_to(source)
-            destination = Path(target) / relative
+            destination = Path(target) / relative.parent
             items.append((str(file_path), str(destination)))
     return items
 
@@ -38,8 +49,8 @@ A = Analysis(
     pathex=[str(PROJECT_ROOT)],
     binaries=[],
     datas=DATA_FILES,
-    hiddenimports=[
-        "entities.hunter_ship", "hunter.controller", "hunter.perception",
+    hiddenimports=sorted(GAME_IMPORTS) + [
+        "entities.hunter_ship_body", "hunter.controller", "hunter.perception",
         "hunter.spawn", "hunter.worker",
         "hunter.rules_pilot", "pymunk",
     ],
@@ -54,7 +65,7 @@ A = Analysis(
 
 PYZ_ARCHIVE = PYZ(A.pure, A.zipped_data, cipher=BLOCK_CIPHER)
 
-# Use windowed mode on macOS to create proper app bundle
+# macOS bundles use the windowed bootloader; BUNDLE below creates the .app structure.
 import sys
 IS_MACOS = sys.platform == 'darwin'
 CONSOLE_MODE = not (IS_MACOS and not ONEFILE_BUILD)
@@ -75,7 +86,7 @@ EXECUTABLE = EXE(
 )
 
 if not ONEFILE_BUILD:
-    COLLECT(
+    DISTRIBUTION = COLLECT(
         EXECUTABLE,
         A.binaries,
         A.zipfiles,
@@ -84,3 +95,10 @@ if not ONEFILE_BUILD:
         upx=True,
         name="Squiddler",
     )
+    if IS_MACOS:
+        BUNDLE(
+            DISTRIBUTION,
+            name="Squiddler.app",
+            bundle_identifier="com.bazmatic.squiddler",
+            info_plist={"NSHighResolutionCapable": True},
+        )

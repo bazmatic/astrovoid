@@ -140,11 +140,12 @@ chmod +x build.sh
 pyinstaller pyinstaller.spec
 ```
 
-The executable will be created in the `dist/` folder. On Windows, it will be `dist/Squiddler/Squiddler.exe`. On Linux/macOS, it will be `dist/Squiddler/Squiddler`.
+The distribution will be created in `dist/`. On macOS, distribute `dist/Squiddler.app`; users can drag it into Applications and double-click it. On Windows, the executable is `dist/Squiddler/Squiddler.exe`; on Linux, it is `dist/Squiddler/Squiddler`. Keep the whole `Squiddler` folder together on Windows and Linux.
 
 ### Build Output
 
-- **One-file executable**: The build creates a single executable file that includes all dependencies and data files (assets, config, levels).
+- **Mac app bundle**: The default macOS build creates `Squiddler.app` with all dependencies and resources inside. Package it with `ditto -c -k --keepParent dist/Squiddler.app dist/Squiddler-macos.zip` to preserve bundle symlinks.
+- **Folder distribution**: Windows and Linux default to a self-contained `Squiddler` folder. `ASTROVOID_PYINSTALLER_MODE=onefile` selects the optional standalone executable instead of the default folder/app build.
 - **No console window**: The executable runs without a console window (windowed application).
 - **All resources bundled**: Assets, configuration files, and level data are automatically included in the executable.
 
@@ -215,13 +216,30 @@ Grenades detonate when an enemy comes within 28 pixels of their proximity sensor
 
 Each level and retry starts fresh with only the basic gun. Swapping weapons cannot bypass the current firing cooldown.
 
-Weapon tuning and drop weights live in `weapons/catalog.py`; optional level `weapons` lists restrict drops to named special weapon IDs. Drop chance remains under `powerups.crystalSpawnChance` in `config/settings.json`. Old ammo policies and timed upgrade settings apply only to legacy training/replays. New training runs record the weapon ruleset and tuning; resumed historical runs keep their recorded combat rules.
+Weapon tuning and drop weights live in `weapons/catalog.py`; optional level `weapons` lists restrict drops to named special weapon IDs. Drop chance remains under `powerups.crystalSpawnChance` in `config/settings.json`. Old ammo policies and timed upgrade settings apply only to legacy training/replays. New training runs record the weapon ruleset and tuning; resumed historical runs keep their recorded combat rules. They also record `curved_walls`: new runs train on curved cave rock, while runs and replays recorded before it existed keep square walls.
 
 The Inflator makes a creature five times its normal size for five seconds. Its first hit does no damage; any further shot or blast kills the inflated target. Surviving targets shrink back, retaining their original health. Set `powerups.inflationDurationSeconds` and `powerups.inflationSizeMultiplier` in `config/settings.json` to change the duration and scale. Inflated outlines are easier to shoot, while their navigation footprint remains normal so they can still fit through corridors. Hunters collecting this pickup receive their usual generic timed boost.
 
 ### Walls
 
 The maze is built from solid blocks of rock. A block has walls only where it faces open space, so blocks packed together form one mass with nothing inside to fly through.
+
+The rock is drawn and felt as curved cave walls: smooth, water-worn outlines with gentle bulges and dips, laid over the same grid of blocks. Collision follows the curve, so you bounce off a bulge's surface, not the square block behind it. Seeded bulges may narrow passages and make traversal harder. Rock stays out of gate swings, and the ship's start, the exit, the beacon and every hand-placed creature get as much room as square walls would give them. Strong (metal) walls stay square. When a block is destroyed the rock around the hole re-forms smoothly. The bulges come from the level's seed, so a level looks and plays the same every time.
+
+The shape is tuned under `maze.cave` in `config/settings.json`. Lengths ending in `Cells` are fractions of a cell (of the square root of a cell's width times height, so the curve scales with the cell); the rest are pixels or plain numbers:
+
+| Key | Meaning |
+|---|---|
+| `enabled` | `true` for curved cave rock; `false` gives the old square block walls |
+| `maxSampleSpacing` | Largest spacing of the rock field's samples, in pixels (finer is smoother and slower) |
+| `minSamplesPerCell` | Fewest samples across a cell, whatever its size |
+| `blurCells` | Corner rounding spread in cells; currently `0.42` |
+| `noiseAmplitude` | How strongly the bulges and dips push the outline (in the field's own units, where 0.5 is the outline; 0 gives smooth rounded blocks) |
+| `noiseScalesCells` | Bulge scale in cells; currently one broad layer at `[2.5]`, without fine noise |
+| `noiseWeights` | Each noise layer's share, in the same order |
+| `linkClearance` | Pixels kept open around the line joining each pair of neighbouring open cells |
+| `wallCoreCells` | Radius of the core, in cells, around each block's centre and the lines to its wall neighbours, that is always rock, so thin walls never break |
+| `simplifyTolerance` | Pixels the traced outline may stray when it is simplified into fewer segments |
 
 - Your shots wear a block down. It takes 4 hits from any side (`maze.wallHitPoints`), and each one knocks chips loose, darkens the rock and breaks a chunk out of the edge where it landed, with cracks running in from the wound. Shots in the same place open the same wound further. The last hit bursts the whole block into rubble.
 - Destroying a block exposes the faces of its neighbours, so you can tunnel through thick rock one block at a time.
@@ -419,6 +437,7 @@ asterdroids/
 - Each kind of enemy (its names, how it behaves in the maze and its own tuning) has one entry in `config/enemies.json`.
 - `config.py` loads the JSON into typed dataclasses and exposes the legacy uppercase names for backward compatibility (e.g., `config.SCREEN_WIDTH`) while also providing `config.SETTINGS` for new code that prefers structured access.
 - When updating `config/settings.json`, rerun the game or tests to reload the new configuration.
+- Tune player movement in `ship` and hunter movement independently in `hunterShip`: `rotationSpeed`, `thrustForce`, `friction`, and `maxSpeed`. Hunter pilot thrust and turn multipliers still apply to the hunter values. Allied and enemy hunters share this movement baseline; their sizes and colors remain in `config/enemies.json`. Other enemy kinds may still scale their movement from `ship`.
 
 ## Documentation
 
