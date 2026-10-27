@@ -140,11 +140,12 @@ chmod +x build.sh
 pyinstaller pyinstaller.spec
 ```
 
-The executable will be created in the `dist/` folder. On Windows, it will be `dist/Squiddler/Squiddler.exe`. On Linux/macOS, it will be `dist/Squiddler/Squiddler`.
+The distribution will be created in `dist/`. On macOS, distribute `dist/Squiddler.app`; users can drag it into Applications and double-click it. On Windows, the executable is `dist/Squiddler/Squiddler.exe`; on Linux, it is `dist/Squiddler/Squiddler`. Keep the whole `Squiddler` folder together on Windows and Linux.
 
 ### Build Output
 
-- **One-file executable**: The build creates a single executable file that includes all dependencies and data files (assets, config, levels).
+- **Mac app bundle**: The default macOS build creates `Squiddler.app` with all dependencies and resources inside. Package it with `ditto -c -k --keepParent dist/Squiddler.app dist/Squiddler-macos.zip` to preserve bundle symlinks.
+- **Folder distribution**: Windows and Linux default to a self-contained `Squiddler` folder. `ASTROVOID_PYINSTALLER_MODE=onefile` selects the optional standalone executable instead of the default folder/app build.
 - **No console window**: The executable runs without a console window (windowed application).
 - **All resources bundled**: Assets, configuration files, and level data are automatically included in the executable.
 
