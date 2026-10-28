@@ -80,6 +80,7 @@ class Setting:
     group: str
     label: str
     display_scale: float = 1.0
+    tasks: tuple = ('hunter', 'wallcrawler_team')
 
 
 @dataclass(frozen=True)
@@ -89,6 +90,8 @@ class Value:
 
 
 def _kind(action):
+    if action.type is str or isinstance(action.default, str):
+        return 'string'
     if action.nargs == 0:
         return 'bool'
     if action.type is ppo_neural.parse_levels:
@@ -100,6 +103,9 @@ def _kind(action):
 
 def _settings():
     from experiments.score import Weights
+    from learning.tasks import TASKS
+    common = ('task','iterations','episodes','workers','lr','gamma','gae_lambda','horizon')
+    extra = {key for t in TASKS.values() for key in t.options}
     out = []
     for action in ppo_neural.build_parser()._actions:
         if action.dest in NOT_SETTINGS:
@@ -109,7 +115,9 @@ def _settings():
         help_text = ('Reward points lost per enemy collision or projectile hit; 0 disables this penalty.'
                      if action.dest == 'hit_scale' else action.help or '')
         out.append(Setting(action.dest, action.option_strings[0], _kind(action), default, help_text,
-                           group, label, Weights().hit if action.dest == 'hit_scale' else 1.0))
+                           group, label, Weights().hit if action.dest == 'hit_scale' else 1.0,
+                           tuple(t.key for t in TASKS.values() if action.dest in common or
+                                 action.dest in t.options or (t.key=='hunter' and action.dest not in extra))))
     return out
 
 
@@ -169,7 +177,8 @@ def read_settings(run_dir, all_runs):
     config = config_of(run_dir)
     recorded, recovered = _recorded(config), _recovered(config)
     others = [{**_recovered(c), **_recorded(c)} for c in
-              (config_of(r) for r in sorted(all_runs, key=_number, reverse=True) if Path(r) != Path(run_dir))]
+              (config_of(r) for r in sorted(all_runs, key=_number, reverse=True) if Path(r) != Path(run_dir))
+              if (c or {}).get('task', 'hunter') == (config or {}).get('task', 'hunter')]
     out = {}
     for s in SETTINGS:
         if s.dest in recorded:
@@ -212,6 +221,12 @@ def parse_value(setting, value):
     """`value` (text from a person, or already typed) as the setting's type."""
     def bad(why):
         return ValueError(f'{setting.dest}: {value!r} {why}')
+    if setting.kind == 'string':
+        text = str(value)
+        if setting.dest == 'task':
+            from learning.tasks import task
+            task(text)
+        return text
     if setting.kind == 'bool':
         if isinstance(value, bool):
             return value
@@ -294,5 +309,5 @@ def to_argv(values):
         elif s.kind == 'levels':
             argv += [s.flag, format_levels(value)]
         else:
-            argv += [s.flag, repr(value) if s.kind != 'int' else str(value)]
+            argv += [s.flag, str(value) if s.kind in ('int', 'string') else repr(value)]
     return argv

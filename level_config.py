@@ -106,14 +106,14 @@ def get_level_seed(level: int) -> int:
 
 
 def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
-    """Get enemy counts for a level with partial override support.
+    """Get enemy counts from a layout or an explicit, possibly sparse enemies section.
     
     Args:
         level: Current level number (1-based).
         
     Returns:
-        EnemyCounts dataclass with config overrides applied, or None if no config exists.
-        Unspecified enemy counts use defaults from level_rules.
+        EnemyCounts for the explicit roster, or None when no enemies section exists.
+        Within an enemies section, unspecified kinds mean zero. Without that section the caller uses level_rules.
     """
     layout = get_level_layout(level)
     if layout is not None:
@@ -126,18 +126,16 @@ def get_level_enemy_counts(level: int) -> Optional[EnemyCounts]:
     if not config or 'enemies' not in config:
         return None
     
-    # Get defaults
-    default_counts = get_enemy_counts(level)
     enemies_config = config['enemies']
     
-    # Apply partial overrides
-    static = enemies_config.get('static', default_counts.static)
-    patrol = enemies_config.get('patrol', default_counts.patrol)
-    aggressive = enemies_config.get('aggressive', default_counts.aggressive)
-    replay = enemies_config.get('replay', default_counts.replay)
-    flocker = enemies_config.get('flocker', default_counts.flocker)
-    flighthouse = enemies_config.get('flighthouse', default_counts.flighthouse)
-    egg = enemies_config.get('egg', default_counts.egg)
+    # An explicit roster lists only the kinds present; omitted kinds are absent.
+    static = enemies_config.get('static', 0)
+    patrol = enemies_config.get('patrol', 0)
+    aggressive = enemies_config.get('aggressive', 0)
+    replay = enemies_config.get('replay', 0)
+    flocker = enemies_config.get('flocker', 0)
+    flighthouse = enemies_config.get('flighthouse', 0)
+    egg = enemies_config.get('egg', 0)
     anemone = get_level_anemone_count(level)
     
     # Calculate total from the sum of regular enemies
@@ -164,15 +162,15 @@ def get_level_anemone_count(level: int) -> int:
         level: Current level number (1-based).
         
     Returns:
-        The number the level's config asks for, taken as given. Otherwise the
-        number from level_rules, held to what the level's maze has room for.
+        An explicit enemies section's count (zero if omitted). Without that section,
+        the number from level_rules, held to what the level's maze has room for.
     """
     layout = get_level_layout(level)
     if layout is not None:
         return layout.counts()['anemone']
     config = load_level_config(level)
-    if config and 'anemone' in config.get('enemies', {}):
-        return max(0, int(config['enemies']['anemone']))
+    if config and 'enemies' in config:
+        return max(0, int(config['enemies'].get('anemone', 0)))
     return min(get_anemone_count(level), anemones_that_fit(get_maze_grid_size(level)))
 
 
@@ -183,14 +181,14 @@ def get_level_split_boss_count(level: int) -> int:
         level: Current level number (1-based).
         
     Returns:
-        Split boss count from config if present, otherwise default from level_rules.
+        An explicit enemies section’s split boss count (zero if omitted), otherwise level_rules.
     """
     layout = get_level_layout(level)
     if layout is not None:
         return layout.counts()['split_boss']
     config = load_level_config(level)
-    if config and 'enemies' in config and 'split_boss' in config['enemies']:
-        return int(config['enemies']['split_boss'])
+    if config and 'enemies' in config:
+        return int(config['enemies'].get('split_boss', 0))
     return get_split_boss_count(level)
 
 
@@ -201,15 +199,15 @@ def get_level_mother_boss_count(level: int) -> int:
         level: Current level number (1-based).
         
     Returns:
-        Mother boss count from config if present, otherwise default from level_rules.
+        An explicit enemies section’s mother boss count (zero if omitted), otherwise level_rules.
     """
     layout = get_level_layout(level)
     if layout is not None:
         return layout.counts()['mother_boss']
     from level_rules import get_mother_boss_count
     config = load_level_config(level)
-    if config and 'enemies' in config and 'mother_boss' in config['enemies']:
-        return int(config['enemies']['mother_boss'])
+    if config and 'enemies' in config:
+        return int(config['enemies'].get('mother_boss', 0))
     return get_mother_boss_count(level)
 
 
@@ -244,6 +242,17 @@ def get_level_belemnite_count(level: int) -> int:
     return _placed_only_count(level, 'belemnite')
 
 
+def get_level_wallcrawler_count(level: int) -> int:
+    """Authored wallcrawlers, or a small growing population on generated levels from level 11."""
+    layout = get_level_layout(level)
+    if layout is not None:
+        return layout.counts()['wallcrawler']
+    data = load_level_config(level)
+    if data is not None and 'enemies' in data:
+        return max(0, int(data['enemies'].get('wallcrawler', 0)))
+    return min(6, 1 + (level - 11) // 6) if level >= 11 else 0
+
+
 def _placed_only_count(level: int, kind: str) -> int:
     """How many of an enemy only a level file places: its layout's, else its `enemies` count, else none."""
     layout = get_level_layout(level)
@@ -262,14 +271,14 @@ def get_level_egg_count(level: int) -> int:
         level: Current level number (1-based).
         
     Returns:
-        Egg count from config if present, otherwise default from level_rules.
+        An explicit enemies section’s egg count (zero if omitted), otherwise level_rules.
     """
     layout = get_level_layout(level)
     if layout is not None:
         return layout.counts()['egg']
     config = load_level_config(level)
-    if config and 'enemies' in config and 'egg' in config['enemies']:
-        return int(config['enemies']['egg'])
+    if config and 'enemies' in config:
+        return int(config['enemies'].get('egg', 0))
     return get_enemy_counts(level).egg
 
 

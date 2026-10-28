@@ -27,22 +27,23 @@ def enemy_count(level):
     return sum(enemies(level).values())
 
 
-@pytest.mark.parametrize('level', ARC)
-def test_every_arc_level_has_a_complete_file_and_valid_layout(level):
+@pytest.mark.parametrize('level', range(1, 32))
+def test_every_campaign_level_has_valid_enemy_counts_and_layout(level):
     data = level_config.load_level_config(level)
-    assert data['seed'] == 100 + level
-    assert set(data['enemies']) == set(enemy_kinds.kinds())
+    if level in ARC:
+        assert data['seed'] == 100 + level
+    assert set(data['enemies']) <= set(enemy_kinds.kinds())
     assert all(type(n) is int and n >= 0 for n in data['enemies'].values())
     assert 'layout' not in data or level_config.get_level_layout(level) is not None
     assert {k:v for k,v in enemies(level).items() if v} == {k:v for k,v in data['enemies'].items() if v}
 
 
 def test_boss_introductions_build_on_the_smaller_creatures():
-    assert enemies(6)['split_boss'] == 0
+    assert enemies(6).get('split_boss', 0) == 0
     assert enemies(12)['split_boss'] == 1
     assert enemies(18)['split_boss'] == 2
     assert enemies(24)['mother_boss'] == 1
-    assert enemies(24)['neural_hunter'] == 0
+    assert enemies(24).get('neural_hunter', 0) == 0
     assert enemies(30)['boss_viber'] == 1
 
 
@@ -57,7 +58,7 @@ def test_at_most_one_enemy_type_is_new_on_any_level():
         seen |= new
     assert first == {'static':1, 'patrol':2, 'aggressive':3, 'egg':4, 'flocker':5,
                      'anemone':7, 'replay':8, 'belemnite':9, 'flighthouse':10,
-                     'split_boss':12, 'vibelet':19, 'neural_hunter':21,
+                     'wallcrawler':11, 'split_boss':12, 'vibelet':19, 'neural_hunter':21,
                      'rules_hunter':23, 'mother_boss':24, 'boss_viber':30}
     # A first encounter is one of the new creature, rather than a swarm or a boss squad.
     assert all(enemies(level)[kind] == 1 for kind,level in first.items() if kind != 'static')
@@ -69,6 +70,13 @@ def test_the_enemy_count_rises_gently_between_ordinary_levels():
     assert enemy_count(1) == 4 and enemy_count(23) == 24
 
 
+def test_wallcrawler_practice_builds_between_boss_encounters():
+    expected = {11: 1, 13: 1, 14: 2, 15: 2, 16: 2, 17: 3,
+                19: 3, 20: 3, 21: 4, 22: 4, 23: 4, 27: 4}
+    assert {level: enemies(level).get('wallcrawler', 0)
+            for level in range(1, 32) if enemies(level).get('wallcrawler', 0)} == expected
+
+
 def test_ordinary_mazes_never_shrink_and_stop_at_32():
     sizes = [level_config.get_maze_grid_size(level) for level in ORDINARY]
     assert sizes == sorted(sizes)
@@ -77,7 +85,7 @@ def test_ordinary_mazes_never_shrink_and_stop_at_32():
 
 @pytest.mark.parametrize('level', ARC)
 def test_anemones_fit_the_maze(level):
-    assert enemies(level)['anemone'] <= anemones_that_fit(level_config.get_maze_grid_size(level))
+    assert enemies(level).get('anemone', 0) <= anemones_that_fit(level_config.get_maze_grid_size(level))
 
 
 @pytest.fixture
@@ -107,6 +115,7 @@ def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level
         'static': counts.static, 'patrol': counts.patrol, 'aggressive': counts.aggressive,
         'replay': counts.replay, 'flocker': counts.flocker, 'flighthouse': counts.flighthouse,
         'egg': counts.egg, 'anemone': level_config.get_level_anemone_count(level),
+        'wallcrawler': level_config.get_level_wallcrawler_count(level),
         'split_boss': level_config.get_level_split_boss_count(level),
         'mother_boss': level_config.get_level_mother_boss_count(level)}
     game.level = level

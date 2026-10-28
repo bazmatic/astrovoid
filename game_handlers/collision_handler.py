@@ -121,6 +121,9 @@ class CollisionHandler:
         
         if projectile.check_circle_collision((ship.x, ship.y), ship.radius):
             ship.flinch()
+            callback = getattr(self, 'on_player_projectile_hit', None)
+            if callback is not None:
+                callback(projectile)
             scoring.record_enemy_bullet_hit(projectile.strength)  # a bullet costs the bullet penalty, nothing more
             self.sound_manager.play_bad_hit()
             # Apply physics-based collision (projectile has very small mass)

@@ -137,7 +137,9 @@ def test_a_mortal_hunter_survives_fewer_hits_than_its_health():
             hunter.immunity_remaining = 0.0
             damage(hunter, hunter.encounter)
         seen.append(hunter.health)
-    result = run_episode(13, 0, horizon=3.0, health=3, trace=hit_twice)
+    # The opening encounter has no guns: later campaign encounters can add a third,
+    # incidental hit and turn this health-budget check into a combat-survival test.
+    result = run_episode(1, 0, horizon=3.0, health=3, trace=hit_twice)
     assert result.end != 'died' and 0 < min(seen) <= 1.0      # two hits taken; a wall may have taken a little more
 
 

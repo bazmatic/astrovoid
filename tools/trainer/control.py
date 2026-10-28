@@ -102,8 +102,32 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None):
     with _lock(root):
         runs = _runs(root, processes)
         _refuse_if_busy(runs)
+        requested_task = (changes or {}).get('task', 'hunter')
+        from learning.tasks import task
+        try:
+            definition = task(requested_task)
+        except ValueError as e:
+            raise TrainerError(str(e)) from None
+        if definition.fresh_defaults and from_ in (None, 'new', 'random'):
+            from tools.trainer.settings import SETTINGS, Value
+            base = {s.dest: Value(s.default, 'recorded') for s in SETTINGS}
+            for key, value in dict(task=requested_task, **definition.fresh_defaults).items():
+                base[key] = Value(value, 'recorded')
+            try:
+                values = apply_changes(base, changes)
+            except ValueError as e:
+                raise TrainerError(str(e)) from None
+            name = f'run{next_run_number(root)}'
+            out = root/name
+            out.mkdir()
+            command = [sys.executable, '-m', 'tools.ppo_neural', '--start', '', '--out', str(out), *to_argv(values)]
+            (launch or launch_process)(command, root/f'{name}.log')
+            return Started(name, 'random', changed(base, values), command)
         source, checkpoint = _source(from_, runs)
         base = read_settings(source.path, run_folders(root))
+        source_task = (config_of(source.path) or {}).get('task', 'hunter')
+        if 'task' in (changes or {}) and changes['task'] != source_task:
+            raise TrainerError('cannot transfer a checkpoint between creature tasks; start a new task')
         try:
             values = apply_changes(base, changes)
         except ValueError as e:
@@ -144,7 +168,8 @@ def pause(root=RL_ROOT, processes=None):
     if not training:
         raise TrainerError('nothing is training')
     run = training[0]
-    if not isinstance((config_of(run.path) or {}).get('args'), dict):
+    config = config_of(run.path)
+    if config is not None and not isinstance(config.get('args'), dict):
         raise TrainerError(f'{run.name} was started before pausing existed; it can only be stopped')
     (run.path / ppo_neural.PAUSE_FILE).touch()
     return run.name

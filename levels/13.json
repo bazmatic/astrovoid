@@ -5,23 +5,16 @@
     "grid_size": 26
   },
   "enemies": {
-    "static": 3,
+    "static": 2,
     "patrol": 2,
     "aggressive": 3,
     "replay": 1,
     "flocker": 2,
-    "vibehouse": 0,
     "flighthouse": 1,
     "egg": 1,
     "anemone": 1,
-    "split_boss": 0,
-    "mother_boss": 0,
-    "rules_hunter": 0,
-    "neural_hunter": 0,
-    "boss_viber": 0,
-    "vibelet": 0,
-    "baby": 0,
-    "belemnite": 1
+    "belemnite": 1,
+    "wallcrawler": 1
   },
   "layout": {
     "walls": [
@@ -201,7 +194,7 @@
         ]
       },
       {
-        "type": "static",
+        "type": "wallcrawler",
         "cell": [
           14,
           4

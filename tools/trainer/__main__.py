@@ -1,4 +1,4 @@
-"""./run-trainer.sh [serve | status | runs | start | stop | pause | resume]: manage hunter training.
+"""./run-trainer.sh [serve | status | runs | start | stop | pause | resume]: manage creature training.
 
 With no command it opens the training manager in the browser."""
 import argparse
@@ -34,7 +34,7 @@ def _parser():
     commands.add_parser('status', help='what is training').add_argument('--json', action='store_true')
     commands.add_parser('runs', help='every run').add_argument('--json', action='store_true')
     start = commands.add_parser('start', help='start a new run (refuses while one is training or paused)')
-    start.add_argument('--from', dest='from_', help='RUN or RUN/iterNNNN to carry on from (default: newest run, last checkpoint)')
+    start.add_argument('--from', dest='from_', help='RUN or RUN/iterNNNN to continue, or new for fresh creature weights (default: newest run)')
     start.add_argument('--set', action='append', default=[], metavar='NAME=VALUE', help='change a setting')
     commands.add_parser('stop', help='end the training run')
     commands.add_parser('pause', help='pause the training run after its current iteration')
@@ -50,7 +50,7 @@ def _status_text(s):
     if s.get('seconds_per_iteration'):
         lines.append(f"{s['seconds_per_iteration']:.1f} s per iteration, started {s.get('started') or '-'}")
     latest = s.get('latest') or {}
-    shown = [k for k in ('score', 'mean_return', 'kills_per_min', 'deaths_per_episode', 'speed_fraction') if k in latest]
+    shown = [k for k in ('score', 'mean_return', 'kills_per_min', 'deaths_per_episode', 'speed_fraction', 'hits_per_minute', 'hit_probability', 'accuracy', 'survival') if k in latest]
     if shown:
         lines.append('latest: ' + ', '.join(f'{k} {latest[k]:g}' for k in shown))
     return '\n'.join(lines)

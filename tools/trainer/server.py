@@ -45,9 +45,11 @@ def make_handler(root, processes, launch, allowed_hosts=()):
             if path == '/api/status':
                 return self.send(200, runs.status(root, processes()))
             if path == '/api/runs':
-                return self.send(200, [run_json(r) for r in runs.list_runs(root, processes())])
+                return self.send(200, [dict(run_json(r), task=(config_of(r.path) or {}).get('task', 'hunter')) for r in runs.list_runs(root, processes())])
             if path == '/api/settings':
-                return self.send(200, {'settings': [asdict(s) for s in SETTINGS], 'levels': available_levels()})
+                from learning.tasks import TASKS
+                return self.send(200, {'settings': [asdict(s) for s in SETTINGS], 'levels': available_levels(),
+                                       'tasks':[dict(key=t.key,label=t.label,defaults=t.fresh_defaults) for t in TASKS.values()]})
             match = RUN_PATH.fullmatch(path)
             if match and (root / match.group(1)).is_dir():
                 run_dir, what = root / match.group(1), match.group(2)

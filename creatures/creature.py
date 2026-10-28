@@ -100,6 +100,8 @@ class Creature(GameEntity):
         """Something shoved it: add to its velocity (an anchored creature is put back on its next frame)."""
         self.vx += vx
         self.vy += vy
+        if self.has_spawned:
+            self.emit('shoved', self.encounter)
 
     def die(self) -> None:
         """It is gone; its Body hears `died` so it can start its death."""

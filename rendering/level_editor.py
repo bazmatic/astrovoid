@@ -40,7 +40,7 @@ LABELS = {'wall': 'Wall', 'strong_wall': 'Strong wall', **{kind: enemy_kinds.nam
 # The chip beside each palette entry, in the colours the things have in play
 CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140),
          'replay': (190, 110, 255), 'flocker': (255, 200, 80), 'flighthouse': (255, 230, 140), 'vibehouse': (255, 90, 230), 'egg': (240, 220, 200),
-         'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
+         'wallcrawler': (225, 190, 110), 'anemone': (255, 120, 200), 'split_boss': (170, 90, 255), 'mother_boss': (220, 80, 255),
          'rules_hunter': (255, 90, 90), 'neural_hunter': (255, 90, 230),
          'boss_viber': (255, 90, 230), 'vibelet': (255, 90, 230), 'baby': (215, 170, 255), 'belemnite': (240, 120, 60), 'start': (90, 170, 255), 'exit': (80, 230, 255), 'beacon': (120, 255, 90),
          'gate': (120, 235, 245), 'motor_gate': (255, 190, 80)}

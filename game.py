@@ -120,6 +120,16 @@ class Game:
         
         # Every enemy on the level
         self.roster = EnemyRoster()
+        self.wallcrawler_policy = None
+        crawler_weights = os.getenv('WALLCRAWLER_POLICY')
+        if crawler_weights:
+            from learning.policy import RecurrentPolicy
+            from learning.adapters.wallcrawler import SPEC
+            try:
+                self.wallcrawler_policy = RecurrentPolicy.load(crawler_weights, SPEC)
+            except (ValueError, OSError, KeyError) as exc:
+                logging.getLogger(__name__).warning('Wallcrawler policy unavailable: %s', exc)
+
         
         self.projectiles: List[Projectile] = []
         self.powerup_crystals: List[PowerupCrystal] = []
@@ -365,7 +375,7 @@ class Game:
         split_boss_count = level_config.get_level_split_boss_count(self.level)
         mother_boss_count = level_config.get_level_mother_boss_count(self.level)
         spawn_positions = [] if layout is not None else self.maze.get_valid_spawn_positions(
-            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.vibehouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + level_config.get_level_belemnite_count(self.level) + 5,  # Extra buffer for spawn positions
+            enemy_counts.total + enemy_counts.replay + enemy_counts.flocker + enemy_counts.flighthouse + enemy_counts.vibehouse + enemy_counts.egg + enemy_counts.anemone + split_boss_count + mother_boss_count + level_config.get_level_rules_hunter_count(self.level) + level_config.get_level_neural_hunter_count(self.level) + level_config.get_level_boss_viber_count(self.level) + level_config.get_level_vibelet_count(self.level) + level_config.get_level_belemnite_count(self.level) + level_config.get_level_wallcrawler_count(self.level) + 5,  # Extra buffer for spawn positions
             start_clearance=config.ENEMY_START_CLEARANCE
         )
         # The hunter is summoned by a Jev beacon; some levels start with one lying in the maze
@@ -394,7 +404,8 @@ class Game:
             self.spawn_manager.spawn_all_enemies(
                 self.level, spawn_positions, self.command_recorder, enemy_counts, split_boss_count, mother_boss_count,
                 anemone_keep_clear=(self.maze.start_pos, anemone_reach), maze=self.maze,
-                belemnite_count=level_config.get_level_belemnite_count(self.level)
+                belemnite_count=level_config.get_level_belemnite_count(self.level),
+                wallcrawler_count=level_config.get_level_wallcrawler_count(self.level)
             )
             self._spawn_enemy_hunters(spawn_positions)
         else:

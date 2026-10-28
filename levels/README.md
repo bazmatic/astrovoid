@@ -2,7 +2,7 @@
 
 Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels 25–30 also have custom files. Later levels come from the formulas in `level_rules.py` unless a file overrides them.
 
-A file can exist for any level, and can state as much or as little as it likes. Whatever it leaves out comes from the formulas.
+A file can exist for any level, and can state as much or as little as it likes. Outside an explicit `enemies` section, omitted settings come from the formulas. Within `enemies`, omitted types mean zero.
 
 ## Format
 
@@ -22,11 +22,12 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **seed**: random seed for the maze, enemy positions and the bulges of the curved cave rock (so a level's rock is the same every time, hand-made layouts included). Default: the level number. Arc levels use `100 + level`.
 - **maze.complexity**: `empty` (perimeter walls only), `simple`, `normal`, `complex` or `extreme`.
 - **maze.grid_size**: width and height in cells, 5 to 100. Bigger means more, smaller cells.
-- **enemies**: a count for each type. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
+- **enemies**: counts for the types the file overrides; listing every enemy type is optional. Omitted types mean zero; an empty `enemies: {}` section gives an empty roster. If the whole section is absent, level formulas apply. Anemone counts in a file are taken as given; the formulas would hold them to what the maze has room for.
 - **vibehouse**: a pink Flighthouse variant that launches Neural-piloted Vibelets when its searchlight sees the player or an ally. It has five hit points and uses the Flighthouse launch cadence. Add it through the editor or an `enemies.vibehouse` count.
 - **rules_hunter**: Rules hunters on the level (the Rules pilot's hunter ship as an enemy, hostile only to the player). A level with one is a boss level. Level 25 has one.
 - **neural_hunter**: Neural hunters on the level (the neural pilot's hunter ship as an enemy, in magenta, hostile only to the player). Like the Rules hunter it takes 12 hits and makes a boss level. Without an installed neural model (`assets/neural/hunter.npz`) the level starts without it.
 - **belemnite**: Belemnites on the level: spiky squids in pointed shells that chase the player as Jellies do, never overlapping one another. They have no guns, take 3 hits, and explode when they die, hurting the player, the hunter, nearby walls and other enemies (so one can set off the next).
+- **wallcrawler**: A gun walking on twelve little legs along curved rock or square steel. Bullets and explosions knock it loose; it cannot fire during its 0.6-second stunned tumble or its flight to the nearest wall. It has four hit points. Campaign encounters begin with one on level 11 and rise gradually to four by level 21; level 27 pairs four with explosive Belemnites. Layouts place it through the editor; generated levels accept an `enemies.wallcrawler` count. Levels without a file gain a small growing population from level 11 (up to six).
 - **hunter**: `false` forbids an ally. `{"earned": true}` allows enemy kills to drop a beacon only after 65% of the starting enemies have been defeated (at least four kills). The usual 3% drop chance still applies after that threshold. No beacon starts on an earned level. An explicit `{"spawn_cell": [col, row]}` remains available for custom encounters.
 - **layout**: an exact, hand-made level, written by the level editor (see the main README). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
 
@@ -90,6 +91,7 @@ Levels without files also have no starting beacon and use this earned-kill thres
 | 8 | Squiddler | One tougher armed enemy |
 | 9 | Belemnite | One explosive chaser |
 | 10 | Flighthouse | One reinforcement spawner |
+| 11 | Wallcrawler | One wall gun; knock it loose with bullets or explosions |
 | 12 | Squiddler Boss | One boss with two flockers |
 | 19 | Vibelet | One fragile neural ship |
 | 21 | Viber | One full-sized neural ship |
@@ -103,6 +105,13 @@ level 1 to 24 at level 23, with no sudden introductory swarms. Existing maze
 walls, gates, starts and exits are retained except that the level 6 practice
 arena is enlarged to avoid a maze-size drop. Enemy placements are retuned to
 leave the opening clear. Counts in the file agree with its saved layout.
+
+Wallcrawler practice continues after the introduction: one on level 13, two on
+levels 14–16, three on levels 17, 19 and 20, and four on levels 21–23. These replace
+up to two passive targets first, then Crabs, preserving each level's total roster
+and retaining at least one passive target in these mixed encounters. Boss
+arenas and specialist encounters keep their focused mixes. Explicit enemy blocks
+list only present types; omitted types stay absent instead of using formula counts.
 
 Level 25 remains a single-Terminator duel, and 26 a Viber encounter. Level 27's
 Belemnite population is reduced from 27 to ten. Levels 28 and 29 keep their

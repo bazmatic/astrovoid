@@ -249,6 +249,7 @@ The shape is tuned under `maze.cave` in `config/settings.json`. Lengths ending i
 ### Enemy Types
 
 - **Static**: Stationary enemies that fire at the player when in range. When hit by projectiles, they gain momentum and move with physics, bouncing off walls. Require multiple hits to destroy.
+- **Wallcrawler**: A living gun on twelve little legs that walks along rock and steel. Its legs supply launch momentum and timed spin; it coasts between walls and uses magnetic alignment with cushioned legs to land. Bullets and explosions can knock it off course and leave it drifting. It cannot fire while airborne. Takes four hits. Introduced alone on level 11, then returns in gradually larger groups on later ordinary levels. Tune its `wallCrawls` and `gun` traits in `config/enemies.json`.
 - **Patrol**: Move in straight lines, reversing direction on wall collision
 - **Aggressive**: Actively chase the player when alerted
 - **Replay**: Purple ships that replay your previous successful attempt
@@ -274,6 +275,7 @@ The shape is tuned under `maze.cave` in `config/settings.json`. Lengths ending i
 | 7 | Anemones |
 | 8 | Flocker swarms |
 | 10 | Flighthouses |
+| 11 | Wallcrawlers |
 | 12 | **Boss level**: two Split Bosses |
 | 13 | Eggs |
 | 18 | **Boss level**: Mother Boss |
@@ -534,6 +536,8 @@ its settings, any of which can be changed first, including which levels to train
 Replay an episode lists any finished iteration's episodes by level; Find panic flies them again (a minute or so,
 slowing training meanwhile) to show each one's panic, return, kills and ending, the most panic first; Watch opens one
 in the game window at normal, half or quarter speed (`python -m tools.watch_episode` does the same from the command line).
+The manager also supports communicating Wallcrawler teams, fresh task weights, team metrics and deterministic joint-action replays. See [Creature training](docs/creature-training.md) for the architecture, two-hour pilot settings, held-out comparisons and explicit gameplay selection.
+
 Runs live in `.astrovoid-local/neural/rl/runN/`. One run trains at a time. Pause lets the current iteration finish,
 then the run can be resumed later as the same run; Stop ends it. Closing the manager does not stop training.
 

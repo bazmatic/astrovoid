@@ -23,20 +23,14 @@ class NeuralPolicy:
         self.hidden = self.params['gru_w_hh'].shape[1]
 
     def initial_state(self):
-        return np.zeros(self.hidden, dtype=np.float32)
+        from learning.policy import RecurrentPolicy
+        return RecurrentPolicy.initial_state(self)
 
     def step(self, senses, state):
-        p = self.params
-        x = np.tanh(p['embed_w'] @ ((np.asarray(senses, dtype=np.float32) - self.mean) / self.scale) + p['embed_b'])
-        gi = p['gru_w_ih'] @ x + p['gru_b_ih']
-        gh = p['gru_w_hh'] @ state + p['gru_b_hh']
-        H = self.hidden
-        r = _sigmoid(gi[:H] + gh[:H])
-        z = _sigmoid(gi[H:2 * H] + gh[H:2 * H])
-        n = np.tanh(gi[2 * H:] + r * gh[2 * H:])
-        new_state = ((1.0 - z) * n + z * state).astype(np.float32)
-        logits = {k: p[f'{k}_w'] @ new_state + p[f'{k}_b'] for k in HEAD_SIZES}
-        return logits, new_state
+        from learning.policy import RecurrentPolicy
+        from learning.policy import PolicySpec
+        self.spec = PolicySpec('hunter', FEATURE_NAMES, tuple(HEAD_SIZES.items()), OBSERVATION_VERSION)
+        return RecurrentPolicy.step(self, senses, state)
 
     def act(self, senses, state, greedy=True, rng=None, temperature=1.0):
         """Choose the controls. Sampled choices are drawn at `temperature`: above 1 the odds flatten (training's

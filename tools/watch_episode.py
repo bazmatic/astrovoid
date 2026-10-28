@@ -162,6 +162,17 @@ def main(argv=None):
     parser.add_argument('--speed', type=float, default=1.0, help='playback speed when watching')
     parser.add_argument('--workers', type=int, default=8, help='processes when finding')
     args = parser.parse_args(argv)
+    import json
+    config_path = Path(args.run)/'config.json'
+    from learning.tasks import task
+    config = json.loads(config_path.read_text()) if config_path.exists() else {}
+    replay = task(config.get('task','hunter')).replay()
+    if replay is not None:
+        if args.episode is None:
+            print(json.dumps(replay.fly(args.run, args.iteration), indent=2))
+        else:
+            replay.watch(args.run, args.iteration, args.episode, args.speed)
+        return
     if args.episode is None:
         find(args.run, args.iteration, args.workers)
     else:

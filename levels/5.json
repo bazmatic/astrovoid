@@ -8,20 +8,8 @@
     "static": 3,
     "patrol": 2,
     "aggressive": 1,
-    "replay": 0,
     "flocker": 1,
-    "vibehouse": 0,
-    "flighthouse": 0,
-    "egg": 1,
-    "anemone": 0,
-    "split_boss": 0,
-    "mother_boss": 0,
-    "rules_hunter": 0,
-    "neural_hunter": 0,
-    "boss_viber": 0,
-    "vibelet": 0,
-    "baby": 0,
-    "belemnite": 0
+    "egg": 1
   },
   "layout": {
     "walls": [

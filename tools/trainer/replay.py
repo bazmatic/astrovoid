@@ -37,6 +37,11 @@ def _jobs(path, iteration):
 def episodes(run, iteration, root=RL_ROOT):
     """The iteration's episodes as training flew them, each with its level: quick, nothing is flown."""
     path = _run_dir(root, run, iteration)
+    from tools.trainer.settings import config_of
+    from learning.tasks import task
+    adapter = task((config_of(path) or {}).get('task','hunter')).replay()
+    if adapter is not None:
+        return adapter.episodes(path, iteration)
     return [{'episode': i, 'level': level, 'seed': seed} for i, (level, seed, _) in enumerate(_jobs(path, iteration))]
 
 
@@ -44,6 +49,11 @@ def fly(run, iteration, root=RL_ROOT, workers=8):
     """The iteration's episodes flown again, with how each went. Takes a while, and slows any training."""
     from tools.watch_episode import fly_all
     path = _run_dir(root, run, iteration)
+    from tools.trainer.settings import config_of
+    from learning.tasks import task
+    adapter = task((config_of(path) or {}).get('task','hunter')).replay()
+    if adapter is not None:
+        return adapter.fly(path, iteration)
     _jobs(path, iteration)
     return [{'episode': i, 'level': level, 'panic': panic, 'return': ret, 'kills': kills, 'end': end,
              'seconds': seconds}
@@ -53,7 +63,7 @@ def fly(run, iteration, root=RL_ROOT, workers=8):
 def watch(run, iteration, episode, speed=1.0, root=RL_ROOT, launch=None):
     """Open the episode in the game window, at `speed` (one of SPEEDS)."""
     path = _run_dir(root, run, iteration)
-    count = len(_jobs(path, iteration))
+    count = len(episodes(run, iteration, root))
     if not isinstance(episode, int) or isinstance(episode, bool) or not 0 <= episode < count:
         raise TrainerError(f'iteration {iteration} has episodes 0 to {count - 1}')
     if speed not in SPEEDS:

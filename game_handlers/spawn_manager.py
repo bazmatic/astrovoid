@@ -184,7 +184,8 @@ class SpawnManager:
         mother_boss_count: int,
         anemone_keep_clear: Optional[Tuple[Tuple[float, float], float]] = None,
         maze=None,
-        belemnite_count: int = 0
+        belemnite_count: int = 0,
+        wallcrawler_count: int = 0
     ) -> None:
         """Spawn all enemies for a level.
         
@@ -199,6 +200,7 @@ class SpawnManager:
                 within that distance of the position (the player's start and its reach).
             maze: When given, big enemies are placed where they do not touch a wall.
             belemnite_count: Number of Belemnites to spawn.
+            wallcrawler_count: Number of wall-clinging guns to spawn.
         """
         self._anemone_keep_clear = anemone_keep_clear
         self._maze = maze
@@ -218,7 +220,7 @@ class SpawnManager:
         
         # Define spawn configurations for all enemy types
         spawn_configs = self._create_spawn_configs(
-            enemy_counts, split_boss_count, mother_boss_count, level, belemnite_count
+            enemy_counts, split_boss_count, mother_boss_count, level, belemnite_count, wallcrawler_count
         )
         
         # Spawn all entities using configuration
@@ -249,7 +251,8 @@ class SpawnManager:
         split_boss_count: int,
         mother_boss_count: int,
         level: int = 1,
-        belemnite_count: int = 0
+        belemnite_count: int = 0,
+        wallcrawler_count: int = 0
     ) -> List[SpawnConfig]:
         """Create spawn configurations for all enemy types.
         
@@ -265,7 +268,7 @@ class SpawnManager:
                   ('flighthouse', enemy_counts.flighthouse), ('vibehouse', enemy_counts.vibehouse),
                   ('split_boss', split_boss_count),
                   ('mother_boss', mother_boss_count), ('egg', enemy_counts.egg), ('anemone', enemy_counts.anemone),
-                  ('belemnite', belemnite_count))
+                  ('belemnite', belemnite_count), ('wallcrawler', wallcrawler_count))
         # Big enemies need their whole body clear of walls, not just their centre
         return [SpawnConfig(count=count, kind=kind,
                             factory_func=lambda pos, cr, kind=kind: make_enemy(kind, pos, level, cr),

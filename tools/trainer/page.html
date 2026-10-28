@@ -72,11 +72,12 @@ input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;paddi
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap">
 <div class="wrap">
- <header><h1>Hunter training</h1>
+ <header><h1>Creature training</h1>
  <p class="sub">Start, pause, resume and stop training, and watch it. Training maximises the return: the rewards minus the penalties listed below, per episode. Each point is the mean of one iteration's episodes.</p></header>
  <div class="bar" id="status"><span class="msg">Loading…</span></div>
  <div class="next" id="next">
   <h2>Next run</h2>
+  <div class="row">Creature <select id="task" aria-label="Training task"><option value="hunter">Hunter</option><option value="wallcrawler_team">Wallcrawler team</option></select><button id="fresh-team" type="button">Fresh weights</button></div>
   <div class="row">Carry on from <select id="from-run" aria-label="Run to carry on from"></select> at iteration <input type="number" class="iter" id="from-iter" step="1" aria-label="Checkpoint iteration"><button type="button" id="from-last">Last</button><span class="range" id="from-range"></span>
    <span class="msg" id="changed-count"></span>
    <button id="edit">Edit settings</button>
@@ -104,6 +105,7 @@ let D=[];
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function smooth(v,k=5){return v.map((_,i)=>{const s=v.slice(Math.max(0,i-k+1),i+1);return s.reduce((a,b)=>a+b,0)/s.length})}
 function chart({title,sub,key,ref,base,gate,wide}){
+  if(!D.length)return '';
   if(D.length&&!(key in D.at(-1)))return '';        // a run that does not log this one
   const W=960,H=300,m={l:44,r:10,t:10,b:22};
   const xs=D.map(d=>d.iteration),ys=D.map(d=>d[key]);
@@ -143,13 +145,19 @@ const EPISODE_S=75;let EPI=96;
 const gameTime=s=>{const h=s/3600;return h<48?`${h.toFixed(0)} h`:`${Math.floor(h/24)} d ${Math.round(h%24)} h`};
 function render(){
   const last=D.at(-1)||{},sm=k=>{const v=smooth(D.map(d=>d[k]),25);return v.at(-1)};
+  const shown=(k,n=1)=>Number.isFinite(sm(k))?sm(k).toFixed(n):'-';
+  const team='hits_per_minute' in last;
   document.getElementById('strip').innerHTML=[
-   ['Iterations',D.length?D.length:'0'],['Training return',D.length?sm('mean_return').toFixed(1):'-'],['Kills / min',D.length?sm('kills_per_min').toFixed(1):'-'],
-   ['Wall quotient / min',D.length?sm('wall_quotient_per_min').toFixed(2):'-'],['Hits taken / min',D.length?sm('hits_taken_per_min').toFixed(2):'-'],
+   ['Iterations',D.length?D.length:'0'],['Training return',D.length?sm('mean_return').toFixed(1):'-'],[team?'Team hits / min':'Kills / min',shown(team?'hits_per_minute':'kills_per_min')],
+   [team?'Accuracy':'Wall quotient / min',shown(team?'accuracy':'wall_quotient_per_min',2)],[team?'Survival':'Hits taken / min',shown(team?'survival':'hits_taken_per_min',2)],
    ['Last iteration (s)',D.length?((last.rollout_s||0)+(last.update_s||0)).toFixed(1):'-'],
    ['Game time',D.length?gameTime(D.length*EPI*EPISODE_S):'-']].map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
   document.getElementById('charts').innerHTML=[
    chart({title:'Training return',sub:'Higher is better. What training maximises. Only comparable within a run.',key:'mean_return',wide:true}),
+   chart({title:'Team projectile hits per minute',sub:'Wallcrawler team: accepted bullet impacts on the frozen player.',key:'hits_per_minute'}),
+   chart({title:'Team hit probability',sub:'Share of trials with at least one accepted hit.',key:'hit_probability'}),
+   chart({title:'Team accuracy',sub:'Accepted hits divided by actual crawler shots.',key:'accuracy'}),
+   chart({title:'Crawler survival',sub:'Share of the team still alive at trial end.',key:'survival'}),
    chart({title:'Speed',sub:'Higher is better. Average speed as a share of top speed.',key:'speed_fraction'}),
    chart({title:'Powerups per episode',sub:'Higher is better. Crystals the hunter collects.',key:'powerups_per_episode'}),
    chart({title:'Hunter power boost',sub:'Share of time the generic power boost is active.',key:'upgraded_fraction'}),
@@ -169,6 +177,11 @@ function render(){
 async function loadRules(){
   if(!VIEW)return;
   try{const r=await fetch(`api/runs/${VIEW}/config`,{cache:'no-store'});if(!r.ok)return;const c=await r.json();
+    if(c.task==='wallcrawler_team'){
+      EPI=c.args.episodes;
+      $('rules').innerHTML=`<div class="card"><h2>Team objective</h2><p>+1 per accepted projectile hit; −0.01 per actual shot. Shared team reward. Trials last ${c.manifest.horizon} seconds or until the team dies. Frozen neural player; no pickups or passive power drain.</p></div>`;
+      return;
+    }
     const rows=c.rewards||[];if(!rows.length)return;
     const list=(sign,cls)=>rows.filter(x=>x.sign===sign).map(x=>`<li class="${cls}"><b>${sign==='-'?'&minus;':'+'}${+x.value}</b><span>${x.name}<br><small>${x.unit}</small></span></li>`).join('');
     const e=c.episode||{};
@@ -222,10 +235,10 @@ async function loadStatus(){try{STATUS=await api('api/status');renderStatus();if
 // The next run: where it carries on from and the settings it changes.
 function nextNumber(){return RUNS.length?Math.max(...RUNS.map(r=>+r.name.slice(3)))+1:1}
 function fillFrom(){
-  const sel=$('from-run'),keep=sel.value,usable=RUNS.filter(r=>r.checkpoints.length).reverse();
-  sel.innerHTML=usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
-  if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;fromChanged()}
-  fillIters();
+  const sel=$('from-run'),keep=sel.value,usable=RUNS.filter(r=>r.checkpoints.length && (r.task||'hunter')===$('task').value).reverse();
+  sel.innerHTML=($('task').value==='hunter'?'':'<option value="new">Fresh weights</option>')+usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
+  if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;}
+  fromChanged();fillIters();
 }
 // An iteration box: any finished iteration of the run, typed or stepped; Last jumps to the newest.
 function setIters(input,range,checkpoints){
@@ -247,12 +260,18 @@ function fillIters(){
 }
 async function fromChanged(){
   fillIters();
+  if($('from-run').value==='new'){
+    BASE=Object.fromEntries(SCHEMA.settings.map(s=>[s.dest,{value:s.default,source:'recorded'}]));
+    const task=SCHEMA.tasks.find(t=>t.key===$('task').value);
+    for(const [key,value] of Object.entries({...task.defaults,task:task.key}))BASE[key]={value,source:'recorded'};
+    EDITS={};renderForm();renderStart();return;
+  }
   try{BASE=await api(`api/runs/${$('from-run').value}/settings`);EDITS={};renderForm()}catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message}
 }
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 function typed(s,raw){
   if(s.kind==='bool')return raw;
-  if(s.kind==='levels')return raw;
+  if(s.kind==='levels'||s.kind==='string')return raw;
   const t=String(raw).trim();
   if(s.kind==='optional_float'&&(t===''||t.toLowerCase()==='none'||t.toLowerCase()==='off'))return null;
   return t!==''&&!isNaN(+t)?+t/(s.display_scale||1):t;
@@ -271,7 +290,7 @@ function levelPicker(s){
 function renderForm(){
   if(!SCHEMA)return;
   const groups=['Rewards','Episodes','Training'];
-  $('form').innerHTML=groups.map(g=>`<fieldset><legend>${g}</legend>${SCHEMA.settings.filter(s=>s.group===g).map(s=>{
+  $('form').innerHTML=groups.map(g=>`<fieldset><legend>${g}</legend>${SCHEMA.settings.filter(s=>s.dest!=='task' && s.group===g && (!s.tasks||s.tasks.includes($('task').value))).map(s=>{
     const src=BASE[s.dest]?.source,tag=src&&src!=='recorded'?`<span class="tag" title="This run did not record it: ${src==='recovered'?'worked out from what it did record':'taken from the newest run that recorded it'}">${src}</span>`:'';
     const raw=edited(s),v=typeof raw==='number'?raw*(s.display_scale||1):raw,id=`set-${s.dest}`;
     const input=s.kind==='bool'?`<input type="checkbox" id="${id}" ${v?'checked':''}>`:s.kind==='levels'?'':`<input type="text" id="${id}" value="${esc(v===null||v===undefined?'none':v)}">`;
@@ -294,11 +313,13 @@ function renderStart(){
   if(why){$('next-msg').className='msg';$('next-msg').textContent=why}
   else if($('next-msg').textContent.endsWith('first.')||$('next-msg').textContent.endsWith('pausing.'))$('next-msg').textContent='';
 }
+$('task').onchange=()=>{fillFrom();renderStart();$('fresh-team').disabled=$('task').value==='hunter'};
+$('fresh-team').onclick=()=>{$('from-run').value='new';fromChanged()};
 $('from-run').onchange=fromChanged;
 $('edit').onclick=()=>{$('form').hidden=!$('form').hidden;$('edit').textContent=$('form').hidden?'Edit settings':'Hide settings'};
 $('start').onclick=async()=>{
   const b=$('start');b.disabled=true;
-  try{const r=await post('api/start',{from:`${$('from-run').value}/${checkpointName($('from-iter').value)}`,changes:EDITS});
+  try{const r=await post('api/start',{from:$('from-run').value==='new'?'new':`${$('from-run').value}/${checkpointName($('from-iter').value)}`,changes:{...EDITS,task:$('task').value}});
     $('next-msg').className='msg';$('next-msg').textContent=`Started ${r.run} from ${r.started_from}${r.changes.length?`, changing ${r.changes.map(c=>c.setting).join(', ')}`:' with the same settings'}.`;
     // Keep the submitted settings visible. The new run may not have a checkpoint yet,
     // so choosing the newest usable source here would reload the previous run's settings.
@@ -386,7 +407,7 @@ $('rp-fly').onclick=async()=>{
 };
 
 async function boot(){
-  try{SCHEMA=await api('api/settings')}catch(e){}
+  try{SCHEMA=await api('api/settings');$('task').innerHTML=SCHEMA.tasks.map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('');$('fresh-team').disabled=true;}catch(e){}
   await loadRuns();await loadStatus();
   setInterval(loadStatus,5000);setInterval(loadRuns,15000);setInterval(refresh,15000);setInterval(loadRules,60000);
 }

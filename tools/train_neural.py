@@ -33,19 +33,8 @@ def split_episodes(episodes, held_out_fraction=0.1, seed=0):
 
 
 def _torch_net_class():
-    import torch
-
-    class TorchNet(torch.nn.Module):
-        def __init__(self, hidden=128, embed=64):
-            super().__init__()
-            self.embed = torch.nn.Linear(SENSE_SIZE, embed)
-            self.gru = torch.nn.GRU(embed, hidden, batch_first=True)
-            self.heads = torch.nn.ModuleDict({k: torch.nn.Linear(hidden, n) for k, n in HEAD_SIZES.items()})
-
-        def forward(self, x, state=None):
-            h, state = self.gru(torch.tanh(self.embed(x)), state)
-            return {k: head(h) for k, head in self.heads.items()}, state
-    return TorchNet
+    from learning.models import network_class
+    return network_class(SENSE_SIZE, HEAD_SIZES)
 
 
 def __getattr__(name):
@@ -55,24 +44,13 @@ def __getattr__(name):
 
 
 def to_numpy_policy(net, mean, scale):
-    params = {'embed_w': net.embed.weight, 'embed_b': net.embed.bias,
-              'gru_w_ih': net.gru.weight_ih_l0, 'gru_w_hh': net.gru.weight_hh_l0,
-              'gru_b_ih': net.gru.bias_ih_l0, 'gru_b_hh': net.gru.bias_hh_l0}
-    for head in HEAD_SIZES:
-        params[f'{head}_w'], params[f'{head}_b'] = net.heads[head].weight, net.heads[head].bias
-    return NeuralPolicy({k: v.detach().numpy().copy() for k, v in params.items()}, mean, scale)
+    from learning.models import parameters
+    return NeuralPolicy({k: v.detach().cpu().numpy().copy() for k, v in parameters(net, HEAD_SIZES).items()}, mean, scale)
 
 
 def _load_into(net, policy):
-    import torch
-    mapping = {'embed_w': net.embed.weight, 'embed_b': net.embed.bias,
-               'gru_w_ih': net.gru.weight_ih_l0, 'gru_w_hh': net.gru.weight_hh_l0,
-               'gru_b_ih': net.gru.bias_ih_l0, 'gru_b_hh': net.gru.bias_hh_l0}
-    for head in HEAD_SIZES:
-        mapping[f'{head}_w'], mapping[f'{head}_b'] = net.heads[head].weight, net.heads[head].bias
-    with torch.no_grad():
-        for key, tensor in mapping.items():
-            tensor.copy_(torch.from_numpy(policy.params[key]))
+    from learning.models import load_into
+    load_into(net, policy, HEAD_SIZES)
 
 
 def _windows(episodes, window, rng):

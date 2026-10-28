@@ -38,112 +38,7 @@ def build_net(policy):
     return net
 
 
-def pack(episodes, mean, scale):
-    import torch
-    batch, length = len(episodes), max(len(e['senses']) for e in episodes)
-    x = torch.zeros(batch, length, SENSE_SIZE)
-    controls = torch.zeros(batch, length, 3, dtype=torch.long)
-    rewards = torch.zeros(batch, length)
-    mask = torch.zeros(batch, length, dtype=torch.bool)
-    temperatures = torch.ones(batch, length)       # what each choice was sampled at (training's panic raises it)
-    for i, e in enumerate(episodes):
-        n = len(e['senses'])
-        x[i, :n] = torch.from_numpy((np.asarray(e['senses'], dtype=np.float32) - mean) / scale)
-        controls[i, :n] = torch.from_numpy(np.asarray(e['controls'], dtype=np.int64))
-        rewards[i, :n] = torch.from_numpy(np.asarray(e['rewards'], dtype=np.float32)) * REWARD_SCALE
-        mask[i, :n] = True
-        if 'temperatures' in e:
-            temperatures[i, :n] = torch.from_numpy(np.asarray(e['temperatures'], dtype=np.float32)[:n])
-    return {'x': x, 'controls': controls, 'rewards': rewards, 'mask': mask, 'temperatures': temperatures}
-
-
-def joint_logp(logits, controls, temperatures=None):
-    """The log-probability of the chosen controls, each scored at the temperature it was sampled at."""
-    import torch
-    total = 0.0
-    for k, head in enumerate(HEADS):
-        z = logits[head] if temperatures is None else logits[head] / temperatures[..., None]
-        logp = torch.log_softmax(z, dim=-1)
-        total = total + logp.gather(-1, controls[..., k:k + 1]).squeeze(-1)
-    return total
-
-
-def gae(rewards, values, mask, gamma=0.99, lam=0.95):
-    """Advantages and returns; each episode ends at its last unmasked step (terminal, value 0 after)."""
-    import torch
-    batch, length = rewards.shape
-    zero = torch.zeros(batch)
-    advantages = torch.zeros_like(rewards)
-    running = zero
-    for t in reversed(range(length)):
-        has_next = mask[:, t + 1] if t + 1 < length else torch.zeros(batch, dtype=torch.bool)
-        next_value = torch.where(has_next, values[:, t + 1], zero) if t + 1 < length else zero
-        delta = rewards[:, t] + gamma * next_value - values[:, t]
-        running = delta + gamma * lam * torch.where(has_next, running, zero)
-        advantages[:, t] = torch.where(mask[:, t], running, zero)
-    return advantages, advantages + torch.where(mask, values, torch.zeros_like(values))
-
-
-def _kl_and_entropy(logits, ref_logits):
-    import torch
-    kl, entropy = 0.0, 0.0
-    for head in HEADS:
-        logp = torch.log_softmax(logits[head], dim=-1)
-        p = logp.exp()
-        kl = kl + (p * (logp - torch.log_softmax(ref_logits[head], dim=-1))).sum(-1)
-        entropy = entropy - (p * logp).sum(-1)
-    return kl, entropy
-
-
-def improve(net, ref, optimiser, episodes, mean, scale, kl_coef, rng, clip=0.2, epochs=4, minibatches=4,
-            gamma=0.99, lam=0.95, value_coef=0.5, entropy_coef=0.003):
-    """One PPO update on a batch of whole episodes. Returns the mean loss terms of the last epoch."""
-    import torch
-    batch = pack(episodes, mean, scale)
-    x, controls, mask = batch['x'], batch['controls'], batch['mask']
-    with torch.no_grad():
-        logits, values = net(x)
-        old_logp = joint_logp(logits, controls, batch['temperatures'])
-        advantages, returns = gae(batch['rewards'], values, mask, gamma, lam)
-        ref_logits, _ = ref(x)
-        chosen = advantages[mask]
-        advantages = torch.where(mask, (advantages - chosen.mean()) / (chosen.std() + 1e-8),
-                                 torch.zeros_like(advantages))
-    stats = {}
-    for _ in range(epochs):
-        order = rng.permutation(len(episodes))
-        sums, count = {'policy_loss': 0.0, 'value_loss': 0.0, 'kl': 0.0, 'entropy': 0.0,
-                       'clip_fraction': 0.0}, 0
-        for chunk in np.array_split(order, min(minibatches, len(episodes))):
-            index = torch.as_tensor(chunk, dtype=torch.long)
-            m = mask[index]
-            logits, values = net(x[index])
-            # Clamped so a policy that has moved far within one update cannot overflow the ratio's gradient.
-            logp = joint_logp(logits, controls[index], batch['temperatures'][index])
-            ratio = torch.exp(torch.clamp(logp - old_logp[index], -20.0, 20.0))
-            a = advantages[index]
-            surrogate = torch.minimum(ratio * a, torch.clamp(ratio, 1 - clip, 1 + clip) * a)
-            policy_loss = -surrogate[m].mean()
-            value_loss = ((values - returns[index]) ** 2)[m].mean()
-            kl, entropy = _kl_and_entropy(logits, {k: v[index] for k, v in ref_logits.items()})
-            loss = (policy_loss + value_coef * value_loss + kl_coef * kl[m].mean()
-                    - entropy_coef * entropy[m].mean())
-            if not torch.isfinite(loss):
-                continue
-            optimiser.zero_grad()
-            loss.backward()
-            # A finite loss can still have an infinite gradient, which clipping turns into NaN weights: skip it.
-            if not torch.isfinite(torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)):
-                optimiser.zero_grad()
-                continue
-            optimiser.step()
-            for key, value in (('policy_loss', policy_loss), ('value_loss', value_loss), ('kl', kl[m].mean()),
-                               ('entropy', entropy[m].mean()),
-                               ('clip_fraction', ((ratio - 1).abs() > clip)[m].float().mean())):
-                sums[key] += float(value.detach())
-            count += 1
-        stats = {key: value / max(count, 1) for key, value in sums.items()}
-    return stats
+from learning.ppo import pack, joint_logp, gae, _kl_and_entropy, improve
 
 
 def export(net, policy, path):
@@ -179,10 +74,10 @@ def kl_coefficient(iteration, iterations, start=0.1, end=0.02, fade=0.5):
 
 def _rollout_job(job, shaping=None):
     import time
-    from experiments.rollout import fly_rollout
+    from learning.tasks import task
     level, seed, spec = job
     started = time.perf_counter()
-    flown = fly_rollout(level, seed, spec, **(shaping or {}))
+    flown = task('hunter').adapter().environment().run(level, seed, spec, **(shaping or {}))
     flown['wall'] = time.perf_counter() - started
     return flown
 
@@ -490,6 +385,12 @@ def unit_interval(value):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
+    from learning.tasks import TASKS
+    parser.add_argument('--task', choices=tuple(TASKS), default='hunter', help='creature training task')
+    parser.add_argument('--opponent', type=str, default=str(DEFAULT_START), help='frozen player weights for team training')
+    parser.add_argument('--budget-seconds', type=float, default=7200, help='total team training and evaluation wall time')
+    parser.add_argument('--bootstrap-episodes', type=int, default=8, help='scripted imitation encounters for new team runs')
+    parser.add_argument('--seed', type=int, default=0, help='team model and training seed')
     parser.add_argument('--start', default=str(DEFAULT_START))
     parser.add_argument('--out', default=str(DEFAULT_OUT))
     parser.add_argument('--iterations', type=int, default=100)
@@ -557,6 +458,16 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if args.task != 'hunter':
+        from learning.run import train
+        raw = sys.argv[1:] if argv is None else argv
+        if '--horizon' not in raw:
+            args.horizon = 60.0
+        if args.workers < 1 or args.episodes < 1 or args.horizon <= 0 or args.budget_seconds <= 0:
+            raise ValueError('workers, episodes, horizon and budget must be positive')
+        result = train(args)
+        print('paused' if result['paused'] else 'done', '| checkpoint:', result['last'])
+        return
     if not args.resume:
         write_run_config(args)
     from experiments import run

@@ -22,11 +22,11 @@ def test_level_file_can_override(monkeypatch):
     assert level_config.get_level_enemy_counts(1).anemone == 2
 
 
-def test_level_file_without_the_key_uses_the_schedule(monkeypatch):
+def test_explicit_enemy_roster_without_anemones_has_none(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config',
                         lambda level: {'enemies': {'static': 1}, 'maze': {'grid_size': 40}})
     assert level_config.get_level_enemy_counts(3).anemone == 0
-    assert level_config.get_level_enemy_counts(9).anemone == 1
+    assert level_config.get_level_enemy_counts(9).anemone == 0
 
 
 @pytest.mark.parametrize('grid_size, expected', [(10, 1), (12, 1), (20, 4), (25, 6), (30, 9), (40, 16)])

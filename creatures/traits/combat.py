@@ -184,6 +184,7 @@ class Gun(Trait):
                                   **self.styling)
                 shot.vx *= self.shot_speed
                 shot.vy *= self.shot_speed
+                shot.actor_id = getattr(c, 'agent_id', None)
                 enc.add_shot(shot)
             c.shots_fired += 1
             if self.cadence == 'reload':

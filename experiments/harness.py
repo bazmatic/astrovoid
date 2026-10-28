@@ -220,9 +220,9 @@ def load_student_policy(student):
     return load_policy(student)
 
 
-def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
+def episode_frames(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, trace=None,
                 student=None, recorder=None, labeller=None, on_result=None, random_start=False, after_clear=0.0,
-                 pursue_hunter=False, health=0, duel_separation=False, random_maze=False, combat_ruleset="legacy", weapon_tuning=None, curved_walls=False):
+                 pursue_hunter=False, health=0, duel_separation=False, random_maze=False, combat_ruleset="legacy", weapon_tuning=None, curved_walls=False, external_policy=None):
     """One episode. `hide_player=False` lets the hunter see the parked player (the lab's default hides it).
 
     `random_start` starts the hunter in an open cell chosen from (level, seed) instead of beside the player.
@@ -270,7 +270,9 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     # The lab's pilot answers synchronously on the episode clock. The game holds the same worker, so it never
     # warms up a real one of its own.
     game.hunter_worker = SyncWorker(params, clock)
-    if student is None:
+    if external_policy is not None:
+        pilot = NeuralPilot(external_policy, student.decision_frames)
+    elif student is None:
         pilot = WorkerPilot(game.hunter_worker, clock)
     else:
         if load_student_policy(student) is None:
@@ -328,6 +330,7 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     cleared_at = None
     rules_total = len(game.roster.of_kind('rules_hunter'))
     for frame in range(int((horizon + after_clear) * FPS)):
+        yield game, hunter, flight, counter, elapsed
         now[0] += 1 / FPS
         elapsed += 1 / FPS
         if recorder is not None:
@@ -371,6 +374,20 @@ def _run_episode(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, tr
     if on_result is not None:
         on_result(result)
     return result
+
+
+def _run_episode(*args, **kwargs):
+    frames = episode_frames(*args, **kwargs)
+    while True:
+        try:
+            next(frames)
+        except StopIteration as done:
+            return done.value
+        except RuntimeError as failure:
+            # Trace callbacks historically use StopIteration to interrupt a live episode.
+            if isinstance(failure.__cause__, StopIteration):
+                raise failure.__cause__ from None
+            raise
 
 
 def run_episode(*args, low_graphics=True, **kwargs):

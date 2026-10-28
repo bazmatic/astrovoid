@@ -66,7 +66,7 @@ def test_start_keeps_selected_levels_while_the_new_run_has_no_checkpoint():
 const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
 const html=fs.readFileSync(process.argv[1],'utf8');
 const handler=html.slice(html.indexOf("$('start').onclick=async()=>{"),html.indexOf('// The charts, for the active run'));
-const els={start:{},'from-run':{value:'run67'},'from-iter':{value:'40'},'next-msg':{}};
+const els={start:{},task:{value:'hunter'},'from-run':{value:'run67'},'from-iter':{value:'40'},'next-msg':{}};
 let submitted;
 const ctx={$:id=>els[id],EDITS:{levels:[25,26]},FOLLOW:false,
  checkpointName:n=>`iter${String(n).padStart(4,'0')}`,
@@ -96,3 +96,31 @@ assert.equal(ctx.typed({kind:'float',display_scale:3.5},'0'),0);
 assert.equal(ctx.typed({kind:'float'},'0.97'),0.97);
 """
     subprocess.run([NODE, '-e', script, str(PAGE)], check=True, capture_output=True, text=True)
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+def test_fresh_team_uses_task_defaults_and_submits_edited_settings():
+    script = r"""
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const html=fs.readFileSync(process.argv[1],'utf8');
+const fresh=html.slice(html.indexOf('async function fromChanged()'),html.indexOf('const same='));
+const start=html.slice(html.indexOf("$('start').onclick=async()=>{"),html.indexOf('// The charts, for the active run'));
+const els={start:{},task:{value:'wallcrawler_team'},'from-run':{value:'new'},'from-iter':{value:''},'next-msg':{}};
+let submitted;
+const ctx={$:id=>els[id],BASE:{},EDITS:{levels:[25]},FOLLOW:false,
+ SCHEMA:{settings:[{dest:'horizon',default:90},{dest:'workers',default:8},{dest:'episodes',default:96}],tasks:[{key:'wallcrawler_team',defaults:{horizon:60,workers:4}}]},
+ fillIters(){},renderForm(){},renderStart(){},checkpointName(){throw Error('No checkpoint for fresh weights')},
+ async api(){throw Error('Fresh weights must not load a source run')},
+ async post(path,body){submitted=structuredClone(body);return {run:'run1',started_from:'random',changes:[]}},
+ async loadRuns(){},async loadStatus(){}};
+vm.createContext(ctx);vm.runInContext(fresh+start,ctx);
+(async()=>{
+ await ctx.fromChanged();
+ assert.equal(ctx.BASE.horizon.value,60);assert.equal(ctx.BASE.workers.value,4);
+ assert.equal(ctx.BASE.task.value,'wallcrawler_team');assert.equal(Object.keys(ctx.EDITS).length,0);
+ ctx.EDITS={episodes:8};await els.start.onclick();
+ assert.equal(submitted.from,'new');assert.equal(submitted.changes.task,'wallcrawler_team');
+ assert.equal(submitted.changes.episodes,8);
+})().catch(e=>{console.error(e);process.exitCode=1});
+"""
+    subprocess.run([NODE,'-e',script,str(PAGE)],check=True,capture_output=True,text=True)

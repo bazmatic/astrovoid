@@ -852,5 +852,45 @@
         "upgrades": true
       }
     }
+  },
+  "wallcrawler": {
+    "name": [
+      "Wallcrawler",
+      "Wallcrawlers"
+    ],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 10,
+    "layer": 3,
+    "tuning": {
+      "size": 10,
+      "color": [
+        225,
+        190,
+        110
+      ]
+    },
+    "allegiance": "enemy",
+    "body": "wallcrawler",
+    "traits": {
+      "wallCrawls": {
+        "walkSpeed": 0.65,
+        "returnSpeed": 2.4,
+        "stunFrames": 36,
+        "knockSpeed": 2.8
+      },
+      "gun": {
+        "intervalMin": 100,
+        "intervalMax": 140,
+        "range": 550,
+        "strengthLevel": 1
+      },
+      "ramsShip": {},
+      "takesHits": {
+        "hitPoints": 4
+      },
+      "dropsPickup": {}
+    }
   }
 }
