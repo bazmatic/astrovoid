@@ -128,6 +128,16 @@ class Game:
                 self.wallcrawler_policy = load_policy(crawler_weights)
             except (ValueError, OSError, KeyError) as exc:
                 logging.getLogger(__name__).warning('Wallcrawler policy unavailable: %s', exc)
+        # Opt-in trained brain for the `neural_jelly` kind (creatures/jelly_team.py reads world.jelly_policy, and the
+        # game is its encounter's world). Without it, those Jellies keep the scripted chase.
+        self.jelly_policy = None
+        jelly_weights = os.getenv('JELLY_POLICY')
+        if jelly_weights:
+            from learning.adapters.jelly import load_policy as load_jelly_policy
+            try:
+                self.jelly_policy = load_jelly_policy(jelly_weights)
+            except (ValueError, OSError, KeyError) as exc:
+                logging.getLogger(__name__).warning('Jelly policy unavailable: %s', exc)
 
         
         self.projectiles: List[Projectile] = []

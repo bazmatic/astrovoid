@@ -166,7 +166,13 @@ class JellyDriver:
 
 
 def load_policy(path):
-    policy = RecurrentPolicy.load(path)
+    """The trained Jelly brain at `path`; ValueError if it is not a readable checkpoint of this SPEC (OSError if the
+    file cannot be opened), so the game can fall back to the scripted Jelly."""
+    import zipfile
+    try:
+        policy = RecurrentPolicy.load(path)
+    except zipfile.BadZipFile as exc:   # a damaged .npz archive, e.g. a cut-off copy
+        raise ValueError(f'damaged policy archive: {exc}') from exc
     if policy.spec != SPEC:
         raise ValueError('checkpoint task or observation/action schema does not match')
     return policy

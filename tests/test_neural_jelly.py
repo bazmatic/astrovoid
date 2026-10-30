@@ -810,3 +810,97 @@ def test_scripted_team_hunts_the_ship_at_stage3():
         assert result.events['stage'] == 3 and result.events['seconds'] <= 3.
     finally:
         env.close()
+
+
+# ---- Game wiring: JELLY_POLICY ----
+
+@pytest.fixture
+def make_game(tmp_path, monkeypatch):
+    """A real Game started with JELLY_POLICY pointing at the given file (as tests/test_replay_loop.py starts one)."""
+    import pygame
+    import config
+    import level_config
+    from unittest.mock import Mock
+    from game import Game
+    from profiles import ProfileManager
+    from maze.config import MazeComplexity
+    games = []
+
+    def start(policy_path):
+        pygame.init()
+        screen = pygame.display.set_mode((1352, 878))
+        monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+        monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+        monkeypatch.setattr(config, 'SPLASH_ENABLED', False)
+        monkeypatch.delenv('START_LEVEL', raising=False)
+        monkeypatch.delenv('WALLCRAWLER_POLICY', raising=False)
+        monkeypatch.setenv('JELLY_POLICY', str(policy_path))
+        manager = ProfileManager(tmp_path / 'profiles.json')
+        monkeypatch.setitem(Game.__init__.__globals__, 'ProfileManager', lambda: manager)
+        monkeypatch.setitem(Game.__init__.__globals__, 'SoundManager', Mock)
+        monkeypatch.setattr(level_config, 'level_has_hunter', lambda _: False)
+        monkeypatch.setattr(level_config, 'get_maze_complexity', lambda _: MazeComplexity.EMPTY)
+        monkeypatch.setattr(level_config, 'get_maze_grid_size', lambda _: 5)
+        game = Game(screen)
+        games.append(game)
+        return game
+    yield start
+    for game in games:
+        game._close_hunter()
+
+
+def jelly_policy_warnings(caplog):
+    return [r for r in caplog.records if r.levelname == 'WARNING' and 'Jelly policy' in r.getMessage()]
+
+
+def test_corrupt_weights_file_leaves_policy_none_and_game_starts(make_game, tmp_path, caplog):
+    corrupt = tmp_path / 'corrupt.npz'
+    corrupt.write_bytes(b'not a numpy archive')
+    caplog.set_level('WARNING')
+    game = make_game(corrupt)
+    assert game.jelly_policy is None
+    assert len(jelly_policy_warnings(caplog)) == 1
+    missing = make_game(tmp_path / 'missing.npz')
+    assert missing.jelly_policy is None and len(jelly_policy_warnings(caplog)) == 2
+    truncated = tmp_path / 'truncated.npz'   # a damaged archive (zip header, no body), as a cut-off copy leaves it
+    truncated.write_bytes(b'PK\x03\x04 cut off')
+    assert make_game(truncated).jelly_policy is None and len(jelly_policy_warnings(caplog)) == 3
+
+
+def test_wrong_spec_weights_fall_back_to_scripted(make_game, tmp_path, caplog):
+    wrong = PolicySpec('jelly_team', adapter.FEATURES, adapter.HEADS, version=adapter.SPEC.version + 1,
+                       continuous=('heading', 'accel'))
+    path = tmp_path / 'wrong.npz'
+    random_policy(wrong).save(path)
+    caplog.set_level('WARNING')
+    game = make_game(path)
+    assert game.jelly_policy is None and len(jelly_policy_warnings(caplog)) == 1
+    # The game is the encounter's world; a neural_jelly there chases exactly like the scripted aggressive Jelly.
+    assert game.encounter.world is game
+    ship = (POS[0] + 300.0, POS[1])
+    scripted = creatures.build('aggressive', POS, 5)
+    neural = creatures.build('neural_jelly', POS, 5)
+    enc_s = encounter(scripted, world_=world(ship=target(ship)))
+    enc_n = encounter(neural, world_=world(ship=target(ship), jelly_policy=game.jelly_policy))
+    random.seed(3)
+    for _ in range(30):
+        enc_s.step(1.0)
+    random.seed(3)
+    for _ in range(30):
+        enc_n.step(1.0)
+    assert math.isclose(neural.x, scripted.x) and math.isclose(neural.y, scripted.y)
+    assert get_jelly_team(enc_n).driver is None and not get_jelly_team(enc_n).neural
+
+
+def test_valid_jelly_weights_reach_the_team_through_the_game_world(make_game, tmp_path, caplog):
+    path = tmp_path / 'policy.npz'
+    random_policy(adapter.SPEC, 1).save(path)
+    caplog.set_level('WARNING')
+    game = make_game(path)
+    assert game.jelly_policy is not None and game.jelly_policy.spec == adapter.SPEC
+    assert not jelly_policy_warnings(caplog)
+    jelly = creatures.build('neural_jelly', POS, 5)
+    enc = encounter(jelly, world_=world(ship=target((POS[0] + 300.0, POS[1])), jelly_policy=game.jelly_policy))
+    enc.step(1.0)
+    assert get_jelly_team(enc).driver is not None and get_jelly_team(enc).neural
+
