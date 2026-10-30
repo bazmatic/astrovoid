@@ -439,7 +439,7 @@ def test_task_registry_has_jelly_team():
     from learning.tasks import task
     t = task('jelly_team')
     assert t.module == 'learning.adapters.jelly_scenario' and t.label == 'Jelly team'
-    assert t.fresh_defaults == dict(horizon=60.0, workers=4, iterations=10000)
+    assert t.fresh_defaults == dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0)
     assert t.adapter().SPEC.task == 'jelly_team'
 
 
@@ -461,7 +461,7 @@ def test_scripted_baseline_runs_at_the_configured_run_horizon(monkeypatch):
     scenario.metadata(SimpleNamespace(horizon=.5, opponent=''))
     short = scenario.scripted_baseline()
     assert (1, .5) in scenario._baselines
-    assert short['episodes'] == len(scenario.evaluation_cases()) and short['seconds'] <= .5 * short['episodes'] + 1e-9
+    assert short['episodes'] == len(scenario.evaluation_cases(1)) and short['seconds'] <= .5 * short['episodes'] + 1e-9
     scenario.metadata(SimpleNamespace(horizon=.2, opponent=''))
     shorter = scenario.scripted_baseline()
     assert set(scenario._baselines) == {(1, .5), (1, .2)} and shorter is not short
@@ -904,3 +904,107 @@ def test_valid_jelly_weights_reach_the_team_through_the_game_world(make_game, tm
     enc.step(1.0)
     assert get_jelly_team(enc).driver is not None and get_jelly_team(enc).neural
 
+
+# ---- Evaluation gate ----
+
+def gate_rows(catches, stuck, ship_hits=0, deaths=0):
+    """One validation-shaped set: a stage-1 solo, a stage-2 pair and a stage-3 pair, each a minute long."""
+    return [dict(catches=catches, seconds=60., stuck_seconds=stuck, team_size=1, stage=1, time_to_contact=10.),
+            dict(catches=catches, seconds=60., stuck_seconds=stuck, team_size=2, stage=2, time_to_contact=None),
+            dict(catches=0, seconds=60., stuck_seconds=stuck, team_size=2, stage=3, ship_hits=ship_hits,
+                 ship_kills=0, jelly_deaths=deaths, survival_fraction=1-deaths/2, time_to_contact=None)]
+
+
+def test_selection_score_rejects_policy_that_loses_on_cave_arenas():
+    from learning.adapters import jelly_scenario as scenario
+    baseline = scenario.metrics(gate_rows(catches=4, stuck=6.))
+    lowest = scenario.selection_score(scenario.metrics(gate_rows(catches=0, stuck=0.)), baseline)
+    assert lowest == -math.inf                                                    # sits still: never caught
+    assert scenario.selection_score(scenario.metrics(gate_rows(catches=4, stuck=0.)), baseline) == -math.inf   # tie
+    assert scenario.selection_score(scenario.metrics(gate_rows(catches=9, stuck=7.)), baseline) == -math.inf   # stuck
+    passing = scenario.selection_score(scenario.metrics(gate_rows(catches=5, stuck=1.)), baseline)
+    better = scenario.selection_score(scenario.metrics(gate_rows(catches=8, stuck=1.)), baseline)
+    hunter = scenario.selection_score(scenario.metrics(gate_rows(catches=5, stuck=1., ship_hits=3)), baseline)
+    reckless = scenario.selection_score(scenario.metrics(gate_rows(catches=5, stuck=1., ship_hits=3, deaths=2)), baseline)
+    assert -math.inf < passing < better and passing < hunter and reckless < hunter
+    # Stuck at zero on both sides is not worse than the baseline: the catch rate decides.
+    still = scenario.metrics(gate_rows(catches=4, stuck=0.))
+    assert scenario.selection_score(scenario.metrics(gate_rows(catches=5, stuck=0.)), still) > -math.inf
+
+
+def test_selection_score_baseline_is_the_scripted_jelly_on_the_validation_cases(monkeypatch):
+    from learning.adapters import jelly_scenario as scenario
+    monkeypatch.setattr(scenario, '_baselines', {})
+    monkeypatch.setattr(scenario, 'run_horizon', .2)
+    baseline = scenario.validation_baseline()
+    assert baseline['episodes'] == len(scenario.validation_cases())
+    assert baseline is scenario.validation_baseline() and ('validation', .2) in scenario._baselines
+    # The scripted Jelly cannot beat itself.
+    assert scenario.selection_score(baseline) == -math.inf
+
+
+def test_compare_returns_interval_keys():
+    from learning.adapters import jelly_scenario as scenario
+    a = dict(episodes=gate_rows(catches=5, stuck=0.) * 3)
+    b = dict(episodes=gate_rows(catches=3, stuck=1.) * 3)
+    result = scenario.compare(a, b)
+    assert {'mean_extra_catches', 'lower_95', 'upper_95', 'mean_extra_ship_hits', 'mean_extra_jelly_deaths'} <= set(result)
+    assert result['lower_95'] <= result['mean_extra_catches'] <= result['upper_95']
+    assert result['mean_extra_catches'] == pytest.approx(4 / 3)
+    assert scenario.compare(dict(episodes=[]), dict(episodes=[]))['lower_95'] == 0.
+
+
+def test_validation_and_evaluation_cases_cover_all_three_stages():
+    from learning.adapters import jelly_scenario as scenario
+    validation, evaluation = scenario.validation_cases(), scenario.evaluation_cases()
+    for cases in (validation, evaluation):
+        assert {c['stage'] for c in cases} == {1, 2, 3}
+        assert {c['level'] for c in cases} == set(scenario.HOLDOUT_LEVELS)
+        assert all(c['team_size'] == 1 for c in cases if c['stage'] == 1)
+        assert {c['team_size'] for c in cases if c['stage'] == 2} == set(scenario.STAGE2_TEAM_SIZES)
+        assert {c['team_size'] for c in cases if c['stage'] == 3} == set(scenario.STAGE3_TEAM_SIZES)
+    assert not {c['seed'] for c in validation} & {c['seed'] for c in evaluation}   # selection never sees these
+    assert evaluation == [c for stage in scenario.STAGES for c in scenario.evaluation_cases(stage)]
+    assert all(c['stage'] == 1 for c in scenario.evaluation_cases(1))
+
+
+def test_metrics_report_every_evaluation_measure_per_stage():
+    from learning.adapters import jelly_scenario as scenario
+    summary = scenario.metrics(gate_rows(catches=3, stuck=6., ship_hits=2, deaths=1))
+    for key in ('catches_per_minute', 'time_to_contact', 'stuck_fraction', 'angular_spread', 'survival_fraction'):
+        assert key in summary, key
+    # Time to contact counts an episode without contact as its whole length: (10 + 60 + 60) / 3.
+    assert summary['time_to_contact'] == pytest.approx(130 / 3)
+    assert summary['stage1_catches_per_minute'] == 3. and summary['stage2_catches_per_minute'] == 3.
+    assert summary['stage1_time_to_contact'] == 10. and summary['stage3_survival_fraction'] == .5
+    assert summary['stage3_ship_hits'] == 2 and summary['stage2_episodes'] == 1
+    assert all(isinstance(v, (int, float)) for v in summary.values())   # train.log lines hold numbers only
+
+
+def test_time_to_contact_is_the_first_catch_or_ship_hit():
+    env, _ = jelly_env(team_size=1)
+    try:
+        result = env.step(still(env))
+        assert result.events['time_to_contact'] is None
+        (jelly,) = env.team.members()
+        target_ = env.world.additional_targets[0]
+        target_.x, target_.y = jelly.x + 3, jelly.y
+        target_.vx = target_.vy = 0.
+        result = env.step(still(env))
+        assert result.events['time_to_contact'] == pytest.approx((DECISION_FRAMES + 1) / 60)
+        for _ in range(3):
+            result = env.step(still(env))
+        assert result.events['time_to_contact'] == pytest.approx((DECISION_FRAMES + 1) / 60)
+    finally:
+        env.close()
+
+
+def test_jelly_runs_do_not_bootstrap_from_the_weak_teacher_by_default(tmp_path):
+    from learning.tasks import task
+    from tools.trainer.control import start
+    from tools import ppo_neural
+    assert task('jelly_team').fresh_defaults['bootstrap_episodes'] == 0
+    calls = []
+    start(from_='new', changes={'task': 'jelly_team', 'budget_seconds': 10}, root=tmp_path, processes=[],
+          launch=lambda command, log: calls.append(command))
+    assert ppo_neural.build_parser().parse_args(calls[0][3:]).bootstrap_episodes == 0

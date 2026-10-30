@@ -176,6 +176,7 @@ class JellyEnvironment:
         self.living = set(self.agent_ids)   # Jellies alive after the last frame, so deaths are counted once
         self.dead = []                      # agent ids in the order they died
         self.ship_killed_frame = None
+        self.contact_frame = None           # the frame of the first catch (stages 1-2) or ship hit (stage 3)
         self.finished = False
         self.trails = {c.agent_id: deque([c.get_pos()], maxlen=STUCK_WINDOW//DECISION_FRAMES+1)
                        for c in self.team.members()}
@@ -235,6 +236,7 @@ class JellyEnvironment:
                 continue
             caught += 1
             self.agent_catches[toucher.agent_id] += 1
+            self.touched()
             for c in members:
                 rewards[c.agent_id] += CATCH_REWARD if c is toucher else TEAM_CATCH_SHARE*CATCH_REWARD
             self.respawn(target)
@@ -257,11 +259,17 @@ class JellyEnvironment:
             if ship.health >= health:
                 continue
             self.agent_ship_hits[c.agent_id] += 1
+            self.touched()
             earned = SHIP_HIT_REWARD + (0. if ship.active else SHIP_KILL_REWARD)
             if not ship.active:
                 self.ship_killed_frame = self.frames+1
             for o in self.team.members():
                 rewards[o.agent_id] += earned if o is c else TEAM_SHIP_SHARE*earned
+
+    def touched(self):
+        """Note the first contact with the quarry (a catch or a ship hit), counted on the frame being stepped."""
+        if self.contact_frame is None:
+            self.contact_frame = self.frames+1
 
     def fly_shots(self):
         """Advance the shots in flight with the game's rules: walls and gates stop them, and Encounter.shoot hands a
@@ -390,7 +398,8 @@ class JellyEnvironment:
                 'ship_hits': sum(self.agent_ship_hits.values()), 'agent_ship_hits': dict(self.agent_ship_hits),
                 'ship_kills': int(self.ship_killed_frame is not None), 'jelly_deaths': len(self.dead),
                 'survival_fraction': len(self.team.members())/self.team_size,
-                'time_to_ship_kill': self.ship_killed_frame/60 if self.ship_killed_frame is not None else None}
+                'time_to_ship_kill': self.ship_killed_frame/60 if self.ship_killed_frame is not None else None,
+                'time_to_contact': self.contact_frame/60 if self.contact_frame is not None else None}
 
     def close(self):
         if hasattr(self, '_screen_settings'):
@@ -433,7 +442,8 @@ def metadata(args):
     global run_horizon
     run_horizon = args.horizon   # learning.run calls this in the process that later calls promote
     opponent = Path(getattr(args, 'opponent', '') or '')
-    return dict(task=SPEC.task, scenario_version=3, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    # Version 4: episodes report time_to_contact, and validation/evaluation cover all three stages.
+    return dict(task=SPEC.task, scenario_version=4, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=dict(REWARDS), reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': TEAM_CATCH_SHARE},
@@ -453,6 +463,9 @@ def metadata(args):
                 promotion={'1': 'training_catches_per_minute_and_stuck_fraction_beat_scripted_holdout_baseline',
                            '2': 'training_angular_spread_and_team_catches_per_minute_beat_scripted_holdout_team_baseline',
                            '3': 'final'},
+                selection={'gate': 'stage1_2_catches_per_minute_above_and_stuck_fraction_below_scripted_on_validation_cases',
+                           'score': 'reward_weighted_catches_per_minute_times_unstuck_share',
+                           'validation_cases': validation_cases()},
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',
                       'pilot_sha256': hashlib.sha256(SHIP_PILOT.read_bytes()).hexdigest() if SHIP_PILOT.is_file() else None,
@@ -493,16 +506,38 @@ def training_cases(iteration, count, stage, bootstrap=False):
     return cases
 
 
+def team_sizes(stage):
+    return STAGE3_TEAM_SIZES if stage == 3 else STAGE2_TEAM_SIZES if stage == 2 else (1,)
+
+
+VALIDATION_SEED = 900              # checkpoint selection (selection_score): never one of the final evaluation's seeds
+EVALUATION_SEEDS = (1000, 1001)    # the final held-out report and the promotion baselines
+
+
 def validation_cases():
-    return [dict(level=n, seed=s, team_size=1, stage=1) for n, s in ((13, 800), (17, 801))]
+    """What learning.run scores checkpoints on (selection_score): the real game's cave levels held out of training
+    (HOLDOUT_LEVELS 15, 20 and 23, as the game builds them), at every stage, so selection sees flanking and ship
+    hunting as well as navigation. Per arena: a solo Jelly on the plain target, a team on the plain target and a team
+    against the training ship, the team sizes rotating over the arenas so each size appears once per stage; nine
+    episodes. Its seed differs from evaluation_cases', so the final report is not on episodes selection has seen."""
+    cases = []
+    for stage in STAGES:
+        sizes = team_sizes(stage)
+        cases += [dict(level=n, seed=VALIDATION_SEED, team_size=sizes[j % len(sizes)], stage=stage)
+                  for j, n in enumerate(HOLDOUT_LEVELS)]
+    return cases
 
 
-def evaluation_cases(stage=1):
-    sizes = STAGE3_TEAM_SIZES if stage == 3 else STAGE2_TEAM_SIZES if stage == 2 else (1,)
-    return [dict(level=n, seed=s, team_size=k, stage=stage) for n in HOLDOUT_LEVELS for s in (1000, 1001) for k in sizes]
+def evaluation_cases(stage=None):
+    """The held-out cases of one stage (every HOLDOUT_LEVELS arena, seed and team size of the stage), or, with no
+    stage, as learning.run's final report asks, of all three stages one after another."""
+    if stage is None:
+        return [c for s in STAGES for c in evaluation_cases(s)]
+    return [dict(level=n, seed=s, team_size=k, stage=stage)
+            for n in HOLDOUT_LEVELS for s in EVALUATION_SEEDS for k in team_sizes(stage)]
 
 
-def metrics(rows):
+def summarise(rows):
     seconds = sum(r['seconds'] for r in rows)
     jelly_seconds = sum(r['seconds']*r['team_size'] for r in rows)
     catches = sum(r['catches'] for r in rows)
@@ -512,6 +547,7 @@ def metrics(rows):
     flank = sum(r.get('flank_seconds', 0.) for r in rows)
     hunted = [r for r in rows if r.get('stage') == 3]   # stage-3 rows: the retention cases have no ship
     kill_times = [r['time_to_ship_kill'] for r in hunted if r.get('time_to_ship_kill') is not None]
+    timed = [r for r in rows if 'time_to_contact' in r]
     return dict(episodes=len(rows), catches=catches, seconds=seconds, stuck_seconds=stuck,
                 catches_per_minute=catches*60/max(seconds, 1e-9),
                 stuck_fraction=stuck/max(jelly_seconds, 1e-9),
@@ -520,6 +556,9 @@ def metrics(rows):
                 flank_seconds=flank, bunched_seconds=sum(r.get('bunched_seconds', 0.) for r in rows),
                 bunched_fraction=sum(r.get('bunched_seconds', 0.) for r in rows)/max(jelly_seconds, 1e-9),
                 catch_probability=sum(r['catches'] > 0 for r in rows)/max(1, len(rows)),
+                # mean seconds to the first catch or ship hit; an episode without one counts its whole length
+                time_to_contact=float(np.mean([r['seconds'] if r['time_to_contact'] is None else r['time_to_contact']
+                                               for r in timed])) if timed else 0.,
                 mean_episode_return=float(np.mean(returns)) if returns else 0.,
                 ship_hits=sum(r.get('ship_hits', 0) for r in rows), ship_kills=sum(r.get('ship_kills', 0) for r in rows),
                 jelly_deaths=sum(r.get('jelly_deaths', 0) for r in rows),
@@ -530,34 +569,94 @@ def metrics(rows):
                 time_to_ship_kill=float(np.mean(kill_times)) if kill_times else 0.)
 
 
-def selection_score(summary):
-    """Catch rate, discounted by the share of Jelly time spent stuck. Validation runs on the real cave arenas."""
-    return summary['catches_per_minute']*(1-summary['stuck_fraction'])
+# What metrics repeats per stage, as stage<n>_<key>, for the stages present (a row without a stage is stage 1).
+STAGE_KEYS = {1: ('episodes', 'catches', 'seconds', 'catches_per_minute', 'stuck_fraction', 'time_to_contact'),
+              2: ('episodes', 'catches', 'seconds', 'catches_per_minute', 'stuck_fraction', 'time_to_contact',
+                  'angular_spread', 'bunched_fraction'),
+              3: ('episodes', 'seconds', 'stuck_fraction', 'time_to_contact', 'ship_hits', 'ship_kills',
+                  'jelly_deaths', 'survival_fraction', 'time_to_ship_kill')}
+
+
+def metrics(rows):
+    """Catch rate (catches per minute), time to contact, stuck time, angular spread, Jelly survival and the rest over
+    all rows, then the same per stage (stage1_catches_per_minute, stage3_survival_fraction, ...): flat numbers, as
+    learning.run writes them into train.log lines."""
+    summary = summarise(rows)
+    for stage, keys in STAGE_KEYS.items():
+        part = [r for r in rows if r.get('stage', 1) == stage]
+        if part:
+            staged = summarise(part)
+            summary.update({f'stage{stage}_{k}': staged[k] for k in keys})
+    return summary
+
+
+def chase_rate(summary):
+    """Catches per minute over the plain-target (stage 1-2) episodes; stage-3 episodes have no target to catch."""
+    seconds = summary.get('stage1_seconds', 0.)+summary.get('stage2_seconds', 0.)
+    if not seconds:
+        return summary['catches_per_minute']
+    return (summary.get('stage1_catches', 0)+summary.get('stage2_catches', 0))*60/seconds
+
+
+def passes_gate(summary, baseline):
+    """The hard gate: on the same held-out cave-arena cases, a strictly higher plain-target catch rate than the
+    scripted Jelly, and a strictly lower stuck share (or both never stuck)."""
+    stuck, scripted_stuck = summary['stuck_fraction'], baseline['stuck_fraction']
+    return (chase_rate(summary) > chase_rate(baseline)
+            and (stuck < scripted_stuck or stuck == scripted_stuck == 0.))
+
+
+def selection_score(summary, baseline=None):
+    """learning.run keeps the checkpoint with the highest score on validation_cases(). A hard gate first: -inf unless
+    the checkpoint beats the scripted Jelly on those same cases (passes_gate; the baseline is validation_baseline(),
+    the scripted Jelly flown on validation_cases at the run's horizon). Passing checkpoints are ordered by what the
+    rewards value, in catches per minute over every validation episode: catches, plus ship hits and kills and less
+    Jelly deaths at their reward weights relative to a catch, discounted by the share of Jelly time spent stuck."""
+    baseline = baseline or validation_baseline()
+    if not passes_gate(summary, baseline):
+        return -math.inf
+    earned = (CATCH_REWARD*summary['catches']+SHIP_HIT_REWARD*summary['ship_hits']
+              + SHIP_KILL_REWARD*summary['ship_kills']-DEATH_PENALTY*summary['jelly_deaths'])/CATCH_REWARD
+    return earned*60/max(summary['seconds'], 1e-9)*(1-summary['stuck_fraction'])
 
 
 _baselines = {}
 run_horizon = 60.0   # the run's episode horizon (set by metadata), so promote's baseline matches the run's episodes
 
 
+def scripted_metrics(cases, horizon):
+    """The scripted Jelly (Chase + Drift, no policy) flown on `cases` at `horizon`."""
+    env = JellyEnvironment(horizon=horizon, scripted=True)
+    rows = []
+    try:
+        for case in cases:
+            case = dict(case)
+            env.reset(case.pop('seed'), **case)
+            while True:
+                result = env.step({})
+                if result.terminated or result.truncated:
+                    break
+            rows.append(dict(result.events, **case))
+    finally:
+        env.close()
+    return metrics(rows)
+
+
 def scripted_baseline(stage=1, horizon=None):
-    """The scripted Jelly (Chase + Drift, no policy) on the held-out arenas at the run's horizon; cached per (stage, horizon)."""
+    """The scripted Jelly on one stage's held-out evaluation cases at the run's horizon; cached per (stage, horizon)."""
     horizon = run_horizon if horizon is None else horizon
     key = (stage, horizon)
     if key not in _baselines:
-        env = JellyEnvironment(horizon=horizon, scripted=True)
-        rows = []
-        try:
-            for case in evaluation_cases(stage):
-                case = dict(case)
-                env.reset(case.pop('seed'), **case)
-                while True:
-                    result = env.step({})
-                    if result.terminated or result.truncated:
-                        break
-                rows.append(dict(result.events, **case))
-        finally:
-            env.close()
-        _baselines[key] = metrics(rows)
+        _baselines[key] = scripted_metrics(evaluation_cases(stage), horizon)
+    return _baselines[key]
+
+
+def validation_baseline(horizon=None):
+    """The scripted Jelly on validation_cases() at the run's horizon, what selection_score gates against; cached."""
+    horizon = run_horizon if horizon is None else horizon
+    key = ('validation', horizon)
+    if key not in _baselines:
+        _baselines[key] = scripted_metrics(validation_cases(), horizon)
     return _baselines[key]
 
 
@@ -585,7 +684,7 @@ def compare(a, b):
     pairs = list(zip(a['episodes'], b['episodes']))
     values = np.array([x['catches']-y['catches'] for x, y in pairs], float)
     stuck = np.array([x['stuck_seconds']-y['stuck_seconds'] for x, y in pairs], float)
-    # Stage 3 (reported, not yet part of any gate): extra hits on the ship and extra Jelly deaths per episode.
+    # Stage 3 (reported; selection_score weighs them): extra hits on the ship and extra Jelly deaths per episode.
     hits = np.array([x.get('ship_hits', 0)-y.get('ship_hits', 0) for x, y in pairs], float)
     deaths = np.array([x.get('jelly_deaths', 0)-y.get('jelly_deaths', 0) for x, y in pairs], float)
     if not len(values):

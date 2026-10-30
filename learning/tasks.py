@@ -26,8 +26,9 @@ TASKS = {
         dict(horizon=60.0,workers=4,iterations=10000),
         ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
         'learning.adapters.crawler_replay'),
+    # No imitation bootstrap by default: the scripted Jelly teacher (learning.adapters.jelly.teacher) is weak.
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
-        dict(horizon=60.0, workers=4, iterations=10000),
+        dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0),
         ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
         'learning.adapters.jelly_replay'),
 }
