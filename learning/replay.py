@@ -4,7 +4,10 @@ This module knows no task. It reads the run's config.json for the task key, and 
 (`Task.replay_hooks` in learning/tasks.py) supplies what differs between tasks:
 
 - open_environment(path, manifest) -> env      required: check the recording against the current rules (raise
-                                               ValueError if they differ) and build the environment to replay in
+                                               ValueError if they differ; check_rules below does it, given the
+                                               task's metadata and, if its manifest needs more than the recorded
+                                               horizon, a metadata_args(path, manifest) builder) and build the
+                                               environment to replay in
 - episode(job) -> dict                         optional: the fields listed for each episode (default: the job)
 - outcome(manifest, events, transition, total_reward) -> dict
                                                optional: return/end etc. for a flown episode
@@ -45,21 +48,25 @@ def _hooks(task):
     return hooks
 
 
-def check_rules(path, saved, metadata, effective_rules=lambda rules: rules):
+def _recorded_horizon(path, manifest):
+    from types import SimpleNamespace
+    return SimpleNamespace(horizon=manifest['horizon'])
+
+
+def check_rules(path, saved, metadata, effective_rules=lambda rules: rules, metadata_args=_recorded_horizon):
     """Raise ValueError unless the task's current rules (`metadata(args)`, the adapter's manifest builder) match the
     recorded manifest. Arena snapshots are immutable and replayed directly, and training hyperparameters do not
     change the scenario, so both are taken from the recording; every other rule change needs the original version.
     `effective_rules` maps a manifest to what actually governs play, for tasks whose manifests carry overridden
-    defaults."""
-    from types import SimpleNamespace
-    current = json.loads(json.dumps(metadata(SimpleNamespace(opponent=Path(path)/'opponent.npz',
-                                                             horizon=saved['horizon']))))
+    defaults. `metadata_args(path, manifest)` builds the arguments `metadata` is called with; by default only the
+    recorded horizon, and a task whose manifest depends on files in the run directory supplies its own."""
+    current = json.loads(json.dumps(metadata(metadata_args(Path(path), saved))))
     current['arenas'] = saved['arenas']
     current['training'] = saved.get('training', {})
     now, then = effective_rules(current), effective_rules(saved)
     if now != then:
         changed = sorted(k for k in set(now) | set(then) if now.get(k) != then.get(k))
-        raise ValueError(f'replay rules, schemas or opponent differ from the recorded run: {", ".join(changed)}')
+        raise ValueError(f'replay rules or schemas differ from the recorded run: {", ".join(changed)}')
 
 
 def open_environment(path):

@@ -1,12 +1,20 @@
 """Replay hooks for the jelly_team task (see learning.replay). Jellies have no frozen opponent: the run's saved
 horizon and arena snapshots rebuild the environment, and any other change to the scenario's rules (its
 scenario_version, rewards, creature stats, the ship pilot's checksum) rejects the recording."""
+from types import SimpleNamespace
+
 from learning.replay import check_rules
+
+
+def metadata_args(path, manifest):
+    """learning.run copies the trainer's --opponent file into every run and the manifest records its checksum, so the
+    rules are rebuilt against that copy even though no Jelly flies against it."""
+    return SimpleNamespace(opponent=path/'opponent.npz', horizon=manifest['horizon'])
 
 
 def open_environment(path, manifest):
     from learning.adapters import jelly_scenario
-    check_rules(path, manifest, jelly_scenario.metadata)
+    check_rules(path, manifest, jelly_scenario.metadata, metadata_args=metadata_args)
     return jelly_scenario.JellyEnvironment(horizon=manifest['horizon'], arenas=manifest['arenas'])
 
 

@@ -1,8 +1,14 @@
 """Replay hooks for the wallcrawler_team task (see learning.replay): the frozen opponent copied into the run,
 the practice gun cadence the rules actually used, the episode return and the watch window's scene."""
 import copy
+from types import SimpleNamespace
 
 from learning.replay import check_rules
+
+
+def metadata_args(path, manifest):
+    """The crawler's manifest checksums the frozen opponent learning.run copied into the run directory."""
+    return SimpleNamespace(opponent=path/'opponent.npz', horizon=manifest['horizon'])
 
 
 def effective_rules(manifest):
@@ -19,7 +25,7 @@ def effective_rules(manifest):
 
 def open_environment(path, manifest):
     from learning.adapters import crawler_scenario
-    check_rules(path, manifest, crawler_scenario.metadata, effective_rules)
+    check_rules(path, manifest, crawler_scenario.metadata, effective_rules, metadata_args)
     return crawler_scenario.CrawlerEnvironment(opponent=path/'opponent.npz', horizon=manifest['horizon'],
                                                arenas=manifest['arenas'])
 

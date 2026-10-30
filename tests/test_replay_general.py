@@ -106,3 +106,72 @@ def test_both_team_tasks_register_replay_hooks():
     assert task('jelly_team').replay_hooks == 'learning.adapters.jelly_replay'
     assert task('jelly_team').replay().__name__ == 'learning.replay'
     assert task('hunter').replay() is None
+
+
+class _OverAtOnce:
+    """An environment whose episodes end before the first decision: the recording holds no actions at all."""
+    def __init__(self):
+        self.steps = []
+    def reset(self, seed, **case):
+        self.case = case
+    def step(self, actions):
+        self.steps.append(actions)
+        return SimpleNamespace(reward=0., truncated=False, terminated=True, events={'seconds': 0., 'level': None})
+    def close(self):
+        pass
+
+
+def test_an_episode_recorded_without_actions_replays_with_one_empty_step(tmp_path, monkeypatch):
+    from learning import replay, tasks
+    env = _OverAtOnce()
+    hooks = types.ModuleType('tests._over_at_once_hooks')
+    hooks.open_environment = lambda path, manifest: env
+    monkeypatch.setitem(sys.modules, hooks.__name__, hooks)
+    monkeypatch.setitem(tasks.TASKS, 'over', tasks.Task('over', 'tests', 'Over', replay_module='learning.replay',
+                                                        replay_hooks=hooks.__name__))
+    (tmp_path/'config.json').write_text(json.dumps(dict(task='over', manifest={})))
+    (tmp_path/'episodes').mkdir()
+    (tmp_path/'episodes'/'iter0000.json').write_text(json.dumps(dict(
+        jobs=[dict(level=3, seed=9)], episodes=[dict(seconds=0., level=None)], actions=[[]])))
+    rows = replay.fly(tmp_path, 0)
+    assert env.steps == [{}] and env.case == dict(level=3)
+    assert rows == [dict(episode=0, level=None, seed=9, **{'return': 0.}, end='terminated', seconds=0.)]
+
+
+def test_check_rules_builds_the_rules_from_the_hooks_metadata_args(tmp_path):
+    from learning import replay
+    seen = []
+    def metadata(args):
+        seen.append(vars(args))
+        return dict(horizon=args.horizon, extra=getattr(args, 'extra', None))
+    saved = dict(horizon=4.0, extra=None, arenas={}, training={})
+    replay.check_rules(tmp_path, saved, metadata)                       # default: the recorded horizon alone
+    assert seen[-1] == dict(horizon=4.0)
+    with pytest.raises(ValueError, match='extra'):
+        replay.check_rules(tmp_path, saved, metadata, metadata_args=lambda path, manifest: SimpleNamespace(
+            horizon=manifest['horizon'], extra=str(path)))
+    assert seen[-1] == dict(horizon=4.0, extra=str(tmp_path))
+
+
+def test_replay_source_names_no_task_specific_argument():
+    source = (ROOT/'learning'/'replay.py').read_text()
+    assert 'opponent' not in source
+
+
+def test_jelly_replay_accepts_a_run_with_its_copied_opponent_file(tmp_path):
+    """learning.run copies the trainer's opponent into every run and records its checksum, Jelly runs included."""
+    from learning import replay
+    from learning.policy import random_policy
+    from learning.adapters.jelly import SPEC
+    random_policy(SPEC, 0).save(tmp_path/'opponent.npz')
+    record_jelly_run(tmp_path, [dict(level=11, seed=301, team_size=1, stage=1)], horizon=.2)
+    settings = json.loads((tmp_path/'config.json').read_text())
+    assert settings['manifest']['opponent_sha256'] is not None
+    replay.open_environment(tmp_path).close()
+    assert replay.fly(tmp_path, 0)[0]['seconds'] == pytest.approx(.2)
+
+
+def test_crawler_replay_supplies_the_opponent_through_its_metadata_args(tmp_path):
+    from learning.adapters import crawler_replay
+    args = crawler_replay.metadata_args(tmp_path, dict(horizon=7.0))
+    assert args.opponent == tmp_path/'opponent.npz' and args.horizon == 7.0
