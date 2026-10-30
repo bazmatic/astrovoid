@@ -11,6 +11,7 @@ class Task:
     fresh_defaults: dict = field(default_factory=dict)
     options: tuple = ()
     replay_module: str | None = None
+    replay_hooks: str | None = None   # the module learning.replay asks to rebuild, score and draw this task's episodes
 
     def replay(self):
         return importlib.import_module(self.replay_module) if self.replay_module else None
@@ -23,11 +24,16 @@ TASKS = {
     'hunter': Task('hunter', 'learning.adapters.hunter', 'Hunter'),
     'wallcrawler_team': Task('wallcrawler_team', 'learning.adapters.crawler_scenario', 'Wallcrawler team',
         dict(horizon=60.0,workers=4,iterations=10000),
-        ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay'),
+        ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
+        'learning.adapters.crawler_replay'),
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
         dict(horizon=60.0, workers=4, iterations=10000),
-        ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay'),
+        ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
+        'learning.adapters.jelly_replay'),
 }
+
+# Replayable runs recorded before config.json named its task were all Wallcrawler team runs.
+UNTAGGED_REPLAY_TASK = 'wallcrawler_team'
 
 
 def task(key='hunter'):

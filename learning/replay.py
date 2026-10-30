@@ -1,7 +1,24 @@
-"""Recorded joint actions replay the team encounter without resampling policies."""
+"""Recorded joint actions replay any registered task's episodes without resampling policies.
+
+This module knows no task. It reads the run's config.json for the task key, and the task's replay hooks module
+(`Task.replay_hooks` in learning/tasks.py) supplies what differs between tasks:
+
+- open_environment(path, manifest) -> env      required: check the recording against the current rules (raise
+                                               ValueError if they differ) and build the environment to replay in
+- episode(job) -> dict                         optional: the fields listed for each episode (default: the job)
+- outcome(manifest, events, transition, total_reward) -> dict
+                                               optional: return/end etc. for a flown episode
+                                               (default: return=summed step rewards, end='horizon'|'terminated')
+- draw(env, screen)                            optional: draw the scene (default: the game world's own drawing)
+- status(env, job) -> list[str]                optional: the watch window's text lines
+                                               (default: the task, level and seconds)
+
+The episodes file is learning.run's: jobs (reset arguments plus seed), episodes (recorded events) and actions
+(each episode's per-decision joint actions). Replay resets with each job, applies the recorded actions in order and
+requires the final events to equal the recorded ones exactly."""
+import importlib
 import json
 from pathlib import Path
-import time
 
 
 def record(path, iteration):
@@ -9,73 +26,111 @@ def record(path, iteration):
     return json.loads((Path(path)/'episodes'/filename).read_text())
 
 
-def episodes(path, iteration):
-    data = record(path, iteration)
-    return [dict(episode=i, level=job['level'], seed=job['seed'], team_size=job['team_size'], opponents=job.get('opponents','hunter'),practice_stage=job.get('practice_stage','shooting'),neural_hunter=job.get('neural_hunter',False))
-            for i, job in enumerate(data['jobs'])]
+def _settings(path):
+    return json.loads((Path(path)/'config.json').read_text())
 
 
-def _effective_rules(manifest):
-    """Compare the cadence actually used by practice, rather than its overridden default."""
-    import copy
-    rules = copy.deepcopy(manifest)
-    if rules.get('aiming_practice') and rules.get('opponent_body') == 'practice_targets':
-        interval = rules.get('practice_fire_interval_frames')
-        if interval is not None:
-            for name, tuning in rules['creatures']['wallcrawler']['traits']:
-                if name == 'gun':
-                    tuning['intervalMin'] = tuning['intervalMax'] = interval
-    return rules
+def _task(settings):
+    from learning.tasks import task, UNTAGGED_REPLAY_TASK
+    return task(settings.get('task', UNTAGGED_REPLAY_TASK))
+
+
+def _hooks(task):
+    if not task.replay_hooks:
+        raise ValueError(f"task '{task.key}' has no replay hooks: set Task.replay_hooks in learning/tasks.py "
+                         f"to a module defining open_environment")
+    hooks = importlib.import_module(task.replay_hooks)
+    if not callable(getattr(hooks, 'open_environment', None)):
+        raise ValueError(f"replay hooks for task '{task.key}' ({task.replay_hooks}) do not define open_environment")
+    return hooks
+
+
+def check_rules(path, saved, metadata, effective_rules=lambda rules: rules):
+    """Raise ValueError unless the task's current rules (`metadata(args)`, the adapter's manifest builder) match the
+    recorded manifest. Arena snapshots are immutable and replayed directly, and training hyperparameters do not
+    change the scenario, so both are taken from the recording; every other rule change needs the original version.
+    `effective_rules` maps a manifest to what actually governs play, for tasks whose manifests carry overridden
+    defaults."""
+    from types import SimpleNamespace
+    current = json.loads(json.dumps(metadata(SimpleNamespace(opponent=Path(path)/'opponent.npz',
+                                                             horizon=saved['horizon']))))
+    current['arenas'] = saved['arenas']
+    current['training'] = saved.get('training', {})
+    now, then = effective_rules(current), effective_rules(saved)
+    if now != then:
+        changed = sorted(k for k in set(now) | set(then) if now.get(k) != then.get(k))
+        raise ValueError(f'replay rules, schemas or opponent differ from the recorded run: {", ".join(changed)}')
 
 
 def open_environment(path):
-    from types import SimpleNamespace
-    from learning.adapters.crawler_scenario import CrawlerEnvironment, metadata
-    path = Path(path)
-    saved = json.loads((path/'config.json').read_text())['manifest']
-    current = json.loads(json.dumps(metadata(SimpleNamespace(opponent=path/'opponent.npz',horizon=saved['horizon']))))
-    # Arena snapshots are immutable and replayed directly. Other rule changes require the original version.
-    current['arenas'] = saved['arenas']
-    current['training'] = saved.get('training', {})
-    if _effective_rules(current) != _effective_rules(saved):
-        raise ValueError('replay rules, schemas or opponent differ from the recorded run')
-    return CrawlerEnvironment(opponent=path/'opponent.npz',horizon=saved['horizon'],arenas=saved['arenas'])
+    settings = _settings(path)
+    return _hooks(_task(settings)).open_environment(Path(path), settings['manifest'])
+
+
+def episodes(path, iteration):
+    hooks = _hooks(_task(_settings(path)))
+    describe = getattr(hooks, 'episode', dict)
+    return [dict(episode=i, **describe(job)) for i, job in enumerate(record(path, iteration)['jobs'])]
+
+
+def _outcome(manifest, events, transition, total_reward):
+    return {'return': total_reward, 'end': 'horizon' if transition.truncated else 'terminated'}
 
 
 def fly(path, iteration):
     data = record(path, iteration)
-    env = open_environment(path)
-    rewards = json.loads((Path(path)/'config.json').read_text())['manifest']['rewards']
+    settings = _settings(path)
+    hooks = _hooks(_task(settings))
+    outcome = getattr(hooks, 'outcome', _outcome)
+    env = hooks.open_environment(Path(path), settings['manifest'])
     rows = []
     try:
         for i, (job, expected, trace) in enumerate(zip(data['jobs'],data['episodes'],data['actions'])):
             case = dict(job); seed = case.pop('seed')
             env.reset(seed, **case)
-            for actions in trace:
+            total = 0.
+            # An episode over before its first decision records no actions; the one empty step ends it again.
+            for actions in trace or [{}]:
                 result = env.step({int(k):tuple(v) for k,v in actions.items()})
+                total += result.reward
             actual = result.events
             comparable = json.loads(json.dumps({k:expected[k] for k in actual}))
             if json.loads(json.dumps(actual)) != comparable:
                 raise ValueError(f'replay diverged in episode {i}: {actual} != {comparable}')
-            rows.append(dict(episode=i,level=job['level'],seed=job['seed'],panic=0,
-                             kills=0,**{'return':actual.get('landing_reward',rewards.get('successful_landing',0.))*actual.get('successful_landings',0)+actual.get('trial_completion_reward',0.)+sum(actual.get(k,0.) for k in ('battle_alive_reward','battle_survival_bonus','battle_kill_reward','battle_death_penalty'))+actual.get('jump_proximity_reward',0.)+rewards['team_hit']*actual['hits']+rewards['shot']*actual['shots']+rewards.get('predicted_shot_accuracy',0.)*actual.get('aim_quality_sum',0.)-actual.get('jump_cost',-rewards.get('voluntary_jump',0.))*actual.get('voluntary_jumps',0)+rewards.get('walk_reversal',0.)*actual.get('walk_reversals',0)+rewards.get('bullet_hit',0.)*actual.get('bullet_hits_taken',0)+rewards.get('contact_hit',0.)*actual.get('contact_hits_taken',0)},
-                             end='battle_success' if actual.get('battle_success') else ('horizon' if result.truncated else ('targets_cleared' if actual.get('targets_cleared') else 'team_dead')),**actual))
+            rows.append({'episode': i, **{k: job[k] for k in ('level', 'seed') if k in job},
+                         **outcome(settings['manifest'], actual, result, total), **actual})
         return rows
     finally:
         env.close()
 
 
+def _draw_world(env, screen):
+    world = env.world
+    world.maze.draw(screen)
+    world.roster.draw(screen)
+    for target in getattr(world, 'additional_targets', ()):
+        target.draw(screen)
+    if getattr(world, 'ship', None) is not None:
+        world.ship.draw(screen)
+    for shot in getattr(world, 'projectiles', ()):
+        shot.draw(screen)
+
+
 def watch(path, iteration, episode, speed=1.0):
     import pygame
     import config
-    from learning.adapters.crawler_scenario import CrawlerEnvironment
     from rendering.fonts import get_font
     path = Path(path)
-    data, settings = record(path, iteration), json.loads((path/'config.json').read_text())
+    data, settings = record(path, iteration), _settings(path)
+    task = _task(settings)
+    hooks = _hooks(task)
+    draw_scene = getattr(hooks, 'draw', _draw_world)
+    status = getattr(hooks, 'status', lambda env, job: [
+        f'{task.label.upper()} — level {job.get("level")} — {getattr(env, "frames", 0)/60:.1f}s'])
     job = data['jobs'][episode]
     pygame.init()
     screen = pygame.display.set_mode((1352,878), pygame.DOUBLEBUF)
-    env = open_environment(path)
+    env = hooks.open_environment(path, settings['manifest'])
     case = dict(job); seed = case.pop('seed')
     env.reset(seed, **case)
     clock = pygame.time.Clock()
@@ -84,22 +139,13 @@ def watch(path, iteration, episode, speed=1.0):
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
                 raise KeyboardInterrupt
         screen.fill(config.COLOR_BACKGROUND)
-        scene.world.maze.draw(screen)
-        scene.world.roster.draw(screen)
-        scene.opponent.draw(screen) if scene.opponent is not None else None
-        for target in scene.world.additional_targets:target.draw(screen)
-        if scene.world.ship is not None: scene.world.ship.draw(screen)
-        for shot in scene.world.projectiles: shot.draw(screen)
-        lines = [f'WALLCRAWLER TEAM — level {job["level"]} — {scene.frames/60:.1f}s',
-                 f'Accepted hits {scene.hits}    shots {scene.shots}']
-        for c in scene.world.roster.all():
-            lines.append(f'{c.agent_id}: {c.wall_state}  radio {getattr(c,"wall_message",0)}  HP {c.hit_points}')
-        for i, line in enumerate(lines):
+        draw_scene(scene, screen)
+        for i, line in enumerate(status(scene, job)):
             screen.blit(get_font(20).render(line,True,(235,220,185)),(8,15+28*i))
         pygame.display.flip(); clock.tick(max(1, round(60*speed)))
     env.render_frames = draw
     try:
-        for actions in data['actions'][episode]:
+        for actions in data['actions'][episode] or [{}]:
             transition = env.step({int(i):tuple(a) for i,a in actions.items()})
             if transition.terminated or transition.truncated: break
     except KeyboardInterrupt:
