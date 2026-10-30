@@ -3,7 +3,7 @@ import math
 import random
 
 import creatures
-from creatures.jelly_team import ACCEL_RATE, DECISION_FRAMES, MAX_SPEED, Intent, get_jelly_team
+from creatures.jelly_team import ACCEL_RATE, DECISION_FRAMES, MAX_SPEED, TURN_RATE, Intent, get_jelly_team
 from tests.creature_parts import encounter, target, world
 
 POS = (400.0, 300.0)
@@ -58,9 +58,17 @@ def test_heading_turns_at_a_bounded_rate():
     team.commit({jelly.agent_id: Intent(heading=0., accel=1.)})
     for _ in range(50):
         enc.step(1.0)
+    assert math.isclose(jelly.jelly_facing, 0., abs_tol=1e-9)
     team.commit({jelly.agent_id: Intent(heading=math.pi / 2, accel=1.)})
     enc.step(1.0)
-    assert jelly.vx > 0   # still mostly moving east one frame after asking for south
+    assert math.isclose(jelly.jelly_facing, TURN_RATE)
+    frames = math.ceil((math.pi / 2) / TURN_RATE)
+    for frame in range(2, frames + 5):
+        enc.step(1.0)
+        assert jelly.jelly_facing <= math.pi / 2 + 1e-9   # never overshoots
+        if frame < frames:
+            assert jelly.jelly_facing < math.pi / 2 - 1e-9
+    assert math.isclose(jelly.jelly_facing, math.pi / 2)
 
 
 def test_without_policy_jelly_chases_like_scripted():
