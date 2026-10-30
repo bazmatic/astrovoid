@@ -149,14 +149,18 @@ class Encounter:
 
     def target_for(self, creature) -> Optional[Tuple[float, float]]:
         """Where the creature's target is: the nearest friend or opposite-allegiance creature, or None."""
+        target = self.target_entity_for(creature)
+        return target.get_pos() if target is not None else None
+
+    def target_entity_for(self, creature):
+        """The creature's target itself: the nearest friend or opposite-allegiance creature, or None."""
         from game_handlers.combat_targets import nearest_friendly
         usual = nearest_friendly(creature,self.world.ship,self.world.hunter)
         targets = [t for t in getattr(self.world,'additional_targets',()) if t.active]
         targets += [c for c in self.roster.alive() if c is not creature and c.allegiance != creature.allegiance]
         if usual is not None:
             targets.append(usual)
-        target = min(targets,key=lambda t:(t.x-creature.x)**2+(t.y-creature.y)**2,default=None)
-        return target.get_pos() if target is not None else None
+        return min(targets,key=lambda t:(t.x-creature.x)**2+(t.y-creature.y)**2,default=None)
 
     def kill(self, creature, shot=None) -> None:
         """The creature dies; a shot that killed it counts as a kill for whoever fired it."""

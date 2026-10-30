@@ -52,17 +52,6 @@ def rays(c, maze, heading, reach=RAY_REACH):
     return ray_distances(c.get_pos(), math.degrees(heading), starts, ends, reach)
 
 
-def target_entity(enc, c):
-    """The thing at the position enc.target_for(c) names (for its velocity), or None when there is no target."""
-    pos = enc.target_for(c)
-    if pos is None:
-        return None, None
-    world = enc.world
-    candidates = [world.ship, world.hunter] + list(getattr(world, 'additional_targets', ())) + list(enc.roster.alive())
-    match = next((t for t in candidates if t is not None and t is not c and tuple(t.get_pos()) == tuple(pos)), None)
-    return pos, match
-
-
 def relative(c, f, pos):
     """Bearing sin/cos relative to facing f and normalised distance to pos."""
     dx, dy = pos[0]-c.x, pos[1]-c.y
@@ -80,14 +69,15 @@ def observe(team, c):
     x = [min(1., math.hypot(c.vx, c.vy)/MAX_SPEED), sf, cf,
          clip((c.vx*cf+c.vy*sf)/MAX_SPEED), clip((-c.vx*sf+c.vy*cf)/MAX_SPEED)]
     x += list(rays(c, team.maze, f)/RAY_REACH)
-    pos, entity = target_entity(enc, c)
-    if pos is None:
+    entity = enc.target_entity_for(c)
+    if entity is None:
         x += [0.]*len(TARGET)
     else:
+        pos = entity.get_pos()
         bs, bc, d = relative(c, f, pos)
         dx, dy = pos[0]-c.x, pos[1]-c.y
         dist = math.hypot(dx, dy) or 1.
-        tvx, tvy = (getattr(entity, 'vx', 0.), getattr(entity, 'vy', 0.)) if entity is not None else (0., 0.)
+        tvx, tvy = getattr(entity, 'vx', 0.), getattr(entity, 'vy', 0.)
         closing = -((tvx-c.vx)*dx + (tvy-c.vy)*dy)/dist
         x += [1., bs, bc, d, clip(closing/CLOSING_SCALE)]
     others = sorted((o for o in team.members() if o is not c),
@@ -101,7 +91,7 @@ def observe(team, c):
         of = facing(o) - f
         x += [1., bs, bc, d, math.sin(of), math.cos(of), min(1., math.hypot(o.vx, o.vy)/MAX_SPEED)]
     masks = {name: np.ones(size, bool) for name, size in HEADS}
-    return np.asarray(x, np.float32), masks, None
+    return np.asarray(x, np.float32), masks, ()
 
 
 def intention(action):

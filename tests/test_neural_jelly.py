@@ -1,10 +1,16 @@
 """The neural Jelly: a policy chooses heading and acceleration; without one it chases like the scripted Jelly."""
 import math
 import random
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
 
 import creatures
 from creatures.jelly_team import ACCEL_RATE, DECISION_FRAMES, MAX_SPEED, TURN_RATE, Intent, get_jelly_team
-from tests.creature_parts import encounter, target, world
+from learning.adapters import jelly as adapter
+from learning.policy import PolicySpec, random_policy
+from tests.creature_parts import encounter, open_maze, target, world
 
 POS = (400.0, 300.0)
 
@@ -112,14 +118,6 @@ def test_driver_decides_every_decision_frames():
 
 
 # --- the adapter: what a Jelly senses and how its policy's outputs become an Intent ---
-from types import SimpleNamespace
-
-import numpy as np
-import pytest
-
-from learning.adapters import jelly as adapter
-from learning.policy import PolicySpec, random_policy
-from tests.creature_parts import open_maze
 
 
 def feature(x, name):
@@ -130,7 +128,8 @@ def test_observation_length_matches_spec():
     crew, enc, team = team_scene(positions=(POS, (POS[0] + 60, POS[1]), (POS[0], POS[1] + 80)),
                                  ship=target((POS[0] + 200, POS[1])))
     for c in crew:
-        x, masks, _ = adapter.observe(team, c)
+        x, masks, sites = adapter.observe(team, c)
+        assert sites == ()
         assert x.dtype == np.float32 and len(x) == len(adapter.SPEC.features)
         assert np.isfinite(x).all() and np.abs(x).max() <= 1.0
         assert set(masks) == {name for name, _ in adapter.HEADS}
@@ -154,6 +153,27 @@ def test_teammate_slot_sees_nearest_other_jelly():
     assert feature(x, 'teammate2_present') == 0
     assert feature(x, 'teammate0_distance') < feature(x, 'teammate1_distance')
     assert math.isclose(feature(x, 'teammate0_bearing_cos'), 1., abs_tol=1e-6)
+
+
+def test_dead_teammate_drops_out_of_slots():
+    (a, b, c), enc, team = team_scene(positions=(POS, (POS[0] + 50, POS[1]), (POS[0] + 300, POS[1])))
+    a.jelly_facing = 0.
+    near = feature(adapter.observe(team, a)[0], 'teammate0_distance')
+    enc.kill(b)
+    x, _, _ = adapter.observe(team, a)
+    assert feature(x, 'teammate0_present') == 1 and feature(x, 'teammate1_present') == 0
+    assert feature(x, 'teammate0_distance') > near   # the far Jelly now fills slot 0
+
+
+def test_closing_speed_is_nonzero_for_a_moving_target():
+    ship = target((POS[0] + 200, POS[1]))
+    (jelly,), enc, team = team_scene(ship=ship)
+    ship.vx, ship.vy = -2., 0.   # toward the Jelly
+    toward = feature(adapter.observe(team, jelly)[0], 'target_closing_speed')
+    ship.vx = 2.                 # away from the Jelly
+    away = feature(adapter.observe(team, jelly)[0], 'target_closing_speed')
+    assert math.isclose(toward, 2 / adapter.CLOSING_SCALE, rel_tol=1e-5)
+    assert math.isclose(away, -2 / adapter.CLOSING_SCALE, rel_tol=1e-5)
 
 
 def test_no_target_sets_present_zero_and_does_not_raise():
