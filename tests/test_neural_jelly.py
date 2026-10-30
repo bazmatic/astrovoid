@@ -586,3 +586,16 @@ def test_flank_metrics_and_promote_from_stage2_need_more_spread_and_team_catches
     assert scenario.promote(2, dict(summary, angular_spread=.2), baseline) == 2
     assert scenario.promote(2, dict(summary, team_catches_per_minute=1.), baseline) == 2
     assert scenario.promote(2, dict(summary, episodes=0), baseline) == 2
+
+
+def test_stage2_team_sizes_are_not_tied_to_particular_levels():
+    from collections import defaultdict
+    from learning.adapters import jelly_scenario as scenario
+    cases = [c for it in range(4) for c in scenario.training_cases(it, 16, 2)]
+    levels = defaultdict(set)
+    for c in cases:
+        levels[(c['stage'], c['team_size'])].add(c['level'])
+    assert set(levels) == {(1, 1), (2, 2), (2, 3), (2, 4)}
+    assert all(len(found) > 2 for found in levels.values()), dict(levels)
+    assert sum(c['stage'] == 1 for c in cases) * 4 == len(cases)   # the 1-in-4 retention share holds
+    assert cases == [c for it in range(4) for c in scenario.training_cases(it, 16, 2)]

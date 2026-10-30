@@ -354,7 +354,9 @@ def training_cases(iteration, count, stage, bootstrap=False):
     for i in range(count):
         index = iteration*count+i
         level, seed = TRAIN_LEVELS[index % len(TRAIN_LEVELS)], 100+i if bootstrap else 300+index % 100
-        slot = index % RETENTION_SHARE
+        # Shift the slot by one each pass through TRAIN_LEVELS, else index % 8 fixes index % 4 and every team size
+        # trains on the same two levels. Each block of len(TRAIN_LEVELS) cases still holds the 1-in-4 retention share.
+        slot = (index + index//len(TRAIN_LEVELS)) % RETENTION_SHARE
         if stage >= 2 and slot:
             cases.append(dict(level=level, seed=seed, team_size=STAGE2_TEAM_SIZES[(slot-1) % len(STAGE2_TEAM_SIZES)],
                               stage=stage))
