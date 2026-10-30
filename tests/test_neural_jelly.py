@@ -109,3 +109,118 @@ def test_driver_decides_every_decision_frames():
         enc.step(1.0)
     assert calls == [0, DECISION_FRAMES, 2 * DECISION_FRAMES]
     assert jelly.vx > 0
+
+
+# --- the adapter: what a Jelly senses and how its policy's outputs become an Intent ---
+from types import SimpleNamespace
+
+import numpy as np
+import pytest
+
+from learning.adapters import jelly as adapter
+from learning.policy import PolicySpec, random_policy
+from tests.creature_parts import open_maze
+
+
+def feature(x, name):
+    return float(x[adapter.FEATURES.index(name)])
+
+
+def test_observation_length_matches_spec():
+    crew, enc, team = team_scene(positions=(POS, (POS[0] + 60, POS[1]), (POS[0], POS[1] + 80)),
+                                 ship=target((POS[0] + 200, POS[1])))
+    for c in crew:
+        x, masks, _ = adapter.observe(team, c)
+        assert x.dtype == np.float32 and len(x) == len(adapter.SPEC.features)
+        assert np.isfinite(x).all() and np.abs(x).max() <= 1.0
+        assert set(masks) == {name for name, _ in adapter.HEADS}
+    assert len(adapter.critic(team)) == adapter.CRITIC_SIZE
+    assert np.isfinite(adapter.critic(team)).all()
+
+
+def test_team_of_one_zero_fills_teammate_slots():
+    (jelly,), enc, team = team_scene(ship=target((POS[0] + 200, POS[1])))
+    x, _, _ = adapter.observe(team, jelly)
+    slots = [i for i, n in enumerate(adapter.FEATURES) if n.startswith('teammate')]
+    assert len(slots) == 4 * len(adapter.TEAM)
+    assert not x[slots].any()
+
+
+def test_teammate_slot_sees_nearest_other_jelly():
+    (a, b, c), enc, team = team_scene(positions=(POS, (POS[0] + 300, POS[1]), (POS[0] + 50, POS[1])))
+    a.jelly_facing = 0.
+    x, _, _ = adapter.observe(team, a)
+    assert feature(x, 'teammate0_present') == 1 and feature(x, 'teammate1_present') == 1
+    assert feature(x, 'teammate2_present') == 0
+    assert feature(x, 'teammate0_distance') < feature(x, 'teammate1_distance')
+    assert math.isclose(feature(x, 'teammate0_bearing_cos'), 1., abs_tol=1e-6)
+
+
+def test_no_target_sets_present_zero_and_does_not_raise():
+    (jelly,), enc, team = team_scene()
+    assert enc.target_for(jelly) is None
+    x, _, _ = adapter.observe(team, jelly)
+    assert feature(x, 'target_present') == 0
+    assert not x[[adapter.FEATURES.index(f'target_{n}') for n in adapter.TARGET]].any()
+    adapter.teacher(jelly, enc)
+
+
+def test_target_bearing_is_relative_to_facing():
+    (jelly,), enc, team = team_scene(ship=target((POS[0], POS[1] + 200)))
+    jelly.jelly_facing = 0.
+    x, _, _ = adapter.observe(team, jelly)
+    assert feature(x, 'target_present') == 1
+    assert math.isclose(feature(x, 'target_bearing_sin'), 1., abs_tol=1e-6)
+    assert math.isclose(feature(x, 'target_bearing_cos'), 0., abs_tol=1e-6)
+
+
+def test_wall_rays_see_adjacent_wall():
+    wall = SimpleNamespace(start=(POS[0] + 20, POS[1] - 100), end=(POS[0] + 20, POS[1] + 100), active=True)
+    crew = [creatures.build('neural_jelly', POS, 5)]
+    enc = encounter(*crew, world_=world(maze=open_maze([wall])))
+    enc.ready()
+    team = get_jelly_team(enc)
+    team.external = True
+    crew[0].jelly_facing = 0.
+    x, _, _ = adapter.observe(team, crew[0])
+    assert math.isclose(feature(x, 'ray_0'), 20 / adapter.RAY_REACH, rel_tol=1e-4)
+    assert feature(x, 'ray_8') == 1.0   # nothing behind
+
+
+def test_intention_maps_activations_to_heading_and_accel():
+    intent = adapter.intention((0., 0.))
+    assert intent == Intent(heading=0., accel=0.)
+    intent = adapter.intention((50., -50.))
+    assert math.isclose(intent.heading, math.pi) and math.isclose(intent.accel, -1.)
+
+
+def test_teacher_heads_toward_target():
+    (jelly,), enc, team = team_scene(ship=target((POS[0], POS[1] + 200)))
+    heading, accel = adapter.teacher(jelly, enc)
+    intent = adapter.intention((heading, accel))
+    assert math.isclose(intent.heading, math.pi / 2, abs_tol=1e-3) and intent.accel > 0.9
+
+
+def test_driver_commits_one_intent_per_member():
+    crew, enc, team = team_scene(positions=(POS, (POS[0] + 60, POS[1])), ship=target((POS[0] + 200, POS[1])))
+    for c in crew:
+        c.jelly_intent = None
+    driver = adapter.JellyDriver(random_policy(adapter.SPEC), greedy=False, seed=1)
+    driver.decide(team)
+    assert set(driver.states) == {c.agent_id for c in crew}
+    for c in crew:
+        assert isinstance(c.jelly_intent, Intent)
+        assert -math.pi <= c.jelly_intent.heading <= math.pi and -1 <= c.jelly_intent.accel <= 1
+    assert adapter.enabled(None, None, None) == [True, True]
+
+
+def test_load_policy_rejects_wrong_spec(tmp_path):
+    good = tmp_path / 'good.npz'
+    random_policy(adapter.SPEC).save(good)
+    assert adapter.load_policy(good).spec == adapter.SPEC
+    wrong = PolicySpec('jelly_team', adapter.FEATURES, adapter.HEADS, version=adapter.SPEC.version + 1,
+                       continuous=('heading', 'accel'))
+    bad = tmp_path / 'bad.npz'
+    random_policy(wrong).save(bad)
+    with pytest.raises(ValueError):
+        adapter.load_policy(bad)
