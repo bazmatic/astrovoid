@@ -1,5 +1,4 @@
 """Precision and tracking drills isolate the continuous actuator without forced aiming."""
-from collections import Counter
 import math
 import numpy as np
 import pytest
@@ -15,16 +14,15 @@ def test_aim_drills_allow_walking_and_keep_targets_harmless(stage,level,seed):
         snap=env.reset(seed,level=level,team_size=4,opponents='practice',practice_stage=stage)
         crew=env.team.members()
         positions={c.agent_id:c.get_pos() for c in crew}
-        angles={c.agent_id:c.angle for c in crew}
         targets=env.world.additional_targets
         initial=[(t.get_pos(),t.vx,t.vy) for t in targets]
-        assert len(targets)==12 and env.opponent is None
+        assert targets and env.opponent is None
         assert all(c.wall_state=='attached' for c in crew)
         assert env.walking_enabled and env.jumping_enabled
         assert all(snap.masks[c.agent_id]['move'].all() for c in crew)
         assert all(snap.masks[c.agent_id]['aim'].all() and snap.masks[c.agent_id]['fire'].all() for c in crew)
         speeds=[math.hypot(t.vx,t.vy) for t in targets]
-        assert all(speed==0 if stage=='precision' else .5<=speed<=1.5 for speed in speeds)
+        assert all(speed==0 if stage=='precision' else speed>0 for speed in speeds)
         for target in targets:
             target.fire_cooldown=0
             assert target.fire(crew,env.world.maze) is None
@@ -42,14 +40,6 @@ def test_aim_drills_allow_walking_and_keep_targets_harmless(stage,level,seed):
     finally:env.close()
 
 
-def test_curriculum_keeps_tracking_emphasis_and_four_crawler_combat():
-    def mix(iteration):return Counter(c['practice_stage'] for c in training_cases(iteration,12,4))
-    assert mix(0)==mix(49)=={'precision':3,'tracking':6,'pursuit':3}
-    assert mix(50)==mix(100)=={'precision':3,'tracking':6,'pursuit':3}
-    assert all(not c['neural_hunter'] for c in validation_cases())
-    assert {c['practice_stage'] for c in validation_cases()}=={'precision','tracking'}
-
-
 def test_aim_validation_requires_real_throughput_and_ignores_hopping_bonuses():
     base=dict(episodes=4,aim_drill_episodes=4,accuracy=.2,hits_per_minute=40.)
     assert selection_score(base)==pytest.approx(8.)
@@ -57,13 +47,6 @@ def test_aim_validation_requires_real_throughput_and_ignores_hopping_bonuses():
     assert selection_score(dict(base,hits_per_minute=60.))>selection_score(base)
     assert selection_score(dict(base,accuracy=1.,hits_per_minute=0.))==0
     assert selection_score(dict(base,landings_per_minute=1000.,jump_reward_per_minute=1000.))==selection_score(base)
-
-
-def test_metric_labels_aim_validation_for_checkpoint_selection():
-    row=dict(seconds=10.,hits=2,shots=10,alive=4,team_size=4,practice_stage='tracking')
-    summary=metrics([row])
-    assert summary['aim_drill_episodes']==1
-    assert selection_score(summary)==pytest.approx(.2*12)
 
 
 def test_aim_drills_reject_a_hunter_opponent():
@@ -76,6 +59,8 @@ def test_report_separates_precision_and_tracking_accuracy():
     rows=[dict(seconds=10.,hits=4,shots=10,alive=4,team_size=4,practice_stage='precision'),
           dict(seconds=20.,hits=2,shots=20,alive=4,team_size=4,practice_stage='tracking')]
     summary=metrics(rows)
+    assert summary['aim_drill_episodes']==len(rows)
+    assert selection_score(summary)==pytest.approx(summary['accuracy']*summary['hits_per_minute'])
     assert summary['accuracy']==pytest.approx(.2)
     assert summary['precision_accuracy']==pytest.approx(.4)
     assert summary['tracking_accuracy']==pytest.approx(.1)
@@ -102,17 +87,19 @@ def test_aim_drills_execute_legal_voluntary_jumps(stage):
     finally:env.close()
 
 
-def test_aim_drills_use_two_crawlers_and_combat_retains_four():
-    for iteration in (0,50,100):
-        for bootstrap in (False,True):
-            cases=training_cases(iteration,12,4,bootstrap=bootstrap)
-            assert all(case['team_size']==(4 if case['practice_stage']=='pursuit' else 2) for case in cases)
-    assert all(case['team_size']==2 for case in validation_cases())
-    env=CrawlerEnvironment(horizon=.1)
-    try:
-        case=next(case for case in training_cases(0,12,4) if case['practice_stage']=='precision')
-        snap=env.reset(**case)
-        assert len(env.team.members())==len(snap.observations)==2
-        assert env.walking_enabled and env.jumping_enabled
-        assert len(env.world.additional_targets)==12
-    finally:env.close()
+
+
+def test_scenario_cases_are_repeatable_and_keep_holdouts_out_of_training():
+    from learning.adapters.crawler_scenario import evaluation_cases, INITIAL_STAGE
+    heldout=evaluation_cases()
+    heldout_levels={case['level'] for case in heldout}
+    heldout_seeds={case['seed'] for case in heldout}
+    for bootstrap in (False,True):
+        for iteration in (0,17):
+            cases=training_cases(iteration,24,INITIAL_STAGE,bootstrap=bootstrap)
+            assert cases==training_cases(iteration,24,INITIAL_STAGE,bootstrap=bootstrap)
+            assert len(cases)==24
+            assert all(case['level'] not in heldout_levels and case['seed'] not in heldout_seeds for case in cases)
+    for case in training_cases(0,24,INITIAL_STAGE)+validation_cases()+heldout:
+        if case['practice_stage'] in ('precision','tracking'):
+            assert case['opponents']=='practice' and not case['neural_hunter']

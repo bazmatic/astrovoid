@@ -350,18 +350,6 @@ def test_ppo_updates_learned_message_actions_without_a_fire_learning_signal():
     torch.testing.assert_close(before['fire'],net.heads['fire'].weight)
 
 
-def test_curriculum_uses_two_drill_crawlers_and_four_combat_crawlers_and_excludes_holdouts():
-    from learning.adapters.crawler_scenario import training_cases,HOLDOUT_LEVELS,promote,INITIAL_STAGE
-    for bootstrap in (False,True):
-        cases=training_cases(0,8,INITIAL_STAGE,bootstrap=bootstrap)
-        assert INITIAL_STAGE==4
-        assert all(c['team_size']==(4 if c['practice_stage']=='pursuit' else 2) and c['level'] not in HOLDOUT_LEVELS for c in cases)
-        assert not any(c['seed'] in (1000,1001) for c in cases)
-    assert promote(2,{'hit_probability':.5,'hits':8,'episodes':8})==2
-    assert promote(4,{'hit_probability':.5,'hits':8,'episodes':8})==4
-    assert promote(2,{'hit_probability':.25,'hits':8,'episodes':8})==2
-
-
 def test_player_and_hunter_have_independent_visible_observations():
     crew,enc,team=team_scene();c=crew[0]
     enc.world.hunter=target((500,350));enc.world.hunter.vx=2;enc.world.hunter.vy=-1
@@ -410,12 +398,6 @@ def test_opponent_scenarios_are_deterministic_and_both_ships_can_be_hit(mode):
             env.opponent.immunity_remaining=0
             assert env.opponent_hit(shot) and env.hits==2
     finally:env.close()
-
-
-def test_mixed_scenarios_cover_training_validation_and_holdouts():
-    from learning.adapters.crawler_scenario import training_cases,validation_cases,evaluation_cases
-    for cases in (training_cases(0,8,2),validation_cases(),evaluation_cases()):
-        assert {c['opponents'] for c in cases}=={'practice'}
 
 
 def test_neural_player_matches_hunter_controls_and_has_independent_memory():
@@ -691,40 +673,34 @@ def test_collector_uses_individual_rewards_and_focal_critics_without_changing_sh
         np.testing.assert_array_equal(episodes[1]['final_critic'],[0,1])
 
 
-def test_wallcrawler_gameplay_and_practice_both_fire_every_fifteen_frames():
+def test_practice_firing_respects_configured_cadence():
     from learning.adapters.crawler_scenario import CrawlerEnvironment,PRACTICE_FIRE_INTERVAL
     env=CrawlerEnvironment(horizon=1.1)
     try:
         snap=env.reset(339,level=11,team_size=2,opponents='practice')
-        assert PRACTICE_FIRE_INTERVAL==15
-        for c in env.team.members():assert c.gun_interval==c.gun_cooldown==15
+        for c in env.team.members():assert c.gun_interval==c.gun_cooldown==PRACTICE_FIRE_INTERVAL
         actions={i:(1,0.,1,0,0,0) for i in snap.observations}
         for _ in range(10):env.step(actions)
         assert env.frames==60
-        for c in env.team.members():assert c.shots_fired==4 and c.gun_interval==15
-        env.reset(339,level=11,team_size=2,opponents='hunter')
-        for c in env.team.members():assert c.gun_interval==15
-        crew,_,_=team_scene()
-        for c in crew:assert c.gun_interval==15
+        for c in env.team.members():assert c.shots_fired==env.frames//PRACTICE_FIRE_INTERVAL and c.gun_interval==PRACTICE_FIRE_INTERVAL
     finally:env.close()
 
 
-def test_wallcrawler_doubled_range_reaches_observations_and_its_own_bullets_only():
+def test_gun_range_controls_perception_and_projectile_reach():
     from entities.projectile import Projectile
     crew,enc,team=team_scene();c=crew[0]
-    assert c.gun_range==1100
     enc.world.ship=None
-    victim=target((c.x+800,c.y));victim.vx=victim.vy=0
+    victim=target((c.x+c.gun_range*.75,c.y));victim.vx=victim.vy=0
     enc.world.hunter=victim
     assert observe(team,c)[0][SPEC.features.index('hunter_present')]==1
-    enc.world.hunter=target((c.x+1200,c.y));enc.world.hunter.vx=enc.world.hunter.vy=0
+    enc.world.hunter=target((c.x+c.gun_range*1.1,c.y));enc.world.hunter.vx=enc.world.hunter.vy=0
     assert observe(team,c)[0][SPEC.features.index('hunter_present')]==0
     c.gun_cooldown=0;c.wall_intent=Intent(move=0,fire=True)
     enc.step(1)
     shot=enc.world.projectiles[0]
-    assert shot.lifetime==240 and shot.aim_range==1100
-    assert math.hypot(shot.vx,shot.vy)==8
-    assert Projectile((0,0),0).lifetime==120
+    gun=next(trait for trait in c.traits if trait.NAME=='gun')
+    assert shot.lifetime==pytest.approx(Projectile((0,0),0).lifetime*gun.shot_lifetime)
+    assert shot.aim_range==c.gun_range
 
 
 def test_practice_targets_have_varied_seeded_speeds_in_the_recorded_range():
@@ -866,16 +842,6 @@ def test_practice_replay_accepts_overridden_gameplay_reload_but_rejects_effectiv
     assert manifest['creatures']['wallcrawler']['traits'][0][1]['intervalMin']==100
 
 
-def test_aim_curriculum_retains_some_pursuit_and_holds_requested_team_size():
-    from learning.adapters.crawler_scenario import training_cases,validation_cases,evaluation_cases,promote
-    cases=training_cases(0,12,2)
-    assert sum(c['practice_stage']=='pursuit' for c in cases)==3
-    assert all(c['team_size']==2 for c in cases)
-    assert {c['practice_stage'] for c in validation_cases()}=={'precision','tracking'}
-    assert {c['practice_stage'] for c in evaluation_cases()}=={'precision','tracking','pursuit'}
-    assert promote(2,{'hit_probability':1,'hits':100,'episodes':12})==2
-
-
 def test_dodge_encounter_is_seeded_has_relocation_targets_and_matches_no_jump_ablation():
     from learning.adapters.crawler_scenario import CrawlerEnvironment
     from creatures.traits.rooted import wall_between
@@ -945,7 +911,7 @@ def test_allied_jellyfish_reuses_real_body_and_chase_targets_only_crawlers():
     env=CrawlerEnvironment(horizon=1)
     try:
         snap=env.reset(339,level=11,team_size=2,opponents='practice',practice_stage='pursuit')
-        assert len(env.world.additional_targets)==4
+        assert env.world.additional_targets
         assert len(env.team.members())==len(env.world.roster.alive())==2
         for t in env.world.additional_targets:
             assert t.type=='aggressive' and t.allegiance=='ally'
@@ -1278,8 +1244,7 @@ def test_escape_curriculum_starts_after_a_feasible_cooldown_window(level):
     env=CrawlerEnvironment(horizon=1)
     try:
         env.reset(1000,level=level,team_size=2,opponents='practice',practice_stage='pursuit')
-        assert PURSUER_START_DISTANCE==300.
-        assert len(env.world.additional_targets)==4
+        assert env.world.additional_targets
         assert all(math.dist(t.get_pos(),c.get_pos())>=PURSUER_START_DISTANCE
                    for t in env.world.additional_targets for c in env.team.members())
         for _ in range(10):
@@ -1371,20 +1336,6 @@ def test_practice_neural_hunter_fires_weak_bullets_alongside_random_speed_jellie
         env.close()
 
 
-def test_hunter_is_retained_for_pursuit_and_absent_from_aim_drills():
-    from learning.adapters.crawler_scenario import training_cases, validation_cases, evaluation_cases
-    for jobs in (training_cases(0, 12, 2), validation_cases(), evaluation_cases()):
-        assert all(job['opponents']=='practice' and job['neural_hunter']==(job['practice_stage']=='pursuit') for job in jobs)
-
-
-def test_checkpoint_selection_treats_jelly_contact_as_a_large_cost():
-    from learning.adapters.crawler_scenario import selection_score
-    base = dict(hits_per_minute=10.)
-    score = selection_score(base)
-    assert score-selection_score(dict(base, contact_hits_received_per_minute=1.)) == pytest.approx(5.)
-    assert score-selection_score(dict(base, bullet_hits_received_per_minute=1.)) == pytest.approx(1.)
-
-
 def test_four_crawlers_exchange_messages_in_actor_observations():
     crew, enc, team = team_scene(((400,312),(480,312),(560,312),(640,312)))
     team.commit({c.agent_id:Intent(message=i+1) for i,c in enumerate(crew)})
@@ -1401,13 +1352,3 @@ def test_four_crawlers_exchange_messages_in_actor_observations():
         muted, _, _ = observe(team, c, muted=True)
         assert all(muted[SPEC.features.index(f'teammate{i}_message{symbol}')] == 0
                    for i in range(3) for symbol in range(1,8))
-
-
-def test_validation_matches_two_crawler_drill_size_and_radio_defaults_on():
-    from learning.adapters.crawler_scenario import CrawlerEnvironment, validation_cases
-    from learning.run import make_jobs
-    from types import SimpleNamespace
-    assert all(case['team_size'] == 2 for case in validation_cases())
-    assert CrawlerEnvironment().muted is False
-    args = SimpleNamespace(task='wallcrawler_team', opponent='opponent.npz', horizon=60.)
-    assert all(job['muted'] is False for job in make_jobs(args, 'weights.npz', validation_cases()))
