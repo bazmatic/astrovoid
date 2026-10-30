@@ -451,3 +451,20 @@ def test_manager_can_start_fresh_jelly_team(tmp_path):
     assert result.started_from == 'random'
     args = ppo_neural.build_parser().parse_args(calls[0][3:])
     assert args.task == 'jelly_team' and args.workers == 4 and args.horizon == 60 and args.start == ''
+
+
+def test_scripted_baseline_runs_at_the_configured_run_horizon(monkeypatch):
+    from learning.adapters import jelly_scenario as scenario
+    monkeypatch.setattr(scenario, '_baselines', {})
+    monkeypatch.setattr(scenario, 'run_horizon', scenario.run_horizon)
+    scenario.metadata(SimpleNamespace(horizon=.5, opponent=''))
+    short = scenario.scripted_baseline()
+    assert (1, .5) in scenario._baselines
+    assert short['episodes'] == len(scenario.evaluation_cases()) and short['seconds'] <= .5 * short['episodes'] + 1e-9
+    scenario.metadata(SimpleNamespace(horizon=.2, opponent=''))
+    shorter = scenario.scripted_baseline()
+    assert set(scenario._baselines) == {(1, .5), (1, .2)} and shorter is not short
+    assert math.isclose(shorter['seconds'], .2 * shorter['episodes'])
+    # promote baselines at the run's horizon: it reuses that cache entry rather than a 60 s one.
+    scenario.promote(1, dict(catches_per_minute=0., stuck_fraction=1., episodes=1))
+    assert set(scenario._baselines) == {(1, .5), (1, .2)}

@@ -267,6 +267,8 @@ def metadata(args):
     import level_config
     from creatures.jelly_team import MAX_SPEED, ACCEL_RATE, TURN_RATE
     from learning.adapters.practice_targets import TARGET_RADIUS, TARGET_SPEED_MIN, TARGET_SPEED_MAX
+    global run_horizon
+    run_horizon = args.horizon   # learning.run calls this in the process that later calls promote
     opponent = Path(getattr(args, 'opponent', '') or '')
     return dict(task=SPEC.task, scenario_version=1, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=dict(REWARDS), reward_scope='individual', critic_context='focal_agent_first_v1',
@@ -323,10 +325,12 @@ def selection_score(summary):
 
 
 _baselines = {}
+run_horizon = 60.0   # the run's episode horizon (set by metadata), so promote's baseline matches the run's episodes
 
 
-def scripted_baseline(stage=1, horizon=60.0):
-    """The scripted Jelly (Chase + Drift, no policy) on the held-out arenas; computed once per process."""
+def scripted_baseline(stage=1, horizon=None):
+    """The scripted Jelly (Chase + Drift, no policy) on the held-out arenas at the run's horizon; cached per (stage, horizon)."""
+    horizon = run_horizon if horizon is None else horizon
     key = (stage, horizon)
     if key not in _baselines:
         env = JellyEnvironment(horizon=horizon, scripted=True)
