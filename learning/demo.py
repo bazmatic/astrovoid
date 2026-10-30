@@ -17,6 +17,7 @@ def main():
     parser.add_argument('--seed',type=int,default=1000)
     parser.add_argument('--trials',type=int,default=3)
     parser.add_argument('--seconds',type=float,default=20)
+    parser.add_argument('--opponents',choices=('hunter','mixed','practice'),default='practice')
     parser.add_argument('--sample',action='store_true')
     options=parser.parse_args()
     import pygame
@@ -47,7 +48,9 @@ def main():
             if event.type==pygame.QUIT or (event.type==pygame.KEYDOWN and event.key==pygame.K_ESCAPE):
                 raise KeyboardInterrupt
         screen.fill(config.COLOR_BACKGROUND);scene.world.maze.draw(screen)
-        scene.world.roster.draw(screen);scene.world.ship.draw(screen)
+        scene.world.roster.draw(screen);scene.opponent.draw(screen) if scene.opponent is not None else None
+        for target in scene.world.additional_targets:target.draw(screen)
+        if scene.world.ship is not None: scene.world.ship.draw(screen)
         for shot in scene.world.projectiles:shot.draw(screen)
         for c in scene.team.members():
             previous=previous_pose.get(c.agent_id)
@@ -79,7 +82,7 @@ def main():
     try:
         for trial in range(options.trials):
             seed=options.seed+trial
-            snap=env.reset(seed,level=options.level,team_size=6)
+            snap=env.reset(seed,level=options.level,team_size=6,opponents=options.opponents)
             previous_pose.clear()
             states={i:policy.initial_state() for i in snap.observations}
             rngs={i:np.random.default_rng(np.random.SeedSequence([seed,i])) for i in states}

@@ -53,11 +53,12 @@ class WallCrawls(Trait):
     NAME = 'wallCrawls'
     REQUIRES = ('gun',)
 
-    def __init__(self, walkSpeed=0.65, returnSpeed=2.4, stunFrames=36.0, knockSpeed=2.8):
-        if min(walkSpeed, returnSpeed, stunFrames, knockSpeed) <= 0:
+    def __init__(self, walkSpeed=0.65, returnSpeed=2.4, stunFrames=36.0, knockSpeed=2.8, bulletReleaseSpeed=0.9):
+        if min(walkSpeed, returnSpeed, stunFrames, knockSpeed, bulletReleaseSpeed) <= 0:
             raise ValueError('wallCrawls: speeds and stunFrames must be positive')
         self.walk_speed, self.return_speed = walkSpeed, returnSpeed
         self.stun_frames, self.knock_speed = stunFrames, knockSpeed
+        self.bullet_release_speed = bulletReleaseSpeed
 
     def on_spawn(self, c, enc):
         c.wall_state = 'returning'
@@ -85,7 +86,7 @@ class WallCrawls(Trait):
         c.controls.fire, c.controls.aim = False, None
         c.just_fired = False
 
-    def _dislodge(self, c):
+    def _dislodge(self, c, release_speed=None):
         attached = c.wall_state == 'attached'
         c.wall_state, c.wall_stun = 'stunned', self.stun_frames
         c.wall_destination = None
@@ -97,23 +98,40 @@ class WallCrawls(Trait):
             # Even a shot travelling into the rock knocks it into open space.
             nx, ny = c.wall_normal
             outward = c.vx * nx + c.vy * ny
-            c.vx += nx * max(0.0, self.knock_speed - outward)
-            c.vy += ny * max(0.0, self.knock_speed - outward)
+            c.vx += nx * max(0.0, (self.knock_speed if release_speed is None else release_speed) - outward)
+            c.vy += ny * max(0.0, (self.knock_speed if release_speed is None else release_speed) - outward)
         self._silence(c)
 
     def on_shot(self, c, shot, enc):
         from physics.angular_motion import inertia
-        # The projectile transfers angular impulse about the crawler's centre.
+        # Transfer projectile momentum using the same area-based mass as other bodies.
+        # Training bullets carry a fraction of normal strength, including their impulse.
+        from utils.math_utils import calculate_entity_mass
+        strength = max(0., getattr(shot, 'creature_damage', 1.))
         rx,ry = shot.x-c.x,shot.y-c.y
-        impulse_mass = shot.radius*shot.radius
+        impulse_mass = calculate_entity_mass(shot.radius)*strength
         c.wall_angular_velocity += (rx*shot.vy-ry*shot.vx)*60*impulse_mass/inertia(c.radius)
-        c.vx += shot.vx * 0.18
-        c.vy += shot.vy * 0.18
-        self._dislodge(c)
+        ratio = impulse_mass/calculate_entity_mass(c.radius)
+        c.vx += shot.vx * ratio
+        c.vy += shot.vy * ratio
+        # Breaking the planted grip supplies a release kick independent of bullet damage.
+        # _dislodge applies it only while attached; airborne hits retain small impulses.
+        self._dislodge(c, release_speed=self.bullet_release_speed)
 
     def on_event(self, c, name, enc):
         if name == 'shoved':
             self._dislodge(c)
+        elif name == 'recoil' and c.wall_state!='attached':
+            # A genuine firing impulse establishes flight even when initial
+            # placement had no wall to return to. Never erase it on the next tick.
+            c.wall_in_flight=True
+            site=c.wall_destination
+            if c.wall_phase=='landing' and site is not None and c.vx*site.normal[0]+c.vy*site.normal[1]>0:
+                c.wall_destination=None
+                c.wall_phase='flight'
+                c.wall_approach=None
+                from creatures.wallcrawler_team import get_team
+                get_team(enc).reservations.pop(c.agent_id,None)
 
     def _attach(self, c, maze, surface):
         _, foot, normal, _ = surface
@@ -139,6 +157,7 @@ class WallCrawls(Trait):
 
     def on_frame(self, c, enc, dt):
         self._silence(c)
+        gun_angle=c.angle
         c.wall_attach_cooldown = max(0, c.wall_attach_cooldown-dt)
         # Small steps keep projected walking continuous at short curved contour segments.
         remaining = max(0.0, dt)
@@ -146,14 +165,20 @@ class WallCrawls(Trait):
             step = min(1.0, remaining)
             self._move(c, enc.maze, step)
             remaining -= step
-        if c.wall_state != 'attached':
+        if c.wall_state == 'stunned':
             return
+        attached=c.wall_state=='attached'
+        # Stabilise the gun in world space while the chassis spins ballistically.
+        # Aiming alone cannot steer flight; the gun applies recoil only on actual shots.
+        if not attached:c.angle=gun_angle
         intent = getattr(c, 'wall_intent', None)
         if intent is not None:
-            normal = math.degrees(math.atan2(c.wall_normal[1], c.wall_normal[0]))
-            off = (c.angle-normal+180) % 360-180
-            off = max(-89, min(89, off+intent.aim*3*dt))
-            c.angle = normal+off
+            if attached:
+                normal = math.degrees(math.atan2(c.wall_normal[1], c.wall_normal[0]))
+                off = (c.angle-normal+180) % 360-180
+                c.angle = normal+max(-89,min(89,off+intent.aim*3*dt))
+            else:
+                c.angle=(c.angle+intent.aim*3*dt)%360
             rad = math.radians(c.angle)
             c.controls.aim = (c.x+math.cos(rad)*c.gun_range, c.y+math.sin(rad)*c.gun_range)
             c.controls.fire = intent.fire
@@ -162,12 +187,15 @@ class WallCrawls(Trait):
         if target is not None:
             dx, dy = target[0] - c.x, target[1] - c.y
             outward = dx * c.wall_normal[0] + dy * c.wall_normal[1]
-            if outward > 0 and math.hypot(dx, dy) <= c.gun_range and not wall_between(c.get_pos(), target, enc.maze):
+            if (not attached or outward > 0) and math.hypot(dx, dy) <= c.gun_range and not wall_between(c.get_pos(), target, enc.maze):
                 desired = math.degrees(math.atan2(dy, dx))
-                normal = math.degrees(math.atan2(c.wall_normal[1], c.wall_normal[0]))
-                offset = (c.angle-normal+180) % 360-180
                 delta = (desired-c.angle+180) % 360-180
-                c.angle = normal+max(-89, min(89, offset+max(-3*dt,min(3*dt,delta))))
+                turn=max(-3*dt,min(3*dt,delta))
+                if attached:
+                    normal = math.degrees(math.atan2(c.wall_normal[1], c.wall_normal[0]))
+                    offset = (c.angle-normal+180) % 360-180
+                    c.angle = normal+max(-89,min(89,offset+turn))
+                else:c.angle=(c.angle+turn)%360
                 rad = math.radians(c.angle)
                 c.controls.aim = (c.x+math.cos(rad)*c.gun_range,c.y+math.sin(rad)*c.gun_range)
                 c.controls.fire = abs((desired-c.angle+180) % 360-180) <= 12
@@ -180,7 +208,7 @@ class WallCrawls(Trait):
             c.prev_x, c.prev_y = c.x, c.y
             c.x += c.vx * dt
             c.y += c.vy * dt
-            self._sweep(c, maze)
+            self._sweep(c, maze, dt)
             if c.wall_stun <= 0:
                 c.wall_state = 'returning'
             return
@@ -205,7 +233,7 @@ class WallCrawls(Trait):
             return
         c.prev_x, c.prev_y = old
         from creatures.wallcrawler_team import swept_peers
-        swept_peers(c, c.encounter)
+        swept_peers(c, c.encounter, dt)
         c.walk_phase += math.dist(old, c.get_pos()) / max(1.0, c.radius) * 3
 
     def _launch_plan(self,c,site,ramp=True):
@@ -249,7 +277,7 @@ class WallCrawls(Trait):
                 c.vy+=(omega*omega*(site.position[1]-c.y)-2*omega*c.vy)*step
                 c.x+=c.vx*step;c.y+=c.vy*step
                 remaining-=step
-            self._sweep(c,enc.maze)
+            self._sweep(c,enc.maze,dt)
             error=abs((desired-c.wall_body_angle+180)%360-180)
             if (math.dist(c.get_pos(),site.position)<.4 and math.hypot(c.vx,c.vy)<.15
                     and error<3 and abs(c.wall_angular_velocity)<.4):
@@ -307,13 +335,13 @@ class WallCrawls(Trait):
                         site=Landing(wall,foot,normal,pos)
                         c.wall_destination=site;c.wall_phase='landing'
                         team.reservations[c.agent_id]=site
-        self._sweep(c,enc.maze)
+        self._sweep(c,enc.maze,dt)
 
     @staticmethod
-    def _sweep(c, maze):
+    def _sweep(c, maze, dt=1.):
         sweep_walls(c, maze.walls, maze.spatial_grid)
         gates = getattr(maze, 'gate_segments', ())
         if gates:
             sweep_walls(c, gates)
         from creatures.wallcrawler_team import swept_peers
-        swept_peers(c, c.encounter)
+        swept_peers(c, c.encounter, dt)

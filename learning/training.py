@@ -9,6 +9,7 @@ def build_network(policy, critic_size):
     class TeamNetwork(base):
         def __init__(self):
             super().__init__(policy.hidden, policy.params['embed_w'].shape[0])
+            self.continuous = policy.spec.continuous
             self.critic = torch.nn.Sequential(torch.nn.Linear(critic_size, 128), torch.nn.Tanh(),
                                               torch.nn.Linear(128, 128), torch.nn.Tanh(), torch.nn.Linear(128, 1))
         def forward(self, x, context):
@@ -41,24 +42,28 @@ def collect(env, policy, seed, scenario, greedy=False, teacher=None):
             else:
                 action = tuple(0 for _ in policy.spec.heads)
             active = env.adapter.enabled(x, action, masks) if alive else [False]*len(policy.spec.heads)
-            e['x'].append((x-policy.mean)/policy.scale); e['critic'].append(snap.critic); e['actions'].append(action)
+            e['x'].append((x-policy.mean)/policy.scale); e['critic'].append((snap.agent_critics or {}).get(i,snap.critic)); e['actions'].append(action)
             e['alive'].append(alive); e['enabled'].append(active)
             for k in e['legal']:
                 e['legal'][k].append(masks[k])
         transition = env.step(actions)
-        for e in episodes.values():
-            e['rewards'].append(transition.reward)
+        for i,e in episodes.items():
+            e['rewards'].append(transition.reward if transition.agent_rewards is None else transition.agent_rewards.get(i,0.))
         snap = transition.snapshot
         if transition.terminated or transition.truncated:
             break
-    for e in episodes.values():
-        e.update(terminated=transition.terminated, final_critic=snap.critic)
+    for i,e in episodes.items():
+        e.update(terminated=transition.terminated, final_critic=(snap.agent_critics or {}).get(i,snap.critic))
     return list(episodes.values()), transition.events, env.action_trace
 
 
-def clone_behaviour(net, episodes, head_names, selected_heads=None, epochs=4, lr=1e-3):
-    """Warm-start only movement/aim/fire; do not prescribe communication or detachment conventions."""
+def clone_behaviour(net, episodes, head_names, selected_heads=None, epochs=4, lr=1e-3, balanced=False):
+    """Warm-start only the action heads explicitly selected by the task adapter."""
     import torch
+    if balanced:
+        from learning.imitation import Demonstrations
+        Demonstrations(episodes,head_names,selected_heads or head_names).fit(net,epochs=epochs,lr=lr)
+        return
     optimiser = torch.optim.Adam(net.parameters(), lr=lr)
     names = tuple(selected_heads or head_names)
     indices = {k:i for i,k in enumerate(head_names)}
@@ -75,6 +80,10 @@ def clone_behaviour(net, episodes, head_names, selected_heads=None, epochs=4, lr
                 active = mask & torch.as_tensor(np.asarray(e['enabled'])[:,indices[k]], dtype=torch.bool)
                 if active.any():
                     labels = y[active,indices[k]]
+                    if k in getattr(net,'continuous',()):
+                        losses.append(torch.nn.functional.mse_loss(logits[k][0,active,0].tanh(), labels.tanh()))
+                        continue
+                    labels = labels.long()
                     counts = torch.bincount(labels,minlength=logits[k].shape[-1]).float()
                     weights = (len(labels)/(len(counts)*counts.clamp_min(1))).clamp(max=8)
                     losses.append(torch.nn.functional.cross_entropy(logits[k][0][active],labels,weight=weights))

@@ -122,7 +122,7 @@ def test_the_command_line_round_trips_through_the_trainer_parser(tmp_path):
 
 
 def test_every_parser_flag_is_a_setting():
-    assert {s.dest for s in SETTINGS} == {a.dest for a in ppo.build_parser()._actions} - {'start', 'out', 'resume', 'help'}
+    assert {s.dest for s in SETTINGS} == {a.dest for a in ppo.build_parser()._actions} - {'start', 'out', 'resume', 'help', 'actor_scale'}
     assert {s.group for s in SETTINGS} <= {'Rewards', 'Episodes', 'Training'}
 
 

@@ -12,6 +12,7 @@ def airborne(c,pos=(900,900),velocity=(1.1,.7)):
     c.x,c.y=pos;c.vx,c.vy=velocity
     c.wall_state='returning';c.wall_phase='flight';c.wall_in_flight=True
     c.wall_destination=None
+    c.wall_intent=Intent(move=0,fire=False)
 
 
 def test_angular_motion_accelerates_with_inertia_and_integrates_consistently():
@@ -111,3 +112,102 @@ def test_timed_spin_handles_short_and_diagonal_jumps(gap,offset):
     assert c.wall_phase=='landing'
     assert abs((c.wall_body_angle-270+180)%360-180)<.01
     assert abs(c.wall_angular_velocity)<=math.pi+1e-8
+
+
+def test_two_airborne_crawlers_bounce_instead_of_halting():
+    crew,enc,team=team_scene()
+    left,right=crew
+    airborne(left,(400,450),(10.,0.))
+    airborne(right,(450,450),(-10.,0.))
+    for _ in range(4):enc.step(1)
+    assert left.vx<0 and right.vx>0, (left.vx,right.vx)
+    assert left.vx+right.vx==pytest.approx(0.)
+    assert math.dist(left.get_pos(),right.get_pos())>=left.radius+right.radius
+
+
+def test_peer_bounce_preserves_momentum_and_glancing_tangent():
+    import config
+    from creatures.wallcrawler_team import swept_peers
+    crew,enc,team=team_scene()
+    first,second=crew
+    airborne(first,(430,450),(30.,7.))
+    first.prev_x,first.prev_y=400,443
+    airborne(second,(450,450),(-10.,-3.))
+    second.radius=20
+    before=(first.vx,first.vy,second.vx,second.vy)
+    assert swept_peers(first,enc)
+    nx,ny=first.x-second.x,first.y-second.y
+    distance=math.hypot(nx,ny);nx,ny=nx/distance,ny/distance
+    old_relative=(before[0]-before[2],before[1]-before[3])
+    relative=(first.vx-second.vx,first.vy-second.vy)
+    assert first.radius**2*first.vx+second.radius**2*second.vx==pytest.approx(100*before[0]+400*before[2])
+    assert first.radius**2*first.vy+second.radius**2*second.vy==pytest.approx(100*before[1]+400*before[3])
+    assert relative[0]*nx+relative[1]*ny==pytest.approx(-config.COLLISION_RESTITUTION*(old_relative[0]*nx+old_relative[1]*ny))
+    assert relative[0]*-ny+relative[1]*nx==pytest.approx(old_relative[0]*-ny+old_relative[1]*nx)
+
+
+def test_crawlers_moving_together_do_not_block_each_other():
+    crew,enc,team=team_scene()
+    left,right=crew
+    airborne(left,(400,450),(50.,0.))
+    airborne(right,(425,450),(50.,0.))
+    enc.step(1)
+    assert left.get_pos()==pytest.approx((450,450))
+    assert right.get_pos()==pytest.approx((475,450))
+    assert left.vx==right.vx==50
+
+
+def test_high_speed_peer_collision_does_not_tunnel_and_keeps_bouncing():
+    crew,enc,team=team_scene()
+    left,right=crew
+    airborne(left,(350,450),(150.,0.))
+    airborne(right,(550,450),(-150.,0.))
+    enc.step(1)
+    assert left.x<right.x and math.dist(left.get_pos(),right.get_pos())>=left.radius+right.radius
+    assert left.vx<0 and right.vx>0
+    velocities=left.vx,right.vx
+    enc.step(1)
+    assert (left.vx,right.vx)==velocities
+
+
+def test_flying_crawler_bounces_off_planted_peer_and_cancels_capture():
+    import config
+    from creatures.wallcrawler_team import swept_peers
+    crew,enc,team=team_scene(((400,312),(500,312)))
+    flying,planted=crew
+    airborne(flying,(490,312),(40.,0.))
+    flying.prev_x,flying.prev_y=450,312
+    flying.wall_destination=Landing(enc.maze.walls[0],(450,300),(0,1),(450,312))
+    flying.wall_phase='landing'
+    team.reservations[flying.agent_id]=flying.wall_destination
+    position=planted.get_pos()
+    assert swept_peers(flying,enc)
+    assert flying.vx==pytest.approx(-40*config.COLLISION_RESTITUTION)
+    assert planted.get_pos()==position and planted.wall_state=='attached'
+    assert flying.wall_phase=='flight' and flying.wall_destination is None and flying.wall_in_flight
+    assert flying.agent_id not in team.reservations
+
+
+def test_separating_peer_contact_does_not_apply_a_second_bounce():
+    from creatures.wallcrawler_team import swept_peers
+    crew,enc,team=team_scene()
+    left,right=crew
+    airborne(left,(400,450),(-10.,0.));left.prev_x,left.prev_y=405,450
+    airborne(right,(420,450),(10.,0.))
+    assert not swept_peers(left,enc)
+    assert (left.vx,right.vx)==(-10.,10.)
+
+
+def test_moving_planted_peer_impulse_is_consistent_for_subframe_steps():
+    from creatures.wallcrawler_team import swept_peers
+    import config
+    velocities=[]
+    for dt in (1.,.5):
+        crew,enc,team=team_scene()
+        planted,floating=crew
+        planted.prev_x,planted.prev_y=500,312
+        planted.x,planted.y=500+.65*dt,312
+        airborne(floating,(521.1,312),(0.,0.))
+        assert swept_peers(planted,enc,dt)
+        velocities.append(floating.vx)
+    assert velocities==pytest.approx([(1+config.COLLISION_RESTITUTION)*.65]*2)

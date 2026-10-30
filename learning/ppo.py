@@ -127,20 +127,26 @@ def bootstrapped_gae(rewards, values, valid, terminated, bootstrap, gamma=0.99, 
     return advantages, advantages+values
 
 
-def masked_statistics(logits, actions, legal, enabled):
+def masked_statistics(logits, actions, legal, enabled, continuous=()):
     import torch
     logp = torch.zeros(actions.shape[:2], device=actions.device)
     entropy = torch.zeros_like(logp)
     for i, name in enumerate(logits):
+        if name in continuous:
+            from learning.continuous import statistics
+            lp, ent = statistics(logits[name], actions[...,i])
+            logp += lp*enabled[...,i]
+            entropy += ent*enabled[...,i]
+            continue
         z = logits[name].masked_fill(~legal[name], -1e9)
         lp = torch.log_softmax(z, -1)
         mask = enabled[..., i]
-        logp += lp.gather(-1, actions[..., i:i+1]).squeeze(-1)*mask
+        logp += lp.gather(-1, actions[..., i:i+1].long()).squeeze(-1)*mask
         entropy -= (lp.exp()*lp).sum(-1)*mask
     return logp, entropy
 
 
-def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, clip=0.2):
+def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, clip=0.2, imitation_loss=None):
     """Shared recurrent PPO with optional privileged value inputs and per-agent action masks.
 
     Agent trajectories share team rewards. Dead agents have no actor loss; the team critic
@@ -151,7 +157,7 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
     d, context = len(episodes[0]['x'][0]), len(episodes[0]['critic'][0])
     h = len(net.heads)
     x, critic = torch.zeros(b, length, d), torch.zeros(b, length, context)
-    actions = torch.zeros(b, length, h, dtype=torch.long)
+    actions = torch.zeros(b, length, h, dtype=torch.float32)
     valid = torch.zeros(b, length, dtype=torch.bool)
     alive, done = valid.clone(), valid.clone()
     rewards = torch.zeros(b, length)
@@ -174,7 +180,7 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
                 bootstrap[i] = net.critic(torch.as_tensor(e['final_critic']).reshape(1, -1)).squeeze()
     with torch.no_grad():
         logits, values = net(x, critic)
-        old_logp, _ = masked_statistics(logits, actions, legal, enabled)
+        old_logp, _ = masked_statistics(logits, actions, legal, enabled, getattr(net,'continuous',()))
         advantages, returns = bootstrapped_gae(rewards, values, valid, done, bootstrap, gamma, lam)
         chosen = advantages[alive]
         if not chosen.numel():
@@ -185,7 +191,7 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
         for chunk in np.array_split(rng.permutation(b), min(4, b)):
             i = torch.as_tensor(chunk, dtype=torch.long)
             logits, values = net(x[i], critic[i])
-            logp, entropy = masked_statistics(logits, actions[i], {k:v[i] for k,v in legal.items()}, enabled[i])
+            logp, entropy = masked_statistics(logits, actions[i], {k:v[i] for k,v in legal.items()}, enabled[i], getattr(net,'continuous',()))
             ratio = (logp-old_logp[i]).clamp(-20, 20).exp()
             surrogate = torch.minimum(ratio*advantages[i], ratio.clamp(1-clip, 1+clip)*advantages[i])
             mask = alive[i]
@@ -194,7 +200,8 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
             policy_loss = -surrogate[mask].mean()
             value_loss = (values-returns[i]).square()[valid[i]].mean()
             ent = entropy[mask].mean()
-            loss = policy_loss+0.5*value_loss-0.01*ent
+            imitation = imitation_loss(net,rng) if imitation_loss is not None else policy_loss*0
+            loss = policy_loss+0.5*value_loss-0.01*ent+imitation
             if not torch.isfinite(loss):
                 raise ValueError('non-finite PPO loss')
             optimiser.zero_grad(); loss.backward()
@@ -202,5 +209,5 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
                 raise ValueError('non-finite PPO gradient')
             optimiser.step()
             stats = dict(policy_loss=float(policy_loss.detach()), value_loss=float(value_loss.detach()),
-                         entropy=float(ent.detach()))
+                         entropy=float(ent.detach()), imitation_loss=float(imitation.detach()))
     return stats

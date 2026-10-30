@@ -10,6 +10,7 @@ import creatures
 import enemy_kinds
 import level_config
 from creatures.traits.wallcrawl import clear, contact
+from creatures.wallcrawler_team import Intent
 from editor.model import PALETTE
 from entities.explosion import Blast
 from entities.projectile import Projectile
@@ -74,18 +75,19 @@ def test_bullet_dislodges_into_open_space_and_stops_firing_immediately():
     enc.apply_hit(c, shot)
     assert c.active and c.hit_points == 3
     assert c.wall_state == 'stunned' and not c.controls.fire
-    assert c.vy >= 2.8
+    assert 0 < c.vy < 1
     ready_gun(c)
     for _ in range(35):
         enc.step(1)
         assert c.wall_state == 'stunned' and not c.just_fired
     assert c.y > 312 and enc.world.projectiles == []
-    for _ in range(150):
+    c.wall_intent=Intent(move=0,fire=False)
+    for _ in range(1200):
         enc.step(1)
         if c.wall_state == 'attached':
             break
-        assert not c.just_fired
     assert c.wall_state == 'attached'
+    c.wall_intent=None
     for _ in range(30):
         enc.step(1)
         if enc.world.projectiles:
@@ -119,6 +121,7 @@ def test_returns_to_nearest_wall_rather_than_original_wall():
     walls = [WallSegment((250, 300), (1000, 300), 4), WallSegment((250, 600), (1000, 600), 4)]
     c, enc = scene(walls=walls)
     c.x, c.y, c.wall_state = 500, 530, 'returning'
+    c.wall_intent=Intent(move=0,fire=False)
     ready_gun(c)
     for _ in range(100):
         enc.step(1)
@@ -130,6 +133,7 @@ def test_destroyed_wall_releases_it_without_inventing_launch_momentum():
     walls = [WallSegment((250, 300), (1000, 300), 4), WallSegment((250, 600), (1000, 600), 4)]
     c, enc = scene(walls=walls)
     walls[0].active = False
+    c.wall_intent=Intent(move=0,fire=False)
     ready_gun(c)
     enc.step(1)
     assert c.wall_state == 'returning' and not c.just_fired
@@ -139,11 +143,11 @@ def test_destroyed_wall_releases_it_without_inventing_launch_momentum():
     assert c.vx == c.vy == 0
 
 
-def test_no_walls_means_no_attachment_or_firing():
+def test_no_walls_allows_airborne_firing_without_attachment():
     c, enc = scene(walls=[])
     ready_gun(c)
     enc.step(100)
-    assert c.wall_state == 'returning' and enc.world.projectiles == []
+    assert c.wall_state == 'returning' and enc.world.projectiles
 
 
 def test_a_fourth_hit_kills_it_using_the_standard_kill_path():
@@ -188,6 +192,7 @@ def test_it_walks_on_real_rock_and_steel_without_entering_them(monkeypatch, curv
     for cell in [(4, 5), (8, 5)]:
         c, enc = scene(maze.position_calculator.grid_center_to_screen(*cell))
         enc.world.maze = maze
+        c.wall_intent=Intent(move=1,fire=False)
         for _ in range(300):
             enc.step(1)
             assert clear(maze, c.get_pos(), c.radius)
@@ -219,6 +224,7 @@ def test_campaign_starts_the_expected_crawlers_and_they_find_a_wall(game, monkey
     game.start_level()
     crawlers = game.roster.of_kind('wallcrawler')
     assert len(crawlers) == level_config.get_level_wallcrawler_count(level) > 0
+    for c in crawlers:c.wall_intent=Intent(move=1,fire=False)
     for _ in range(240):
         for c in crawlers:
             game.encounter.step_creature(c, 1)
@@ -226,3 +232,36 @@ def test_campaign_starts_the_expected_crawlers_and_they_find_a_wall(game, monkey
     assert any(c.wall_state == 'attached' and c.walk_phase > 0 for c in crawlers)
     assert all(c.wall_state in ('attached','returning','stunned') for c in crawlers)
     game.encounter.close()
+
+
+def test_dislodged_crawler_coasts_through_stun_expiry_without_homing():
+    c, enc = scene(walls=[WallSegment((250,300),(1000,300),4)])
+    enc.apply_hit(c, Projectile(c.get_pos(), 30, source='player'))
+    from creatures.wallcrawler_team import Intent
+    c.wall_intent=Intent(move=0,fire=False)
+    velocity=(c.vx,c.vy)
+    start=c.get_pos()
+    for frame in range(80):
+        enc.step(1)
+        assert (c.vx,c.vy)==pytest.approx(velocity)
+        assert c.get_pos()==pytest.approx((start[0]+velocity[0]*(frame+1),start[1]+velocity[1]*(frame+1)))
+        assert c.wall_state!='attached'
+
+
+def test_weak_bullet_kicks_off_wall_but_only_nudges_in_midair():
+    c, enc = scene()
+    shot=Projectile((c.x+3,c.y),270,source='player')
+    shot.vx,shot.vy=0,-2
+    shot.creature_damage=.1
+    enc.apply_hit(c,shot)
+    assert c.wall_state=='stunned'
+    assert c.vy == pytest.approx(.9)
+    start=c.get_pos()
+    enc.step(36)
+    assert c.y-start[1] == pytest.approx(32.4)
+    assert c.wall_state == "returning"
+    c.vx,c.vy=1.1,.7
+    before_spin=c.wall_angular_velocity
+    enc.apply_hit(c,shot)
+    assert math.hypot(c.vx-1.1,c.vy-.7)<.05
+    assert abs(c.wall_angular_velocity-before_spin)<.1

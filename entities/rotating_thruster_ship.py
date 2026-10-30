@@ -100,6 +100,10 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         """
         return config.SHIP_THRUST_FORCE
     
+    @property
+    def friction(self) -> float:
+        return config.SHIP_FRICTION
+
     def rotate_left(self) -> None:
         """Rotate ship counter-clockwise."""
         self.angle -= self.current_rotation_speed
@@ -141,7 +145,7 @@ class RotatingThrusterShip(GameEntity, Collidable, Drawable):
         self.thrusting = False
         
         # Move with friction (remembering where it was, for swept wall collision), bouncing off screen edges
-        for _ in range(thrust.coast(self, dt, config.SHIP_FRICTION)):
+        for _ in range(thrust.coast(self, dt, self.friction)):
             self.on_edge_collision()
         
         # Update thrust particles (only when thrusting from previous frame)

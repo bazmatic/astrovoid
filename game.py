@@ -123,10 +123,9 @@ class Game:
         self.wallcrawler_policy = None
         crawler_weights = os.getenv('WALLCRAWLER_POLICY')
         if crawler_weights:
-            from learning.policy import RecurrentPolicy
-            from learning.adapters.wallcrawler import SPEC
+            from learning.adapters.wallcrawler import load_policy
             try:
-                self.wallcrawler_policy = RecurrentPolicy.load(crawler_weights, SPEC)
+                self.wallcrawler_policy = load_policy(crawler_weights)
             except (ValueError, OSError, KeyError) as exc:
                 logging.getLogger(__name__).warning('Wallcrawler policy unavailable: %s', exc)
 

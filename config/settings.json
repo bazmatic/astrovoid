@@ -7,7 +7,7 @@
   },
   "ship": {
     "size": 9,
-    "rotationSpeed": 5.0,
+    "rotationSpeed": 7.0,
     "thrustForce": 0.15,
     "friction": 0.998,
     "maxSpeed": 8.0,

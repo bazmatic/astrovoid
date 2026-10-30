@@ -388,12 +388,12 @@ def build_parser():
     from learning.tasks import TASKS
     parser.add_argument('--task', choices=tuple(TASKS), default='hunter', help='creature training task')
     parser.add_argument('--opponent', type=str, default=str(DEFAULT_START), help='frozen player weights for team training')
-    parser.add_argument('--budget-seconds', type=float, default=7200, help='total team training and evaluation wall time')
+    parser.add_argument('--budget-seconds', type=float, default=7200, help='total team training and evaluation wall time; 0 means no time limit')
     parser.add_argument('--bootstrap-episodes', type=int, default=8, help='scripted imitation encounters for new team runs')
     parser.add_argument('--seed', type=int, default=0, help='team model and training seed')
     parser.add_argument('--start', default=str(DEFAULT_START))
     parser.add_argument('--out', default=str(DEFAULT_OUT))
-    parser.add_argument('--iterations', type=int, default=100)
+    parser.add_argument('--iterations', type=int, default=100, help='training iterations; 0 means unlimited for creature teams')
     parser.add_argument('--episodes', type=int, default=96)
     parser.add_argument('--workers', type=int, default=os.cpu_count() or 1)
     parser.add_argument('--lr', type=float, default=1e-4)
@@ -451,6 +451,8 @@ def build_parser():
                         help='points lost per second spent turning (circling costs; a quick correction is cheap)')
     parser.add_argument('--levels', type=parse_levels, default=None,
                         help='levels to train on, e.g. 1-20 or 4,7,13 (default: the tune set)')
+    parser.add_argument('--actor-scale', type=float, default=1.,
+                        help='one-time wallcrawler output-head damping when starting a new run (0 < scale <= 1)')
     parser.add_argument('--resume', action='store_true',
                         help='carry on the run in --out from its resume state')
     return parser
@@ -458,13 +460,15 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+    if not 0<args.actor_scale<=1 or (args.task=='hunter' and args.actor_scale!=1):
+        raise ValueError('actor scale requires a wallcrawler run and 0 < scale <= 1')
     if args.task != 'hunter':
         from learning.run import train
         raw = sys.argv[1:] if argv is None else argv
         if '--horizon' not in raw:
             args.horizon = 60.0
-        if args.workers < 1 or args.episodes < 1 or args.horizon <= 0 or args.budget_seconds <= 0:
-            raise ValueError('workers, episodes, horizon and budget must be positive')
+        if args.workers < 1 or args.episodes < 1 or args.horizon <= 0 or args.budget_seconds < 0 or args.iterations < 0:
+            raise ValueError('workers, episodes and horizon must be positive; budget and iterations must be nonnegative')
         result = train(args)
         print('paused' if result['paused'] else 'done', '| checkpoint:', result['last'])
         return

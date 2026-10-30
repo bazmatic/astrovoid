@@ -13,4 +13,10 @@ if [[ -z "${TYPESAFE_API_KEY:-}" && -f "$key_file" ]]; then
     export TYPESAFE_API_KEY
 fi
 
+# Use the explicitly deployed local crawler model unless the caller overrides it.
+# WALLCRAWLER_POLICY= ./run.sh selects the scripted controller.
+if [[ -z "${WALLCRAWLER_POLICY+x}" && -f ".astrovoid-local/neural/wallcrawler.npz" ]]; then
+    export WALLCRAWLER_POLICY="$PWD/.astrovoid-local/neural/wallcrawler.npz"
+fi
+
 exec venv/bin/python main.py "$@"

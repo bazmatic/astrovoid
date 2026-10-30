@@ -9,6 +9,7 @@ class Snapshot:
     observations: Mapping[int, np.ndarray]
     masks: Mapping[int, dict]
     critic: np.ndarray
+    agent_critics: Mapping[int, np.ndarray] | None = None
 
 
 @dataclass
@@ -18,6 +19,7 @@ class Transition:
     terminated: bool
     truncated: bool
     events: dict
+    agent_rewards: Mapping[int, float] | None = None
 
 
 class Environment(Protocol):

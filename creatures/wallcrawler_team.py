@@ -13,7 +13,7 @@ LANDING_HALF_ANGLE = 45.0
 @dataclass(frozen=True)
 class Intent:
     move: int = 1
-    aim: int = 0
+    aim: float = 0.
     fire: bool = False
     detach: bool = False
     landing: int = 0
@@ -37,30 +37,68 @@ def space_free(c, enc, pos):
                for other in crawlers(enc))
 
 
-def swept_peers(c, enc):
-    """Stop before another body; following and head-on traffic cannot tunnel or stack."""
+def swept_peers(c, enc, dt=1.):
+    """Sweep body spacing, exchanging momentum on impacts involving a free crawler."""
+    from utils.math_utils import resolve_circle_collision, calculate_entity_mass
+    import config
     start, end = (c.prev_x, c.prev_y), c.get_pos()
-    earliest = 1.0
+    dx, dy = end[0]-start[0], end[1]-start[1]
+    grounded = c.wall_state == 'attached'
+    velocity = (dx/max(dt,1e-9),dy/max(dt,1e-9)) if grounded else (c.vx,c.vy)
+    earliest, peer = 1., None
     for other in crawlers(enc):
-        if other is c:
-            continue
-        dx, dy = end[0]-start[0], end[1]-start[1]
+        if other is c:continue
         ox, oy = start[0]-other.x, start[1]-other.y
         radius = c.radius+other.radius+1
         a, b, d = dx*dx+dy*dy, 2*(ox*dx+oy*dy), ox*ox+oy*oy-radius*radius
-        if d < -0.01:
-            # Overlapping spawn or external shove: allow movement only out of the overlap.
-            if math.dist(end, other.get_pos()) <= math.dist(start, other.get_pos()):
-                earliest = 0.0
+        impact = None
+        if d < -.01:
+            if math.dist(end,other.get_pos()) <= math.dist(start,other.get_pos()):impact=0.
         elif a > 1e-12 and b*b-4*a*d >= 0:
             t = (-b-math.sqrt(b*b-4*a*d))/(2*a)
-            if 0 <= t <= 1:
-                earliest = min(earliest, max(0, t-0.001))
-    if earliest < 1:
-        c.x, c.y = start[0]+(end[0]-start[0])*earliest, start[1]+(end[1]-start[1])*earliest
-        c.vx = c.vy = 0.0
-        return True
-    return False
+            if 0 <= t <= 1:impact=max(0.,t-.001)
+        if impact is None or impact>=earliest:continue
+        free_peer = other.wall_state != 'attached'
+        if not grounded or free_peer:
+            nx,ny = start[0]+dx*impact-other.x,start[1]+dy*impact-other.y
+            # A peer moving alongside us, or already separating after a bounce,
+            # must not have its position clipped or receive another impulse.
+            if (velocity[0]-other.vx)*nx+(velocity[1]-other.vy)*ny >= 0:continue
+        earliest,peer = impact,other
+    if peer is None:return False
+    c.x,c.y = start[0]+dx*earliest,start[1]+dy*earliest
+    if grounded and peer.wall_state=='attached':
+        return True  # Planted feet constrain walking; there is no free-flight momentum.
+    # Resolve any initial overlap before using the shared mass-based impulse law.
+    nx,ny = c.x-peer.x,c.y-peer.y
+    distance=math.hypot(nx,ny)
+    if distance<1e-9:
+        nx,ny = peer.vx-velocity[0],peer.vy-velocity[1]
+        distance=math.hypot(nx,ny)
+        nx,ny = ((nx/distance,ny/distance) if distance>1e-9 else (1.,0.))
+        distance=0.
+    else:nx,ny=nx/distance,ny/distance
+    overlap=max(0.,c.radius+peer.radius+1-distance)
+    mass1=math.inf if grounded else calculate_entity_mass(c.radius)
+    mass2=math.inf if peer.wall_state=='attached' else calculate_entity_mass(peer.radius)
+    share = 0. if grounded else 1. if math.isinf(mass2) else mass2/(mass1+mass2)
+    c.x+=nx*overlap*share;c.y+=ny*overlap*share
+    peer.x-=nx*overlap*(1-share);peer.y-=ny*overlap*(1-share)
+    v1,v2,_=resolve_circle_collision(c.get_pos(),velocity,c.radius,mass1,
+                                    peer.get_pos(),(peer.vx,peer.vy),peer.radius,mass2,
+                                    config.COLLISION_RESTITUTION)
+    team=get_team(enc)
+    for body,new_velocity in ((c,v1),(peer,v2)):
+        if body.wall_state=='attached':continue
+        body.vx,body.vy=new_velocity
+        # A bump spoils the planned launch/capture. Coast with the exchanged
+        # momentum rather than restoring the old launch impulse or landing spring.
+        body.wall_destination=None
+        body.wall_phase='flight'
+        body.wall_approach=None
+        body.wall_in_flight=True
+        team.reservations.pop(body.agent_id,None)
+    return True
 
 
 def capsule_hits(start, end, radius, a, b):

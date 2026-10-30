@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tools import ppo_neural
 
-NOT_SETTINGS = {'start', 'out', 'resume', 'help'}
+NOT_SETTINGS = {'start', 'out', 'resume', 'help', 'actor_scale'}
 DEFAULT_ITERATIONS = 1000     # what run52 uses: the guess for a run that never recorded its total
 
 # dest: (group, label). A trainer option missing here still appears, under Training.

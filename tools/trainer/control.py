@@ -96,8 +96,11 @@ def _source(from_, runs):
     return run, checkpoint
 
 
-def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None):
+def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, actor_scale=1.):
     """Start a new run carrying on from a checkpoint (default: the newest run's last), with settings changed."""
+    if not 0<actor_scale<=1:
+        raise TrainerError('actor scale must be greater than zero and at most one')
+    actor_options=['--actor-scale',str(actor_scale)] if actor_scale!=1 else []
     root = Path(root)
     with _lock(root):
         runs = _runs(root, processes)
@@ -120,12 +123,14 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None):
             name = f'run{next_run_number(root)}'
             out = root/name
             out.mkdir()
-            command = [sys.executable, '-m', 'tools.ppo_neural', '--start', '', '--out', str(out), *to_argv(values)]
+            command = [sys.executable, '-m', 'tools.ppo_neural', '--start', '', '--out', str(out), *to_argv(values), *actor_options]
             (launch or launch_process)(command, root/f'{name}.log')
             return Started(name, 'random', changed(base, values), command)
         source, checkpoint = _source(from_, runs)
         base = read_settings(source.path, run_folders(root))
         source_task = (config_of(source.path) or {}).get('task', 'hunter')
+        if actor_scale!=1 and source_task!='wallcrawler_team':
+            raise TrainerError('actor damping is supported only for wallcrawler runs')
         if 'task' in (changes or {}) and changes['task'] != source_task:
             raise TrainerError('cannot transfer a checkpoint between creature tasks; start a new task')
         try:
@@ -136,7 +141,7 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None):
         out = root / name
         out.mkdir()                      # claims the number before the trainer starts writing
         command = [sys.executable, '-m', 'tools.ppo_neural', '--start', str(source.path / f'{checkpoint}.npz'),
-                   '--out', str(out), *to_argv(values)]
+                   '--out', str(out), *to_argv(values), *actor_options]
         (launch or launch_process)(command, root / f'{name}.log')
     return Started(name, f'{source.name}/{checkpoint}', changed(base, values), command)
 

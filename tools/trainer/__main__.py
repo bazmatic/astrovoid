@@ -35,6 +35,7 @@ def _parser():
     commands.add_parser('runs', help='every run').add_argument('--json', action='store_true')
     start = commands.add_parser('start', help='start a new run (refuses while one is training or paused)')
     start.add_argument('--from', dest='from_', help='RUN or RUN/iterNNNN to continue, or new for fresh creature weights (default: newest run)')
+    start.add_argument('--actor-scale', type=float, default=1.,help='one-time wallcrawler output-head damping (0 < scale <= 1)')
     start.add_argument('--set', action='append', default=[], metavar='NAME=VALUE', help='change a setting')
     commands.add_parser('stop', help='end the training run')
     commands.add_parser('pause', help='pause the training run after its current iteration')
@@ -93,9 +94,11 @@ def main(argv=None, out=sys.stdout):
                 if not sep or not name:
                     raise TrainerError(f'--set needs NAME=VALUE, not {item!r}')
                 changes[name] = value
-            started = control.start(from_=args.from_, changes=changes)
+            started = control.start(from_=args.from_, changes=changes, **({'actor_scale':args.actor_scale} if args.actor_scale!=1 else {}))
             say(f'started {started.run}, carrying on from {started.started_from}')
             say('\n'.join(f'  {d}: {_shown(o)} → {_shown(n)}' for d, o, n in started.changes) or '  no settings changed')
+            if args.actor_scale!=1:
+                say(f'  one-time actor output scale: {args.actor_scale:g}')
         elif args.command == 'stop':
             say(f'stopped {control.stop()}')
         elif args.command == 'pause':

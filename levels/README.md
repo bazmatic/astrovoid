@@ -1,6 +1,6 @@
 # Level files
 
-Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels 25–30 also have custom files. Later levels come from the formulas in `level_rules.py` unless a file overrides them.
+Levels 1 to 24 are a designed arc: each has a file here, `{level}.json`, that says exactly what is on it. Levels 25–32 also have custom files. Later levels come from the formulas in `level_rules.py` unless a file overrides them.
 
 A file can exist for any level, and can state as much or as little as it likes. Outside an explicit `enemies` section, omitted settings come from the formulas. Within `enemies`, omitted types mean zero.
 
@@ -154,3 +154,23 @@ Destroy both flighthouses, one on the outer turn and one in the core, to open
 the exit. Ammo is unlimited. There are no gates, hunter beacons or neural enemies.
 
 Start directly with `START_LEVEL=29 ./run.sh`.
+
+## Level 32: Silkgrave Tunnel
+
+A long crawler-only gauntlet: five folded cave passages lead from the quiet
+northwestern entrance to the southeastern escape portal. Twenty Wallcrawlers
+occupy alternating walls and widened lairs. Rock teeth interrupt the sightlines;
+rounded turns and the chambers provide room to dodge and turn back. Permanent
+reinforcement ribs preserve the winding route even when rock is blasted away.
+
+Ammo is unlimited and the exit is open: reaching it is the objective, rather
+than clearing every crawler. There are no other enemies, gates or hunter beacons.
+The 133-cell minimum route is over twice the entrance-to-exit Manhattan distance.
+The authored layout and generated fallback both specify only twenty crawlers.
+
+Start directly with `START_LEVEL=32 ./run.sh`. To try a particular trained actor,
+set `WALLCRAWLER_POLICY=/absolute/path/to/checkpoint.npz` on the same command.
+
+Authored crawler placements are resolved from their cells onto nearby clear wall
+surfaces during level setup. All twenty Silkgrave crawlers begin attached on the
+first frame, rather than spending the opening seconds flying toward the walls.

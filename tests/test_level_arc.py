@@ -27,7 +27,7 @@ def enemy_count(level):
     return sum(enemies(level).values())
 
 
-@pytest.mark.parametrize('level', range(1, 32))
+@pytest.mark.parametrize('level', range(1, 33))
 def test_every_campaign_level_has_valid_enemy_counts_and_layout(level):
     data = level_config.load_level_config(level)
     if level in ARC:

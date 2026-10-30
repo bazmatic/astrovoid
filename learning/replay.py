@@ -5,13 +5,27 @@ import time
 
 
 def record(path, iteration):
-    return json.loads((Path(path)/'episodes'/f'iter{iteration:04d}.json').read_text())
+    filename='bootstrap.json' if iteration=='bootstrap' else f'iter{iteration:04d}.json'
+    return json.loads((Path(path)/'episodes'/filename).read_text())
 
 
 def episodes(path, iteration):
     data = record(path, iteration)
-    return [dict(episode=i, level=job['level'], seed=job['seed'], team_size=job['team_size'])
+    return [dict(episode=i, level=job['level'], seed=job['seed'], team_size=job['team_size'], opponents=job.get('opponents','hunter'),practice_stage=job.get('practice_stage','shooting'),neural_hunter=job.get('neural_hunter',False))
             for i, job in enumerate(data['jobs'])]
+
+
+def _effective_rules(manifest):
+    """Compare the cadence actually used by practice, rather than its overridden default."""
+    import copy
+    rules = copy.deepcopy(manifest)
+    if rules.get('aiming_practice') and rules.get('opponent_body') == 'practice_targets':
+        interval = rules.get('practice_fire_interval_frames')
+        if interval is not None:
+            for name, tuning in rules['creatures']['wallcrawler']['traits']:
+                if name == 'gun':
+                    tuning['intervalMin'] = tuning['intervalMax'] = interval
+    return rules
 
 
 def open_environment(path):
@@ -23,7 +37,7 @@ def open_environment(path):
     # Arena snapshots are immutable and replayed directly. Other rule changes require the original version.
     current['arenas'] = saved['arenas']
     current['training'] = saved.get('training', {})
-    if current != saved:
+    if _effective_rules(current) != _effective_rules(saved):
         raise ValueError('replay rules, schemas or opponent differ from the recorded run')
     return CrawlerEnvironment(opponent=path/'opponent.npz',horizon=saved['horizon'],arenas=saved['arenas'])
 
@@ -31,10 +45,12 @@ def open_environment(path):
 def fly(path, iteration):
     data = record(path, iteration)
     env = open_environment(path)
+    rewards = json.loads((Path(path)/'config.json').read_text())['manifest']['rewards']
     rows = []
     try:
         for i, (job, expected, trace) in enumerate(zip(data['jobs'],data['episodes'],data['actions'])):
-            env.reset(job['seed'],level=job['level'],team_size=job['team_size'])
+            case = dict(job); seed = case.pop('seed')
+            env.reset(seed, **case)
             for actions in trace:
                 result = env.step({int(k):tuple(v) for k,v in actions.items()})
             actual = result.events
@@ -42,8 +58,8 @@ def fly(path, iteration):
             if json.loads(json.dumps(actual)) != comparable:
                 raise ValueError(f'replay diverged in episode {i}: {actual} != {comparable}')
             rows.append(dict(episode=i,level=job['level'],seed=job['seed'],panic=0,
-                             kills=0,**{'return':actual['hits']-.01*actual['shots']},
-                             end='horizon' if result.truncated else 'team_dead',**actual))
+                             kills=0,**{'return':actual.get('landing_reward',rewards.get('successful_landing',0.))*actual.get('successful_landings',0)+actual.get('trial_completion_reward',0.)+sum(actual.get(k,0.) for k in ('battle_alive_reward','battle_survival_bonus','battle_kill_reward','battle_death_penalty'))+actual.get('jump_proximity_reward',0.)+rewards['team_hit']*actual['hits']+rewards['shot']*actual['shots']+rewards.get('predicted_shot_accuracy',0.)*actual.get('aim_quality_sum',0.)-actual.get('jump_cost',-rewards.get('voluntary_jump',0.))*actual.get('voluntary_jumps',0)+rewards.get('walk_reversal',0.)*actual.get('walk_reversals',0)+rewards.get('bullet_hit',0.)*actual.get('bullet_hits_taken',0)+rewards.get('contact_hit',0.)*actual.get('contact_hits_taken',0)},
+                             end='horizon' if result.truncated else ('targets_cleared' if actual.get('targets_cleared') else 'team_dead'),**actual))
         return rows
     finally:
         env.close()
@@ -60,7 +76,8 @@ def watch(path, iteration, episode, speed=1.0):
     pygame.init()
     screen = pygame.display.set_mode((1352,878), pygame.DOUBLEBUF)
     env = open_environment(path)
-    env.reset(job['seed'], level=job['level'], team_size=job['team_size'])
+    case = dict(job); seed = case.pop('seed')
+    env.reset(seed, **case)
     clock = pygame.time.Clock()
     def draw(scene):
         for event in pygame.event.get():
@@ -69,7 +86,9 @@ def watch(path, iteration, episode, speed=1.0):
         screen.fill(config.COLOR_BACKGROUND)
         scene.world.maze.draw(screen)
         scene.world.roster.draw(screen)
-        scene.world.ship.draw(screen)
+        scene.opponent.draw(screen) if scene.opponent is not None else None
+        for target in scene.world.additional_targets:target.draw(screen)
+        if scene.world.ship is not None: scene.world.ship.draw(screen)
         for shot in scene.world.projectiles: shot.draw(screen)
         lines = [f'WALLCRAWLER TEAM — level {job["level"]} — {scene.frames/60:.1f}s',
                  f'Accepted hits {scene.hits}    shots {scene.shots}']

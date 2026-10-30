@@ -230,7 +230,7 @@ class SpawnManager:
             available_positions = self._update_available_positions(used_positions, spawn_positions)
     
     def spawn_from_layout(self, layout, maze, level, command_recorder):
-        """Create the enemies a layout places, each at the centre of its cell, and no others.
+        """Create only the authored enemies; wall crawlers start on a nearby clear surface.
 
         Returns (kind, pixel position) for each of its enemy hunters, which the game makes and flies itself.
         """
@@ -242,8 +242,37 @@ class SpawnManager:
             if kind in enemy_kinds.hunters():
                 hunters.append((kind, pos))
                 continue
-            self.roster.add(make_enemy(kind, pos, level, command_recorder))
+            enemy = make_enemy(kind, pos, level, command_recorder)
+            if kind == 'wallcrawler':
+                self._place_layout_crawler(enemy, maze)
+            self.roster.add(enemy)
         return hunters
+
+    def _place_layout_crawler(self, crawler, maze):
+        """Resolve an authored cell to a planted spawn before the Encounter's spawn hooks."""
+        from creatures.traits.wallcrawl import contact, clear, nearby
+        from creatures.traits.rooted import wall_between
+        origin = crawler.get_pos()
+        reach = max(maze.cell_size_x, maze.cell_size_y) * 2
+        surfaces = [contact(maze, origin, [wall]) for wall in nearby(maze, origin, reach)]
+        surfaces = sorted((surface for surface in surfaces if surface is not None),
+                          key=lambda surface: surface[3])
+        for _, foot, normal, distance in surfaces:
+            if distance > reach:
+                continue
+            gap = crawler.radius + 2.
+            position = (foot[0]+normal[0]*gap, foot[1]+normal[1]*gap)
+            if not clear(maze, position, crawler.radius) or wall_between(origin, position, maze):
+                continue
+            start = getattr(maze, 'start_pos', None)
+            if (start is not None and math.dist(origin, start) >= game_config.ENEMY_START_CLEARANCE
+                    and math.dist(position, start) < game_config.ENEMY_START_CLEARANCE):
+                continue
+            if any(math.dist(position, other.get_pos()) < crawler.radius+other.radius+2
+                   for other in self.roster.all()):
+                continue
+            crawler.x, crawler.y = position
+            return
 
     def _create_spawn_configs(
         self,

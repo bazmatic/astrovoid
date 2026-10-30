@@ -14,7 +14,7 @@ def test_simultaneous_controls(name):
     ship = HunterRig((200,200))
     shots = ship.step(1, action, LINED_UP)
     assert (shots is not None) == action.fire
-    assert ship.angle == (action.turn * config.SHIP_ROTATION_SPEED
+    assert ship.angle == (action.turn * config.SETTINGS.hunterShip.rotationSpeed
                           * ship.settings.turn_rate_multiplier) % 360
     assert (abs(ship.vx) + abs(ship.vy) > 0) == action.thrust
     if shots:

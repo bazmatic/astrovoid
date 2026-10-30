@@ -159,6 +159,7 @@ def main(argv=None):
     parser.add_argument('run')
     parser.add_argument('iteration', type=int)
     parser.add_argument('episode', type=int, nargs='?')
+    parser.add_argument('--check',action='store_true',help='validate creature replay rules without opening a window')
     parser.add_argument('--speed', type=float, default=1.0, help='playback speed when watching')
     parser.add_argument('--workers', type=int, default=8, help='processes when finding')
     args = parser.parse_args(argv)
@@ -168,6 +169,12 @@ def main(argv=None):
     config = json.loads(config_path.read_text()) if config_path.exists() else {}
     replay = task(config.get('task','hunter')).replay()
     if replay is not None:
+        if args.check:
+            try:
+                env=replay.open_environment(args.run);env.close()
+            except (ValueError,OSError,KeyError) as exc:
+                raise SystemExit(str(exc)) from None
+            return
         if args.episode is None:
             print(json.dumps(replay.fly(args.run, args.iteration), indent=2))
         else:

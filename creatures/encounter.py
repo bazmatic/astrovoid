@@ -18,6 +18,7 @@ class Encounter:
     def __init__(self, roster, world):
         self.roster = roster
         self.world = world
+        self.on_projectile_damage = None
         self.hits = Counter()          # shots that reached an enemy, by who fired them ('player', 'hunter', ...)
 
     @property
@@ -132,6 +133,7 @@ class Encounter:
         self.hits[projectile.source] += 1
         if creature.inflation.on_hit(creature,projectile,self):
             return
+        health_before = creature.hit_points
         for _ in range(damage):
             if not creature.active:
                 break
@@ -140,8 +142,18 @@ class Encounter:
                 if not creature.active:
                     break
 
+        if creature.hit_points < health_before and self.on_projectile_damage is not None:
+            self.on_projectile_damage(creature, projectile)
+
     def target_for(self, creature) -> Optional[Tuple[float, float]]:
         """Where the creature's target is: the nearest friend, or None."""
+        additional = getattr(self.world, 'additional_targets', ())
+        if additional:
+            from game_handlers.combat_targets import nearest_friendly
+            usual = nearest_friendly(creature,self.world.ship,self.world.hunter)
+            targets = [t for t in additional if t.active]+([usual] if usual is not None else [])
+            target = min(targets,key=lambda t:(t.x-creature.x)**2+(t.y-creature.y)**2,default=None)
+            return target.get_pos() if target is not None else None
         return nearest_friendly_pos(creature, self.world.ship, self.world.hunter)
 
     def kill(self, creature, shot=None) -> None:

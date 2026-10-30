@@ -70,5 +70,15 @@ def watch(run, iteration, episode, speed=1.0, root=RL_ROOT, launch=None):
         raise TrainerError(f'the speed must be one of {", ".join(f"{s:g}" for s in SPEEDS)}')
     command = [sys.executable, '-m', 'tools.watch_episode', str(path), str(iteration), str(episode),
                '--speed', f'{speed:g}']
+    from tools.trainer.settings import config_of
+    if (config_of(path) or {}).get('task','hunter')!='hunter':
+        import subprocess
+        try:
+            checked=subprocess.run(command+['--check'],capture_output=True,text=True,timeout=20)
+        except subprocess.TimeoutExpired:
+            raise TrainerError('Replay validation timed out; try again shortly.') from None
+        if checked.returncode:
+            reason=(checked.stderr or checked.stdout).strip().splitlines()
+            raise TrainerError(f'{run} cannot be watched with the current rules: {reason[-1] if reason else "validation failed"}')
     (launch or launch_process)(command, Path(root) / 'replay.log')
     return command

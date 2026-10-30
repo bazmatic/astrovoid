@@ -1,4 +1,4 @@
-"""Versioned recurrent categorical policies; deployment depends on NumPy alone."""
+"""Versioned recurrent categorical and continuous policies; deployment depends on NumPy alone."""
 from dataclasses import dataclass
 import json
 import numpy as np
@@ -8,12 +8,16 @@ import numpy as np
 class PolicySpec:
     task: str
     features: tuple
-    heads: tuple  # ordered (name, categorical size)
+    heads: tuple  # ordered (name, output width); continuous heads emit mean/log-std
     version: int = 1
+    continuous: tuple = ()  # heads output Gaussian mean/log-std; actions record pre-tanh activations
 
     def metadata(self):
-        return {'task': self.task, 'features': list(self.features), 'heads': [list(h) for h in self.heads],
-                'version': self.version}
+        metadata = {'task': self.task, 'features': list(self.features), 'heads': [list(h) for h in self.heads],
+                    'version': self.version}
+        if self.continuous:
+            metadata['continuous'] = list(self.continuous)
+        return metadata
 
 
 class RecurrentPolicy:
@@ -28,6 +32,8 @@ class RecurrentPolicy:
                   'gru_w_ih': (3*self.hidden, self.params['embed_w'].shape[0]),
                   'gru_w_hh': (3*self.hidden, self.hidden),
                   'gru_b_ih': (3*self.hidden,), 'gru_b_hh': (3*self.hidden,)}
+        if not set(spec.continuous) <= dict(spec.heads).keys() or any(dict(spec.heads)[k] != 2 for k in spec.continuous):
+            raise ValueError('continuous heads require mean and log-standard-deviation outputs')
         for name, size in spec.heads:
             shapes.update({name+'_w': (size, self.hidden), name+'_b': (size,)})
         for key, shape in shapes.items():
@@ -53,6 +59,10 @@ class RecurrentPolicy:
         actions = []
         for name, size in self.spec.heads:
             legal = np.asarray((masks or {}).get(name, np.ones(size, bool)), bool)
+            if name in self.spec.continuous:
+                from learning.continuous import sample_activation
+                actions.append(sample_activation(logits[name], rng, greedy, temperature) if legal.any() else 0.)
+                continue
             if not legal.any():
                 raise ValueError(f'no legal action for {name}')
             z = np.where(legal, logits[name]/temperature, -1e9)
@@ -67,7 +77,7 @@ class RecurrentPolicy:
     def load(cls, path, expected=None):
         with np.load(path, allow_pickle=False) as data:
             meta = json.loads(str(data['policy_spec']))
-            spec = PolicySpec(meta['task'], tuple(meta['features']), tuple(tuple(h) for h in meta['heads']), meta['version'])
+            spec = PolicySpec(meta['task'], tuple(meta['features']), tuple(tuple(h) for h in meta['heads']), meta['version'], tuple(meta.get('continuous',())))
             if expected is not None and spec != expected:
                 raise ValueError('checkpoint task or observation/action schema does not match')
             params = {k: data[k].copy() for k in data.files if k not in ('mean', 'scale', 'policy_spec')}
@@ -83,4 +93,8 @@ def random_policy(spec, seed=0, hidden=64, embed=32):
                   gru_b_ih=np.zeros(3*hidden, np.float32), gru_b_hh=np.zeros(3*hidden, np.float32))
     for name, size in spec.heads:
         params[name+'_w'], params[name+'_b'] = normal(size, hidden), np.zeros(size, np.float32)
+        if name in spec.continuous:
+            from learning.continuous import INITIAL_LOG_STD
+            params[name+'_w'][1] = 0
+            params[name+'_b'][1] = INITIAL_LOG_STD
     return RecurrentPolicy(params, np.zeros(len(spec.features), np.float32), np.ones(len(spec.features), np.float32), spec)

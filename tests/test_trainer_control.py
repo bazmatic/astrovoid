@@ -196,3 +196,15 @@ def test_the_default_launcher_writes_to_the_run_log(tmp_path, monkeypatch):
     monkeypatch.setattr(control.subprocess, 'Popen', FakePopen)
     assert control.launch_process(['x'], tmp_path / 'run9.log') == 77
     assert seen['start_new_session'] and seen['stdout'].name == str(tmp_path / 'run9.log')
+
+
+def test_output_damping_is_explicit_once_and_not_inherited(root):
+    path=root/'run52'/'config.json'
+    cfg=json.loads(path.read_text());cfg['task']='wallcrawler_team';cfg['args']['task']='wallcrawler_team'
+    cfg['args']['actor_scale']=.5  # a previous run's initialization setting
+    path.write_text(json.dumps(cfg))
+    fake=FakeLaunch()
+    scaled=start('run52',root=root,processes=[],launch=fake,actor_scale=.5)
+    assert scaled.command[-2:]==['--actor-scale','0.5']
+    ordinary=start('run52',root=root,processes=[],launch=fake)
+    assert '--actor-scale' not in ordinary.command

@@ -1,5 +1,7 @@
 """Task-registered training lifecycle, bounded runs, evaluation and reproducible replays."""
 import json
+import itertools
+import math
 import os
 from pathlib import Path
 import time
@@ -43,7 +45,8 @@ class Rollouts:
                     raise TimeoutError('training wall-clock budget exhausted')
                 results.append(rollout_job(job))
             return results
-        return self.pool.map_async(rollout_job, jobs).get(timeout=max(.001,self.deadline-time.monotonic()))
+        timeout = None if math.isinf(self.deadline) else max(.001,self.deadline-time.monotonic())
+        return self.pool.map_async(rollout_job, jobs).get(timeout=timeout)
     def close(self):
         if self.pool:
             self.pool.terminate(); self.pool.join()
@@ -92,15 +95,23 @@ def train(args):
         if resume_path.exists() or (out/'train.log').exists():
             raise ValueError('run already exists; use resume')
         if args.start and Path(args.start).resolve() != Path(args.opponent).resolve():
-            policy = RecurrentPolicy.load(args.start, adapter.SPEC)
+            policy = (adapter.load_transfer_policy(args.start) if hasattr(adapter,'load_transfer_policy')
+                      else RecurrentPolicy.load(args.start, adapter.SPEC))
         else:
             policy = random_policy(adapter.SPEC, args.seed)
+        actor_scale=getattr(args,'actor_scale',1.)
+        if actor_scale!=1.:
+            from learning.initialization import dampen_actor
+            policy=dampen_actor(policy,actor_scale)
         shutil.copyfile(args.opponent, out/'opponent.npz')
         (out/'initial.npz').parent.mkdir(parents=True, exist_ok=True)
         policy.save(out/'initial.npz')
-        config_path.write_text(json.dumps(dict(task=args.task, args=vars(args), manifest=expected,
-                                              shaping=expected['rewards'], episode={'horizon_seconds':args.horizon},
-                                              start=args.start), indent=2))
+        record=dict(task=args.task, args=vars(args), manifest=expected,
+                    shaping=expected['rewards'],episode={'horizon_seconds':args.horizon},start=args.start)
+        if actor_scale!=1.:
+            record['actor_initialization']={'action_head_scale':actor_scale,'aim_std':.35,
+                'preserved':'recurrent_backbone_and_normalization','applied':'once_before_first_iteration'}
+        config_path.write_text(json.dumps(record,indent=2))
     # Use the immutable copy in every worker/replay, never whichever model is later installed in assets.
     args.opponent = str((out/'opponent.npz').resolve())
     torch.manual_seed(args.seed)
@@ -117,13 +128,30 @@ def train(args):
         torch.manual_seed(args.seed)
     pool = Rollouts(args.workers)
     started = entered
-    pool.deadline = started+max(0,args.budget_seconds-elapsed)
-    reserve = min(600., args.budget_seconds/6)
-    training_limit = max(0., args.budget_seconds-reserve)
+    unlimited = args.budget_seconds == 0
+    pool.deadline = float('inf') if unlimited else started+max(0,args.budget_seconds-elapsed)
+    reserve = 0. if unlimited else min(600., args.budget_seconds/6)
+    training_limit = float('inf') if unlimited else max(0., args.budget_seconds-reserve)
     (out/'episodes').mkdir(exist_ok=True)
     validation = adapter.validation_cases()
     best = out/'best.npz'
     history = []
+    demonstrations=[]
+    demonstration_path=out/'demonstrations.pt'
+    if saved and getattr(adapter,'IMITATION_REHEARSAL_WEIGHT',0):
+        if args.bootstrap_episodes and not demonstration_path.exists():
+            raise ValueError('resume requires the saved demonstration trajectories')
+        if demonstration_path.exists():demonstrations=torch.load(demonstration_path,weights_only=False,map_location='cpu')
+    def build_rehearsal(episodes):
+        if not episodes or not getattr(adapter,'IMITATION_REHEARSAL_WEIGHT',0):return None
+        from learning.imitation import Demonstrations
+        focus=getattr(adapter,'IMITATION_FOCUS_HEAD',None)
+        data=Demonstrations(episodes,dict(adapter.SPEC.heads),adapter.IMITATION_HEADS,focus)
+        if focus and not data.focus:raise ValueError('demonstrations contain no examples for the configured focus head')
+        return data
+    rehearsal=build_rehearsal(demonstrations)
+    def rehearsal_loss(model,random):
+        return rehearsal.rehearse(model,random,getattr(adapter,'IMITATION_REHEARSAL_HEADS',adapter.IMITATION_HEADS))*adapter.IMITATION_REHEARSAL_WEIGHT
     log = (out/'train.log').open('a', buffering=1)
     def used(): return elapsed+time.monotonic()-started
     def save_resume(next_iteration):
@@ -134,14 +162,23 @@ def train(args):
         temp.replace(resume_path)
     try:
         if not saved:
-            teacher_jobs = make_jobs(args,out/current,adapter.training_cases(0,args.bootstrap_episodes,team_size,bootstrap=True),'teacher')
+            teacher_cases=adapter.training_cases(0,args.bootstrap_episodes,team_size,bootstrap=True)
+            teacher_jobs = make_jobs(args,out/current,teacher_cases,'teacher')
             demonstrated = pool(teacher_jobs)
-            clone_behaviour(net, [e for result in demonstrated for e in result[0]], dict(adapter.SPEC.heads), selected_heads=adapter.IMITATION_HEADS, epochs=4)
+            (out/'episodes'/'bootstrap.json').write_text(json.dumps(dict(task=args.task,jobs=teacher_cases,
+                episodes=[dict(result[1],**case) for result,case in zip(demonstrated,teacher_cases)],
+                actions=[result[2] for result in demonstrated])))
+            demonstrations=[e for result in demonstrated for e in result[0]]
+            torch.save(demonstrations,demonstration_path)
+            clone_behaviour(net,demonstrations,dict(adapter.SPEC.heads),selected_heads=adapter.IMITATION_HEADS,
+                            epochs=getattr(adapter,'IMITATION_EPOCHS',4),balanced=getattr(adapter,'IMITATION_BALANCED',False))
+            rehearsal=build_rehearsal(demonstrations)
             policy = export(net, policy); current = 'bootstrap.npz'; policy.save(out/current)
             policy.save(best)
             best_score = adapter.selection_score(evaluate(pool,args,best,validation)['summary'])
             save_resume(0)
-        for iteration in range(first, args.iterations):
+        iterations = itertools.count(first) if args.iterations == 0 else range(first, args.iterations)
+        for iteration in iterations:
             if used() >= training_limit:
                 break
             weights = out/current
@@ -152,7 +189,7 @@ def train(args):
             rollout_seconds = time.monotonic()-rollout_at
             update_at = time.monotonic()
             stats = update_team(net, optimiser, [e for result in flown for e in result[0]], rng,
-                                gamma=args.gamma, lam=args.gae_lambda)
+                                gamma=args.gamma, lam=args.gae_lambda,imitation_loss=rehearsal_loss if rehearsal is not None else None)
             policy = export(net, policy)
             previous, current = current, f'iter{iteration:04d}.npz'
             policy.save(out/current)
@@ -168,7 +205,7 @@ def train(args):
                     best_score = score; policy.save(best)
             team_size = adapter.promote(team_size,summary)
             line = dict(iteration=iteration, update_s=round(time.monotonic()-update_at,3),
-                        mean_return=sum(sum(r[0][0]['rewards']) for r in flown)/len(flown),
+                        mean_return=sum(sum(e['rewards']) for r in flown for e in r[0])/sum(len(r[0]) for r in flown),
                         rollout_s=round(rollout_seconds,3), team_size=team_size, elapsed_s=round(used(),1), **summary, **stats)
             text = ' '.join(f'{k}={v}' for k,v in line.items())
             print(text, flush=True); log.write(text+'\n'); history.append(line)

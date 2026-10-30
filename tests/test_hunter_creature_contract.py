@@ -35,8 +35,8 @@ def contract_trace(direct=False):
                     settings = ship.settings
                     ship = creature([Energy(settings.health, settings.indestructible, settings.damage_immunity,
                                             settings.wall_energy),
-                                     Thrusters(1, config.SHIP_THRUST_FORCE * settings.thrust_multiplier,
-                                               config.SHIP_ROTATION_SPEED * settings.turn_rate_multiplier, mode='hunter'),
+                                     Thrusters(1, config.SETTINGS.hunterShip.thrustForce * settings.thrust_multiplier,
+                                               config.SETTINGS.hunterShip.rotationSpeed * settings.turn_rate_multiplier, mode='hunter'),
                                      BurstFire(settings.burst_size, settings.burst_spacing, settings.fire_interval),
                                      Gun(cadence='burst', aimMode='nose', upgrades=True)], pos=(500.0, 500.0))
                     ship.radius = config.SHIP_SIZE

@@ -72,23 +72,23 @@ class WallcrawlerBody:
         legs=[]
         for side in (-1,1):
             for i in range(self.LEG_PAIRS):
-                along=(i/(self.LEG_PAIRS-1)-.5)*r*1.6
+                along=(i/(self.LEG_PAIRS-1)-.5)*r*1.35
                 wave=math.sin(phase+i*math.pi*.8)
                 hip=point(along+side*r*.07,-r*.28)
-                folded=point(along+side*r*.4,-r*.7)
-                spread=along+side*r*.4+(wave*r*.18 if attached else 0)
+                folded=point(along+side*r*.12,-r*.45)
+                spread=along+side*r*.18+(wave*r*.12 if attached else 0)
                 lift=max(0,wave*side)*r*.3 if attached else 0
                 grounded=(anchor[0]-gy*spread+gx*lift,anchor[1]+gx*spread+gy*lift)
                 foot=(folded[0]+(grounded[0]-folded[0])*grip,
                       folded[1]+(grounded[1]-folded[1])*grip)
-                knee=self._knee(hip,foot,r*1.15,r*1.45,(side*tx,side*ty))
+                knee=self._knee(hip,foot,r*.70,r*.95,(side*tx,side*ty))
                 legs.append((side,hip,knee,foot))
         # Far legs sit behind the shell; near legs emerge from its lower rim.
         for side,hip,knee,foot in legs:
-            if side<0:self._leg(screen,hip,knee,foot,r,colour,False)
+            if side<0 or grip<.3:self._leg(screen,hip,knee,foot,r,colour,False)
         self._shell(screen,point,r,colour,attached)
         for side,hip,knee,foot in legs:
-            if side>0:self._leg(screen,hip,knee,foot,r,colour,True)
+            if side>0 and grip>=.3:self._leg(screen,hip,knee,foot,r,colour,True)
         self._feeler(screen,c,r,attached)
 
     @staticmethod
@@ -107,13 +107,13 @@ class WallcrawlerBody:
     def _leg(screen,hip,knee,foot,r,colour,near):
         edge=(42,35,24)
         chitin=colour if near else tuple(round(v*.55) for v in colour)
-        thigh=max(1,round(r*.24))
-        shin=max(1,round(r*.10))
+        thigh=max(1,round(r*.30))
+        shin=max(1,round(r*.16))
         pygame.draw.lines(screen,edge,False,[hip,knee,foot],shin+2)
         pygame.draw.line(screen,chitin,hip,knee,thigh)
         pygame.draw.line(screen,chitin,knee,foot,shin)
         joint=tuple(round(v) for v in knee)
-        pygame.draw.circle(screen,edge,joint,max(1,round(r*.19)))
+        pygame.draw.circle(screen,edge,joint,max(1,round(r*.16)))
         pygame.draw.circle(screen,chitin,joint,max(1,round(r*.10)))
         # Small dark gripping tips, rather than a luminous comb along the wall.
         pygame.draw.circle(screen,(104,117,105),tuple(round(v) for v in foot),max(1,round(r*.09)))

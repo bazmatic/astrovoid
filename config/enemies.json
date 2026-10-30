@@ -878,13 +878,16 @@
         "walkSpeed": 0.65,
         "returnSpeed": 2.4,
         "stunFrames": 36,
-        "knockSpeed": 2.8
+        "knockSpeed": 2.8,
+        "bulletReleaseSpeed": 0.9
       },
       "gun": {
-        "intervalMin": 100,
-        "intervalMax": 140,
-        "range": 550,
-        "strengthLevel": 1
+        "intervalMin": 15,
+        "intervalMax": 15,
+        "range": 1100,
+        "shotLifetime": 2.0,
+        "strengthLevel": 1,
+        "recoil": true
       },
       "ramsShip": {},
       "takesHits": {

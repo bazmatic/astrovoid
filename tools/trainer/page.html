@@ -67,7 +67,6 @@ input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;paddi
 .episodes th{position:sticky;top:0;background:var(--panel);color:var(--muted);font-weight:600;font-size:12px}
 .episodes td{font-family:var(--mono);font-variant-numeric:tabular-nums}
 .episodes td.end{font-family:var(--font);text-align:left}
-.episodes tr.panic td.p{color:var(--bad)}
 .episodes button{padding:2px 10px;font-size:12px}
 </style>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono&family=IBM+Plex+Sans:wght@400;600&display=swap">
@@ -91,20 +90,36 @@ input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;paddi
    level <select id="rp-level" aria-label="Level"><option value="">All</option></select>
    speed <select id="rp-speed" aria-label="Playback speed"><option value="1">Normal</option><option value="0.5">Half</option><option value="0.25">Quarter</option></select>
    <button class="primary" id="rp-latest" title="The newest run's last finished iteration, its last episode matching the selected level, at the speed chosen">Watch the last episode</button>
-   <button id="rp-fly" title="Flies the iteration's episodes again to see how each went: takes a while, and slows training while it runs">Find panic</button></div>
-  <div class="msg" id="rp-msg">Episodes open in the game window (Esc closes it). A red label shows when the hunter panics.</div>
+</div>
+  <div class="msg" id="rp-msg">Episodes open in the game window (Esc closes it).</div>
   <div class="episodes" id="rp-list" hidden></div>
  </div>
- <div class="view"><h2>Charts for</h2><select id="view-run" aria-label="Run to chart"></select></div>
+ <div class="view"><h2>Charts for</h2><select id="view-run" aria-label="Run to chart"></select><label for="chart-start">From iteration</label><input id="chart-start" class="iter" type="number" min="0" step="1" value="0"><button id="chart-all" type="button">Show all</button><span id="chart-range" class="range" aria-live="polite"></span></div>
  <div class="strip" id="strip"></div>
  <div class="rules" id="rules"></div>
  <div class="grid" id="charts"></div>
 </div>
 <script>
-let D=[];
+let D=[],CHART_START=0;
+const CHART_STARTS=new Map();
+function validChartStart(value){const n=Number(value);return Number.isFinite(n)?Math.max(0,Math.floor(n)):0}
+function savedChartStart(run){
+  try{return validChartStart(localStorage.getItem(`astrovoid.chartStart.${run}`)||0)}
+  catch(e){return CHART_STARTS.get(run)||0}
+}
+function chartData(){return D.filter(row=>row.iteration>=CHART_START)}
+function setChartStart(value){
+  CHART_START=validChartStart(value);$('chart-start').value=String(CHART_START);
+  if(VIEW){
+    CHART_STARTS.set(VIEW,CHART_START);
+    try{localStorage.setItem(`astrovoid.chartStart.${VIEW}`,String(CHART_START))}catch(e){}
+  }
+  render();
+}
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 function smooth(v,k=5){return v.map((_,i)=>{const s=v.slice(Math.max(0,i-k+1),i+1);return s.reduce((a,b)=>a+b,0)/s.length})}
 function chart({title,sub,key,ref,base,gate,wide}){
+  const D=chartData();
   if(!D.length)return '';
   if(D.length&&!(key in D.at(-1)))return '';        // a run that does not log this one
   const W=960,H=300,m={l:44,r:10,t:10,b:22};
@@ -112,7 +127,7 @@ function chart({title,sub,key,ref,base,gate,wide}){
   const g=gate?D.filter(d=>'gate_score' in d):[];
   let all=ys.concat(ref!=null?[ref]:[],base!=null?[base]:[],g.map(d=>d.gate_score));
   let lo=Math.min(...all),hi=Math.max(...all);const pad=(hi-lo||1)*.08;lo-=pad;hi+=pad;
-  const x0=0,x1=Math.max(10,...xs);
+  const x0=CHART_START,x1=Math.max(x0+10,...xs);
   const X=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r),Y=v=>H-m.b-(v-lo)/(hi-lo)*(H-m.t-m.b);
   let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
   for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css('--grid')}"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${v.toFixed(Math.abs(hi)<10?2:0)}</text>`}
@@ -144,6 +159,7 @@ function chart({title,sub,key,ref,base,gate,wide}){
 const EPISODE_S=75;let EPI=96;
 const gameTime=s=>{const h=s/3600;return h<48?`${h.toFixed(0)} h`:`${Math.floor(h/24)} d ${Math.round(h%24)} h`};
 function render(){
+  const D=chartData();
   const last=D.at(-1)||{},sm=k=>{const v=smooth(D.map(d=>d[k]),25);return v.at(-1)};
   const shown=(k,n=1)=>Number.isFinite(sm(k))?sm(k).toFixed(n):'-';
   const team='hits_per_minute' in last;
@@ -154,9 +170,20 @@ function render(){
    ['Game time',D.length?gameTime(D.length*EPI*EPISODE_S):'-']].map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
   document.getElementById('charts').innerHTML=[
    chart({title:'Training return',sub:'Higher is better. What training maximises. Only comparable within a run.',key:'mean_return',wide:true}),
-   chart({title:'Team projectile hits per minute',sub:'Wallcrawler team: accepted bullet impacts on the frozen player.',key:'hits_per_minute'}),
-   chart({title:'Team hit probability',sub:'Share of trials with at least one accepted hit.',key:'hit_probability'}),
+   chart({title:'Team projectile hits per minute',sub:'Wallcrawler team: accepted bullet impacts on the frozen opponents.',key:'hits_per_minute'}),
+   chart({title:'Predicted shot quality',sub:'Mean launch-time interception quality, from 0 to 1. A shaping signal, not measured hits.',key:'mean_aim_quality'}),
+   chart({title:'Targets cleared',sub:'Share of practice trials in which every target was hit.',key:'target_clear_rate'}),
    chart({title:'Team accuracy',sub:'Accepted hits divided by actual crawler shots.',key:'accuracy'}),
+   chart({title:'Stationary-target accuracy',sub:'Accepted hits / shots in harmless stationary-target drills.',key:'precision_accuracy'}),
+   chart({title:'Moving-target accuracy',sub:'Accepted hits / shots in harmless moving-target drills.',key:'tracking_accuracy'}),
+   chart({title:'Battle survival',sub:'Fraction of battle crawlers alive at the time limit.',key:'pursuit_survival'}),
+   chart({title:'Combat accuracy',sub:'Accepted hits / shots in retained Jellyfish and neural-hunter encounters.',key:'pursuit_accuracy'}),
+   chart({title:'Walking reversals per trial',sub:'Actual direction changes while walking; stops and airborne motion excluded.',key:'reversals_per_episode'}),
+   chart({title:'Voluntary jumps per trial',sub:'Actual voluntary launches, excluding damage-induced detachment.',key:'jumps_per_episode'}),
+   chart({title:'Bullet hits received per trial',sub:'Average damaging bullet impacts received by the whole crawler team per trial. Lower is better.',key:'bullet_hits_taken_per_episode'}),
+   chart({title:'Jellyfish contact hits per trial',sub:'Average accepted damaging contacts received by crawlers; repeated overlap is limited by a shared cooldown.',key:'contact_hits_taken_per_episode'}),
+   chart({title:'Demonstration rehearsal loss',sub:'Weighted auxiliary loss that helps retain demonstrated jump and landing choices. This is not an escape-success score.',key:'imitation_loss'}),
+   chart({title:'Time airborne',sub:'Share of crawler simulation time spent unattached, including stun and voluntary flight.',key:'airborne_fraction'}),
    chart({title:'Crawler survival',sub:'Share of the team still alive at trial end.',key:'survival'}),
    chart({title:'Speed',sub:'Higher is better. Average speed as a share of top speed.',key:'speed_fraction'}),
    chart({title:'Powerups per episode',sub:'Higher is better. Crystals the hunter collects.',key:'powerups_per_episode'}),
@@ -173,29 +200,64 @@ function render(){
    chart({title:'Enemy hits taken per minute',sub:'Lower is better.',key:'hits_taken_per_min'}),
    chart({title:'Distance from the starting policy (KL)',sub:'How far the policy has moved from where the run started.',key:'kl'}),
    chart({title:'Policy entropy',sub:'Randomness of the controls. Near zero means it has stopped exploring.',key:'entropy'})].join('');
+  $('chart-range').textContent=D.length?`Showing ${D[0].iteration}–${last.iteration} (${D.length} iterations)`:`No data from iteration ${CHART_START} yet`;
+  if(!D.length)$('charts').innerHTML='<div class="card"><p>No iterations in the selected range. Choose an earlier start or Show all.</p></div>';
 }
 async function loadRules(){
   if(!VIEW)return;
   try{const r=await fetch(`api/runs/${VIEW}/config`,{cache:'no-store'});if(!r.ok)return;const c=await r.json();
-    if(c.task==='wallcrawler_team'){
-      EPI=c.args.episodes;
-      $('rules').innerHTML=`<div class="card"><h2>Team objective</h2><p>+1 per accepted projectile hit; −0.01 per actual shot. Shared team reward. Trials last ${c.manifest.horizon} seconds or until the team dies. Frozen neural player; no pickups or passive power drain.</p></div>`;
-      return;
+    const team=c.task==='wallcrawler_team';
+    let rows=c.rewards||[];
+    if(team){
+      const rewards=c.manifest?.rewards||c.shaping||{};
+      rows=[
+        {name:'Accepted projectile hit',sign:'+',value:rewards.team_hit,unit:c.manifest?.reward_scope==='individual'?'Reward only for the crawler whose bullet hit':'Shared team reward for a genuine accepted bullet hit'},
+        {name:'Actual shot',sign:'-',value:Math.abs(rewards.shot||0),unit:'Cost for each shot actually fired'}
+      ];
+      if(rewards.successful_landing&&!c.manifest?.battle_rewards)rows.push({name:'Successful landing',sign:'+',value:rewards.successful_landing,unit:'Combat trials only in current runs; aiming drills earn no landing bonus. Once per completed voluntary jump to the landing crawler.'});
+      const battle=c.manifest?.battle_rewards;
+      if(battle)rows.push(
+        {name:'Battle time alive',sign:'+',value:battle.alive_per_second,unit:'Per living crawler per second'},
+        {name:'Battle survived',sign:'+',value:battle.survival_bonus,unit:'Per crawler alive at the time limit'},
+        {name:'Crawler killed',sign:'-',value:battle.death_cost,unit:'Once per death in battle'},
+        {name:'Jelly destroyed',sign:'+',value:battle.jelly_kill,unit:'To the shooter, in addition to hit rewards'});
+      if(rewards.trial_completion)rows.push({name:'Aiming trial cleared',sign:'+',value:rewards.trial_completion,unit:'Once per successful clear, shared equally by living crawlers. No bonus for timeout or team death.'});
+      if(rewards.jump_proximity)rows.push({name:'Jump near enemy',sign:'+',value:rewards.jump_proximity,unit:`Pursuit trials: per actual launch, scales from zero at ${c.manifest.jump_proximity.range_pixels}px body clearance to this maximum at contact; nearest visible enemy only; reward goes to jumper only.`});
+      if(rewards.contact_hit)rows.push({name:'Struck by Jellyfish',sign:'-',value:Math.abs(rewards.contact_hit),unit:'Cost to the struck crawler only; shared contact cooldown prevents repeated overlap charges'});
+      if(rewards.bullet_hit)rows.push({name:'Struck by bullet',sign:'-',value:Math.abs(rewards.bullet_hit),unit:'Cost to the struck crawler only, once per damaging bullet impact'});
+      if(rewards.walk_reversal)rows.push({name:'Walking reversal',sign:'-',value:Math.abs(rewards.walk_reversal),unit:'Cost per actual attached walking reversal; stopping does not reset direction history'});
+      if(rewards.voluntary_jump)rows.push({name:'Voluntary jump',sign:'-',value:Math.abs(rewards.voluntary_jump),unit:c.manifest?.curriculum?`Shooting trials: ${Math.abs(rewards.voluntary_jump)}; dodge trials: ${c.manifest.curriculum.dodge_jump_cost}; pursuit trials: ${c.manifest.jump_proximity?.pursuit_jump_cost??c.manifest.curriculum.dodge_jump_cost}. Damage-induced detachment excluded.`:'Cost per actual voluntary launch; damage-induced detachment is excluded'});
+      if(rewards.predicted_shot_accuracy)rows.push({name:'Predicted shot accuracy',sign:'+',
+        value:rewards.predicted_shot_accuracy,unit:'Up to this amount per shot for predicted interception quality; blocked paths excluded. This is not a measured hit.'});
     }
-    const rows=c.rewards||[];if(!rows.length)return;
+    if(!rows.length)return;
     const list=(sign,cls)=>rows.filter(x=>x.sign===sign).map(x=>`<li class="${cls}"><b>${sign==='-'?'&minus;':'+'}${+x.value}</b><span>${x.name}<br><small>${x.unit}</small></span></li>`).join('');
     const e=c.episode||{};
-    if(e.episodes_per_iteration&&e.episodes_per_iteration!==EPI){EPI=e.episodes_per_iteration;render()}
+    const episodes=team?c.args?.episodes:e.episodes_per_iteration;
+    if(episodes&&episodes!==EPI){EPI=episodes;render()}
+    const teacherNote=c.manifest?.jump_teacher?` Bootstrap teacher: pre-contact escape demonstrations train aiming, firing, detachment and legal landing selection; PPO episodes use the learned policy${c.manifest.jump_teacher.rehearsal_weight?` with jump/landing rehearsal (weight ${c.manifest.jump_teacher.rehearsal_weight})`:``}. `:'';
+    const teamEpisode=team?`<div class="card"><h2>Episodes</h2><p>Up to ${c.manifest?.horizon??e.horizon_seconds} seconds or until all crawlers die${c.manifest?.practice_targets?.dies_on_hit?' or every target is hit':''}. ${episodes} episodes per iteration.${teacherNote} ${c.manifest?.pursuers?`Jellyfish pursuit curriculum: ${Math.round((1-c.manifest.curriculum.shooting_share)*100)}% pursuit trials (${c.manifest.pursuers.count} allied Jellyfish${c.manifest.pursuers.health?`, ${c.manifest.pursuers.health} HP each`:``}; ${c.manifest.pursuers.contact_damage} HP contact damage; speed ${c.manifest.pursuers.speed} px/frame), ${Math.round(c.manifest.curriculum.shooting_share*100)}% shooting trials. Two crawlers until paired evaluation supports progression. `:c.manifest?.curriculum?`Dodge and reposition curriculum: ${Math.round((1-c.manifest.curriculum.shooting_share)*100)}% dodge trials (${c.manifest.curriculum.dodge_targets} targets, ${c.manifest.curriculum.burst_size}-shot aimed bursts), ${Math.round(c.manifest.curriculum.shooting_share*100)}% shooting trials. Two crawlers until paired evaluation supports progression. `:''} ${c.manifest?.ships_fire===false?'Opponent ships do not fire. ':''}${c.manifest?.aiming_practice?`Aiming practice: ${c.manifest.practice_walking?'walking enabled':'walking disabled'}; voluntary jumping ${c.manifest.practice_jumping?'enabled':'disabled'}.${c.manifest.practice_fire_interval_frames?` Reload time: ${c.manifest.practice_fire_interval_frames/60} seconds.`:''} `:''}${c.manifest?.practice_targets?`Up to ${c.manifest.practice_targets.count} practice targets.${c.manifest.practice_targets.return_fire?` Slow return fire every ${c.manifest.practice_targets.return_fire.interval_frames/60} seconds.`:''} `:'Frozen neural opponents; '}No pickups or passive power drain. ${c.manifest?.reward_scope==='individual'?'Individual rewards: each crawler receives only its own hits and costs.':'Rewards are shared by the crawler team.'}</p></div>`:'';
     document.getElementById('rules').innerHTML=
      `<div class="card gain"><h2>Active rewards</h2><ul>${list('+','gain')}</ul></div>`+
      `<div class="card cost"><h2>Active penalties</h2><ul>${list('-','cost')}</ul></div>`+
-     `<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.levels?.length?` Levels: ${esc(fmtLevels(e.levels))}.`:''}</p></div>`;
+     (team?teamEpisode:`<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.levels?.length?` Levels: ${esc(fmtLevels(e.levels))}.`:''}</p></div>`);
   }catch(e){}
 }
 async function refresh(){if(!VIEW)return;const asked=VIEW;try{const r=await fetch(`api/runs/${VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();n.forEach(d=>{if('free_shots_per_episode' in d&&!('unaimed_shots_per_episode' in d))d.unaimed_shots_per_episode=d.free_shots_per_episode});if(asked===VIEW&&n.length!==D.length){D=n;render()}}}catch(e){}}
 const $=id=>document.getElementById(id);
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let STATUS_KEY=null,VIEW=null,STATUS=null,RUNS=[],SCHEMA=null,BASE={},EDITS={},FOLLOW=true;
+let DEFAULT_RUN=null;
+function currentTask(){return (RUNS.find(r=>r.name===STATUS?.run)||RUNS.at(-1))?.task||'hunter'}
+function taskLabel(key){return SCHEMA?.tasks.find(t=>t.key===key)?.label||key}
+function replayRuns(){return RUNS.filter(r=>r.replayable&&r.checkpoints.length&&(r.task||'hunter')===currentTask())}
+function syncCreature(){
+  const run=STATUS?.run||RUNS.at(-1)?.name;
+  if(run===DEFAULT_RUN)return;
+  DEFAULT_RUN=run;$('task').value=currentTask();
+  $('fresh-team').disabled=$('task').value==='hunter';
+  $('from-run').value='';fillFrom();fillReplay();
+}
 async function api(path,opts){const r=await fetch(path,{cache:'no-store',...opts});const b=await r.json().catch(()=>({}));if(!r.ok)throw new Error(b.error||r.statusText);return b}
 const post=(path,body)=>api(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body||{})});
 const fmtLevels=v=>{if(!v||!v.length)return 'the tune set';const s=[...new Set(v)].sort((a,b)=>a-b),out=[];for(let i=0;i<s.length;){let j=i;while(j+1<s.length&&s[j+1]===s[j]+1)j++;out.push(i===j?`${s[i]}`:`${s[i]}-${s[j]}`);i=j+1}return out.join(',')};
@@ -205,7 +267,7 @@ function renderStatus(){
   const s=STATUS;if(!s)return;
   const state=s.run?s.state:'idle',iter=s.iteration!=null?s.iteration:'-';
   const started=s.started?new Date(s.started).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'-';
-  const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · ${s.seconds_per_iteration.toFixed(1)} s per iteration`:''}</span>`:'<span class="facts">No runs yet</span>';
+  const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · ${esc(taskLabel(currentTask()))} · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · ${s.seconds_per_iteration.toFixed(1)} s per iteration`:''}</span>`:'<span class="facts">No runs yet</span>';
   const buttons={training:['pause','stop'],pausing:['stop'],paused:['resume','stop'],interrupted:['resume','stop'],idle:[]}[state]||[];
   const label={pause:'Pause',resume:'Resume',stop:'Stop'};
   const note={pausing:'Pausing after this iteration…',paused:'Paused: resume to carry on where it stopped.',interrupted:'Interrupted (it ended without a pause or stop): resume to carry on from its last iteration.'}[state]||'';
@@ -230,7 +292,7 @@ async function act(button){
     await loadRuns()}
   catch(e){const m=$('status-msg');m.className='msg error';m.textContent=e.message;button.disabled=false}
 }
-async function loadStatus(){try{STATUS=await api('api/status');renderStatus();if(FOLLOW&&STATUS.run&&STATUS.run!==VIEW)setView(STATUS.run)}catch(e){}}
+async function loadStatus(){try{STATUS=await api('api/status');syncCreature();renderStatus();if(FOLLOW&&STATUS.run&&STATUS.run!==VIEW)setView(STATUS.run)}catch(e){}}
 
 // The next run: where it carries on from and the settings it changes.
 function nextNumber(){return RUNS.length?Math.max(...RUNS.map(r=>+r.name.slice(3)))+1:1}
@@ -329,17 +391,19 @@ $('start').onclick=async()=>{
 
 // The charts, for the active run unless another one is chosen.
 async function loadRuns(){
-  try{RUNS=await api('api/runs');fillFrom();fillReplay();
+  try{RUNS=await api('api/runs');syncCreature();fillFrom();fillReplay();renderStatus();
     const sel=$('view-run'),keep=FOLLOW?'':sel.value;
     sel.innerHTML=`<option value="">The active run</option>`+[...RUNS].reverse().map(r=>`<option value="${r.name}">${r.name} (${r.state}, ${r.iterations_done} iterations)</option>`).join('');
     sel.value=keep;renderStart()}catch(e){}
 }
-function setView(run){if(run===VIEW)return;VIEW=run;D=[];$('rules').innerHTML='';render();refresh();loadRules()}
+function setView(run){if(run===VIEW)return;VIEW=run;D=[];CHART_START=savedChartStart(run);$('chart-start').value=String(CHART_START);$('rules').innerHTML='';render();refresh();loadRules()}
+$('chart-start').onchange=()=>setChartStart($('chart-start').value);
+$('chart-all').onclick=()=>setChartStart(0);
 $('view-run').onchange=()=>{const v=$('view-run').value;FOLLOW=!v;setView(v||STATUS?.run||null)};
 // Replays: an iteration's episodes, optionally flown again to see how each went, each one watchable.
-let EPISODES=[],FLOWN=false,RP_KEY='',EPISODE_REQUEST=null;
+let EPISODES=[],RP_KEY='',EPISODE_REQUEST=null;
 function fillReplay(){
-  const sel=$('rp-run'),keep=sel.value,usable=RUNS.filter(r=>r.replayable&&r.checkpoints.length).reverse();
+  const sel=$('rp-run'),keep=sel.value,usable=replayRuns().reverse();
   sel.innerHTML=usable.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
   if(keep&&usable.some(r=>r.name===keep))sel.value=keep;
   const run=RUNS.find(r=>r.name===sel.value);
@@ -348,9 +412,9 @@ function fillReplay(){
 }
 async function loadEpisodes(){
   const run=$('rp-run').value,iteration=$('rp-iter').value,key=`${run}/${iteration}`;
-  if(!run||iteration==='')return [];
+  if(!run||iteration===''){RP_KEY='';EPISODES=[];fillLevels();renderEpisodes();return [];}
   if(key===RP_KEY)return EPISODE_REQUEST;
-  RP_KEY=key;EPISODES=[];FLOWN=false;renderEpisodes();
+  RP_KEY=key;EPISODES=[];renderEpisodes();
   EPISODE_REQUEST=(async()=>{
     try{const e=await post('api/episodes',{run,iteration:+iteration});if(RP_KEY===key){EPISODES=e;fillLevels();renderEpisodes()}return e}
     catch(e){if(RP_KEY===key){RP_KEY='';$('rp-msg').className='msg error';$('rp-msg').textContent=e.message==='not found'?'This training manager is older than the page: close it (ctrl-c) and run ./run-trainer.sh again.':e.message}return null}
@@ -365,11 +429,9 @@ function fillLevels(){
 function renderEpisodes(){
   const list=$('rp-list'),level=$('rp-level').value;
   let rows=EPISODES.filter(e=>level===''||e.level===+level);
-  if(FLOWN)rows=[...rows].sort((a,b)=>b.panic-a.panic||a.episode-b.episode);
   list.hidden=!EPISODES.length;
-  const head=FLOWN?'<th>Panic</th><th>Return</th><th>Kills</th><th>Seconds</th><th class="end">Ended</th>':'';
-  list.innerHTML=`<table><thead><tr><th>Episode</th><th>Level</th>${head}<th></th></tr></thead><tbody>${rows.map(e=>
-    `<tr class="${FLOWN&&e.panic>0?'panic':''}"><td>${e.episode}</td><td>${e.level}</td>${FLOWN?`<td class="p">${Math.round(e.panic*100)}%</td><td>${e.return.toFixed(1)}</td><td>${e.kills}</td><td>${e.seconds.toFixed(1)}</td><td class="end">${esc(e.end)}</td>`:''}<td><button data-ep="${e.episode}">Watch</button></td></tr>`).join('')}</tbody></table>`;
+  list.innerHTML=`<table><thead><tr><th>Episode</th><th>Level</th><th>Stage</th><th></th></tr></thead><tbody>${rows.map(e=>
+    `<tr><td>${e.episode}</td><td>${e.level}</td><td>${e.practice_stage==='pursuit'?'Jellyfish pursuit':e.practice_stage==='dodge'?'Dodge / reposition':e.practice_stage==='shooting'?'Shooting':'—'}</td><td><button data-ep="${e.episode}">Watch</button></td></tr>`).join('')}</tbody></table>`;
   list.querySelectorAll('button[data-ep]').forEach(b=>b.onclick=()=>watchEpisode(+b.dataset.ep));
 }
 async function watchEpisode(episode){
@@ -378,8 +440,18 @@ async function watchEpisode(episode){
     m.className='msg';m.textContent=`Opening episode ${episode} in the game window${speed===1?'':` at ${$('rp-speed').selectedOptions[0].text.toLowerCase()} speed`} (Esc closes it).`}
   catch(e){m.className='msg error';m.textContent=e.message}
 }
+let LATEST_WAIT=null;
 $('rp-latest').onclick=async()=>{
-  const run=RUNS.filter(r=>r.replayable&&r.checkpoints.length).at(-1),m=$('rp-msg'),level=$('rp-level').value;
+  const button=$('rp-latest');
+  if(LATEST_WAIT!==null){clearTimeout(LATEST_WAIT);LATEST_WAIT=null;button.textContent='Watch the last episode';$('rp-msg').textContent='Stopped waiting for an episode.';return}
+  const retry=()=>{LATEST_WAIT=null;return button.onclick()};
+  const m=$('rp-msg'),level=$('rp-level').value;
+  m.className='msg';m.textContent='Checking the latest episode…';
+  await loadStatus();await loadRuns();
+  const active=RUNS.find(r=>r.name===STATUS?.run&&(r.task||'hunter')===currentTask());
+  if(active&&(!active.replayable||!active.checkpoints.length)){m.className='msg';m.textContent=`${active.name} is preparing its first episode. It will open automatically when ready; click again to cancel.`;button.textContent='Cancel waiting for episode';LATEST_WAIT=setTimeout(retry,5000);return}
+  button.textContent='Watch the last episode';
+  const run=active||replayRuns().at(-1);
   if(!run){m.className='msg error';m.textContent='No run can be replayed yet.';return}
   const iteration=+run.checkpoints.at(-1).slice(4);
   $('rp-run').value=run.name;$('rp-iter').value='';fillReplay();$('rp-iter').value=String(iteration);
@@ -396,16 +468,6 @@ $('rp-last').onclick=()=>{$('rp-iter').value='';fillReplay()};
 $('from-iter').onchange=()=>snapIter($('from-iter'));
 $('from-last').onclick=()=>{$('from-iter').value='';fillIters()};
 $('rp-level').onchange=renderEpisodes;
-$('rp-fly').onclick=async()=>{
-  const b=$('rp-fly'),m=$('rp-msg'),run=$('rp-run').value,iteration=+$('rp-iter').value,key=RP_KEY;
-  b.disabled=true;m.className='msg';m.textContent=`Flying ${EPISODES.length||'the'} episodes again… this takes a minute or so.`;
-  try{const e=await post('api/episodes',{run,iteration,fly:true});
-    if(RP_KEY===key){EPISODES=e;FLOWN=true;fillLevels();renderEpisodes();
-      m.textContent=`${e.filter(x=>x.panic>0).length} of ${e.length} episodes panicked; the most panic first.`}}
-  catch(e){m.className='msg error';m.textContent=e.message}
-  b.disabled=false;
-};
-
 async function boot(){
   try{SCHEMA=await api('api/settings');$('task').innerHTML=SCHEMA.tasks.map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('');$('fresh-team').disabled=true;}catch(e){}
   await loadRuns();await loadStatus();

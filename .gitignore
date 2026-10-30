@@ -28,3 +28,9 @@ player_settings.json
 
 # Private machine-local credentials (never commit)
 /.astrovoid-local/
+
+# Generated application bundles and local tooling artifacts
+/build/
+/dist/
+/.codegraph/
+/.playwright-mcp/

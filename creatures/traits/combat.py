@@ -24,7 +24,7 @@ class TakesHits(Trait):
         c.hit_points = c.max_hit_points = self.hit_points
 
     def on_shot(self, c, shot, enc):
-        c.hit_points -= 1
+        c.hit_points -= getattr(shot, 'creature_damage', 1.)
         c.emit('hit', enc)
         if c.hit_points <= 0:
             enc.kill(c, shot)
@@ -102,23 +102,26 @@ class Gun(Trait):
     the projectile's. It keeps `gun_charge`, how far it is through reloading (0 to 1), for its Body to show, and
     `just_fired`, true on the frame it fires, for its neighbours. `cadence='burst'` takes its firing times from
     burstFire instead of reloading itself; `aimMode='nose'` emits a volley from the nose along the heading.
-    `upgrades` enables crystal upgrades and expiry, including spread volleys and their fire-rate adjustment."""
+    `upgrades` enables crystal upgrades and expiry, including spread volleys and their fire-rate adjustment.
+    `recoil` opts a gun into projectile momentum exchange while its body is unsupported."""
     NAME = 'gun'
 
     def __init__(self, intervalMin: Optional[int] = None, intervalMax: Optional[int] = None,
                  range: Optional[float] = None, strengthLevel: Optional[int] = None, startsLoaded: bool = False,
-                 shotSpeed: float = 1.0, impact: float = 1.0, glowColor: Optional[list] = None,
+                 shotSpeed: float = 1.0, shotLifetime: float = 1.0, impact: float = 1.0, glowColor: Optional[list] = None,
                  glowRadius: float = 1.0, glowIntensity: float = 0.0,
                  cadence: str = 'reload', aimMode: str = 'target', shotStrength: float = 1.0,
-                 upgrades: bool = False):
+                 upgrades: bool = False, recoil: bool = False):
         if cadence not in ('reload', 'burst') or aimMode not in ('target', 'nose'):
             raise ValueError('gun: unknown cadence or aimMode')
         self.cadence, self.aim_mode, self.shot_strength = cadence, aimMode, shotStrength
         self.upgrades = upgrades
+        self.recoil = recoil
         self.REQUIRES = ('burstFire',) if cadence == 'burst' else ()
         self.interval_min, self.interval_max, self.range = intervalMin, intervalMax, range
         self.strength_level, self.starts_loaded = strengthLevel, startsLoaded
         self.shot_speed = shotSpeed
+        self.shot_lifetime = shotLifetime
         self.styling = {'impact_force_multiplier': impact, 'glow_radius_multiplier': glowRadius,
                         'glow_intensity': glowIntensity}
         if glowColor is not None:
@@ -175,6 +178,8 @@ class Gun(Trait):
             extra = max(0, level - 3)
             colour = (tuple(c.kind.tuning['color']) if self.aim_mode == 'nose'
                       and 'color' in c.kind.tuning else None)
+            launch_velocity=(c.vx,c.vy)
+            launch_spin=getattr(c,'wall_angular_velocity',0.)
             for heading in angles:
                 shot = Projectile(pos, heading, is_enemy=c.allegiance == 'enemy',
                                   source='enemy' if c.allegiance == 'enemy' else 'hunter',
@@ -184,7 +189,13 @@ class Gun(Trait):
                                   **self.styling)
                 shot.vx *= self.shot_speed
                 shot.vy *= self.shot_speed
+                shot.lifetime *= self.shot_lifetime
+                shot.aim_range = c.gun_range
                 shot.actor_id = getattr(c, 'agent_id', None)
+                if self.recoil:
+                    from physics.recoil import apply_firing_recoil
+                    if apply_firing_recoil(c,shot,launch_velocity,launch_spin):
+                        c.emit('recoil',enc)
                 enc.add_shot(shot)
             c.shots_fired += 1
             if self.cadence == 'reload':
