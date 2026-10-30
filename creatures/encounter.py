@@ -53,6 +53,9 @@ class Encounter:
         if any(c.active and c.type == 'wallcrawler' for c in creatures):
             from creatures.wallcrawler_team import get_team
             get_team(self).before_frame()
+        if any(c.active and any(t.NAME == 'neuralJelly' for t in c.traits) for c in creatures):
+            from creatures.jelly_team import get_jelly_team
+            get_jelly_team(self).before_frame()
         crowds: Dict[Tuple[str, str], Tuple[object, List[Creature]]] = {}
         for creature in creatures:
             if not creature.active:

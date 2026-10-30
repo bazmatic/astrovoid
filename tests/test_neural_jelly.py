@@ -1,0 +1,103 @@
+"""The neural Jelly: a policy chooses heading and acceleration; without one it chases like the scripted Jelly."""
+import math
+import random
+
+import creatures
+from creatures.jelly_team import ACCEL_RATE, DECISION_FRAMES, MAX_SPEED, Intent, get_jelly_team
+from tests.creature_parts import encounter, target, world
+
+POS = (400.0, 300.0)
+
+
+def team_scene(positions=(POS,), ship=None):
+    crew = [creatures.build('neural_jelly', p, 5) for p in positions]
+    enc = encounter(*crew, world_=world(ship=ship))
+    enc.ready()
+    team = get_jelly_team(enc)
+    team.external = True
+    team.members()
+    return crew, enc, team
+
+
+def speed(c):
+    return math.hypot(c.vx, c.vy)
+
+
+def test_commit_accelerates_and_clamps_speed():
+    (jelly,), enc, team = team_scene()
+    team.commit({jelly.agent_id: Intent(heading=0., accel=1.)})
+    enc.step(1.0)
+    assert math.isclose(speed(jelly), ACCEL_RATE)
+    for _ in range(200):
+        enc.step(1.0)
+    assert math.isclose(speed(jelly), MAX_SPEED)
+    assert jelly.vx > 0 and abs(jelly.vy) < 1e-9
+    assert jelly.x > POS[0]
+
+
+def test_negative_accel_brakes_to_a_stop_and_stays():
+    (jelly,), enc, team = team_scene()
+    team.commit({jelly.agent_id: Intent(heading=0., accel=1.)})
+    for _ in range(200):
+        enc.step(1.0)
+    team.commit({jelly.agent_id: Intent(heading=math.pi, accel=-1.)})
+    enc.step(1.0)
+    assert math.isclose(speed(jelly), MAX_SPEED - ACCEL_RATE)
+    assert jelly.vx > 0   # braking slows the current motion; it does not push backwards
+    for _ in range(200):
+        enc.step(1.0)
+    assert speed(jelly) == 0.
+    stopped = jelly.get_pos()
+    for _ in range(20):
+        enc.step(1.0)
+    assert jelly.get_pos() == stopped
+
+
+def test_heading_turns_at_a_bounded_rate():
+    (jelly,), enc, team = team_scene()
+    team.commit({jelly.agent_id: Intent(heading=0., accel=1.)})
+    for _ in range(50):
+        enc.step(1.0)
+    team.commit({jelly.agent_id: Intent(heading=math.pi / 2, accel=1.)})
+    enc.step(1.0)
+    assert jelly.vx > 0   # still mostly moving east one frame after asking for south
+
+
+def test_without_policy_jelly_chases_like_scripted():
+    ship = (POS[0] + 300.0, POS[1])
+    scripted = creatures.build('aggressive', POS, 5)
+    neural = creatures.build('neural_jelly', POS, 5)
+    enc_s = encounter(scripted, world_=world(ship=target(ship)))
+    enc_n = encounter(neural, world_=world(ship=target(ship)))
+    random.seed(3)
+    for _ in range(30):
+        enc_s.step(1.0)
+    random.seed(3)
+    for _ in range(30):
+        enc_n.step(1.0)
+    assert neural.x > POS[0] + 10
+    assert math.isclose(neural.x, scripted.x) and math.isclose(neural.y, scripted.y)
+    assert get_jelly_team(enc_n).driver is None
+
+
+def test_single_jelly_team_has_one_member():
+    (jelly,), enc, team = team_scene()
+    assert team.members() == [jelly]
+    assert get_jelly_team(enc) is team
+
+
+def test_driver_decides_every_decision_frames():
+    (jelly,), enc, team = team_scene()
+    team.external = False
+    calls = []
+
+    class Stub:
+        def decide(self, t):
+            calls.append(t.frames)
+            t.commit({c.agent_id: Intent(heading=0., accel=1.) for c in t.members()})
+
+    team.driver = Stub()
+    for _ in range(DECISION_FRAMES * 2 + 1):
+        enc.step(1.0)
+    assert calls == [0, DECISION_FRAMES, 2 * DECISION_FRAMES]
+    assert jelly.vx > 0
