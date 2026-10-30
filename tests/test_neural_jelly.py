@@ -244,3 +244,210 @@ def test_load_policy_rejects_wrong_spec(tmp_path):
     random_policy(wrong).save(bad)
     with pytest.raises(ValueError):
         adapter.load_policy(bad)
+
+
+# ---- Stage 1 scenario: navigation to a moving target ----
+
+def still(env):
+    """Zero-accel actions for every living Jelly: heading 0, no push."""
+    return {i: (0., 0.) for i in env.snapshot().observations}
+
+
+def toward(env, i, pos, accel=3.):
+    c = next(c for c in env.team.members() if c.agent_id == i)
+    desired = math.atan2(pos[1] - c.y, pos[0] - c.x)
+    return (math.atanh(max(-.999, min(.999, desired / math.pi))), accel)
+
+
+def jelly_env(horizon=60.0, **case):
+    from learning.adapters.jelly_scenario import JellyEnvironment
+    env = JellyEnvironment(horizon=horizon)
+    snap = env.reset(case.pop('seed', 5), **case)
+    return env, snap
+
+
+def test_reset_and_step_are_deterministic_for_a_seed():
+    def trial():
+        env, first = jelly_env(team_size=2, seed=7)
+        try:
+            results = []
+            for _ in range(20):
+                actions = {i: toward(env, i, env.world.additional_targets[0].get_pos()) for i in env.agent_ids}
+                results.append(env.step(actions))
+            return first, results
+        finally:
+            env.close()
+    (a, ra), (b, rb) = trial(), trial()
+    assert set(a.observations) == {0, 1}
+    for i in a.observations:
+        np.testing.assert_array_equal(a.observations[i], b.observations[i])
+    for x, y in zip(ra, rb):
+        assert x.events == y.events and x.agent_rewards == y.agent_rewards
+        for i in x.snapshot.observations:
+            np.testing.assert_array_equal(x.snapshot.observations[i], y.snapshot.observations[i])
+
+
+def test_contact_with_target_rewards_only_contacting_jelly_more():
+    from learning.adapters.jelly_scenario import CATCH_REWARD, TEAM_CATCH_SHARE
+    env, _ = jelly_env(team_size=2)
+    try:
+        catcher = next(c for c in env.team.members() if c.agent_id == 0)
+        target = env.world.additional_targets[0]
+        target.x, target.y = catcher.x + 3, catcher.y
+        target.vx = target.vy = 0.
+        result = env.step(still(env))
+        assert result.events['catches'] == 1 and result.events['agent_catches'] == {0: 1}
+        r = result.agent_rewards
+        assert math.isclose(r[0], CATCH_REWARD, abs_tol=1e-6)
+        assert math.isclose(r[1], TEAM_CATCH_SHARE * CATCH_REWARD, abs_tol=1e-6)
+        assert r[0] > r[1] > 0
+        assert math.isclose(result.reward, r[0] + r[1])
+    finally:
+        env.close()
+
+
+def test_target_respawns_after_catch_and_episode_continues():
+    from learning.adapters.jelly_scenario import RESPAWN_DISTANCE
+    env, _ = jelly_env(team_size=1)
+    try:
+        (jelly,) = env.team.members()
+        target = env.world.additional_targets[0]
+        target.x, target.y = jelly.x, jelly.y + 4
+        result = env.step(still(env))
+        assert result.events['catches'] == 1
+        assert not result.terminated and not result.truncated
+        assert target.active and env.world.maze.is_open(target.get_pos(), target.radius)
+        assert math.dist(target.get_pos(), jelly.get_pos()) >= RESPAWN_DISTANCE
+        for _ in range(5):
+            result = env.step(still(env))
+        assert result.events['catches'] == 1 and result.events['seconds'] > 0
+    finally:
+        env.close()
+
+
+def test_step_after_end_raises():
+    env, _ = jelly_env(horizon=.2)
+    try:
+        result = env.step(still(env))
+        while not (result.terminated or result.truncated):
+            result = env.step(still(env))
+        assert result.truncated and math.isclose(result.events['seconds'], .2)
+        with pytest.raises(RuntimeError):
+            env.step(still(env))
+    finally:
+        env.close()
+
+
+def test_progress_toward_target_is_rewarded_and_standing_still_is_not_stuck():
+    env, _ = jelly_env(team_size=1)
+    try:
+        (jelly,) = env.team.members()
+        target = env.world.additional_targets[0]
+        target.vx = target.vy = 0.
+        for _ in range(12):
+            result = env.step(still(env))
+            assert result.agent_rewards[0] == 0.
+        assert result.events['stuck_seconds'] == 0.
+        # Put the target on the clearest ray, then accelerate straight at it.
+        distances = adapter.rays(jelly, env.world.maze, 0.)
+        k = int(np.argmax(distances))
+        assert distances[k] > 200
+        angle = k * 2 * math.pi / len(distances)
+        target.x, target.y = jelly.x + 150 * math.cos(angle), jelly.y + 150 * math.sin(angle)
+        rewards = [env.step({0: toward(env, 0, target.get_pos())}).agent_rewards[0] for _ in range(5)]
+        assert all(r > 0 for r in rewards[1:])
+    finally:
+        env.close()
+
+
+def test_accelerating_without_getting_anywhere_counts_as_stuck_and_is_penalised():
+    from learning.adapters.jelly_scenario import STUCK_PENALTY, STUCK_WINDOW
+    env, _ = jelly_env(team_size=1)
+    try:
+        (jelly,) = env.team.members()
+        target = env.world.additional_targets[0]
+        target.vx = target.vy = 0.
+        home = jelly.get_pos()
+        rewards = []
+        for _ in range(STUCK_WINDOW // DECISION_FRAMES + 3):
+            result = env.step({0: toward(env, 0, target.get_pos())})
+            rewards.append(result.agent_rewards[0])
+            jelly.x, jelly.y = home   # jammed: full accel, no displacement
+            jelly.vx = jelly.vy = 0.
+        # Stuck from the first decision whose whole window was spent accelerating: the last four.
+        assert math.isclose(result.events['stuck_seconds'], 4 * DECISION_FRAMES / 60)
+        assert rewards[-1] < -STUCK_PENALTY + .03 and rewards[0] > -STUCK_PENALTY / 2
+    finally:
+        env.close()
+
+
+def test_scripted_mode_chases_and_teacher_collect_runs():
+    from learning.adapters.jelly_scenario import JellyEnvironment, teacher_action
+    from learning.training import collect
+    env = JellyEnvironment(horizon=1., scripted=True)
+    try:
+        env.reset(3, level=11, team_size=1)
+        (jelly,) = env.team.members()
+        start = jelly.get_pos()
+        while True:
+            result = env.step({})
+            if result.truncated or result.terminated:
+                break
+        assert jelly.get_pos() != start   # the scripted Chase/Drift brain moved it
+    finally:
+        env.close()
+    env = JellyEnvironment(horizon=.5)
+    try:
+        episodes, events, trace = collect(env, random_policy(adapter.SPEC, hidden=8, embed=4), 4,
+                                          dict(level=11, team_size=1), teacher=teacher_action)
+        assert trace and all(len(e['x']) == len(e['rewards']) for e in episodes)
+        assert {'catches', 'seconds', 'stuck_seconds'} <= set(events)
+    finally:
+        env.close()
+
+
+def test_promote_needs_more_catches_and_less_stuck_than_scripted():
+    from learning.adapters import jelly_scenario as scenario
+    baseline = dict(catches_per_minute=2., stuck_fraction=.2)
+    assert scenario.promote(1, dict(catches_per_minute=3., stuck_fraction=.1, episodes=4), baseline) == 2
+    assert scenario.promote(1, dict(catches_per_minute=3., stuck_fraction=.3, episodes=4), baseline) == 1
+    assert scenario.promote(1, dict(catches_per_minute=1., stuck_fraction=.1, episodes=4), baseline) == 1
+    rows = [dict(catches=2, seconds=60., stuck_seconds=6., team_size=1, agent_returns={0: 1.})]
+    summary = scenario.metrics(rows)
+    assert summary['catches_per_minute'] == 2. and math.isclose(summary['stuck_fraction'], .1)
+    # learning.run spreads the summary into its log line beside these keys.
+    assert not set(summary) & {'iteration', 'update_s', 'mean_return', 'rollout_s', 'team_size', 'elapsed_s'}
+
+
+def test_hooks_cover_the_trainer_contract():
+    from learning.adapters import jelly_scenario as scenario
+    for name in ('SPEC', 'CRITIC_SIZE', 'INITIAL_STAGE', 'IMITATION_HEADS', 'environment', 'metadata',
+                 'training_cases', 'validation_cases', 'evaluation_cases', 'metrics', 'selection_score',
+                 'promote', 'compare'):
+        assert hasattr(scenario, name), name
+    assert scenario.INITIAL_STAGE == 1 and scenario.IMITATION_HEADS == ('heading', 'accel')
+    cases = scenario.training_cases(0, 4, 1)
+    assert all(c['team_size'] == 1 and c['level'] in scenario.TRAIN_LEVELS for c in cases)
+    assert all(c['level'] in scenario.HOLDOUT_LEVELS for c in scenario.evaluation_cases())
+    assert not set(scenario.TRAIN_LEVELS) & set(scenario.HOLDOUT_LEVELS)
+    env = scenario.environment(opponent='ignored', horizon=1., muted=True, arenas=None, scripted=False)
+    assert env.adapter.teacher_action is scenario.teacher_action and env.adapter.enabled is adapter.enabled
+
+
+def test_task_registry_has_jelly_team():
+    from learning.tasks import task
+    t = task('jelly_team')
+    assert t.module == 'learning.adapters.jelly_scenario' and t.label == 'Jelly team'
+    assert t.fresh_defaults == dict(horizon=60.0, workers=4, iterations=10000)
+    assert t.adapter().SPEC.task == 'jelly_team'
+
+
+def test_manager_can_start_fresh_jelly_team(tmp_path):
+    from tools.trainer.control import start
+    from tools import ppo_neural
+    calls = []
+    result = start(from_='new', changes={'task': 'jelly_team', 'budget_seconds': 10}, root=tmp_path,
+                   processes=[], launch=lambda command, log: calls.append(command))
+    assert result.started_from == 'random'
+    args = ppo_neural.build_parser().parse_args(calls[0][3:])
+    assert args.task == 'jelly_team' and args.workers == 4 and args.horizon == 60 and args.start == ''

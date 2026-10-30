@@ -24,6 +24,9 @@ TASKS = {
     'wallcrawler_team': Task('wallcrawler_team', 'learning.adapters.crawler_scenario', 'Wallcrawler team',
         dict(horizon=60.0,workers=4,iterations=10000),
         ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay'),
+    'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
+        dict(horizon=60.0, workers=4, iterations=10000),
+        ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay'),
 }
 
 
