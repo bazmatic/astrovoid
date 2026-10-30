@@ -2,7 +2,14 @@
 Jelly body and wall-bounce code. Stage 1: navigation to a moving target. A catch is body contact; the target then
 respawns elsewhere and the episode runs on to the horizon, so the Jellies must catch repeatedly. Stage 2: teams of
 two to four Jellies on the same scene, with a small shaped reward for closing in from differing bearings (flanking)
-and a penalty for Jellies bunched up on each other."""
+and a penalty for Jellies bunched up on each other. Stage 3: no plain target; a training-only ship,
+the `training_ship` creature kind (config/enemies.json: the allied hunter ship with a slower top speed and thrust, half
+the fire rate and half-strength shots, a mortal three-point hull, flown by the frozen neural hunter pilot), hunts the
+Jellies with the game's own gun, shots and hit rules while they hunt it. It is a friend-allegiance creature on the
+roster, so Encounter.target_entity_for gives it to every Jelly. A Jelly touching it costs it a hit point through the
+game's allied-hunter contact rule (CollisionHandler.handle_hunter_contacts, with the hull's immunity after each hit);
+that is rewarded, a Jelly dying is penalised, and the episode ends when the ship dies, every Jelly dies, or at the
+horizon. The stage-2 flank/bunch shaping carries on, around the ship."""
 from collections import Counter, deque
 from dataclasses import replace
 import hashlib
@@ -18,7 +25,8 @@ from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intentio
 from learning.adapters.crawler_scenario import TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
 
-STAGES = (1, 2)                # stage 2 (flanking) shares stage 1's scene and adds the flank/bunch shaping below
+STAGES = (1, 2, 3)             # stage 2 (flanking) shares stage 1's scene and adds the flank/bunch shaping below;
+                               # stage 3 swaps the plain target for the hunting training ship
 TARGET_COUNT = 1               # one plain target: every Jelly in the team hunts the same one
 TARGET_START_DISTANCE = 250.   # px: targets start at least this far from every Jelly (else the farthest open cell)
 RESPAWN_DISTANCE = 300.        # px: a caught target reappears at least this far from every Jelly
@@ -39,6 +47,18 @@ BUNCH_DISTANCE = 40.           # px between Jelly centres: closer than this is b
 BUNCH_PENALTY = .01            # per decision, to each Jelly of every pair closer than BUNCH_DISTANCE
 STAGE2_TEAM_SIZES = (2, 3, 4)
 RETENTION_SHARE = 4            # one stage-2 training case in this many is a stage-1 solo case, so navigation is kept
+# Stage 3, the hunting ship. A Jelly's death costs more than one touch on the ship earns, so trading a life for a single
+# hit (a suicide rush) loses (4 - 5 = -1), while the ship's whole life is worth far more than one death: its three hull
+# points (training_ship energy.health) are 3 x 4 plus the kill (10), 22 to the touchers, before the team shares.
+STAGE3_TEAM_SIZES = (2, 3, 4)  # teams against the ship; a team of one is allowed by reset but not in the case mix
+SHIP_START_DISTANCE = 300.     # px: the ship starts at least this far from every Jelly (else the farthest open cell)
+SHIP_KIND = 'training_ship'    # its stats live in config/enemies.json; its pilot is the frozen neural hunter below
+SHIP_PILOT = Path(__file__).resolve().parents[2] / 'assets/neural/hunter.npz'
+SHIP_HIT_REWARD = 4.           # to the Jelly whose touch costs the ship a hit point (none during hull immunity)
+SHIP_KILL_REWARD = 10.         # on top, to the Jelly whose touch kills the ship (worth a stage 1-2 catch)
+TEAM_SHIP_SHARE = TEAM_CATCH_SHARE   # every other living Jelly gets this share of a teammate's hit and kill rewards
+DEATH_PENALTY = 5.             # to a Jelly the ship kills, on the decision it dies
+TEAM_DEATH_SHARE = .25         # every surviving Jelly loses this share of DEATH_PENALTY for each teammate lost
 
 
 def flank_spread(positions, target):
@@ -110,7 +130,7 @@ class JellyEnvironment:
                                      scoring=scoring, sound_manager=SilentSound(),
                                      command_recorder=handler.command_recorder, collision_handler=handler,
                                      powerup_crystals=[], jev_beacon_allowed=lambda: False, combat_ruleset='legacy',
-                                     additional_targets=[], jelly_policy=None,
+                                     additional_targets=[], jelly_policy=None, enemy_policy=ship_pilot,
                                      _hunter_sees_player=lambda: False)
         chosen = []
         for i in range(team_size):
@@ -127,10 +147,20 @@ class JellyEnvironment:
         self.team.external = not self.scripted   # scripted: no policy, so the trait chases like the scripted Jelly
         self.team._next_id = team_size
         from learning.adapters.practice_targets import PracticeTarget
-        for _ in range(TARGET_COUNT):
-            target = PracticeTarget(self.free_cell(TARGET_START_DISTANCE), 0., 0., firing_enabled=False)
-            self.launch(target)
-            self.world.additional_targets.append(target)
+        self.targets = []    # the plain drifting targets of stages 1-2
+        self.ship = None
+        if stage == 3:
+            # A friend-allegiance roster creature: target_entity_for gives it to every Jelly, its neural pilot hunts
+            # the enemy creatures on the roster, and the Encounter steps it like any other creature.
+            self.ship = creatures.build(SHIP_KIND, self.free_cell(SHIP_START_DISTANCE), level)
+            self.world.roster.add(self.ship)
+            self.enc.ready()
+        else:
+            for _ in range(TARGET_COUNT):
+                target = PracticeTarget(self.free_cell(TARGET_START_DISTANCE), 0., 0., firing_enabled=False)
+                self.launch(target)
+                self.targets.append(target)
+                self.world.additional_targets.append(target)
         self.obstacles = obstacles
         self.level, self.seed, self.team_size, self.stage = level, seed, team_size, stage
         self.agent_ids = tuple(range(team_size))
@@ -142,6 +172,11 @@ class JellyEnvironment:
         self.flank_frames = 0
         self.bunched_frames = 0      # Jelly-frames spent closer than BUNCH_DISTANCE to another Jelly
         self.generation = Counter()   # how many times each target has respawned
+        self.agent_ship_hits = Counter()
+        self.living = set(self.agent_ids)   # Jellies alive after the last frame, so deaths are counted once
+        self.dead = []                      # agent ids in the order they died
+        self.ship_killed_frame = None
+        self.finished = False
         self.trails = {c.agent_id: deque([c.get_pos()], maxlen=STUCK_WINDOW//DECISION_FRAMES+1)
                        for c in self.team.members()}
         self.pushes = {c.agent_id: deque(maxlen=STUCK_WINDOW//DECISION_FRAMES) for c in self.team.members()}
@@ -180,13 +215,17 @@ class JellyEnvironment:
         return Snapshot({i: v[0] for i, v in batch.items()}, {i: v[1] for i, v in batch.items()}, critic(self.team),
                         {i: critic(self.team, i) for i in batch})
 
+    def terminal(self):
+        """Every Jelly is dead, or (stage 3) the ship is."""
+        return not self.team.members() or (self.ship is not None and not self.ship.active)
+
     def ended(self):
-        return self.frames >= self.horizon*60 or not self.team.members()
+        return self.finished or self.frames >= self.horizon*60 or self.terminal()
 
     def catch(self, rewards):
         """Body contact with a target is a catch: the toucher takes CATCH_REWARD, each other living Jelly a share."""
         caught = 0
-        for target in self.world.additional_targets:
+        for target in self.targets:
             if not target.active:
                 continue
             members = self.team.members()
@@ -201,9 +240,69 @@ class JellyEnvironment:
             self.respawn(target)
         return caught
 
+    def quarry(self):
+        """What the Jellies hunt: the plain targets (stages 1-2) or the living ship (stage 3)."""
+        return self.targets + ([self.ship] if self.ship is not None and self.ship.active else [])
+
+    def contacts(self, rewards):
+        """Stage 3: the game's allied-hunter contact rule, one Jelly at a time so the toucher is known. A touching
+        Jelly bounces off and, unless the hull's immunity from the last hit still runs, costs the ship a hit point:
+        SHIP_HIT_REWARD to the toucher, a share to its teammates, and on the last hit point SHIP_KILL_REWARD likewise."""
+        ship = self.ship
+        for c in self.team.members():
+            if not ship.active:
+                break
+            health = ship.health
+            self.world.collision_handler.handle_hunter_contacts(ship, None, [c])
+            if ship.health >= health:
+                continue
+            self.agent_ship_hits[c.agent_id] += 1
+            earned = SHIP_HIT_REWARD + (0. if ship.active else SHIP_KILL_REWARD)
+            if not ship.active:
+                self.ship_killed_frame = self.frames+1
+            for o in self.team.members():
+                rewards[o.agent_id] += earned if o is c else TEAM_SHIP_SHARE*earned
+
+    def fly_shots(self):
+        """Advance the shots in flight with the game's rules: walls and gates stop them, and Encounter.shoot hands a
+        friendly shot to the first enemy creature it reaches, whose TakesHits does the damage."""
+        live = []
+        for shot in self.world.projectiles:
+            shot.update(1)
+            if not shot.active:
+                continue
+            if shot.check_wall_collision(self.world.maze.walls, self.world.maze.spatial_grid):
+                shot.active = False
+            elif self.obstacles and self.obstacles.bullet_hit(shot):
+                shot.active = False
+            elif self.enc.shoot(shot):
+                shot.active = False
+            if shot.active:
+                live.append(shot)
+        self.world.projectiles = live
+
+    def deaths(self, rewards):
+        """Jellies that died since the last frame: DEATH_PENALTY each at stage 3, and a share to every survivor."""
+        living = {c.agent_id for c in self.team.members()}
+        died = sorted(self.living - living)
+        self.living = living
+        if not died:
+            return
+        self.dead += died
+        if self.stage == 3:
+            for i in died:
+                rewards[i] -= DEATH_PENALTY
+            for i in living:
+                rewards[i] -= TEAM_DEATH_SHARE*DEATH_PENALTY*len(died)
+
     def step(self, actions):
         if self.ended():
-            raise RuntimeError('step after episode ended')
+            if self.frames or self.finished or not self.terminal():
+                raise RuntimeError('step after episode ended')
+            # Over before the first decision (the ship or every Jelly already dead): end the episode without crashing.
+            self.finished = True
+            rewards = {i: 0. for i in self.agent_ids}
+            return Transition(self.snapshot(), 0., True, False, self.events(), agent_rewards=rewards)
         members = self.team.members()
         if self.scripted:
             accelerating = {c.agent_id: True for c in members}   # the scripted Drift always pushes
@@ -216,14 +315,19 @@ class JellyEnvironment:
         rewards = {i: 0. for i in self.agent_ids}
         frames = 0
         for _ in range(DECISION_FRAMES):
-            for target in self.world.additional_targets:
+            for target in self.targets:
                 target.step(self.world.maze)
-            self.enc.step(1)
+            self.enc.step(1)   # the ship, a roster creature, flies and fires here
+            if self.ship is not None:
+                self.contacts(rewards)
+            if self.world.projectiles:
+                self.fly_shots()
             self.world.roster.update_dying(1)
             if self.obstacles:
                 self.obstacles.step(1/60, self.world.roster.alive())
                 self.world.maze.gate_segments = self.obstacles.segments()
             self.catch(rewards)
+            self.deaths(rewards)
             self.frames += 1
             frames += 1
             if self.render_frames is not None:
@@ -244,7 +348,7 @@ class JellyEnvironment:
                 self.agent_stuck_frames[i] += frames
         self.formation(rewards, frames)
         self.agent_returns.update(rewards)
-        terminated = not self.team.members()
+        terminated = self.terminal()
         truncated = self.frames >= self.horizon*60 and not terminated
         return Transition(self.snapshot(), sum(rewards.values()), terminated, truncated, self.events(),
                           agent_rewards=rewards)
@@ -253,7 +357,7 @@ class JellyEnvironment:
         """Flank spread and bunching, measured at every stage; rewarded only from stage 2, so stage 1 is unchanged."""
         members = self.team.members()
         shaped = self.stage >= 2
-        for target in self.world.additional_targets:
+        for target in self.quarry():
             if not target.active:
                 continue
             near = [c.get_pos() for c in members if math.dist(c.get_pos(), target.get_pos()) <= FLANK_RANGE]
@@ -282,7 +386,11 @@ class JellyEnvironment:
                 'alive': len(self.team.members()), 'stage': self.stage,
                 'angular_spread': self.spread_frames/self.flank_frames if self.flank_frames else 0.,
                 'flank_seconds': self.flank_frames/60, 'bunched_seconds': self.bunched_frames/60,
-                'agent_returns': {i: self.agent_returns[i] for i in self.agent_ids}}
+                'agent_returns': {i: self.agent_returns[i] for i in self.agent_ids},
+                'ship_hits': sum(self.agent_ship_hits.values()), 'agent_ship_hits': dict(self.agent_ship_hits),
+                'ship_kills': int(self.ship_killed_frame is not None), 'jelly_deaths': len(self.dead),
+                'survival_fraction': len(self.team.members())/self.team_size,
+                'time_to_ship_kill': self.ship_killed_frame/60 if self.ship_killed_frame is not None else None}
 
     def close(self):
         if hasattr(self, '_screen_settings'):
@@ -310,7 +418,9 @@ INITIAL_STAGE = 1
 IMITATION_HEADS = ('heading', 'accel')
 REWARDS = {'catch': CATCH_REWARD, 'team_catch_share': TEAM_CATCH_SHARE, 'progress_per_pixel': PROGRESS_REWARD,
            'stuck_per_decision': -STUCK_PENALTY, 'stage2_flank_per_decision': FLANK_REWARD,
-           'stage2_bunch_per_pair_decision': -BUNCH_PENALTY}
+           'stage2_bunch_per_pair_decision': -BUNCH_PENALTY, 'stage3_ship_hit': SHIP_HIT_REWARD,
+           'stage3_ship_kill': SHIP_KILL_REWARD, 'stage3_team_ship_share': TEAM_SHIP_SHARE,
+           'stage3_death': -DEATH_PENALTY, 'stage3_team_death_share': TEAM_DEATH_SHARE}
 
 
 def metadata(args):
@@ -323,7 +433,7 @@ def metadata(args):
     global run_horizon
     run_horizon = args.horizon   # learning.run calls this in the process that later calls promote
     opponent = Path(getattr(args, 'opponent', '') or '')
-    return dict(task=SPEC.task, scenario_version=2, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    return dict(task=SPEC.task, scenario_version=3, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=dict(REWARDS), reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': TEAM_CATCH_SHARE},
@@ -337,9 +447,17 @@ def metadata(args):
                 flank={'reward_per_decision': FLANK_REWARD, 'range': FLANK_RANGE, 'spread': '1_minus_mean_bearing_resultant',
                        'bunch_distance': BUNCH_DISTANCE, 'bunch_penalty_per_pair_decision': BUNCH_PENALTY,
                        'shaped_from_stage': 2},
-                curriculum={'stage2_team_sizes': list(STAGE2_TEAM_SIZES), 'stage1_retention_every': RETENTION_SHARE},
+                curriculum={'stage2_team_sizes': list(STAGE2_TEAM_SIZES), 'stage1_retention_every': RETENTION_SHARE,
+                            'stage3_team_sizes': list(STAGE3_TEAM_SIZES),
+                            'stage3_retention': 'one_in_retention_every_alternating_stage2_team_and_stage1_solo'},
                 promotion={'1': 'training_catches_per_minute_and_stuck_fraction_beat_scripted_holdout_baseline',
-                           '2': 'training_angular_spread_and_team_catches_per_minute_beat_scripted_holdout_team_baseline'},
+                           '2': 'training_angular_spread_and_team_catches_per_minute_beat_scripted_holdout_team_baseline',
+                           '3': 'final'},
+                ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
+                      'pilot': 'frozen_neural_hunter_greedy',
+                      'pilot_sha256': hashlib.sha256(SHIP_PILOT.read_bytes()).hexdigest() if SHIP_PILOT.is_file() else None,
+                      'start_distance': SHIP_START_DISTANCE, 'contact_rule': 'collision_handler.handle_hunter_contacts',
+                      'ends_episode_on_death': True},
                 physics={name: dataclasses.asdict(getattr(config.SETTINGS, name)) for name in ('maze', 'obstacles')},
                 arenas={str(n): level_config.load_level_config(n) for n in TRAIN_LEVELS+HOLDOUT_LEVELS},
                 opponent_sha256=hashlib.sha256(opponent.read_bytes()).hexdigest() if opponent.is_file() else None,
@@ -349,7 +467,10 @@ def metadata(args):
 
 def training_cases(iteration, count, stage, bootstrap=False):
     """Stage 1: solo Jellies. Stage 2: slots cycle through team sizes 2, 3, 4 plus one stage-1 solo case in every
-    RETENTION_SHARE, so the navigation learnt in stage 1 keeps being rehearsed."""
+    RETENTION_SHARE, so the navigation learnt in stage 1 keeps being rehearsed. Stage 3: the same slots, with teams of
+    2, 3 and 4 against the ship in three of every four cases; the fourth (retention) slot alternates between a stage-2
+    flanking case (team sizes cycling 2, 3, 4) and a stage-1 solo case. Each block of len(TRAIN_LEVELS) cases is thus
+    six stage-3 cases (two of each team size), one stage-2 and one stage-1."""
     cases = []
     for i in range(count):
         index = iteration*count+i
@@ -357,7 +478,14 @@ def training_cases(iteration, count, stage, bootstrap=False):
         # Shift the slot by one each pass through TRAIN_LEVELS, else index % 8 fixes index % 4 and every team size
         # trains on the same two levels. Each block of len(TRAIN_LEVELS) cases still holds the 1-in-4 retention share.
         slot = (index + index//len(TRAIN_LEVELS)) % RETENTION_SHARE
-        if stage >= 2 and slot:
+        if stage == 3 and slot:
+            cases.append(dict(level=level, seed=seed, team_size=STAGE3_TEAM_SIZES[(slot-1) % len(STAGE3_TEAM_SIZES)],
+                              stage=3))
+        elif stage == 3 and (index//RETENTION_SHARE) % 2 == 0:
+            # The two retention slots in a block of len(TRAIN_LEVELS) fall in opposite halves, so they alternate.
+            size = STAGE2_TEAM_SIZES[(index//len(TRAIN_LEVELS)) % len(STAGE2_TEAM_SIZES)]
+            cases.append(dict(level=level, seed=seed, team_size=size, stage=2))
+        elif stage >= 2 and slot:
             cases.append(dict(level=level, seed=seed, team_size=STAGE2_TEAM_SIZES[(slot-1) % len(STAGE2_TEAM_SIZES)],
                               stage=stage))
         else:
@@ -370,7 +498,7 @@ def validation_cases():
 
 
 def evaluation_cases(stage=1):
-    sizes = STAGE2_TEAM_SIZES if stage >= 2 else (1,)
+    sizes = STAGE3_TEAM_SIZES if stage == 3 else STAGE2_TEAM_SIZES if stage == 2 else (1,)
     return [dict(level=n, seed=s, team_size=k, stage=stage) for n in HOLDOUT_LEVELS for s in (1000, 1001) for k in sizes]
 
 
@@ -382,6 +510,8 @@ def metrics(rows):
     returns = [r.get('return', sum(r.get('agent_returns', {}).values())) for r in rows]
     team = [r for r in rows if r['team_size'] >= 2]
     flank = sum(r.get('flank_seconds', 0.) for r in rows)
+    hunted = [r for r in rows if r.get('stage') == 3]   # stage-3 rows: the retention cases have no ship
+    kill_times = [r['time_to_ship_kill'] for r in hunted if r.get('time_to_ship_kill') is not None]
     return dict(episodes=len(rows), catches=catches, seconds=seconds, stuck_seconds=stuck,
                 catches_per_minute=catches*60/max(seconds, 1e-9),
                 stuck_fraction=stuck/max(jelly_seconds, 1e-9),
@@ -390,7 +520,14 @@ def metrics(rows):
                 flank_seconds=flank, bunched_seconds=sum(r.get('bunched_seconds', 0.) for r in rows),
                 bunched_fraction=sum(r.get('bunched_seconds', 0.) for r in rows)/max(jelly_seconds, 1e-9),
                 catch_probability=sum(r['catches'] > 0 for r in rows)/max(1, len(rows)),
-                mean_episode_return=float(np.mean(returns)) if returns else 0.)
+                mean_episode_return=float(np.mean(returns)) if returns else 0.,
+                ship_hits=sum(r.get('ship_hits', 0) for r in rows), ship_kills=sum(r.get('ship_kills', 0) for r in rows),
+                jelly_deaths=sum(r.get('jelly_deaths', 0) for r in rows),
+                # Jelly-weighted share alive at the end of the stage-3 episodes; 1 when there are none
+                survival_fraction=(sum(r['survival_fraction']*r['team_size'] for r in hunted)
+                                   / sum(r['team_size'] for r in hunted)) if hunted else 1.,
+                # mean seconds to kill the ship over the episodes that killed it; 0 when none did (read with ship_kills)
+                time_to_ship_kill=float(np.mean(kill_times)) if kill_times else 0.)
 
 
 def selection_score(summary):
@@ -428,7 +565,8 @@ def promote(stage, summary, baseline=None):
     """Stage 1 -> 2 once catches per minute beat the scripted Jelly's held-out rate and the stuck share is lower.
     Stage 2 -> 3 once the training summary's angular_spread and team_catches_per_minute (team scenes only, the solo
     retention cases left out) both strictly beat the scripted team on the held-out team scenes, evaluation_cases(2).
-    The scripted team is the stand-in for stage-1 behaviour in team scenes: every Jelly rushes the target on its own."""
+    The scripted team is the stand-in for stage-1 behaviour in team scenes: every Jelly rushes the target on its own.
+    Stage 3 is the last: it stays there."""
     if stage not in (1, 2) or not summary.get('episodes'):
         return stage
     baseline = baseline or scripted_baseline(stage)
@@ -444,10 +582,27 @@ def promote(stage, summary, baseline=None):
 
 
 def compare(a, b):
-    values = np.array([x['catches']-y['catches'] for x, y in zip(a['episodes'], b['episodes'])], float)
-    stuck = np.array([x['stuck_seconds']-y['stuck_seconds'] for x, y in zip(a['episodes'], b['episodes'])], float)
+    pairs = list(zip(a['episodes'], b['episodes']))
+    values = np.array([x['catches']-y['catches'] for x, y in pairs], float)
+    stuck = np.array([x['stuck_seconds']-y['stuck_seconds'] for x, y in pairs], float)
+    # Stage 3 (reported, not yet part of any gate): extra hits on the ship and extra Jelly deaths per episode.
+    hits = np.array([x.get('ship_hits', 0)-y.get('ship_hits', 0) for x, y in pairs], float)
+    deaths = np.array([x.get('jelly_deaths', 0)-y.get('jelly_deaths', 0) for x, y in pairs], float)
     if not len(values):
-        return dict(mean_extra_catches=0., lower_95=0., upper_95=0., mean_extra_stuck_seconds=0.)
+        return dict(mean_extra_catches=0., lower_95=0., upper_95=0., mean_extra_stuck_seconds=0.,
+                    mean_extra_ship_hits=0., mean_extra_jelly_deaths=0.)
     samples = np.random.default_rng(0).choice(values, (2000, len(values)), replace=True).mean(axis=1)
     return dict(mean_extra_catches=float(values.mean()), lower_95=float(np.quantile(samples, .025)),
-                upper_95=float(np.quantile(samples, .975)), mean_extra_stuck_seconds=float(stuck.mean()))
+                upper_95=float(np.quantile(samples, .975)), mean_extra_stuck_seconds=float(stuck.mean()),
+                mean_extra_ship_hits=float(hits.mean()), mean_extra_jelly_deaths=float(deaths.mean()))
+
+
+_ship_pilot = []
+
+
+def ship_pilot():
+    """The training ship's pilot policy: the frozen neural hunter, loaded once per process (None if it is missing)."""
+    if not _ship_pilot:
+        from hunter.neural.policy import NeuralPolicy
+        _ship_pilot.append(NeuralPolicy.load(SHIP_PILOT) if SHIP_PILOT.is_file() else None)
+    return _ship_pilot[0]

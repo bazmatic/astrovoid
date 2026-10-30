@@ -1,5 +1,6 @@
 """The neural Jelly: a policy chooses heading and acceleration; without one it chases like the scripted Jelly."""
 import math
+from collections import Counter
 import random
 from types import SimpleNamespace
 
@@ -599,3 +600,213 @@ def test_stage2_team_sizes_are_not_tied_to_particular_levels():
     assert all(len(found) > 2 for found in levels.values()), dict(levels)
     assert sum(c['stage'] == 1 for c in cases) * 4 == len(cases)   # the 1-in-4 retention share holds
     assert cases == [c for it in range(4) for c in scenario.training_cases(it, 16, 2)]
+
+
+# ---- Stage 3: a training ship that hunts the Jellies back ----
+
+def resolved(kind_key):
+    """A piloted kind's traits as the game builds them for the neural pilot's settings."""
+    import enemy_kinds
+    from hunter.build import flight_kind
+    from hunter.settings_for import hunter_settings_for
+    return dict(flight_kind(enemy_kinds.kind(kind_key), hunter_settings_for('neural')).traits)
+
+
+def test_training_ship_is_slower_and_weaker_than_normal():
+    import enemy_kinds
+    from creatures import registry
+    registry.validate(enemy_kinds._CATALOGUE)
+    kind = enemy_kinds.kind('training_ship')
+    friend = enemy_kinds.kind('allied_hunter')
+    assert kind.allegiance == friend.allegiance == 'friend' and kind.body == friend.body == 'hunterShip'
+    assert 'training_ship' not in enemy_kinds.kinds()   # never placed as an enemy in a level
+    ship, normal = resolved('training_ship'), resolved('allied_hunter')
+    assert ship['thrusters']['maxSpeed'] == pytest.approx(.6 * normal['thrusters']['maxSpeed'])
+    assert ship['thrusters']['thrust'] == pytest.approx(.6 * normal['thrusters']['thrust'])
+    assert ship['burstFire']['interval'] == pytest.approx(2 * normal['burstFire']['interval'])
+    assert ship['gun']['shotStrength'] == .5 and normal['gun'].get('shotStrength', 1.) == 1.
+    assert ship['energy']['indestructible'] is False and ship['energy']['health'] == 3
+    built = creatures.build('training_ship', (400., 300.), 11)
+    assert built.allegiance == 'friend' and built.kind.pilot == 'neural'
+
+
+def test_flight_kind_keeps_the_catalogues_own_params():
+    """Pilot settings fill in only what a kind leaves out, so existing kinds resolve as before."""
+    ship, viber = resolved('training_ship'), resolved('neural_hunter')
+    assert viber['thrusters']['maxSpeed'] == 8. and viber['burstFire']['interval'] == .25
+    assert viber['energy']['health'] == 10 and ship['energy']['wallEnergy'] == 0
+
+
+def stage3_env(team_size=1, **case):
+    env, snap = jelly_env(team_size=team_size, stage=3, **case)
+    env.ship.flight.controller.unavailable = True   # the pilot idles (neutral, gun off): tests place their own shots
+    return env, snap
+
+
+def shoot_at(env, i):
+    """The training ship's shot (a friend's: source 'hunter', half strength) just behind Jelly `i`, flying into it."""
+    from entities.projectile import Projectile
+    c = next(c for c in env.team.members() if c.agent_id == i)
+    shot = Projectile((c.x - 6., c.y), 0., source='hunter', strength=.5)
+    env.world.projectiles.append(shot)
+    return shot
+
+
+def park_ship_far(env):
+    env.ship.x, env.ship.y = env.free_cell(500.)
+    env.ship.vx = env.ship.vy = 0.
+
+
+def test_ship_hit_kills_one_hp_jelly():
+    env, _ = stage3_env(team_size=2)
+    try:
+        park_ship_far(env)
+        jelly = next(c for c in env.team.members() if c.agent_id == 0)
+        assert jelly.hit_points == 1
+        shoot_at(env, 0)
+        env.step(still(env))
+        assert not jelly.active and jelly.hit_points <= 0
+    finally:
+        env.close()
+
+
+def test_training_ship_hunts_and_shoots_the_jellies():
+    from learning.adapters.jelly_scenario import JellyEnvironment
+    env = JellyEnvironment(horizon=30.)
+    try:
+        env.reset(7, level=11, team_size=2, stage=3)
+        ship = env.ship
+        start = min(math.dist(ship.get_pos(), c.get_pos()) for c in env.team.members())
+        closest = start
+        result = None
+        while result is None or not (result.terminated or result.truncated):
+            result = env.step(still(env))
+            if env.team.members():
+                closest = min(closest, min(math.dist(ship.get_pos(), c.get_pos()) for c in env.team.members()))
+        assert ship.shots_fired > 0 and result.events['jelly_deaths'] > 0   # the frozen hunter pilot, greedy: seed 7
+        assert closest < start
+    finally:
+        env.close()
+
+
+def test_stage3_puts_the_hunting_ship_among_the_targets():
+    env, snap = stage3_env(team_size=2)
+    try:
+        assert env.ship in env.world.roster.alive() and env.ship.active and env.ship.flight is not None
+        assert all(env.enc.target_entity_for(c) is env.ship for c in env.team.members())
+        assert all(math.dist(c.get_pos(), env.ship.get_pos()) >= 250. for c in env.team.members())
+        result = env.step(still(env))
+        assert result.events['stage'] == 3 and result.events['catches'] == 0
+        assert {'ship_hits', 'ship_kills', 'jelly_deaths', 'survival_fraction', 'time_to_ship_kill'} <= set(result.events)
+    finally:
+        env.close()
+
+
+def test_episode_ends_when_all_jellies_die():
+    env, _ = stage3_env(team_size=2)
+    try:
+        park_ship_far(env)
+        for i in env.agent_ids:
+            shoot_at(env, i)
+        result = env.step(still(env))
+        assert result.terminated and not result.truncated
+        assert result.events['jelly_deaths'] == 2 and result.events['alive'] == 0
+        assert result.events['survival_fraction'] == 0. and result.events['ship_kills'] == 0
+        with pytest.raises(RuntimeError):
+            env.step({})
+    finally:
+        env.close()
+
+
+def test_episode_ends_when_ship_dies():
+    from learning.adapters.jelly_scenario import SHIP_HIT_REWARD, SHIP_KILL_REWARD
+    env, _ = stage3_env(team_size=1)
+    try:
+        jelly = env.team.members()[0]
+        env.ship.health = 1
+        env.ship.x, env.ship.y = jelly.x + 6., jelly.y
+        env.ship.vx = env.ship.vy = 0.
+        result = env.step(still(env))
+        assert result.terminated and not result.truncated
+        assert result.events['ship_kills'] == 1 and result.events['ship_hits'] == 1
+        assert not env.ship.active and result.events['survival_fraction'] == 1.
+        assert 0. < result.events['time_to_ship_kill'] <= DECISION_FRAMES / 60
+        assert result.agent_rewards[0] >= SHIP_HIT_REWARD + SHIP_KILL_REWARD - 1.
+    finally:
+        env.close()
+
+
+def test_jelly_death_is_penalised():
+    from learning.adapters.jelly_scenario import DEATH_PENALTY, TEAM_DEATH_SHARE
+    env, _ = stage3_env(team_size=2)
+    try:
+        park_ship_far(env)
+        home, angle = open_line(env, 120)
+        place(env, 1, (home[0] + 80 * math.cos(angle), home[1] + 80 * math.sin(angle)))
+        shoot_at(env, 0)
+        result = env.step(still(env))
+        assert not result.terminated and result.events['jelly_deaths'] == 1 and result.events['alive'] == 1
+        assert result.agent_rewards[0] <= -DEATH_PENALTY + .1
+        assert result.agent_rewards[1] == pytest.approx(-TEAM_DEATH_SHARE * DEATH_PENALTY, abs=.1)
+        assert result.events['survival_fraction'] == .5
+        after = env.step(still(env))   # the survivor plays on; the dead Jelly earns nothing more
+        assert set(after.snapshot.observations) == {1} and after.agent_rewards[0] == 0.
+    finally:
+        env.close()
+
+
+def test_stage3_reward_trade_off_makes_a_suicide_rush_unattractive():
+    from learning.adapters import jelly_scenario as s
+    assert s.SHIP_HIT_REWARD - s.DEATH_PENALTY < 0          # one hit traded for a life loses
+    assert s.SHIP_KILL_REWARD > s.DEATH_PENALTY              # killing the ship is worth more than a death costs
+    hull = resolved(s.SHIP_KIND)['energy']['health']
+    assert hull * s.SHIP_HIT_REWARD + s.SHIP_KILL_REWARD > s.DEATH_PENALTY
+
+
+def test_ship_dead_or_jellies_dead_before_first_step_does_not_crash():
+    env, _ = stage3_env(team_size=1)
+    try:
+        env.enc.kill(env.ship)
+        result = env.step({})
+        assert result.terminated and result.events['seconds'] == 0.
+    finally:
+        env.close()
+
+
+def test_stage3_cases_promote_and_metrics():
+    from learning.adapters import jelly_scenario as scenario
+    cases = [c for it in range(4) for c in scenario.training_cases(it, 16, 3)]
+    by_stage = Counter(c['stage'] for c in cases)
+    assert by_stage[3] * 4 == len(cases) * 3 and by_stage[2] == by_stage[1] == len(cases) // 8
+    assert {c['team_size'] for c in cases if c['stage'] == 3} == set(scenario.STAGE3_TEAM_SIZES)
+    assert all(c['team_size'] == 1 for c in cases if c['stage'] == 1)
+    assert {c['team_size'] for c in cases if c['stage'] == 2} <= set(scenario.STAGE2_TEAM_SIZES)
+    assert cases == [c for it in range(4) for c in scenario.training_cases(it, 16, 3)]
+    assert scenario.training_cases(3, 16, 2) == scenario.training_cases(3, 16, 2)   # stage 2 unchanged
+    held_out = scenario.evaluation_cases(3)
+    assert all(c['stage'] == 3 and c['level'] in scenario.HOLDOUT_LEVELS for c in held_out)
+    assert {c['team_size'] for c in held_out} == set(scenario.STAGE3_TEAM_SIZES)
+    rows = [dict(catches=0, seconds=30., stuck_seconds=0., team_size=2, stage=3, ship_hits=3, ship_kills=1,
+                 jelly_deaths=1, survival_fraction=.5, time_to_ship_kill=30., agent_returns={0: 1., 1: 1.}),
+            dict(catches=0, seconds=60., stuck_seconds=0., team_size=4, stage=3, ship_hits=1, ship_kills=0,
+                 jelly_deaths=0, survival_fraction=1., time_to_ship_kill=None, agent_returns={0: 1.}),
+            dict(catches=2, seconds=60., stuck_seconds=0., team_size=1, agent_returns={0: 1.})]
+    summary = scenario.metrics(rows)
+    assert summary['ship_hits'] == 4 and summary['ship_kills'] == 1 and summary['jelly_deaths'] == 1
+    assert summary['survival_fraction'] == pytest.approx(5 / 6)   # Jelly-weighted, over stage-3 rows only
+    assert summary['time_to_ship_kill'] == 30.
+    assert scenario.promote(3, summary, dict(catches_per_minute=0., stuck_fraction=1.)) == 3
+    assert scenario.metrics(rows[2:])['survival_fraction'] == 1. and scenario.metrics(rows[2:])['ship_kills'] == 0
+
+
+def test_scripted_team_hunts_the_ship_at_stage3():
+    from learning.adapters.jelly_scenario import JellyEnvironment
+    env = JellyEnvironment(horizon=3., scripted=True)
+    try:
+        env.reset(5, level=11, team_size=3, stage=3)
+        result = env.step({})
+        while not (result.terminated or result.truncated):
+            result = env.step({})
+        assert result.events['stage'] == 3 and result.events['seconds'] <= 3.
+    finally:
+        env.close()

@@ -14,7 +14,9 @@ class PilotSetup:
 
 
 def flight_kind(kind, settings):
-    """Resolve one flight's fixed settings into its reusable traits, without mutating the catalogue."""
+    """Resolve one flight's fixed settings into its reusable traits, without mutating the catalogue. The settings
+    only fill in what the kind leaves out: a trait parameter the catalogue names for the kind is kept, so a kind can
+    be tuned (a slower top speed, a longer fire interval, a mortal hull) in config alone."""
     movement = config.SETTINGS.hunterShip
     overrides = {
         'energy': {'health': settings.health, 'indestructible': settings.indestructible,
@@ -25,7 +27,7 @@ def flight_kind(kind, settings):
         'burstFire': {'rounds': settings.burst_size, 'spacing': settings.burst_spacing,
                       'interval': settings.fire_interval},
     }
-    return replace(kind, traits=tuple((name, {**params, **overrides.get(name, {})}) for name, params in kind.traits))
+    return replace(kind, traits=tuple((name, {**overrides.get(name, {}), **params}) for name, params in kind.traits))
 
 
 def make_hunter(pos, *, world, setup, angle=0.0):

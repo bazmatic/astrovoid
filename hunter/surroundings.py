@@ -64,3 +64,28 @@ class ProtagonistSurroundings:
 
     def friend(self):
         return None
+
+
+class RosterSurroundings:
+    """What a friendly pilot perceives inside an Encounter, with no Game to ask (a training scene): every
+    enemy-allegiance creature on the Encounter's roster and the enemies' shots. Not itself, no pickups, no friend."""
+
+    def __init__(self, encounter, creature):
+        self._encounter, self._creature = encounter, creature
+
+    @property
+    def maze(self):
+        return self._encounter.maze
+
+    def enemies(self):
+        return [c for c in self._encounter.roster.all()
+                if c is not self._creature and getattr(c, 'allegiance', 'enemy') == 'enemy']
+
+    def threats(self):
+        return [p for p in self._encounter.world.projectiles if p.is_enemy]
+
+    def pickups(self):
+        return []
+
+    def friend(self):
+        return None

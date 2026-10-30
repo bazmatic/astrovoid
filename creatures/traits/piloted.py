@@ -4,7 +4,7 @@ from time import monotonic
 import config
 from creatures.trait import Trait
 from hunter.flight import HunterFlight, NeuralPilot, WorkerPilot
-from hunter.surroundings import ProtagonistSurroundings
+from hunter.surroundings import ProtagonistSurroundings, RosterSurroundings
 
 MODES = ('jev', 'rules', 'neural')
 
@@ -25,7 +25,10 @@ class Pilot(Trait):
         if setup is not None:
             pilot, surroundings, owns = setup.pilot, setup.surroundings, setup.owns_worker
         else:
-            surroundings, owns = ProtagonistSurroundings(enc.world), True
+            # An enemy pilot hunts the protagonist; a friendly one, built without a setup, every enemy on its roster.
+            surroundings = (RosterSurroundings(enc, c) if c.allegiance == 'friend'
+                            else ProtagonistSurroundings(enc.world))
+            owns = True
             if self.mode == 'neural':
                 policy = enc.world.enemy_policy()
                 if policy is None:

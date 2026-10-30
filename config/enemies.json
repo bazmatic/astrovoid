@@ -879,6 +879,80 @@
       }
     }
   },
+  "training_ship": {
+    "name": [
+      "Training ship",
+      "Training ships"
+    ],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 0,
+    "layer": 7,
+    "tuning": {
+      "size": 8,
+      "color": [
+        150,
+        190,
+        255
+      ],
+      "fill": [
+        30,
+        50,
+        110
+      ],
+      "noseColor": [
+        210,
+        225,
+        255
+      ],
+      "cockpitColor": [
+        15,
+        25,
+        60
+      ],
+      "engineColor": [
+        60,
+        95,
+        170
+      ],
+      "engineLitColor": [
+        140,
+        180,
+        255
+      ],
+      "showsHitPoints": false
+    },
+    "allegiance": "friend",
+    "body": "hunterShip",
+    "traits": {
+      "pilot": {
+        "mode": "neural"
+      },
+      "energy": {
+        "health": 3,
+        "indestructible": false,
+        "immunity": 0.5,
+        "wallEnergy": 0
+      },
+      "thrusters": {
+        "speedShare": 0.6,
+        "maxSpeed": 4.8,
+        "thrust": 0.0225,
+        "mode": "hunter"
+      },
+      "burstFire": {
+        "rounds": 1,
+        "interval": 0.5
+      },
+      "gun": {
+        "cadence": "burst",
+        "aimMode": "nose",
+        "upgrades": true,
+        "shotStrength": 0.5
+      }
+    }
+  },
   "wallcrawler": {
     "name": [
       "Wallcrawler",
