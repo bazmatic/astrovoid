@@ -468,3 +468,121 @@ def test_scripted_baseline_runs_at_the_configured_run_horizon(monkeypatch):
     # promote baselines at the run's horizon: it reuses that cache entry rather than a 60 s one.
     scenario.promote(1, dict(catches_per_minute=0., stuck_fraction=1., episodes=1))
     assert set(scenario._baselines) == {(1, .5), (1, .2)}
+
+
+def test_flank_spread_is_zero_for_collinear_bearing_and_one_for_even_ring():
+    from learning.adapters.jelly_scenario import flank_spread
+    target = (100., 100.)
+    same_side = [(150., 100.), (200., 100.), (300., 100.)]
+    assert math.isclose(flank_spread(same_side, target), 0., abs_tol=1e-9)
+    for n in (2, 3, 4):
+        ring = [(100 + 80 * math.cos(2 * math.pi * k / n), 100 + 80 * math.sin(2 * math.pi * k / n)) for k in range(n)]
+        assert math.isclose(flank_spread(ring, target), 1., abs_tol=1e-9)
+    quarter = [(180., 100.), (100., 180.)]   # a right angle apart: partly spread
+    assert 0. < flank_spread(quarter, target) < 1.
+
+
+def test_single_jelly_has_spread_zero_without_error():
+    from learning.adapters.jelly_scenario import flank_spread
+    assert flank_spread([(150., 100.)], (100., 100.)) == 0.
+    assert flank_spread([], (100., 100.)) == 0.
+    assert flank_spread([(100., 100.), (150., 100.)], (100., 100.)) == 0.   # a Jelly on the target has no bearing
+
+
+def open_line(env, length):
+    """Jelly 0's position and the bearing of its clearest wall ray, which is open for at least `length` px."""
+    jelly = next(c for c in env.team.members() if c.agent_id == 0)
+    distances = adapter.rays(jelly, env.world.maze, 0.)
+    k = int(np.argmax(distances))
+    assert distances[k] > length
+    return jelly.get_pos(), k * 2 * math.pi / len(distances)
+
+
+def place(env, i, pos):
+    c = next(c for c in env.team.members() if c.agent_id == i)
+    c.x, c.y = pos
+    c.vx = c.vy = 0.
+
+
+def park_target_far(env):
+    target = env.world.additional_targets[0]
+    target.x, target.y = env.free_cell(500.)
+    target.vx = target.vy = 0.
+    return target
+
+
+def test_bunching_penalty_applies_only_below_bunch_distance():
+    from learning.adapters.jelly_scenario import BUNCH_DISTANCE, BUNCH_PENALTY, FLANK_RANGE
+    def rewards(gap, stage):
+        env, _ = jelly_env(team_size=2, stage=stage)
+        try:
+            home, angle = open_line(env, BUNCH_DISTANCE + 40)
+            place(env, 1, (home[0] + gap * math.cos(angle), home[1] + gap * math.sin(angle)))
+            target = park_target_far(env)
+            assert all(math.dist(c.get_pos(), target.get_pos()) > FLANK_RANGE for c in env.team.members())
+            result = env.step(still(env))
+            return result.agent_rewards, result.events
+        finally:
+            env.close()
+    close, events = rewards(BUNCH_DISTANCE - 10, 2)
+    assert all(math.isclose(r, -BUNCH_PENALTY, abs_tol=1e-9) for r in close.values())
+    assert events['bunched_seconds'] > 0
+    apart, events = rewards(BUNCH_DISTANCE + 10, 2)
+    assert all(r == 0. for r in apart.values()) and events['bunched_seconds'] == 0.
+    stage1, events = rewards(BUNCH_DISTANCE - 10, 1)   # stage 1 rewards are unchanged; bunching is only reported
+    assert all(r == 0. for r in stage1.values()) and events['bunched_seconds'] > 0
+
+
+def test_flanking_pair_is_rewarded_at_stage2_only():
+    from learning.adapters.jelly_scenario import FLANK_RANGE, FLANK_REWARD
+    def rewards(stage):
+        env, _ = jelly_env(team_size=2, stage=stage)
+        try:
+            home, angle = open_line(env, 230)
+            target = env.world.additional_targets[0]
+            target.x, target.y = home[0] + 100 * math.cos(angle), home[1] + 100 * math.sin(angle)
+            target.vx = target.vy = 0.
+            place(env, 1, (home[0] + 200 * math.cos(angle), home[1] + 200 * math.sin(angle)))   # the far side
+            assert all(math.dist(c.get_pos(), target.get_pos()) <= FLANK_RANGE for c in env.team.members())
+            result = env.step(still(env))
+            return result.agent_rewards, result.events
+        finally:
+            env.close()
+    pincer, events = rewards(2)
+    assert all(math.isclose(r, FLANK_REWARD, rel_tol=1e-6) for r in pincer.values())
+    assert math.isclose(events['angular_spread'], 1., abs_tol=1e-6) and events['flank_seconds'] > 0
+    stage1, events = rewards(1)
+    assert all(r == 0. for r in stage1.values()) and math.isclose(events['angular_spread'], 1., abs_tol=1e-6)
+
+
+def test_stage2_cases_have_team_size_2_to_4():
+    from learning.adapters import jelly_scenario as scenario
+    cases = scenario.training_cases(3, 16, 2)
+    team = [c for c in cases if c['stage'] == 2]
+    retention = [c for c in cases if c['stage'] == 1]
+    assert {c['team_size'] for c in team} == {2, 3, 4}
+    assert retention and all(c['team_size'] == 1 for c in retention) and len(retention) < len(team)
+    assert all(c['level'] in scenario.TRAIN_LEVELS for c in cases)
+    assert all(c['team_size'] == 1 and c['stage'] == 1 for c in scenario.training_cases(3, 16, 1))
+    held_out = scenario.evaluation_cases(2)
+    assert {c['team_size'] for c in held_out} == {2, 3, 4} and all(c['stage'] == 2 for c in held_out)
+    assert all(c['level'] in scenario.HOLDOUT_LEVELS for c in held_out)
+
+
+def test_flank_metrics_and_promote_from_stage2_need_more_spread_and_team_catches():
+    from learning.adapters import jelly_scenario as scenario
+    rows = [dict(catches=1, seconds=60., stuck_seconds=0., team_size=1, angular_spread=0., flank_seconds=0.,
+                 bunched_seconds=0., agent_returns={0: 1.}),
+            dict(catches=3, seconds=60., stuck_seconds=0., team_size=2, angular_spread=.8, flank_seconds=10.,
+                 bunched_seconds=12., agent_returns={0: 1., 1: 1.}),
+            dict(catches=1, seconds=60., stuck_seconds=0., team_size=2, angular_spread=.2, flank_seconds=30.,
+                 bunched_seconds=0., agent_returns={0: 1., 1: 1.})]
+    summary = scenario.metrics(rows)
+    assert math.isclose(summary['angular_spread'], (.8 * 10 + .2 * 30) / 40)
+    assert math.isclose(summary['team_catches_per_minute'], 2.)   # the solo retention row is left out
+    assert math.isclose(summary['bunched_fraction'], 12 / 300)
+    baseline = dict(angular_spread=.3, team_catches_per_minute=1.5)
+    assert scenario.promote(2, summary, baseline) == 3
+    assert scenario.promote(2, dict(summary, angular_spread=.2), baseline) == 2
+    assert scenario.promote(2, dict(summary, team_catches_per_minute=1.), baseline) == 2
+    assert scenario.promote(2, dict(summary, episodes=0), baseline) == 2

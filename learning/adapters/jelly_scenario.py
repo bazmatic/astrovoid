@@ -1,6 +1,8 @@
 """Neural Jellies hunting plain drifting practice targets in the real cave arenas, under the game's own Encounter,
 Jelly body and wall-bounce code. Stage 1: navigation to a moving target. A catch is body contact; the target then
-respawns elsewhere and the episode runs on to the horizon, so the Jellies must catch repeatedly."""
+respawns elsewhere and the episode runs on to the horizon, so the Jellies must catch repeatedly. Stage 2: teams of
+two to four Jellies on the same scene, with a small shaped reward for closing in from differing bearings (flanking)
+and a penalty for Jellies bunched up on each other."""
 from collections import Counter, deque
 from dataclasses import replace
 import hashlib
@@ -16,7 +18,7 @@ from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intentio
 from learning.adapters.crawler_scenario import TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
 
-STAGES = (1, 2)                # stage 2 (flanking) shares this scene; its shaping arrives with the stage-2 work
+STAGES = (1, 2)                # stage 2 (flanking) shares stage 1's scene and adds the flank/bunch shaping below
 TARGET_COUNT = 1               # one plain target: every Jelly in the team hunts the same one
 TARGET_START_DISTANCE = 250.   # px: targets start at least this far from every Jelly (else the farthest open cell)
 RESPAWN_DISTANCE = 300.        # px: a caught target reappears at least this far from every Jelly
@@ -29,6 +31,24 @@ STUCK_DISTANCE = 10.           # px: moving less than this over the window, acce
 STUCK_ACCEL = .1               # an intent's accel above this counts as accelerating
 STUCK_PENALTY = .05            # per decision spent stuck (.5 per second)
 MAX_TEAM = 8                   # the critic's member slots
+# Stage 2 shaping, kept small beside CATCH_REWARD: a perfect pincer held for a whole minute earns each Jelly 3, under
+# a third of one catch, so catches dominate while two Jellies converging from opposite sides beats one rushing alone.
+FLANK_REWARD = .005            # per decision to every living Jelly, times flank_spread of the Jellies in range
+FLANK_RANGE = 200.             # px: Jellies this close to the target count towards its flank_spread
+BUNCH_DISTANCE = 40.           # px between Jelly centres: closer than this is bunched (about two body widths apart)
+BUNCH_PENALTY = .01            # per decision, to each Jelly of every pair closer than BUNCH_DISTANCE
+STAGE2_TEAM_SIZES = (2, 3, 4)
+RETENTION_SHARE = 4            # one stage-2 training case in this many is a stage-1 solo case, so navigation is kept
+
+
+def flank_spread(positions, target):
+    """How evenly the Jellies' bearings from the target spread around it, in [0, 1]: one minus the length of the mean
+    unit bearing vector. 0 when all share one bearing (or fewer than two have one), 1 for an even ring or a pincer."""
+    bearings = [math.atan2(y-target[1], x-target[0]) for x, y in positions if (x, y) != tuple(target)]
+    if len(bearings) < 2:
+        return 0.
+    mean = math.hypot(sum(map(math.cos, bearings)), sum(map(math.sin, bearings)))/len(bearings)
+    return min(1., max(0., 1.-mean))
 
 
 class JellyEnvironment:
@@ -118,6 +138,9 @@ class JellyEnvironment:
         self.agent_catches = Counter()
         self.agent_returns = Counter()
         self.agent_stuck_frames = Counter()
+        self.spread_frames = 0.      # flank_spread times frames, over decisions with two or more Jellies in range
+        self.flank_frames = 0
+        self.bunched_frames = 0      # Jelly-frames spent closer than BUNCH_DISTANCE to another Jelly
         self.generation = Counter()   # how many times each target has respawned
         self.trails = {c.agent_id: deque([c.get_pos()], maxlen=STUCK_WINDOW//DECISION_FRAMES+1)
                        for c in self.team.members()}
@@ -219,17 +242,46 @@ class JellyEnvironment:
                     and math.dist(trail[0], trail[-1]) < STUCK_DISTANCE):
                 rewards[i] -= STUCK_PENALTY
                 self.agent_stuck_frames[i] += frames
+        self.formation(rewards, frames)
         self.agent_returns.update(rewards)
         terminated = not self.team.members()
         truncated = self.frames >= self.horizon*60 and not terminated
         return Transition(self.snapshot(), sum(rewards.values()), terminated, truncated, self.events(),
                           agent_rewards=rewards)
 
+    def formation(self, rewards, frames):
+        """Flank spread and bunching, measured at every stage; rewarded only from stage 2, so stage 1 is unchanged."""
+        members = self.team.members()
+        shaped = self.stage >= 2
+        for target in self.world.additional_targets:
+            if not target.active:
+                continue
+            near = [c.get_pos() for c in members if math.dist(c.get_pos(), target.get_pos()) <= FLANK_RANGE]
+            if len(near) < 2:
+                continue
+            spread = flank_spread(near, target.get_pos())
+            self.spread_frames += spread*frames
+            self.flank_frames += frames
+            if shaped:
+                for c in members:
+                    rewards[c.agent_id] += FLANK_REWARD*spread
+        bunched = set()
+        for k, a in enumerate(members):
+            for b in members[k+1:]:
+                if math.dist(a.get_pos(), b.get_pos()) < BUNCH_DISTANCE:
+                    bunched.update((a.agent_id, b.agent_id))
+                    if shaped:
+                        rewards[a.agent_id] -= BUNCH_PENALTY
+                        rewards[b.agent_id] -= BUNCH_PENALTY
+        self.bunched_frames += len(bunched)*frames
+
     def events(self):
         return {'catches': sum(self.agent_catches.values()), 'agent_catches': dict(self.agent_catches),
                 'seconds': self.frames/60, 'stuck_seconds': sum(self.agent_stuck_frames.values())/60,
                 'agent_stuck_seconds': {i: f/60 for i, f in self.agent_stuck_frames.items()},
                 'alive': len(self.team.members()), 'stage': self.stage,
+                'angular_spread': self.spread_frames/self.flank_frames if self.flank_frames else 0.,
+                'flank_seconds': self.flank_frames/60, 'bunched_seconds': self.bunched_frames/60,
                 'agent_returns': {i: self.agent_returns[i] for i in self.agent_ids}}
 
     def close(self):
@@ -257,7 +309,8 @@ def environment(horizon=60.0, arenas=None, scripted=False, **ignored):
 INITIAL_STAGE = 1
 IMITATION_HEADS = ('heading', 'accel')
 REWARDS = {'catch': CATCH_REWARD, 'team_catch_share': TEAM_CATCH_SHARE, 'progress_per_pixel': PROGRESS_REWARD,
-           'stuck_per_decision': -STUCK_PENALTY}
+           'stuck_per_decision': -STUCK_PENALTY, 'stage2_flank_per_decision': FLANK_REWARD,
+           'stage2_bunch_per_pair_decision': -BUNCH_PENALTY}
 
 
 def metadata(args):
@@ -270,7 +323,7 @@ def metadata(args):
     global run_horizon
     run_horizon = args.horizon   # learning.run calls this in the process that later calls promote
     opponent = Path(getattr(args, 'opponent', '') or '')
-    return dict(task=SPEC.task, scenario_version=1, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    return dict(task=SPEC.task, scenario_version=2, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=dict(REWARDS), reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': TEAM_CATCH_SHARE},
@@ -281,7 +334,12 @@ def metadata(args):
                                   'start_distance': TARGET_START_DISTANCE},
                 jelly={'max_speed': MAX_SPEED, 'accel_rate': ACCEL_RATE, 'turn_rate_radians': TURN_RATE,
                        'spacing': JELLY_SPACING, 'creature': dataclasses.asdict(enemy_kinds.kind('neural_jelly'))},
-                promotion={'1': 'training_catches_per_minute_and_stuck_fraction_beat_scripted_holdout_baseline'},
+                flank={'reward_per_decision': FLANK_REWARD, 'range': FLANK_RANGE, 'spread': '1_minus_mean_bearing_resultant',
+                       'bunch_distance': BUNCH_DISTANCE, 'bunch_penalty_per_pair_decision': BUNCH_PENALTY,
+                       'shaped_from_stage': 2},
+                curriculum={'stage2_team_sizes': list(STAGE2_TEAM_SIZES), 'stage1_retention_every': RETENTION_SHARE},
+                promotion={'1': 'training_catches_per_minute_and_stuck_fraction_beat_scripted_holdout_baseline',
+                           '2': 'training_angular_spread_and_team_catches_per_minute_beat_scripted_holdout_team_baseline'},
                 physics={name: dataclasses.asdict(getattr(config.SETTINGS, name)) for name in ('maze', 'obstacles')},
                 arenas={str(n): level_config.load_level_config(n) for n in TRAIN_LEVELS+HOLDOUT_LEVELS},
                 opponent_sha256=hashlib.sha256(opponent.read_bytes()).hexdigest() if opponent.is_file() else None,
@@ -290,11 +348,18 @@ def metadata(args):
 
 
 def training_cases(iteration, count, stage, bootstrap=False):
+    """Stage 1: solo Jellies. Stage 2: slots cycle through team sizes 2, 3, 4 plus one stage-1 solo case in every
+    RETENTION_SHARE, so the navigation learnt in stage 1 keeps being rehearsed."""
     cases = []
     for i in range(count):
         index = iteration*count+i
-        cases.append(dict(level=TRAIN_LEVELS[index % len(TRAIN_LEVELS)],
-                          seed=100+i if bootstrap else 300+index % 100, team_size=1, stage=stage))
+        level, seed = TRAIN_LEVELS[index % len(TRAIN_LEVELS)], 100+i if bootstrap else 300+index % 100
+        slot = index % RETENTION_SHARE
+        if stage >= 2 and slot:
+            cases.append(dict(level=level, seed=seed, team_size=STAGE2_TEAM_SIZES[(slot-1) % len(STAGE2_TEAM_SIZES)],
+                              stage=stage))
+        else:
+            cases.append(dict(level=level, seed=seed, team_size=1, stage=1 if stage >= 2 else stage))
     return cases
 
 
@@ -303,7 +368,8 @@ def validation_cases():
 
 
 def evaluation_cases(stage=1):
-    return [dict(level=n, seed=s, team_size=1, stage=stage) for n in HOLDOUT_LEVELS for s in (1000, 1001)]
+    sizes = STAGE2_TEAM_SIZES if stage >= 2 else (1,)
+    return [dict(level=n, seed=s, team_size=k, stage=stage) for n in HOLDOUT_LEVELS for s in (1000, 1001) for k in sizes]
 
 
 def metrics(rows):
@@ -312,9 +378,15 @@ def metrics(rows):
     catches = sum(r['catches'] for r in rows)
     stuck = sum(r['stuck_seconds'] for r in rows)
     returns = [r.get('return', sum(r.get('agent_returns', {}).values())) for r in rows]
+    team = [r for r in rows if r['team_size'] >= 2]
+    flank = sum(r.get('flank_seconds', 0.) for r in rows)
     return dict(episodes=len(rows), catches=catches, seconds=seconds, stuck_seconds=stuck,
                 catches_per_minute=catches*60/max(seconds, 1e-9),
                 stuck_fraction=stuck/max(jelly_seconds, 1e-9),
+                team_catches_per_minute=sum(r['catches'] for r in team)*60/max(sum(r['seconds'] for r in team), 1e-9),
+                angular_spread=sum(r.get('angular_spread', 0.)*r.get('flank_seconds', 0.) for r in rows)/flank if flank else 0.,
+                flank_seconds=flank, bunched_seconds=sum(r.get('bunched_seconds', 0.) for r in rows),
+                bunched_fraction=sum(r.get('bunched_seconds', 0.) for r in rows)/max(jelly_seconds, 1e-9),
                 catch_probability=sum(r['catches'] > 0 for r in rows)/max(1, len(rows)),
                 mean_episode_return=float(np.mean(returns)) if returns else 0.)
 
@@ -351,13 +423,21 @@ def scripted_baseline(stage=1, horizon=None):
 
 
 def promote(stage, summary, baseline=None):
-    """Stage 1 -> 2 once catches per minute beat the scripted Jelly's held-out rate and the stuck share is lower."""
-    if stage != 1 or not summary.get('episodes'):
+    """Stage 1 -> 2 once catches per minute beat the scripted Jelly's held-out rate and the stuck share is lower.
+    Stage 2 -> 3 once the training summary's angular_spread and team_catches_per_minute (team scenes only, the solo
+    retention cases left out) both strictly beat the scripted team on the held-out team scenes, evaluation_cases(2).
+    The scripted team is the stand-in for stage-1 behaviour in team scenes: every Jelly rushes the target on its own."""
+    if stage not in (1, 2) or not summary.get('episodes'):
         return stage
     baseline = baseline or scripted_baseline(stage)
-    if (summary['catches_per_minute'] > baseline['catches_per_minute']
-            and summary['stuck_fraction'] < baseline['stuck_fraction']):
-        return 2
+    if stage == 1:
+        if (summary['catches_per_minute'] > baseline['catches_per_minute']
+                and summary['stuck_fraction'] < baseline['stuck_fraction']):
+            return 2
+        return stage
+    if (summary['angular_spread'] > baseline['angular_spread']
+            and summary['team_catches_per_minute'] > baseline['team_catches_per_minute']):
+        return 3
     return stage
 
 
