@@ -176,7 +176,8 @@ function render(){
    chart({title:'Team accuracy',sub:'Accepted hits divided by actual crawler shots.',key:'accuracy'}),
    chart({title:'Stationary-target accuracy',sub:'Accepted hits / shots in harmless stationary-target drills.',key:'precision_accuracy'}),
    chart({title:'Moving-target accuracy',sub:'Accepted hits / shots in harmless moving-target drills.',key:'tracking_accuracy'}),
-   chart({title:'Battle survival',sub:'Fraction of battle crawlers alive at the time limit.',key:'pursuit_survival'}),
+   chart({title:'Battle curriculum stage',sub:'0: one Jelly; 1: two; 2: four; 3: four plus the armed hunter.',key:'battle_stage'}),
+   chart({title:'Battle survival',sub:'Fraction of battle crawlers alive at trial end.',key:'pursuit_survival'}),
    chart({title:'Combat accuracy',sub:'Accepted hits / shots in retained Jellyfish and neural-hunter encounters.',key:'pursuit_accuracy'}),
    chart({title:'Walking reversals per trial',sub:'Actual direction changes while walking; stops and airborne motion excluded.',key:'reversals_per_episode'}),
    chart({title:'Voluntary jumps per trial',sub:'Actual voluntary launches, excluding damage-induced detachment.',key:'jumps_per_episode'}),
@@ -218,7 +219,7 @@ async function loadRules(){
       const battle=c.manifest?.battle_rewards;
       if(battle)rows.push(
         {name:'Battle time alive',sign:'+',value:battle.alive_per_second,unit:'Per living crawler per second'},
-        {name:'Battle survived',sign:'+',value:battle.survival_bonus,unit:'Per crawler alive at the time limit'},
+        {name:'Battle survived',sign:'+',value:battle.survival_bonus,unit:'Per crawler alive at terminal battle success: time limit or hunter-free Jelly clear'},
         {name:'Crawler killed',sign:'-',value:battle.death_cost,unit:'Once per death in battle'},
         {name:'Jelly destroyed',sign:'+',value:battle.jelly_kill,unit:'To the shooter, in addition to hit rewards'});
       if(rewards.trial_completion)rows.push({name:'Aiming trial cleared',sign:'+',value:rewards.trial_completion,unit:'Once per successful clear, shared equally by living crawlers. No bonus for timeout or team death.'});

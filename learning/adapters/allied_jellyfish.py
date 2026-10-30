@@ -64,7 +64,7 @@ class AlliedJellyfish:
     def close(self):self.encounter.close()
 
 
-def create_pursuers(env,positions,seed):
+def create_pursuers(env,positions,seed,count=PURSUER_COUNT):
     from learning.adapters.crawler_curriculum import setup_dodge
     # Keep the tested wall starts and useful landing routes from reposition encounters.
     sites = setup_dodge(env,positions,seed)
@@ -79,7 +79,7 @@ def create_pursuers(env,positions,seed):
            for y in range(1,maze.grid_height-1) for x in range(1,maze.grid_width-1) if not maze.grid[y][x]]
     rng.shuffle(cells)
     chosen=[]
-    for i in range(PURSUER_COUNT):
+    for i in range(count):
         c=crew[i%len(crew)]
         choices=[p for p in [t.get_pos() for t in sites]+cells
                  if maze.is_open(p,10)

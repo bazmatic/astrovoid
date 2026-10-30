@@ -126,6 +126,10 @@ def train(args):
         best_score, current = saved['best_score'], saved['policy']
     else:
         torch.manual_seed(args.seed)
+    curriculum = dict(saved['curriculum']) if saved and saved.get('curriculum') is not None else (
+        dict(adapter.INITIAL_CURRICULUM) if hasattr(adapter,'INITIAL_CURRICULUM') else None)
+    def case_options():
+        return {'curriculum':curriculum} if curriculum is not None else {}
     pool = Rollouts(args.workers)
     started = entered
     unlimited = args.budget_seconds == 0
@@ -158,11 +162,11 @@ def train(args):
         temp = out/'resume.tmp'
         torch.save(dict(net=net.state_dict(), optimiser=optimiser.state_dict(), rng=rng.bit_generator.state,
                         torch_rng=torch.get_rng_state(), iteration=next_iteration, elapsed=used(),
-                        team_size=team_size, best_score=best_score, policy=current), temp)
+                        team_size=team_size, best_score=best_score, policy=current, curriculum=curriculum), temp)
         temp.replace(resume_path)
     try:
         if not saved:
-            teacher_cases=adapter.training_cases(0,args.bootstrap_episodes,team_size,bootstrap=True)
+            teacher_cases=adapter.training_cases(0,args.bootstrap_episodes,team_size,bootstrap=True,**case_options())
             teacher_jobs = make_jobs(args,out/current,teacher_cases,'teacher')
             demonstrated = pool(teacher_jobs)
             (out/'episodes'/'bootstrap.json').write_text(json.dumps(dict(task=args.task,jobs=teacher_cases,
@@ -182,7 +186,7 @@ def train(args):
             if used() >= training_limit:
                 break
             weights = out/current
-            cases = adapter.training_cases(iteration,args.episodes,team_size)
+            cases = adapter.training_cases(iteration,args.episodes,team_size,**case_options())
             jobs = make_jobs(args,weights,cases)
             rollout_at = time.monotonic()
             flown = pool(jobs)
@@ -203,6 +207,9 @@ def train(args):
                 score = adapter.selection_score(evaluate(pool, args, out/current, validation)['summary'])
                 if score > best_score:
                     best_score = score; policy.save(best)
+            if curriculum is not None:
+                summary['battle_stage'] = curriculum['stage']
+                curriculum = adapter.advance_curriculum(curriculum,summary)
             team_size = adapter.promote(team_size,summary)
             line = dict(iteration=iteration, update_s=round(time.monotonic()-update_at,3),
                         mean_return=sum(sum(e['rewards']) for r in flown for e in r[0])/sum(len(r[0]) for r in flown),

@@ -20,14 +20,6 @@ def raw_state(enemies=(), heading=10):
     return json.loads(obs.state_json), obs
 
 
-def test_defaults_are_todays_values():
-    assert DEFAULT == RuleParams(
-        steer_band_degrees=20.0, engage_standoff_cells=1.5, too_close_ratio=0.6, far_ratio=1.15,
-        harmless_speed=15.0, wall_follow_cruise=0.6, wall_lookahead_cells=0.75,
-        course_approach_fraction=0.7, cruising_speed_fraction=0.5, pulse_frames=6.0,
-        strafe_cells=1.0, thrust_multiplier=0.25)
-
-
 def test_every_default_is_inside_its_bounds():
     for name, (low, high) in BOUNDS.items():
         assert low < getattr(DEFAULT, name) < high

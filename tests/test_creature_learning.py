@@ -1325,10 +1325,12 @@ def test_practice_neural_hunter_fires_weak_bullets_alongside_random_speed_jellie
                 if transition.terminated or transition.truncated:
                     break
             assert shots, 'the real frozen neural hunter must fire'
-            assert transition.truncated
+            assert transition.terminated and not transition.truncated
+            assert transition.events['battle_success']
             return transition.events
         assert trial() == trial()
-        # Clearing the Jellies does not remove the still-active hunter from the trial.
+        # Before the horizon, clearing Jellies leaves the active hunter in the trial.
+        env.frames=0
         for target in env.world.additional_targets:
             target.creature.active = False
         assert not env.trial_complete()

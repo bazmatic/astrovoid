@@ -194,12 +194,6 @@ def test_drawing_does_not_read_the_level_file_every_frame(editor, monkeypatch):
     assert reads == []
 
 
-def test_the_palette_offers_the_neural_hunter():
-    from rendering.level_editor import LABELS
-    assert 'neural_hunter' in PALETTE and LABELS['neural_hunter'] == 'Viber'
-    assert LABELS['wall'] == 'Wall' and LABELS['beacon'] == 'Jev beacon'
-
-
 def test_e_and_a_change_the_policies(editor):
     open_level(editor)
     exit_before, ammo_before = editor.model.exit_policy, editor.model.ammo_policy

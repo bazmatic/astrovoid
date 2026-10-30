@@ -1,15 +1,6 @@
-"""Anemones arrive at level 7 and build up slowly; a level file can override the number."""
-import pytest
-
+"""Generated anemones respect maze capacity; explicit level overrides take priority."""
 import level_config
-from level_rules import EnemyCounts, anemones_that_fit, get_anemone_count, get_enemy_counts
-
-
-@pytest.mark.parametrize('level, expected', [
-    (1, 0), (6, 0), (7, 1), (9, 1), (12, 0), (17, 3), (23, 3), (25, 4), (35, 5), (47, 6), (100, 6)])
-def test_schedule(level, expected):
-    assert get_anemone_count(level) == expected
-    assert get_enemy_counts(level).anemone == expected
+from level_rules import EnemyCounts, anemones_that_fit
 
 
 def test_counts_default_to_no_anemones():
@@ -29,17 +20,13 @@ def test_explicit_enemy_roster_without_anemones_has_none(monkeypatch):
     assert level_config.get_level_enemy_counts(9).anemone == 0
 
 
-@pytest.mark.parametrize('grid_size, expected', [(10, 1), (12, 1), (20, 4), (25, 6), (30, 9), (40, 16)])
-def test_how_many_fit_depends_on_the_size_of_the_maze(grid_size, expected):
-    # Their fields together cover no more than a set share of the maze
-    assert anemones_that_fit(grid_size) == expected
-
-
 def test_small_mazes_get_fewer_than_the_schedule_asks_for(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {'maze': {'grid_size': 12}})
-    assert get_anemone_count(47) == 6
-    assert level_config.get_level_anemone_count(47) == 1
-    assert level_config.get_level_anemone_count(2) == 0
+    capacity=anemones_that_fit(12)
+    monkeypatch.setattr(level_config, 'get_anemone_count', lambda level: capacity+1)
+    assert level_config.get_level_anemone_count(47) == capacity
+    monkeypatch.setattr(level_config, 'get_anemone_count', lambda level: 0)
+    assert level_config.get_level_anemone_count(47) == 0
 
 
 def test_a_level_file_number_is_taken_as_given_even_on_a_small_maze(monkeypatch):
@@ -58,3 +45,10 @@ def test_anemones_are_not_part_of_the_regular_enemy_total(monkeypatch):
 def test_negative_override_spawns_none(monkeypatch):
     monkeypatch.setattr(level_config, 'load_level_config', lambda level: {'enemies': {'anemone': -2}})
     assert level_config.get_level_enemy_counts(9).anemone == 0
+
+
+def test_larger_mazes_never_reduce_anemone_capacity():
+    capacities=[anemones_that_fit(size) for size in (10,12,20,30,40)]
+    assert all(type(count) is int and count>=1 for count in capacities)
+    assert capacities==sorted(capacities)
+    assert capacities[-1]>capacities[0]

@@ -59,7 +59,7 @@ def fly(path, iteration):
                 raise ValueError(f'replay diverged in episode {i}: {actual} != {comparable}')
             rows.append(dict(episode=i,level=job['level'],seed=job['seed'],panic=0,
                              kills=0,**{'return':actual.get('landing_reward',rewards.get('successful_landing',0.))*actual.get('successful_landings',0)+actual.get('trial_completion_reward',0.)+sum(actual.get(k,0.) for k in ('battle_alive_reward','battle_survival_bonus','battle_kill_reward','battle_death_penalty'))+actual.get('jump_proximity_reward',0.)+rewards['team_hit']*actual['hits']+rewards['shot']*actual['shots']+rewards.get('predicted_shot_accuracy',0.)*actual.get('aim_quality_sum',0.)-actual.get('jump_cost',-rewards.get('voluntary_jump',0.))*actual.get('voluntary_jumps',0)+rewards.get('walk_reversal',0.)*actual.get('walk_reversals',0)+rewards.get('bullet_hit',0.)*actual.get('bullet_hits_taken',0)+rewards.get('contact_hit',0.)*actual.get('contact_hits_taken',0)},
-                             end='horizon' if result.truncated else ('targets_cleared' if actual.get('targets_cleared') else 'team_dead'),**actual))
+                             end='battle_success' if actual.get('battle_success') else ('horizon' if result.truncated else ('targets_cleared' if actual.get('targets_cleared') else 'team_dead')),**actual))
         return rows
     finally:
         env.close()

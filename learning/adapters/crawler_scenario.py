@@ -79,7 +79,7 @@ class CrawlerEnvironment:
         self.world = None
         self.render_frames = None
 
-    def reset(self, seed, level=11, team_size=2, opponents='hunter', practice_stage='shooting', jumping=None, neural_hunter=False):
+    def reset(self, seed, level=11, team_size=2, opponents='hunter', practice_stage='shooting', jumping=None, neural_hunter=False, jelly_count=None):
         import pygame
         import config
         import creatures
@@ -96,6 +96,10 @@ class CrawlerEnvironment:
             raise ValueError('unknown practice stage')
         if neural_hunter and opponents != 'practice':
             raise ValueError('neural_hunter is only supported with practice opponents')
+        from learning.adapters.allied_jellyfish import PURSUER_COUNT
+        if jelly_count is not None and (practice_stage != 'pursuit' or type(jelly_count) is not int or not 1 <= jelly_count <= PURSUER_COUNT):
+            raise ValueError('jelly_count requires a pursuit drill and a valid pursuer count')
+        self.jelly_count = PURSUER_COUNT if jelly_count is None else jelly_count
         self.neural_hunter = neural_hunter
         self.aim_drill = practice_stage in ('precision','tracking')
         if self.aim_drill and (opponents != 'practice' or neural_hunter):
@@ -211,7 +215,7 @@ class CrawlerEnvironment:
                         target.vx = target.vy = 0.
             elif practice_stage == 'pursuit':
                 from learning.adapters.allied_jellyfish import create_pursuers
-                self.world.additional_targets = create_pursuers(self,positions,seed)
+                self.world.additional_targets = create_pursuers(self,positions,seed,count=self.jelly_count)
                 # These are established wall occupants, not newly landed crawlers.
                 # Subsequent landings still enforce the normal one-second cooldown.
                 for c in self.team.members():c.wall_attach_cooldown=0
@@ -365,7 +369,7 @@ class CrawlerEnvironment:
         for c in living:
             self.agent_battle_alive[c.agent_id] += BATTLE_ALIVE_RATE * elapsed / 60
         self._battle_reward_frame = self.frames
-        if self.frames >= self.horizon * 60 and not self._battle_horizon_awarded:
+        if self.battle_success() and not self._battle_horizon_awarded:
             self.agent_battle_survival.update({c.agent_id:BATTLE_SURVIVAL_BONUS for c in living})
             self._battle_horizon_awarded = True
 
@@ -376,6 +380,7 @@ class CrawlerEnvironment:
                     battle_survival_bonus=sum(self.agent_battle_survival.values()),
                     battle_kill_reward=BATTLE_KILL_REWARD*sum(self.agent_jelly_kills.values()),
                     battle_death_penalty=-BATTLE_DEATH_COST*dead,
+                    battle_success=self.battle_success(),
                     battle_deaths=dead, battle_jelly_kills=sum(self.agent_jelly_kills.values()))
 
     def jump_bonus(self, crawler):
@@ -434,8 +439,14 @@ class CrawlerEnvironment:
         return Snapshot({i: v[0] for i, v in batch.items()}, {i: v[1] for i, v in batch.items()}, critic(self.team),
                         {i:critic(self.team,i) for i in batch} if self.aiming_practice else None)
 
+    def battle_success(self):
+        return (self.practice_stage == 'pursuit' and bool(self.team.members())
+                and (self.frames >= self.horizon*60
+                     or (self.opponent is None and bool(self.world.additional_targets)
+                         and not any(t.active for t in self.world.additional_targets))))
+
     def trial_complete(self):
-        return (not bool(self.world.roster.alive()) or
+        return (self.battle_success() or not bool(self.world.roster.alive()) or
                 (self.opponents=='practice' and self.opponent is None
                  and not any(t.active for t in self.world.additional_targets)))
 
@@ -564,6 +575,9 @@ def environment(**kwargs):
 
 # Scenario policy belongs to this adapter, not to the optimiser or run manager.
 INITIAL_STAGE = 4
+from learning.adapters import battle_curriculum
+INITIAL_CURRICULUM = battle_curriculum.INITIAL_STATE
+advance_curriculum = battle_curriculum.advance
 IMITATION_BALANCED = True
 IMITATION_EPOCHS = 64
 IMITATION_REHEARSAL_WEIGHT = .1
@@ -597,6 +611,7 @@ def metadata(args):
                           'speed_distribution':'uniform_per_creature_fixed_per_trial','speed_seed_offset':43000,'health':PURSUER_HEALTH,'minimum_start_distance':PURSUER_START_DISTANCE,'start_approach':'prefer_30_to_45_degrees_off_normal','initial_attachment':'settled_cooldown_zero',
                           'contact_damage':CONTACT_DAMAGE,'contact_interval_frames':CONTACT_INTERVAL,
                           'creature':dataclasses.asdict(enemy_kinds.kind('aggressive'))},
+                battle_curriculum=battle_curriculum.metadata(),
                 curriculum={'name':'continuous_aim_focus','shooting_share':SHOOTING_SHARE,'team_size':INITIAL_STAGE,
                            'warmup_iterations':AIM_WARMUP_ITERATIONS,
                            'warmup_mix':{'precision':.5,'tracking':.25,'pursuit':.25},
@@ -607,7 +622,7 @@ def metadata(args):
                            'dodge_targets':DODGE_TARGET_COUNT,'burst_size':DODGE_BURST_SIZE,'burst_spacing_frames':DODGE_BURST_SPACING,
                            'burst_interval_frames':DODGE_FIRE_INTERVAL,'dodge_jump_cost':DODGE_JUMP_COST,
                            'initial_fire_delay_frames':[60,120],'promotion':'manual_after_paired_jump_evaluation'},
-                task=SPEC.task, scenario_version=55, policy_spec=SPEC.metadata(),
+                task=SPEC.task, scenario_version=56, policy_spec=SPEC.metadata(),
                 aim_actuator={'distribution':'tanh_gaussian','recorded_action':'pre_squash_activation',
                               'max_degrees_per_second':180,'log_std_bounds':[-5.,1.]},
                 communication={'enabled':True,'symbols':8,'silence_symbol':0,
@@ -626,7 +641,7 @@ def metadata(args):
                 airborne_firing={'enabled':True,'stunned':False,'aim_reference':'world_stabilised'},
                 battle_rewards={'alive_per_second':BATTLE_ALIVE_RATE,'survival_bonus':BATTLE_SURVIVAL_BONUS,
                                 'death_cost':BATTLE_DEATH_COST,'jelly_kill':BATTLE_KILL_REWARD,
-                                'success':'alive_at_horizon','hunter_invulnerable':True},
+                                'success':'alive_at_horizon_or_hunter_free_clear','terminal_success':True,'hunter_invulnerable':True},
                 landing_reward={'battle':0.,'aim_drills':0.,'scope':'individual','award':'once_per_completed_voluntary_hop',
                                 'damage_interruption_cancels':True},
                 jump_proximity={'range_pixels':JUMP_PROXIMITY_RANGE,'distance':'body_clearance','pursuit_jump_cost':0.,
@@ -654,8 +669,9 @@ def metadata(args):
                 train_levels=list(TRAIN_LEVELS),holdout_levels=list(HOLDOUT_LEVELS),observation_version=SPEC.version)
 
 
-def training_cases(iteration, count, stage, bootstrap=False):
+def training_cases(iteration, count, stage, bootstrap=False, curriculum=None):
     from learning.adapters.crawler_curriculum import AIM_WARMUP_ITERATIONS, AIM_TEAM_SIZE
+    battle = battle_curriculum.STAGES[(curriculum or INITIAL_CURRICULUM)['stage']]
     stationary_slots = 6 if iteration < AIM_WARMUP_ITERATIONS else 3
     cases = []
     for i in range(count):
@@ -665,7 +681,9 @@ def training_cases(iteration, count, stage, bootstrap=False):
         cases.append(dict(level=TRAIN_LEVELS[index%len(TRAIN_LEVELS)],
                           seed=100+i if bootstrap else 300+index%100,
                           team_size=stage if practice_stage=='pursuit' else AIM_TEAM_SIZE, opponents='practice',
-                          neural_hunter=practice_stage=='pursuit',practice_stage=practice_stage))
+                          neural_hunter=practice_stage=='pursuit' and battle['neural_hunter'],
+                          **({'jelly_count':battle['jelly_count']} if practice_stage=='pursuit' else {}),
+                          practice_stage=practice_stage))
     return cases
 
 
@@ -705,6 +723,10 @@ def metrics(rows):
                 survival=float(np.mean([r['alive']/r['team_size'] for r in rows])),
                 hits_per_crawler=float(np.mean([r['hits']/r['team_size'] for r in rows])),
                 hits=hits,shots=shots,episodes=len(rows),
+                battle_trials=sum(r.get('practice_stage')=='pursuit' for r in rows),
+                battle_survivors=sum(r['alive'] for r in rows if r.get('practice_stage')=='pursuit'),
+                battle_crawlers=sum(r['team_size'] for r in rows if r.get('practice_stage')=='pursuit'),
+                battle_successes=sum(bool(r.get('battle_success')) for r in rows if r.get('practice_stage')=='pursuit'),
                 battle_episodes=sum(r.get('practice_stage')=='pursuit' for r in rows),
                 aim_drill_episodes=sum(r.get('practice_stage') in ('precision','tracking') for r in rows),
                 mean_aim_quality=sum(r.get('aim_quality_sum',0.) for r in rows)/max(1,shots),
