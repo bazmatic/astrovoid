@@ -24,6 +24,8 @@ def rollout_job(job):
     env = adapter.environment(opponent=job['opponent'], horizon=job['horizon'], muted=job['muted'],
                               arenas=recorded.get('manifest', {}).get('arenas'), scripted=job['mode']=='scripted', **options)
     policy = RecurrentPolicy.load(job['weights'], adapter.SPEC)
+    if job['mode'] == 'sample' and hasattr(env, 'enable_training_limits'):
+        env.enable_training_limits()
     teacher = env.adapter.teacher_action if job['mode'] == 'teacher' else None
     case = dict(job['case']); seed = case.pop('seed')
     labeller = (lambda env, i: env.adapter.teacher_action(env, i, None)) if (

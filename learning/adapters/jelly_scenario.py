@@ -87,8 +87,18 @@ class JellyEnvironment:
         if self.rewards['boredom_window'] <= 0 or self.rewards['boredom_distance'] <= 0 or self.rewards['boredom_penalty'] < 0:
             raise ValueError('boredom needs a positive window/distance and a nonnegative penalty')
         self.lessons = lessons or jelly_curriculum.metadata()
+        self.training_limits = False
         self.world = None
         self.render_frames = None
+
+    def enable_training_limits(self):
+        """Training rollouts may end an episode early (no_catch_timeout); evaluation and replay never do."""
+        self.training_limits = True
+
+    def stale(self):
+        """No catch for no_catch_timeout seconds: the rest of the episode would only repeat a failure."""
+        limit = self.rewards['no_catch_timeout']
+        return self.training_limits and limit > 0 and self.frames - self.last_catch_frame >= limit*60
 
     def reset(self, seed, level=11, team_size=1, stage=1, lesson='cave'):
         import pygame
@@ -197,6 +207,7 @@ class JellyEnvironment:
         self.level, self.seed, self.team_size, self.stage = level, seed, team_size, stage
         self.agent_ids = tuple(range(team_size))
         self.frames = 0
+        self.last_catch_frame = 0
         self.agent_catches = Counter()
         self.agent_returns = Counter()
         self.agent_stuck_frames = Counter()
@@ -276,7 +287,7 @@ class JellyEnvironment:
         return not self.team.members() or (self.ship is not None and not self.ship.active)
 
     def ended(self):
-        return self.finished or self.frames >= self.episode_horizon*60 or self.terminal()
+        return self.finished or self.frames >= self.episode_horizon*60 or self.terminal() or self.stale()
 
     def catch(self, rewards):
         """Body contact with a target is a catch: the toucher takes CATCH_REWARD, each other living Jelly a share."""
@@ -291,6 +302,7 @@ class JellyEnvironment:
                 continue
             caught += 1
             self.agent_catches[toucher.agent_id] += 1
+            self.last_catch_frame = self.frames
             self.touched()
             for c in members:
                 earned = self.rewards['catch_reward']
@@ -428,7 +440,7 @@ class JellyEnvironment:
         self.formation(rewards, frames)
         self.agent_returns.update(rewards)
         terminated = self.terminal()
-        truncated = self.frames >= self.episode_horizon*60 and not terminated
+        truncated = (self.frames >= self.episode_horizon*60 or self.stale()) and not terminated
         return Transition(self.snapshot(), sum(rewards.values()), terminated, truncated, self.events(),
                           agent_rewards=rewards)
 
@@ -559,6 +571,7 @@ def metadata(args):
                            'context': 'current_navigation_lesson; cave benchmark reported separately',
                            'validation_cases': validation_cases()},
                 navigation=jelly_curriculum.metadata(),
+                training_limits=dict(no_catch_timeout_seconds=configured['no_catch_timeout']),
                 boredom=dict(window_seconds=configured['boredom_window'], distance_pixels=configured['boredom_distance']),
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',

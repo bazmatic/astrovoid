@@ -159,3 +159,20 @@ def test_a_caught_target_respawns_even_when_the_jelly_hugs_a_curved_cave_wall(tm
         assert any(math.dist((target.x, target.y), cell) < 1e-6 for cell in env.cells)
     finally:
         env.close()
+
+
+def test_training_rollouts_end_early_after_a_long_gap_without_a_catch_but_evaluation_does_not():
+    def run(training):
+        env = scenario.JellyEnvironment(horizon=30., rewards=dict(no_catch_timeout=3.))
+        if training:
+            env.enable_training_limits()
+        try:
+            env.reset(5, lesson='cave')
+            while True:
+                result = env.step({0: (0., -3.)})   # braking never catches anything
+                if result.truncated:
+                    return result.events['seconds']
+        finally:
+            env.close()
+    assert run(training=True) == pytest.approx(3., abs=.2)
+    assert run(training=False) == 30.
