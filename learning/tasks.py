@@ -3,13 +3,19 @@ from dataclasses import dataclass, field
 import importlib
 
 
-REPLAY_MODES = ('hooks', 'legacy_check', None)
+REPLAY_MODES = ('hooks', 'builtin', None)
 SETTINGS_SCOPES = ('listed', 'unclaimed')
 
 
 @dataclass(frozen=True)
 class Capabilities:
-    """What the trainer UI may offer for a task; the defaults describe a plain task."""
+    """What the trainer UI may offer for a task; the defaults describe a plain task.
+
+    replay_mode: 'hooks' replays through the task's replay hooks module, and watching an episode first validates it
+    with `tools.watch_episode --check`; 'builtin' is the built-in Hunter replay path (its episode job list in
+    tools.watch_episode, no hooks module, no pre-watch check); None means the task's runs cannot be replayed.
+    settings_scope: 'listed' offers the common settings and the task's options; 'unclaimed' also offers every setting
+    no other task lists in its options."""
     fresh_weights: bool = True
     actor_damping: bool = False
     replay_mode: str | None = 'hooks'
@@ -43,7 +49,7 @@ class Task:
 
 TASKS = {
     'hunter': Task('hunter', 'learning.adapters.hunter', 'Hunter', dashboard='learning.adapters.hunter_dashboard',
-        capabilities=Capabilities(fresh_weights=False, actor_damping=False, replay_mode='legacy_check',
+        capabilities=Capabilities(fresh_weights=False, actor_damping=False, replay_mode='builtin',
                                   settings_scope='unclaimed')),
     'wallcrawler_team': Task('wallcrawler_team', 'learning.adapters.crawler_scenario', 'Wallcrawler team',
         dict(horizon=60.0,workers=4,iterations=10000),

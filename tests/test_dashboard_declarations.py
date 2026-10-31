@@ -48,7 +48,7 @@ def test_capabilities_defaults_and_validation():
     assert Capabilities() == Capabilities(True, False, 'hooks', 'listed')
     assert Task('t', 'm', 'T').capabilities == Capabilities() and Task('t', 'm', 'T').dashboard is None
     Capabilities(replay_mode=None)
-    Capabilities(replay_mode='legacy_check', settings_scope='unclaimed')
+    Capabilities(replay_mode='builtin', settings_scope='unclaimed')
     with pytest.raises(ValueError):
         Capabilities(replay_mode='bogus')
     with pytest.raises(ValueError):

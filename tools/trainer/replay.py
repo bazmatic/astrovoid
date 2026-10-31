@@ -27,8 +27,8 @@ def _task(path):
 
 
 def _replay_mode(path):
-    """How the run's episodes replay: 'hooks' (its task's replay module), 'legacy_check' (the Hunter's own episode
-    jobs) or None (its task cannot replay). Refuses a task that cannot."""
+    """How the run's episodes replay (see learning.tasks.Capabilities): 'hooks' (its task's replay module, checked
+    before watching) or 'builtin' (the Hunter's episode jobs). Refuses a task whose mode is None."""
     mode = _task(path).capabilities.replay_mode
     if mode is None:
         raise TrainerError(f'{path.name} cannot be replayed: its task does not replay episodes')

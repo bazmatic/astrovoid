@@ -384,7 +384,7 @@ def test_a_new_task_plugs_in_without_changing_the_dashboard_or_trainer(setup, mo
     run.mkdir()
     (run / 'iter0000.npz').write_bytes(b'')
     (run / 'config.json').write_text(json.dumps({'task': 'demo', 'shaping': {}, 'episode': {}}))
-    with pytest.raises(control.TrainerError, match='^actor damping is supported only for wallcrawler runs$'):
+    with pytest.raises(control.TrainerError, match='^actor damping is supported only for '):
         control.start('run60', root=setup['root'], processes=[], launch=FakeLaunch(), actor_scale=.5)
     assert post(setup, '/api/episodes', {'run': 'run60', 'iteration': 0}) == \
         (200, [{'episode': 0, 'level': 7, 'seed': 3}])

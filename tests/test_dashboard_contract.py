@@ -124,7 +124,7 @@ def test_legacy_free_shots_alias_resolves_to_unaimed_shots():
 
 
 def test_task_capabilities():
-    assert TASKS['hunter'].capabilities == Capabilities(False, False, 'legacy_check', 'unclaimed')
+    assert TASKS['hunter'].capabilities == Capabilities(False, False, 'builtin', 'unclaimed')
     assert TASKS['wallcrawler_team'].capabilities == Capabilities(True, True, 'hooks', 'listed')
     assert TASKS['jelly_team'].capabilities == Capabilities(True, False, 'hooks', 'listed')
     assert {key: spec.dashboard for key, spec in TASKS.items()} == {

@@ -104,6 +104,15 @@ def _actor_damping(key):
         return False
 
 
+def _damping_refusal():
+    """Why actor damping was refused, naming the creatures (a task label's first word) whose tasks support it."""
+    from learning.tasks import TASKS
+    creatures = [t.label.split()[0].lower() for t in TASKS.values() if t.capabilities.actor_damping]
+    if not creatures:
+        return 'actor damping is not supported for any task'
+    return f"actor damping is supported only for {' and '.join(creatures)} runs"
+
+
 def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, actor_scale=1.):
     """Start a new run carrying on from a checkpoint (default: the newest run's last), with settings changed."""
     if not 0<actor_scale<=1:
@@ -138,7 +147,7 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, a
         base = read_settings(source.path, run_folders(root))
         source_task = (config_of(source.path) or {}).get('task', UNTAGGED_TASK)
         if actor_scale!=1 and not _actor_damping(source_task):
-            raise TrainerError('actor damping is supported only for wallcrawler runs')
+            raise TrainerError(_damping_refusal())
         if 'task' in (changes or {}) and changes['task'] != source_task:
             raise TrainerError('cannot transfer a checkpoint between creature tasks; start a new task')
         try:

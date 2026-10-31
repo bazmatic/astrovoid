@@ -136,8 +136,9 @@ metric means writing one declaration in one place, with no page or server edits.
   and its Wallcrawler-worded "Demonstration rehearsal loss" chart are declared by the Wallcrawler only; Jelly
   does not declare it (imitation bootstrap is off by default).
 - **Capabilities preserve today's behaviour exactly.** Actor damping stays Wallcrawler-only (Jelly unchanged).
-  "Fresh weights" stays unavailable for Hunter and available for Wallcrawler and Jelly. The Hunter-only
-  `--check` subprocess replay path becomes a replay-mode capability. The Hunter default for settings scoping ("every
+  "Fresh weights" stays unavailable for Hunter and available for Wallcrawler and Jelly. Which replay path a task
+  uses becomes a replay-mode capability: 'hooks' (the task's replay hooks, `--check` before watching), 'builtin' (the
+  Hunter's built-in path, no pre-watch check) or None (not replayable). The Hunter default for settings scoping ("every
   setting that is not another task's option") becomes an explicit per-task settings rule. The `'hunter'` default
   for untagged run configs and `UNTAGGED_REPLAY_TASK` are legacy data defaults, not task comparisons: they stay,
   but as named constants in the task registry.
