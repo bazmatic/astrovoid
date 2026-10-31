@@ -1070,3 +1070,11 @@ def test_training_pulls_the_policy_toward_what_the_teacher_would_do_in_the_state
     for _ in range(30):
         update_team(net, optimiser, episodes, rng, teacher_weight=1., teacher_heads=('heading', 'accel'))
     assert gap() < before * .7
+
+
+def test_neural_jellies_switch_replaces_every_campaign_jelly_and_leaves_other_enemies(monkeypatch):
+    from game_handlers.spawn_manager import make_enemy
+    assert make_enemy('aggressive', POS, 5, None).kind.key == 'aggressive'
+    monkeypatch.setenv('NEURAL_JELLIES', '1')
+    assert make_enemy('aggressive', POS, 5, None).kind.key == 'neural_jelly'
+    assert make_enemy('static', POS, 5, None).kind.key == 'static'

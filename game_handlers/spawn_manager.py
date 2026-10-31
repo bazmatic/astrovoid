@@ -6,6 +6,7 @@ in the start_level() method.
 
 from dataclasses import dataclass
 from typing import List, Tuple, Callable, Optional, TYPE_CHECKING
+import os
 import random
 import math
 import enemy_kinds
@@ -46,6 +47,8 @@ def make_enemy(kind, pos, level, command_recorder):
     if kind not in enemy_kinds.kinds() or enemy_kinds.kind(kind).body is None:
         raise ValueError(f'cannot make an enemy of type {kind!r}')
     import creatures
+    if kind == 'aggressive' and os.getenv('NEURAL_JELLIES'):
+        kind = 'neural_jelly'   # play-testing switch: every campaign Jelly gets the trained brain (see JELLY_POLICY)
     return creatures.build(kind, pos, level, command_recorder)
 
 
