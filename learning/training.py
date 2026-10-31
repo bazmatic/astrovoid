@@ -20,13 +20,15 @@ def build_network(policy, critic_size):
     return net
 
 
-def collect(env, policy, seed, scenario, greedy=False, teacher=None):
+def collect(env, policy, seed, scenario, greedy=False, teacher=None, labeller=None):
+    """One episode. `labeller(env, agent)`, if given, is asked what the teacher would do in every state the policy
+    actually visits; the answers are recorded as e['teacher'] (DAgger-style supervision for the update)."""
     snap = env.reset(seed, **scenario)
     ids = tuple(snap.observations)
     states = {i: policy.initial_state() for i in ids}
     rngs = {i: np.random.default_rng(np.random.SeedSequence([seed, i])) for i in ids}
     episodes = {i: dict(x=[], critic=[], actions=[], alive=[], rewards=[], enabled=[],
-                        legal={k: [] for k,_ in policy.spec.heads}) for i in ids}
+                        legal={k: [] for k,_ in policy.spec.heads}, teacher=[]) for i in ids}
     while True:
         actions = {}
         for i in ids:
@@ -39,8 +41,10 @@ def collect(env, policy, seed, scenario, greedy=False, teacher=None):
                 if teacher is not None:
                     action = teacher(env, i, action)
                 actions[i] = action
+                e['teacher'].append(labeller(env, i) if labeller else None)
             else:
                 action = tuple(0 for _ in policy.spec.heads)
+                e['teacher'].append(None)
             active = env.adapter.enabled(x, action, masks) if alive else [False]*len(policy.spec.heads)
             e['x'].append((x-policy.mean)/policy.scale); e['critic'].append((snap.agent_critics or {}).get(i,snap.critic)); e['actions'].append(action)
             e['alive'].append(alive); e['enabled'].append(active)

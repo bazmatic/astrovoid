@@ -1037,3 +1037,36 @@ def test_teacher_follows_a_wall_when_route_is_unavailable_and_uses_a_new_opening
     wall.active = False
     intent = adapter.intention(adapter.teacher(jelly, enc), adapter.facing(jelly))
     assert abs(intent.heading) < .01 and intent.accel > .9
+
+
+def test_training_pulls_the_policy_toward_what_the_teacher_would_do_in_the_states_it_visits():
+    """DAgger: the Jelly flies its own episode, the teacher labels every state it reaches, and updates reduce the
+    gap between the policy's heading and the teacher's."""
+    import numpy as np
+    import torch
+    from learning.adapters import jelly_scenario as scenario
+    from learning.ppo import update_team
+    from learning.training import build_network, collect
+    policy = random_policy(adapter.SPEC, 0)
+    label = lambda env, i: env.adapter.teacher_action(env, i, None)
+    env = scenario.environment(horizon=4.)
+    try:
+        episodes = collect(env, policy, 7, dict(level=14, team_size=1, stage=1), labeller=label)[0]
+    finally:
+        env.close()
+    assert any(t is not None for t in episodes[0]['teacher'])
+    net = build_network(policy, adapter.CRITIC_SIZE)
+    x = torch.as_tensor(np.asarray(episodes[0]['x']), dtype=torch.float32)[None]
+    critic = torch.as_tensor(np.asarray(episodes[0]['critic']), dtype=torch.float32)[None]
+    taught = torch.as_tensor([t is not None for t in episodes[0]['teacher']])
+    target = torch.as_tensor([t[0] if t else 0. for t in episodes[0]['teacher']]).tanh()
+
+    def gap():
+        with torch.no_grad():
+            return float((net(x, critic)[0]['heading'][0, :, 0].tanh()-target)[taught].square().mean())
+    before = gap()
+    optimiser = torch.optim.Adam(net.parameters(), lr=3e-3)
+    rng = np.random.default_rng(0)
+    for _ in range(30):
+        update_team(net, optimiser, episodes, rng, teacher_weight=1., teacher_heads=('heading', 'accel'))
+    assert gap() < before * .7

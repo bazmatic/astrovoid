@@ -26,8 +26,10 @@ def rollout_job(job):
     policy = RecurrentPolicy.load(job['weights'], adapter.SPEC)
     teacher = env.adapter.teacher_action if job['mode'] == 'teacher' else None
     case = dict(job['case']); seed = case.pop('seed')
+    labeller = (lambda env, i: env.adapter.teacher_action(env, i, None)) if (
+        job['mode'] == 'sample' and getattr(adapter, 'DAGGER_WEIGHT', 0)) else None
     try:
-        return collect(env, policy, seed, case, greedy=job['mode'] != 'sample', teacher=teacher)
+        return collect(env, policy, seed, case, greedy=job['mode'] != 'sample', teacher=teacher, labeller=labeller)
     finally:
         env.close()
 
@@ -220,7 +222,8 @@ def train(args):
             rollout_seconds = time.monotonic()-rollout_at
             update_at = time.monotonic()
             stats = update_team(net, optimiser, [e for result in flown for e in result[0]], rng,
-                                gamma=args.gamma, lam=args.gae_lambda,imitation_loss=rehearsal_loss if rehearsal is not None else None)
+                                gamma=args.gamma, lam=args.gae_lambda,imitation_loss=rehearsal_loss if rehearsal is not None else None,
+                                teacher_weight=getattr(adapter,'DAGGER_WEIGHT',0.), teacher_heads=tuple(adapter.IMITATION_HEADS))
             policy = export(net, policy)
             previous, current = current, f'iter{iteration:04d}.npz'
             policy.save(out/current)

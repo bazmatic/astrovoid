@@ -146,7 +146,8 @@ def masked_statistics(logits, actions, legal, enabled, continuous=()):
     return logp, entropy
 
 
-def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, clip=0.2, imitation_loss=None):
+def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, clip=0.2, imitation_loss=None,
+                teacher_weight=0., teacher_heads=()):
     """Shared recurrent PPO with optional privileged value inputs and per-agent action masks.
 
     Agent trajectories share team rewards. Dead agents have no actor loss; the team critic
@@ -164,7 +165,13 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
     enabled = torch.zeros(b, length, h)
     legal = {k: torch.ones(b, length, head.out_features, dtype=torch.bool) for k, head in net.heads.items()}
     bootstrap = torch.zeros(b)
+    # DAgger: what the teacher would have done in each state the policy visited (episodes recorded with a labeller).
+    labelled = torch.zeros(b, length, h, dtype=torch.bool)
+    labels = torch.zeros(b, length, h)
     for i, e in enumerate(episodes):
+        for t, label in enumerate(e.get('teacher', ())):
+            if label is not None and teacher_weight:
+                labels[i, t] = torch.as_tensor(np.asarray(label, np.float32)); labelled[i, t] = True
         n = len(e['x']); valid[i, :n] = True
         x[i, :n] = torch.as_tensor(np.asarray(e['x']))
         critic[i, :n] = torch.as_tensor(np.asarray(e['critic']))
@@ -201,6 +208,15 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
             value_loss = (values-returns[i]).square()[valid[i]].mean()
             ent = entropy[mask].mean()
             imitation = imitation_loss(net,rng) if imitation_loss is not None else policy_loss*0
+            teacher_loss = policy_loss*0
+            if teacher_weight and (labelled[i] & mask[..., None]).any():
+                for name in teacher_heads:
+                    k = list(net.heads).index(name)
+                    taught = labelled[i][..., k] & mask
+                    if taught.any():
+                        error = logits[name][..., 0].tanh()-labels[i][..., k].tanh()
+                        teacher_loss = teacher_loss+error.square()[taught].mean()/len(teacher_heads)
+            imitation = imitation+teacher_weight*teacher_loss
             loss = policy_loss+0.5*value_loss-0.01*ent+imitation
             if not torch.isfinite(loss):
                 raise ValueError('non-finite PPO loss')
@@ -209,5 +225,6 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
                 raise ValueError('non-finite PPO gradient')
             optimiser.step()
             stats = dict(policy_loss=float(policy_loss.detach()), value_loss=float(value_loss.detach()),
-                         entropy=float(ent.detach()), imitation_loss=float(imitation.detach()))
+                         entropy=float(ent.detach()), imitation_loss=float(imitation.detach()),
+                         teacher_loss=float(teacher_loss.detach()))
     return stats

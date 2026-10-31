@@ -509,10 +509,9 @@ def environment_options(manifest):
 # Scenario policy belongs to this adapter, not to the optimiser or run manager.
 INITIAL_STAGE = 1
 IMITATION_HEADS = ('heading', 'accel')
-# The teacher keeps teaching during PPO (rehearsal of its saved demonstrations), so the wall-following it shows when
-# the quarry is behind a wall is not unlearnt by reinforcement of straight-line progress.
-IMITATION_REHEARSAL_WEIGHT = .1
-BOOTSTRAP_LESSONS = ('cave', 'cave', 'cave', 'open')
+# DAgger: while the Jelly flies its own episodes, the teacher is asked what it would do in every state the Jelly reaches,
+# and the policy is pulled toward those answers (weight of the squared error between tanh outputs).
+DAGGER_WEIGHT = .5
 REWARDS = {'catch': CATCH_REWARD, 'team_catch_share': TEAM_CATCH_SHARE, 'progress_per_pixel': PROGRESS_REWARD,
            'stuck_per_decision': -STUCK_PENALTY, 'stage2_flank_per_decision': FLANK_REWARD,
            'stage2_bunch_per_pair_decision': -BUNCH_PENALTY, 'stage3_ship_hit': SHIP_HIT_REWARD,
@@ -602,11 +601,8 @@ def training_cases(iteration, count, stage, bootstrap=False, curriculum=None):
         else:
             cases.append(dict(level=level, seed=seed, team_size=1, stage=1 if stage >= 2 else stage))
     if curriculum is not None:
-        if curriculum['stage'] < 2 or bootstrap:
+        if curriculum['stage'] < 2:
             cases = [dict(c, stage=1, team_size=1) for c in cases]
-        if bootstrap:
-            # The teacher's value is what to do when a wall is in the way, so most of its demonstrations are caves.
-            return [dict(c, lesson=BOOTSTRAP_LESSONS[i % len(BOOTSTRAP_LESSONS)]) for i, c in enumerate(cases)]
         return jelly_curriculum.cases(cases, curriculum)
     return cases
 
