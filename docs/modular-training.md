@@ -2,7 +2,7 @@
 
 Astrovoid separates creature control, encounter design, numerical learning, and run management. The wallcrawler team uses the shared training lifecycle. Hunter training keeps its existing recorder, value model, checkpoint format, and CLI training path; its numeric environment adapter also supports the shared stepping interface.
 
-For crawler mechanics and the history of reward changes, see [Creature training](creature-training.md). This guide describes the implementation and extension points as of scenario 55 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
+For crawler mechanics and the history of reward changes, see [Creature training](creature-training.md). This guide describes the implementation and extension points as of scenario 56 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
 
 ## Module map
 
@@ -80,7 +80,7 @@ Iteration records describe rollouts from the **previous** policy: `episodes/iter
 | `demonstrations.pt` | Saved teacher trajectories for optional rehearsal |
 | `iterNNNN.npz`, `best.npz` | Updated actors and validation-selected actor |
 | `episodes/bootstrap.json`, `episodes/iterNNNN.json` | Cases, seeds, joint action traces, outcome events |
-| `resume.pt` | Training network including critic, optimiser, random states, next iteration, stage, elapsed budget, best score |
+| `resume.pt` | Training network including critic, optimiser, random states, next iteration, team size, battle curriculum evidence, elapsed budget, best score |
 | `train.log` | Iteration metrics and optimisation statistics |
 | `state.json` | Explicit lifecycle state when written by the trainer |
 | `evaluation.json` | Final held-out comparisons, or an incomplete-budget report |
@@ -135,7 +135,7 @@ Evaluation compares trained, scripted, and muted-radio policies. `--suite pursui
 
 ## Current crawler curriculum
 
-The repeating twelve-case schedule contains three stationary precision drills, six moving-target tracking drills, and three pursuit battles. Aiming uses two crawlers and twelve harmless targets; battles currently use four crawlers, four allied Jelly pursuers, and a frozen neural hunter. Walking, jumping, airborne firing, recoil, and radio remain available. The hunter accepts normal hits and immunity accounting but has its health restored, so it cannot be killed in this scenario.
+The repeating twelve-case schedule contains three stationary precision drills, six moving-target tracking drills, and three pursuit battles. Aiming uses two crawlers and twelve harmless targets; battles use four crawlers and progress from one Jelly to two, four, and finally four plus the frozen armed neural hunter. Walking, jumping, airborne firing, recoil, and radio remain available. The hunter accepts normal hits and immunity accounting but has its health restored, so it cannot be killed in this scenario.
 
 | Reward component | Aiming drills | Pursuit battles |
 | --- | --- | --- |
@@ -150,11 +150,13 @@ The repeating twelve-case schedule contains three stationary precision drills, s
 | Damaging bullet impact received | −1 | −1 |
 | Jelly contact received | −5 if applicable | −5 |
 | Time alive | 0 | +0.1 per living crawler per second |
-| Survive to horizon | 0 | +20 per surviving crawler, once |
+| Battle success | 0 | +20 per surviving crawler, once |
 | Crawler death | 0 additional | −40 to dead crawler, once |
 | Destroy a Jelly | 0 extra | +5 to final shooter, in addition to hit rewards |
 
-A Jelly takes two crawler hits, so a kill earns +7 total before shot costs. Contact damage is lethal to a full-health crawler; hunter bullets are weak physical hits but still incur their reward cost. Battle success is survival to the time limit. The shaping bonus for a proximity launch is still present; completed landings cannot generate extra battle reward.
+A Jelly takes two crawler hits, so a kill earns +7 total before shot costs. Contact damage is lethal to a full-health crawler; hunter bullets are weak physical hits but still incur their reward cost. Battle success means reaching the time limit alive or clearing all Jellies in a hunter-free stage. Both are terminal outcomes with no critic bootstrap; an uncleared aiming horizon remains truncated. The shaping bonus for a proximity launch is still present; completed landings cannot generate extra battle reward.
+
+New runs start at the one-Jelly stage. Each non-overlapping block of at least 100 completed training battle trials must achieve at least 50% crawler survival and 60% successful trials before promotion. Failed blocks reset the evidence without increasing difficulty. Curriculum state and evidence counters are saved in `resume.pt`; a new checkpoint continuation starts a new curriculum, while resuming retains progress. Held-out battles always use the full encounter. Scenario 56 continuation uses gamma 0.997 and GAE lambda 0.97, recorded in its run arguments; these are not changes to legacy hunter defaults.
 
 Validation uses harmless aiming cases and selects by accuracy × hits per minute. Pure battle selection uses mean battle return. Held-out cases span two-, four-, and six-crawler teams. Inspect stage-specific accuracy, survival, and return: aggregate survival mixes safe aiming with lethal battle cases, and higher return after changing reward coefficients does not establish improved behaviour. Logged `mean_return` averages per-agent trajectory returns, whereas stage return metrics sum the event-level team returns before averaging trials.
 
@@ -170,3 +172,35 @@ Validation uses harmless aiming cases and selects by accuracy × hits per minute
 For a reward-only change, edit the scenario rather than PPO or production creature traits. For a new creature ability, implement production mechanics first, then expose the appropriate observation, mask, and actuator through its adapter. Preserve separate training, validation, and held-out cases when extending the curriculum.
 
 Relevant checks include `tests/test_creature_learning.py`, `test_continuous_aim.py`, `test_aim_curriculum.py`, `test_relearning_rewards.py`, `test_firing_recoil.py`, and the trainer control/settings/page tests. Headless game tests use `SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy`.
+
+### Measuring recoil as a manoeuvring tool
+
+`learning.recoil_evaluation` compares a frozen crawler actor on matched held-out
+battle cases, using greedy closed-loop control. One condition keeps normal
+physics; the other removes body linear/angular firing impulses and their recoil
+events while retaining the bullet's inherited muzzle velocity and spin. Training
+runs in separate processes and keeps its normal recoil rules.
+
+```sh
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy venv/bin/python -m learning.recoil_evaluation \
+  .astrovoid-local/neural/rl/run145 --checkpoint iter0950.npz --workers 4 --seeds 10 \
+  --out .astrovoid-local/neural/rl/run145/recoil-ablation-0950.json
+```
+
+The evaluator freezes checkpoint bytes by hash, runs both four-Jelly encounters
+and four-Jelly-plus-hunter encounters, and reports paired differences in survival,
+trial success, Jelly kills, and mean crawler lifetime. Confidence intervals resample
+matched cases. It also attributes projectile hits to attachment state at launch,
+including hits that arrive after their shooter dies. Attached and airborne shot
+counts and accuracies appear in the evaluation report; this instrumentation does
+not change active training events or invalidate its recorded episodes.
+
+An advantage with recoil establishes a benefit under this intervention and case
+set, not proof that each missed shot was an intentional manoeuvre. Removing recoil
+also changes reachable trajectories. Generalisation beyond the tested arenas and
+the greedy policy requires further evaluation.
+
+Unplaceable starts are recorded and excluded only when the same case fails in
+both conditions. A one-sided failure rejects the comparison. Progress is written
+to a sibling `.partial.jsonl` file so completed trial outcomes survive a later
+error. Partial results are not treated as the final matched comparison.

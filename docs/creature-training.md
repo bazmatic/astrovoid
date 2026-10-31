@@ -19,7 +19,7 @@ One run can be active or paused. Stop retains its checkpoints. Pause saves after
 
 Each run stores an immutable opponent checkpoint, arena definitions, tuning, versioned observation/action schema, scenario seeds, per-agent joint actions, contributions, PPO state, `best.npz` and `evaluation.json`. The final ten minutes of a two-hour budget are reserved for evaluation. Short smoke runs reserve one sixth of their budget. A hard wall-clock deadline terminates rollout workers; an incomplete evaluation is recorded as incomplete. Bootstrap and checkpoint selection count against the same budget.
 
-The current repeating schedule mixes stationary precision drills, moving-target tracking drills, and Jellyfish/neural-hunter battles. Aiming drills use two crawlers; battles use four. The current actor is schema 5 with continuous aiming, and scenario 55 adds individual battle survival, death, and Jelly-kill rewards. See the [current curriculum and reward table](modular-training.md#current-crawler-curriculum) for the active rules. Older scenario descriptions below record the evolution of the system rather than current defaults.
+The current repeating schedule mixes stationary precision drills, moving-target tracking drills, and Jellyfish/neural-hunter battles. Aiming drills use two crawlers; battles use four. The current actor is schema 5 with continuous aiming, and scenario 56 adds terminal battle success and a performance-gated battle curriculum to the individual survival, death, and Jelly-kill rewards. See the [current curriculum and reward table](modular-training.md#current-crawler-curriculum) for the active rules. Older scenario descriptions below record the evolution of the system rather than current defaults.
 
 ## Boundaries
 
@@ -755,3 +755,20 @@ aiming drills. The proximity launch bonus, incoming damage costs, recoil, and
 movement controls remain as before. The hunter remains invulnerable; battle
 success means surviving to the time limit. These rewards are individual, and
 replay records each component. Continuation retains the learned actor weights.
+
+
+### Terminal success and staged battles (scenario 56)
+
+Battle success now terminates the episode rather than truncating it, so the critic
+does not bootstrap beyond the +20 success bonus. Success means reaching the
+horizon alive, or clearing all Jellies when no hunter is present. Only living
+crawlers receive this once-per-trial bonus. Other reward magnitudes are unchanged.
+The new continuation uses gamma 0.997 and GAE lambda 0.97 for longer credit assignment.
+
+Training starts with one Jelly and no hunter, then progresses through two Jellies,
+four Jellies, and four plus an armed hunter. Promotion requires at least 100 battle
+trials with at least 50% crawler survival and 60% trial success. Evidence resets
+after each evaluated block; failed blocks retain difficulty. Resume preserves
+the stage and accumulated evidence. Full encounters remain in held-out evaluation.
+The aiming schedule, actor schema, learning rate, physical controls, and reward
+magnitudes remain unchanged.
