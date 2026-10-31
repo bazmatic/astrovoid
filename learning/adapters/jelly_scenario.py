@@ -22,7 +22,7 @@ import numpy as np
 
 from learning.environment import Snapshot, Transition
 from learning import jelly_rewards, jelly_curriculum
-from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled
+from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled, facing
 from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
 from creatures.traits.rooted import wall_between
@@ -371,7 +371,8 @@ class JellyEnvironment:
         if self.scripted:
             accelerating = {c.agent_id: True for c in members}   # the scripted Drift always pushes
         else:
-            intents = {i: intention(a) for i, a in actions.items()}
+            faced = {c.agent_id: facing(c) for c in members}
+            intents = {i: intention(a, faced[i]) for i, a in actions.items()}
             self.team.commit(intents)
             accelerating = {i: intent.accel > STUCK_ACCEL for i, intent in intents.items()}
         self.action_trace.append({str(i): [float(v) for v in a] for i, a in actions.items()})
@@ -530,7 +531,7 @@ def metadata(args):
                if block == 'rewards'}
     # Version 6: the navigation curriculum (open pursuit, a barrier, then caves) is the only mode, and the boredom
     # rule is always recorded.
-    result = dict(task=SPEC.task, scenario_version=6, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    result = dict(task=SPEC.task, scenario_version=7, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': configured['team_catch_share']},
@@ -823,17 +824,15 @@ def curriculum_key(state):
 
 
 def curriculum_validation_cases(state):
-    if state['stage'] >= 2:
-        return validation_cases()
-    return jelly_curriculum.cases([dict(level=n, seed=VALIDATION_SEED+j, team_size=1, stage=1)
-                                   for j, n in enumerate(HOLDOUT_LEVELS)], state)
+    """Checkpoint selection: solo Jelly on the plain target in the current lesson's arenas, held-out levels. Training
+    is solo in every lesson, so team and ship episodes would only dilute the score."""
+    return jelly_curriculum.cases([dict(level=n, seed=VALIDATION_SEED+2*j+k, team_size=1, stage=1)
+                                   for j, n in enumerate(HOLDOUT_LEVELS) for k in range(2)], state)
 
 
 def curriculum_evaluation_cases(state):
-    if state['stage'] >= 2:
-        return evaluation_cases()
-    return jelly_curriculum.cases([dict(level=n, seed=1000+2*j+k, team_size=1, stage=1)
-                                   for j, n in enumerate(HOLDOUT_LEVELS) for k in range(2)], state)
+    return jelly_curriculum.cases([dict(level=n, seed=1000+4*j+k, team_size=1, stage=1)
+                                   for j, n in enumerate(HOLDOUT_LEVELS) for k in range(4)], state)
 
 
 def curriculum_benchmark_cases(state):
@@ -842,13 +841,10 @@ def curriculum_benchmark_cases(state):
 
 
 def curriculum_selection_score(summary, state):
-    if state['stage'] < 2:
-        return (summary['catches_per_minute'] * (1-summary.get('idle_fraction', 0.))
-                if summary['catches'] > 0 else -math.inf)
-    key = ('navigation_validation', state['horizon'], str(state['environment']))
-    if key not in _baselines:
-        _baselines[key] = scripted_metrics(validation_cases(), state['horizon'], **state['environment'])
-    return selection_score(summary, _baselines[key])
+    """Catches per minute, less idle time; no gate against the scripted Jelly, so the best checkpoint keeps improving
+    (a gate nothing passes leaves best.npz at the first checkpoint of the lesson)."""
+    return (summary['catches_per_minute'] * (1-summary.get('idle_fraction', 0.))
+            * (1-summary.get('stuck_fraction', 0.)) if summary['catches'] > 0 else -math.inf)
 
 
 def curriculum_promote(stage, summary, state):

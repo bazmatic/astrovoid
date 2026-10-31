@@ -199,17 +199,17 @@ def test_wall_rays_see_adjacent_wall():
 
 
 def test_intention_maps_activations_to_heading_and_accel():
-    intent = adapter.intention((0., 0.))
-    assert intent == Intent(heading=0., accel=0.)
-    intent = adapter.intention((50., -50.))
-    assert math.isclose(intent.heading, math.pi) and math.isclose(intent.accel, -1.)
+    intent = adapter.intention((0., 0.), 1.)
+    assert intent == Intent(heading=1., accel=0.)   # a zero turn keeps the current facing
+    intent = adapter.intention((50., -50.), 1.)
+    assert math.isclose(intent.heading, 1. + math.pi - 2*math.pi, abs_tol=1e-6) and math.isclose(intent.accel, -1.)
 
 
 def test_teacher_heads_toward_target():
     (jelly,), enc, team = team_scene(ship=target((POS[0], POS[1] + 200)))
     heading, accel = adapter.teacher(jelly, enc)
-    intent = adapter.intention((heading, accel))
-    assert math.isclose(intent.heading, math.pi / 2, abs_tol=1e-3) and intent.accel > 0.9
+    intent = adapter.intention((heading, accel), adapter.facing(jelly))
+    assert math.isclose(math.remainder(intent.heading, 2*math.pi), math.pi / 2, abs_tol=1e-3) and intent.accel > 0.9
 
 
 def test_driver_commits_one_intent_per_member():
@@ -247,7 +247,7 @@ def still(env):
 def toward(env, i, pos, accel=3.):
     c = next(c for c in env.team.members() if c.agent_id == i)
     desired = math.atan2(pos[1] - c.y, pos[0] - c.x)
-    return (math.atanh(max(-.999, min(.999, desired / math.pi))), accel)
+    return (adapter.relative_heading_label(c, desired), accel)
 
 
 def jelly_env(horizon=60.0, **case):
@@ -1016,7 +1016,7 @@ def test_teacher_routes_around_a_wall_and_reaches_the_target_without_clipping_it
         enc.maze.walls = []
         enc.maze.gate_segments = [wall]
     for _ in range(150):
-        intent = adapter.intention(adapter.teacher(jelly, enc))
+        intent = adapter.intention(adapter.teacher(jelly, enc), adapter.facing(jelly))
         for _ in range(DECISION_FRAMES):
             before = jelly.get_pos()
             advance(jelly, intent)
@@ -1032,8 +1032,8 @@ def test_teacher_follows_a_wall_when_route_is_unavailable_and_uses_a_new_opening
     (jelly,), enc, team = team_scene(positions=((150., 150.),), ship=target((250., 150.)))
     enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
                                    offset_x=0, offset_y=0, grid_width=4, grid_height=4)
-    exploring = adapter.intention(adapter.teacher(jelly, enc))
+    exploring = adapter.intention(adapter.teacher(jelly, enc), adapter.facing(jelly))
     assert exploring.accel > .9 and abs(exploring.heading) > .3
     wall.active = False
-    intent = adapter.intention(adapter.teacher(jelly, enc))
+    intent = adapter.intention(adapter.teacher(jelly, enc), adapter.facing(jelly))
     assert abs(intent.heading) < .01 and intent.accel > .9

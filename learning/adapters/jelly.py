@@ -21,7 +21,7 @@ TARGET = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'closing_speed')
 TEAM = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'heading_sin', 'heading_cos', 'speed')
 FEATURES = SELF + tuple(f'target_{n}' for n in TARGET)
 FEATURES += tuple(f'teammate{i}_{n}' for i in range(TEAMMATES) for n in TEAM)
-SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=1, continuous=('heading', 'accel'))
+SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=2, continuous=('heading', 'accel'))
 CRITIC_TARGETS = 4
 CRITIC_MEMBERS = 8
 CRITIC_SIZE = 2*5 + CRITIC_TARGETS*5 + CRITIC_MEMBERS*7
@@ -95,9 +95,16 @@ def observe(team, c):
     return np.asarray(x, np.float32), masks, ()
 
 
-def intention(action):
+def intention(action, current_facing):
+    """The heading is a turn relative to the current facing (tanh of the activation, in half-turns), so zero keeps
+    going straight and small outputs make small corrections."""
     h, a = action
-    return Intent(heading=math.tanh(float(h))*math.pi, accel=math.tanh(float(a)))
+    return Intent(heading=math.remainder(current_facing + math.tanh(float(h))*math.pi, 2*math.pi), accel=math.tanh(float(a)))
+
+
+def relative_heading_label(c, desired):
+    """The pre-tanh heading activation that turns Jelly `c` from its facing toward the world angle `desired`."""
+    return math.atanh(clip(math.remainder(desired - facing(c), 2*math.pi)/math.pi, -.999, .999))
 
 
 def critic(team, focal_agent=None):
@@ -139,7 +146,7 @@ def teacher(c, enc):
     """
     pos = enc.target_for(c)
     if pos is None:
-        return math.atanh(clip(math.remainder(facing(c), 2*math.pi)/math.pi, -.999, .999)), 0.
+        return 0., 0.
     waypoint = pos if path_clear(c, enc, pos) else None
     if waypoint is None:
         routes = getattr(enc, '_jelly_teacher_routes', None)
@@ -169,9 +176,9 @@ def teacher(c, enc):
         from learning.adapters.jelly_wall_follow import clear
         clear(c, enc)
     if waypoint is None:
-        return math.atanh(clip(math.remainder(facing(c), 2*math.pi)/math.pi, -.999, .999)), -FULL
+        return 0., -FULL
     desired = math.atan2(waypoint[1]-c.y, waypoint[0]-c.x)
-    heading = math.atanh(clip(desired/math.pi, -.999, .999))
+    heading = relative_heading_label(c, desired)
     speed = math.hypot(c.vx, c.vy)
     # Turning the facing does not turn existing momentum. Brake before a corner (or a close waypoint), rather than
     # taking a geometrically clear shortcut with enough sideways velocity to slide into its wall.
@@ -200,7 +207,7 @@ class JellyDriver:
             state = self.states.get(i, self.policy.initial_state())
             rng = self.rngs.setdefault(i, np.random.default_rng(np.random.SeedSequence([self.seed, i])))
             action, self.states[i] = self.policy.choose(batch[i][0], state, batch[i][1], self.greedy, rng)
-            intents[i] = intention(action)
+            intents[i] = intention(action, facing(c))
         team.commit(intents)
 
 
