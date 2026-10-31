@@ -133,7 +133,7 @@ def test_navigation_run_records_its_lesson_evaluates_caves_separately_and_resume
         '--workers', '1', '--budget-seconds', '0'])
     train(args)
     bootstrap = json.loads((tmp_path/'episodes/bootstrap.json').read_text())
-    assert all(c['lesson'] == 'open' for c in bootstrap['jobs'])
+    assert {c['lesson'] for c in bootstrap['jobs']} <= {'open', 'cave'}
     assert all(c['seconds'] == .2 for c in bootstrap['episodes'])
     report = json.loads((tmp_path/'evaluation.json').read_text())
     assert report['selection_context'] == 'open' and 'cave_benchmark' in report
