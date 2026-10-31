@@ -1,6 +1,6 @@
 # Modular training system
 
-Astrovoid separates creature control, encounter design, numerical learning, and run management. The wallcrawler team uses the shared training lifecycle. Hunter training keeps its existing recorder, value model, checkpoint format, and CLI training path; its numeric environment adapter also supports the shared stepping interface.
+Astrovoid separates creature control, encounter design, numerical learning, and run management. The wallcrawler team uses the shared training lifecycle. Hunter training keeps its existing recorder, value model, checkpoint format, and CLI training path; its numeric environment adapter also supports the shared stepping interface. The `jelly_team` task trains the opt-in neural Jelly on the same lifecycle; see [Neural Jelly](neural-jelly.md). The sections below use the wallcrawler team as the worked example unless they say otherwise.
 
 For crawler mechanics and the history of reward changes, see [Creature training](creature-training.md). This guide describes the implementation and extension points as of scenario 56 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
 
@@ -8,7 +8,7 @@ For crawler mechanics and the history of reward changes, see [Creature training]
 
 | Responsibility | Source | Owns |
 | --- | --- | --- |
-| Task registry | `learning/tasks.py` | Task keys, adapter imports, defaults, exposed options, replay module |
+| Task registry | `learning/tasks.py` | Task keys, adapter imports, defaults, exposed options, replay module and replay hooks module |
 | Numeric environment interface | `learning/environment.py` | `Snapshot`, `Transition`, seeded reset, joint action stepping, cleanup |
 | Creature adapter | `learning/adapters/wallcrawler.py` | Policy schema, local observations, masks, action translation, critic context, teacher labels, checkpoint migration |
 | Scenario adapter | `learning/adapters/crawler_scenario.py` | Actual encounter construction, rewards, cases, metrics, selection, manifest |
@@ -83,7 +83,7 @@ Iteration records describe rollouts from the **previous** policy: `episodes/iter
 | `resume.pt` | Training network including critic, optimiser, random states, next iteration, team size, battle curriculum evidence, elapsed budget, best score |
 | `train.log` | Iteration metrics and optimisation statistics |
 | `state.json` | Explicit lifecycle state when written by the trainer |
-| `evaluation.json` | Final held-out comparisons, or an incomplete-budget report |
+| `evaluation.json` | Final held-out comparisons, or an incomplete-budget report; both record `selection_gate_passed`, false when no checkpoint passed `selection_score` and `best.npz` is only the fallback policy |
 
 Runs live under `.astrovoid-local/neural/rl/runN`. Process output is also captured in the sibling `runN.log`.
 
@@ -129,7 +129,7 @@ venv/bin/python -m tools.watch_episode .astrovoid-local/neural/rl/run144 0 0 --s
 venv/bin/python -m learning.evaluate .astrovoid-local/neural/rl/run144 --workers 4
 ```
 
-Crawler replay checks the saved manifest against current rules, restores saved arena definitions and the frozen opponent, applies recorded joint actions, and compares cumulative events exactly. `learning.replay.fly(path, iteration)` returns reconstructed reward totals for reconciliation with `agent_returns`. Old recordings may require their original code revision after physics or reward changes; saved actions alone do not preserve an old simulator.
+Replay is task-agnostic. `learning.replay` reads the task key from the run's `config.json` and asks that task's replay hooks module (`Task.replay_hooks`) to check the saved manifest against current rules and build the environment; it then applies the recorded joint actions and compares cumulative events exactly. Restoring the saved arena definitions and the frozen opponent is crawler-only (`learning/adapters/crawler_replay.py`); the Jelly hooks live in `learning/adapters/jelly_replay.py`. `learning.replay.fly(path, iteration)` returns each episode's outcome totals, which the task's `outcome` hook shapes; for crawlers this includes reconstructed reward totals for reconciliation with `agent_returns`. See [Replay hooks](replay-hooks.md) for the contract. Old recordings may require their original code revision after physics or reward changes; saved actions alone do not preserve an old simulator.
 
 Evaluation compares trained, scripted, and muted-radio policies. `--suite pursuit` also compares jumping disabled; `--suite ships` exercises the ship scenarios. Evaluation copies the chosen actor to a hash-named checkpoint so concurrent training cannot change its weights halfway through comparison. A fresh evaluation or `learning.demo` is not the historical recorded rollout. Training does not automatically install its exported actor into the campaign.
 
@@ -165,7 +165,7 @@ Validation uses harmless aiming cases and selects by accuracy × hits per minute
 1. Define a versioned `PolicySpec` and creature adapter: observations, legal masks, action translation, and an `enabled` function aligned with head order. Keep privileged critic context out of actor features.
 2. Implement an environment with seeded `reset`, joint `step`, and `close`, plus the collector's adapter and action-trace hooks. Use stable agent IDs and return individual credits when appropriate.
 3. Supply the scenario hooks consumed by `learning/run.py`: `SPEC`, `CRITIC_SIZE`, `INITIAL_STAGE`, `IMITATION_HEADS`, `environment`, `metadata`, `training_cases`, `validation_cases`, `evaluation_cases`, `metrics`, `selection_score`, `promote`, and `compare`. Teacher mode additionally needs `env.adapter.teacher_action`. Optional rehearsal settings follow the crawler adapter's example; `load_transfer_policy` is optional.
-4. Register the task key, adapter module, defaults/options, and optional replay module in `learning/tasks.py`. A replay module implements `episodes`, `fly`, and `watch`. Check CLI and dashboard support for any new task-specific controls; hunter intentionally retains a special legacy dispatch path.
+4. Register the task key, adapter module, defaults/options, and, to make its episodes replayable, `replay_module='learning.replay'` plus `replay_hooks` in `learning/tasks.py`. The hooks module implements `open_environment(path, manifest)`; `episode`, `outcome`, `draw`, `status`, and `metadata_args` are optional (see [Replay hooks](replay-hooks.md)). Check CLI and dashboard support for any new task-specific controls; hunter intentionally retains a special legacy dispatch path.
 5. Record every behaviour-affecting rule in the manifest. Bump the scenario version when rewards or encounter rules change; bump the policy schema when feature order or action semantics change. Add an explicit transfer loader only when migration is well defined.
 6. Verify a short collection/update, Torch-to-NumPy actor parity, legal controls, deterministic cases and replay, terminal versus horizon handling, and individual versus aggregate reward accounting. Resume must reject incompatible rules. A new checkpoint continuation should preserve compatible arrays unless a requested migration or damping operation changes them.
 
