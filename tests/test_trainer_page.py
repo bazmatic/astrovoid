@@ -234,3 +234,94 @@ vm.createContext(ctx);vm.runInContext(handler,ctx);
 })().catch(e=>{console.error(e);process.exitCode=1});
 """
     subprocess.run([NODE,'-e',script,str(PAGE)],check=True,capture_output=True,text=True)
+
+
+# The charts area and stat strip drawn by render() from the real /api/tasks layouts, read back as
+# (section headings, (title, subtitle) per chart, (label, value) per strip cell).
+RENDER = r"""
+const fs=require('node:fs'),vm=require('node:vm');
+const html=fs.readFileSync(process.argv[1],'utf8');
+const given=JSON.parse(fs.readFileSync(0,'utf8'));
+const code=html.slice(html.indexOf('let D=[],'),html.indexOf('async function loadRules(){'));
+const els=Object.fromEntries(['chart-start','chart-range','charts','strip'].map(id=>[id,{value:'',innerHTML:'',textContent:''}]));
+const ctx={$:id=>els[id],VIEW:'run1',document:{getElementById:id=>els[id]},given,
+ getComputedStyle:()=>({getPropertyValue:()=>'#888'}),localStorage:{getItem(){},setItem(){}}};
+vm.createContext(ctx);vm.runInContext(code,ctx);
+vm.runInContext('LAYOUTS=given.layouts;VIEW_TASK=given.task;D=given.rows;render()',ctx);
+const all=(re,s)=>[...s.matchAll(re)].map(m=>m.slice(1));
+const charts=els.charts.innerHTML;
+console.log(JSON.stringify({sections:all(/<h3[^>]*>(.*?)<\/h3>/g,charts).map(m=>m[0]),
+ charts:all(/<h2>(.*?)<\/h2><p>(.*?)<\/p>/g,charts),strip:all(/<span>(.*?)<\/span><b>(.*?)<\/b>/g,els.strip.innerHTML),
+ text:charts.replace(/<[^>]*>/g,' ')}));
+"""
+FIXTURES = Path(__file__).resolve().parent / 'fixtures' / 'dashboard'
+
+
+def render(task, rows):
+    import json
+    from learning import dashboard
+    given = json.dumps(dict(layouts=dashboard.resolve_all(), task=task, rows=rows))
+    out = subprocess.run([NODE, '-e', RENDER, str(PAGE)], input=given, check=True, capture_output=True, text=True)
+    return json.loads(out.stdout)
+
+
+def log_rows(name, n=3, **extra):
+    """n rows carrying every numeric key a recorded run of this task logged."""
+    import json
+    keys = json.loads((FIXTURES / f'{name}_log_keys.json').read_text())['keys']
+    return [{**{k: 1.23456 for k in keys}, 'iteration': i, **extra} for i in range(n)]
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+def test_render_draws_only_the_task_layout_charts():
+    from learning import dashboard
+    import json
+    keys = json.loads((FIXTURES / 'jelly_log_keys.json').read_text())['keys']
+    page = render('jelly_team', log_rows('jelly'))
+    assert page['charts'] == [[m['title'], m['sub']] for m in dashboard.charted('jelly_team', keys)]
+    assert page['sections'] == ['Training', 'Outcome', 'Navigation', 'Teamwork', 'Ship fight', 'Policy']
+
+
+# The old page's stat strip for these rows (three iterations, every value 1.23456), as tools/trainer/page.html drew it
+# before the dashboard became pluggable.
+OLD_STRIPS = {
+    'hunter': [['Iterations', '3'], ['Training return', '1.2'], ['Kills / min', '1.2'],
+               ['Wall quotient / min', '1.23'], ['Hits taken / min', '1.23'], ['Last iteration (s)', '2.5'],
+               ['Game time', '6 h']],
+    'crawler': [['Iterations', '3'], ['Training return', '1.2'], ['Team hits / min', '1.2'], ['Accuracy', '1.23'],
+                ['Survival', '1.23'], ['Last iteration (s)', '2.5'], ['Game time', '6 h']],
+}
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+@pytest.mark.parametrize('task, log', [('hunter', 'hunter'), ('wallcrawler_team', 'crawler')])
+def test_hunter_and_wallcrawler_pages_draw_the_same_charts_and_strip_as_before(task, log):
+    import json
+    keys = set(json.loads((FIXTURES / f'{log}_log_keys.json').read_text())['keys'])
+    old = json.loads((FIXTURES / 'old_page_charts.json').read_text())
+    page = render(task, log_rows(log))
+    assert page['charts'] == [[c['title'], c['sub']] for c in old if c['key'] in keys]   # and nothing under Other
+    assert page['strip'] == OLD_STRIPS[log]
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+def test_render_puts_undeclared_numeric_keys_in_other_and_never_strings_or_booleans():
+    page = render('hunter', log_rows('hunter', brand_new_rate=.5, checkpoint_name='iter0001.npz', gate_open=False))
+    assert page['sections'][-1] == 'Other'
+    assert page['charts'][-1] == ['brand_new_rate', '']
+    assert 'checkpoint_name' not in page['text'] and 'gate_open' not in page['text']
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+def test_render_with_no_rows_shows_an_empty_state():
+    page = render('jelly_team', [])
+    assert page['charts'] == [] and 'No iterations logged yet' in page['text']
+    assert ['Iterations', '0'] in page['strip']
+
+
+@pytest.mark.skipif(NODE is None, reason='Node.js is needed to exercise dashboard JavaScript')
+def test_unknown_task_shows_a_message_and_shared_charts_only():
+    page = render('made_up_task', log_rows('hunter'))
+    assert 'made_up_task' in page['text'] and 'not one this trainer knows' in page['text']
+    declared = [title for title, sub in page['charts'] if sub]   # Other charts have no subtitle
+    assert declared == ['Training return', 'Distance from the starting policy (KL)', 'Policy entropy']

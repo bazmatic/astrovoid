@@ -21,6 +21,7 @@ p.sub{margin:4px 0 0;color:var(--muted);max-width:65ch}
 .grid{display:grid;grid-template-columns:1fr;gap:12px}
 .card{background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:12px;min-width:0}
 .card.wide{grid-column:1/-1}
+.grid h3.section{grid-column:1/-1;font-size:12px;margin:8px 0 0;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
 .card h2{font-size:14px;margin:0}.card p{margin:2px 0 8px;color:var(--muted);font-size:12px}
 svg{width:100%;height:auto;display:block}
 svg text{fill:var(--muted);font-family:var(--mono);font-size:11px}
@@ -76,7 +77,7 @@ input.iter{font:inherit;font-family:var(--mono);font-size:13px;width:6.5em;paddi
  <div class="bar" id="status"><span class="msg">Loading…</span></div>
  <div class="next" id="next">
   <h2>Next run</h2>
-  <div class="row">Creature <select id="task" aria-label="Training task"><option value="hunter">Hunter</option><option value="wallcrawler_team">Wallcrawler team</option></select><button id="fresh-team" type="button">Fresh weights</button></div>
+  <div class="row">Creature <select id="task" aria-label="Training task"></select><button id="fresh-team" type="button">Fresh weights</button></div>
   <div class="row">Carry on from <select id="from-run" aria-label="Run to carry on from"></select> at iteration <input type="number" class="iter" id="from-iter" step="1" aria-label="Checkpoint iteration"><button type="button" id="from-last">Last</button><span class="range" id="from-range"></span>
    <span class="msg" id="changed-count"></span>
    <button id="edit">Edit settings</button>
@@ -158,51 +159,51 @@ function chart({title,sub,key,ref,base,gate,wide}){
 // Game time is estimated: the log has no episode lengths, so each episode is taken as EPISODE_S seconds of play.
 const EPISODE_S=75;let EPI=96;
 const gameTime=s=>{const h=s/3600;return h<48?`${h.toFixed(0)} h`:`${Math.floor(h/24)} d ${Math.round(h%24)} h`};
+// What each task charts, from GET /api/tasks; a run is charted with its own task's layout.
+let LAYOUTS=[],VIEW_TASK=null;
+const UNTAGGED='hunter';                 // the task of a run whose config names none
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+// The layout for the viewed run's task. A task this trainer does not know gets what every task has (the shared
+// metrics and hidden keys), with a note saying so.
+function viewLayout(){
+  const task=VIEW_TASK||UNTAGGED,known=LAYOUTS.find(t=>t.key===task);
+  if(known)return known;
+  const first=LAYOUTS[0]||{metrics:[],hidden:[]};
+  return {key:task,metrics:first.metrics.filter(m=>LAYOUTS.every(t=>t.metrics.some(x=>x.key===m.key))),sections:[],strip:[],
+    hidden:first.hidden.filter(k=>LAYOUTS.every(t=>t.hidden.includes(k))),
+    note:LAYOUTS.length?`This run's task “${esc(task)}” is not one this trainer knows, so only the shared charts are drawn, with its other logged values under Other.`
+      :rowsLogged()?'The chart layouts could not be loaded from the trainer, so every logged value is charted under Other.':''};
+}
+// Older logs name some metrics differently: copy each alias's value under the metric's own key.
+function withAliases(rows){
+  const aliases=LAYOUTS.flatMap(t=>t.metrics).filter(m=>m.aliases.length);
+  rows.forEach(d=>aliases.forEach(m=>{if(m.key in d)return;const a=m.aliases.find(a=>a in d);if(a)d[m.key]=d[a]}));
+  return rows;
+}
+const rowsLogged=()=>D.length;
 function render(){
-  const D=chartData();
+  const D=chartData(),layout=viewLayout();
   const last=D.at(-1)||{},sm=k=>{const v=smooth(D.map(d=>d[k]),25);return v.at(-1)};
   const shown=(k,n=1)=>Number.isFinite(sm(k))?sm(k).toFixed(n):'-';
-  const team='hits_per_minute' in last;
+  const metric=k=>layout.metrics.find(m=>m.key===k);
   document.getElementById('strip').innerHTML=[
-   ['Iterations',D.length?D.length:'0'],['Training return',D.length?sm('mean_return').toFixed(1):'-'],[team?'Team hits / min':'Kills / min',shown(team?'hits_per_minute':'kills_per_min')],
-   [team?'Accuracy':'Wall quotient / min',shown(team?'accuracy':'wall_quotient_per_min',2)],[team?'Survival':'Hits taken / min',shown(team?'survival':'hits_taken_per_min',2)],
+   ['Iterations',D.length?D.length:'0'],['Training return',D.length?shown('mean_return',1):'-'],
+   ...layout.strip.filter(metric).map(k=>[metric(k).short||metric(k).title,shown(k,metric(k).digits??2)]),
    ['Last iteration (s)',D.length?((last.rollout_s||0)+(last.update_s||0)).toFixed(1):'-'],
    ['Game time',D.length?gameTime(D.length*EPI*EPISODE_S):'-']].map(([a,b])=>`<div class="stat"><span>${a}</span><b>${b}</b></div>`).join('');
-  document.getElementById('charts').innerHTML=[
-   chart({title:'Training return',sub:'Higher is better. What training maximises. Only comparable within a run.',key:'mean_return',wide:true}),
-   chart({title:'Team projectile hits per minute',sub:'Wallcrawler team: accepted bullet impacts on the frozen opponents.',key:'hits_per_minute'}),
-   chart({title:'Predicted shot quality',sub:'Mean launch-time interception quality, from 0 to 1. A shaping signal, not measured hits.',key:'mean_aim_quality'}),
-   chart({title:'Targets cleared',sub:'Share of practice trials in which every target was hit.',key:'target_clear_rate'}),
-   chart({title:'Team accuracy',sub:'Accepted hits divided by actual crawler shots.',key:'accuracy'}),
-   chart({title:'Stationary-target accuracy',sub:'Accepted hits / shots in harmless stationary-target drills.',key:'precision_accuracy'}),
-   chart({title:'Moving-target accuracy',sub:'Accepted hits / shots in harmless moving-target drills.',key:'tracking_accuracy'}),
-   chart({title:'Battle curriculum stage',sub:'0: one Jelly; 1: two; 2: four; 3: four plus the armed hunter.',key:'battle_stage'}),
-   chart({title:'Battle survival',sub:'Fraction of battle crawlers alive at trial end.',key:'pursuit_survival'}),
-   chart({title:'Combat accuracy',sub:'Accepted hits / shots in retained Jellyfish and neural-hunter encounters.',key:'pursuit_accuracy'}),
-   chart({title:'Walking reversals per trial',sub:'Actual direction changes while walking; stops and airborne motion excluded.',key:'reversals_per_episode'}),
-   chart({title:'Voluntary jumps per trial',sub:'Actual voluntary launches, excluding damage-induced detachment.',key:'jumps_per_episode'}),
-   chart({title:'Bullet hits received per trial',sub:'Average damaging bullet impacts received by the whole crawler team per trial. Lower is better.',key:'bullet_hits_taken_per_episode'}),
-   chart({title:'Jellyfish contact hits per trial',sub:'Average accepted damaging contacts received by crawlers; repeated overlap is limited by a shared cooldown.',key:'contact_hits_taken_per_episode'}),
-   chart({title:'Demonstration rehearsal loss',sub:'Weighted auxiliary loss that helps retain demonstrated jump and landing choices. This is not an escape-success score.',key:'imitation_loss'}),
-   chart({title:'Time airborne',sub:'Share of crawler simulation time spent unattached, including stun and voluntary flight.',key:'airborne_fraction'}),
-   chart({title:'Crawler survival',sub:'Share of the team still alive at trial end.',key:'survival'}),
-   chart({title:'Speed',sub:'Higher is better. Average speed as a share of top speed.',key:'speed_fraction'}),
-   chart({title:'Powerups per episode',sub:'Higher is better. Crystals the hunter collects.',key:'powerups_per_episode'}),
-   chart({title:'Hunter power boost',sub:'Share of time the generic power boost is active.',key:'upgraded_fraction'}),
-   chart({title:'Deaths per episode',sub:'Lower is better. Share of episodes in which the hunter is destroyed.',key:'deaths_per_episode'}),
-   chart({title:'Follows the enemy compass',sub:'Higher is better. Share of the time with no enemy in sight that the hunter heads within 45° of the compass.',key:'compass_follow'}),
-   chart({title:'Hits per episode',sub:'Higher is better. Hunter shots that reach an enemy.',key:'hits_per_episode'}),
-   chart({title:'Unaimed shots per episode',sub:'Shots not within 20° of an enemy in sight (at walls, at nothing, or well wide), each at the shot price.',key:'unaimed_shots_per_episode'}),
-   chart({title:'Time in panic',sub:'Share of decisions made in panic: after the last 5 s scored below the panic level, choices are more random until the score recovers.',key:'panic_fraction'}),
-   chart({title:'Bored time',sub:'Lower is better. Share of the time with no enemy in sight in which nothing new has come into view for a second: the same nearby walls (within 3 cells) and crystals as in the last 10 s.',key:'bored_fraction'}),
-   chart({title:'Rules hunter beaten',sub:'Higher is better. Share of Rules-hunter episodes in which it is destroyed.',key:'rules_beaten'}),
-   chart({title:'Kills per minute',sub:'Must not fall.',key:'kills_per_min'}),
-   chart({title:'Wall collision quotient (per minute)',sub:'Lower is better. Harder crashes count more.',key:'wall_quotient_per_min'}),
-   chart({title:'Enemy hits taken per minute',sub:'Lower is better.',key:'hits_taken_per_min'}),
-   chart({title:'Distance from the starting policy (KL)',sub:'How far the policy has moved from where the run started.',key:'kl'}),
-   chart({title:'Policy entropy',sub:'Randomness of the controls. Near zero means it has stopped exploring.',key:'entropy'})].join('');
+  // Charts by section: the layout's section order, then first appearance; declaration order within a section. A
+  // metric is charted when the newest row logs it (or an alias). Other: the newest row's numbers nothing claims.
+  const order=[...layout.sections];layout.metrics.forEach(m=>{if(!order.includes(m.section))order.push(m.section)});
+  const claimed=new Set(layout.hidden);layout.metrics.forEach(m=>[m.key,...m.aliases].forEach(k=>claimed.add(k)));
+  const sections=order.map(name=>[name,layout.metrics.filter(m=>m.section===name).map(m=>{
+    const key=[m.key,...m.aliases].find(k=>k in last);return key?chart({title:m.title,sub:m.sub,key,wide:m.wide}):''}).join('')]);
+  const other=Object.keys(last).filter(k=>!claimed.has(k)&&typeof last[k]==='number'&&Number.isFinite(last[k])).sort();
+  sections.push(['Other',other.map(k=>chart({title:esc(k),sub:'',key:k})).join('')]);
+  const note=layout.note?`<div class="card wide"><p>${layout.note}</p></div>`:'';
+  document.getElementById('charts').innerHTML=note+sections.filter(([,html])=>html).map(([name,html])=>`<h3 class="section">${esc(name)}</h3>${html}`).join('');
   $('chart-range').textContent=D.length?`Showing ${D[0].iteration}–${last.iteration} (${D.length} iterations)`:`No data from iteration ${CHART_START} yet`;
-  if(!D.length)$('charts').innerHTML='<div class="card"><p>No iterations in the selected range. Choose an earlier start or Show all.</p></div>';
+  if(!D.length)$('charts').innerHTML=note+(rowsLogged()?'<div class="card"><p>No iterations in the selected range. Choose an earlier start or Show all.</p></div>'
+    :'<div class="card"><p>No iterations logged yet: the charts appear once the first iteration finishes.</p></div>');
 }
 async function loadRules(){
   if(!VIEW)return;
@@ -244,9 +245,8 @@ async function loadRules(){
      (team?teamEpisode:`<div class="card"><h2>Episodes</h2><p>Up to ${e.horizon_seconds} s of fighting, then up to ${e.after_clear_seconds} s more to collect powerups once the last enemy is dead. ${e.episodes_per_iteration} episodes per iteration.${e.health?` The hunter survives ${e.health} energy: each enemy hit costs 1, and a wall takes up to ${e.wall_energy} for a full-speed crash (less for a gentler one). The episode ends if it is destroyed.`:''}${e.levels?.length?` Levels: ${esc(fmtLevels(e.levels))}.`:''}</p></div>`);
   }catch(e){}
 }
-async function refresh(){if(!VIEW)return;const asked=VIEW;try{const r=await fetch(`api/runs/${VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();n.forEach(d=>{if('free_shots_per_episode' in d&&!('unaimed_shots_per_episode' in d))d.unaimed_shots_per_episode=d.free_shots_per_episode});if(asked===VIEW&&n.length!==D.length){D=n;render()}}}catch(e){}}
+async function refresh(){if(!VIEW)return;const asked=VIEW;try{const r=await fetch(`api/runs/${VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();withAliases(n);if(asked===VIEW&&n.length!==D.length){D=n;render()}}}catch(e){}}
 const $=id=>document.getElementById(id);
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 let STATUS_KEY=null,VIEW=null,STATUS=null,RUNS=[],SCHEMA=null,BASE={},EDITS={},FOLLOW=true;
 let DEFAULT_RUN=null;
 function currentTask(){return (RUNS.find(r=>r.name===STATUS?.run)||RUNS.at(-1))?.task||'hunter'}
@@ -395,9 +395,11 @@ async function loadRuns(){
   try{RUNS=await api('api/runs');syncCreature();fillFrom();fillReplay();renderStatus();
     const sel=$('view-run'),keep=FOLLOW?'':sel.value;
     sel.innerHTML=`<option value="">The active run</option>`+[...RUNS].reverse().map(r=>`<option value="${r.name}">${r.name} (${r.state}, ${r.iterations_done} iterations)</option>`).join('');
-    sel.value=keep;renderStart()}catch(e){}
+    sel.value=keep;renderStart();
+    if(VIEW&&viewTask()!==VIEW_TASK){VIEW_TASK=viewTask();render()}}catch(e){}
 }
-function setView(run){if(run===VIEW)return;VIEW=run;D=[];CHART_START=savedChartStart(run);$('chart-start').value=String(CHART_START);$('rules').innerHTML='';render();refresh();loadRules()}
+function viewTask(){return RUNS.find(r=>r.name===VIEW)?.task||UNTAGGED}
+function setView(run){if(run===VIEW)return;VIEW=run;VIEW_TASK=viewTask();D=[];CHART_START=savedChartStart(run);$('chart-start').value=String(CHART_START);$('rules').innerHTML='';render();refresh();loadRules()}
 $('chart-start').onchange=()=>setChartStart($('chart-start').value);
 $('chart-all').onclick=()=>setChartStart(0);
 $('view-run').onchange=()=>{const v=$('view-run').value;FOLLOW=!v;setView(v||STATUS?.run||null)};
@@ -470,7 +472,10 @@ $('from-iter').onchange=()=>snapIter($('from-iter'));
 $('from-last').onclick=()=>{$('from-iter').value='';fillIters()};
 $('rp-level').onchange=renderEpisodes;
 async function boot(){
-  try{SCHEMA=await api('api/settings');$('task').innerHTML=SCHEMA.tasks.map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('');$('fresh-team').disabled=true;}catch(e){}
+  try{LAYOUTS=await api('api/tasks')}catch(e){}
+  try{SCHEMA=await api('api/settings')}catch(e){}
+  $('task').innerHTML=(LAYOUTS.length?LAYOUTS:SCHEMA?.tasks||[]).map(t=>`<option value="${t.key}">${esc(t.label)}</option>`).join('');$('fresh-team').disabled=true;
+  render();
   await loadRuns();await loadStatus();
   setInterval(loadStatus,5000);setInterval(loadRuns,15000);setInterval(refresh,15000);setInterval(loadRules,60000);
 }

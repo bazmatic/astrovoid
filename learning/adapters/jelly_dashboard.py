@@ -5,7 +5,7 @@ from learning.dashboard import Layout, Metric
 METRICS = (
     Metric('catches_per_minute', 'Catches per minute',
            'Target catches per minute over all episodes. Ship-fight episodes have no target, so they pull it down.',
-           unit='/min', section='Outcome', higher_is_better=True),
+           unit='/min', section='Outcome', higher_is_better=True, short='Catches / min', digits=1),
     Metric('catch_probability', 'Episodes with a catch',
            'Share of episodes in which the team caught the target at least once.',
            section='Outcome', higher_is_better=True),
@@ -37,7 +37,8 @@ METRICS = (
 )
 
 # Training return first and policy drift last, as for every task, with the Jelly's own sections between them.
-LAYOUT = Layout(sections=('Training', 'Outcome', 'Navigation', 'Teamwork', 'Ship fight', 'Policy'))
+LAYOUT = Layout(sections=('Training', 'Outcome', 'Navigation', 'Teamwork', 'Ship fight', 'Policy'),
+                strip=('catches_per_minute', 'stuck_fraction'))
 
 # The per-stage copies jelly_scenario.metrics() writes as stage<n>_<key> (its STAGE_KEYS, repeated here so the dashboard
 # need not import the game; a test checks they match). Per-stage charts are a later addition.

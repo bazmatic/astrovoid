@@ -1,6 +1,6 @@
 """The Hunter's dashboard charts, in the order and words the trainer page has always used; tools/ppo_neural.py
 writes these keys (no metrics() hook), so tests check them against a recorded Hunter log."""
-from learning.dashboard import Metric
+from learning.dashboard import Layout, Metric
 
 METRICS = (
     Metric('speed_fraction', 'Speed',
@@ -29,12 +29,15 @@ METRICS = (
     Metric('rules_beaten', 'Rules hunter beaten',
            'Higher is better. Share of Rules-hunter episodes in which it is destroyed.', higher_is_better=True),
     Metric('kills_per_min', 'Kills per minute',
-           'Must not fall.', higher_is_better=True),
+           'Must not fall.', higher_is_better=True, short='Kills / min', digits=1),
     Metric('wall_quotient_per_min', 'Wall collision quotient (per minute)',
-           'Lower is better. Harder crashes count more.', higher_is_better=False),
+           'Lower is better. Harder crashes count more.', higher_is_better=False,
+           short='Wall quotient / min'),
     Metric('hits_taken_per_min', 'Enemy hits taken per minute',
-           'Lower is better.', higher_is_better=False),
+           'Lower is better.', higher_is_better=False, short='Hits taken / min'),
 )
+
+LAYOUT = Layout(strip=('kills_per_min', 'wall_quotient_per_min', 'hits_taken_per_min'))
 
 # Logged by tools/ppo_neural.py but never charted.
 HIDDEN = ('score', 'rules_episodes')

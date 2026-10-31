@@ -18,11 +18,14 @@ class Metric:
     optional: bool = False
     aliases: tuple[str, ...] = ()
     wide: bool = False
+    short: str = ''    # its stat-strip label; empty uses the title
+    digits: int = 2    # decimals in the stat strip
 
 
 @dataclass(frozen=True)
 class Layout:
-    """Ordering overrides; empty means declaration order."""
+    """Ordering overrides; empty means declaration order. strip: the metric keys whose latest value the stat strip
+    shows, between its shared cells."""
     sections: tuple[str, ...] = ()
     strip: tuple[str, ...] = ()
 

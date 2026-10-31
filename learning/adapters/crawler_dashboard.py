@@ -1,16 +1,17 @@
 """The Wallcrawler team's dashboard charts, in the order and words the trainer page has always used. Keys come from
 crawler_scenario.metrics(), learning.run (battle_stage) and learning.ppo.update_team (imitation_loss)."""
-from learning.dashboard import Metric
+from learning.dashboard import Layout, Metric
 
 METRICS = (
     Metric('hits_per_minute', 'Team projectile hits per minute',
-           'Wallcrawler team: accepted bullet impacts on the frozen opponents.', higher_is_better=True),
+           'Wallcrawler team: accepted bullet impacts on the frozen opponents.', higher_is_better=True,
+           short='Team hits / min', digits=1),
     Metric('mean_aim_quality', 'Predicted shot quality',
            'Mean launch-time interception quality, from 0 to 1. A shaping signal, not measured hits.'),
     Metric('target_clear_rate', 'Targets cleared',
            'Share of practice trials in which every target was hit.', higher_is_better=True),
     Metric('accuracy', 'Team accuracy',
-           'Accepted hits divided by actual crawler shots.', higher_is_better=True),
+           'Accepted hits divided by actual crawler shots.', higher_is_better=True, short='Accuracy'),
     # The per-drill keys appear only in iterations that flew that kind of trial.
     Metric('precision_accuracy', 'Stationary-target accuracy',
            'Accepted hits / shots in harmless stationary-target drills.', higher_is_better=True, optional=True),
@@ -40,8 +41,10 @@ METRICS = (
     Metric('airborne_fraction', 'Time airborne',
            'Share of crawler simulation time spent unattached, including stun and voluntary flight.'),
     Metric('survival', 'Crawler survival',
-           'Share of the team still alive at trial end.', higher_is_better=True),
+           'Share of the team still alive at trial end.', higher_is_better=True, short='Survival'),
 )
+
+LAYOUT = Layout(strip=('hits_per_minute', 'accuracy', 'survival'))
 
 # Raw counts and per-drill copies crawler_scenario.metrics() logs that the page has never charted.
 HIDDEN = ('hits', 'shots', 'episodes', 'hit_probability', 'hits_per_crawler', 'aim_drill_episodes',
