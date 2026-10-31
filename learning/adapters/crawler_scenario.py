@@ -566,7 +566,9 @@ class CrawlerEnvironment:
             for target in self.world.additional_targets:
                 close = getattr(target,"close",None)
                 if close is not None:close()
-            self.enc.close()
+            enc = getattr(self,'enc',None)
+            if enc is not None:
+                enc.close()
             self.world = None
 
 
