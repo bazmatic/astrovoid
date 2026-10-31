@@ -3,7 +3,12 @@ all of an iteration's episodes. The per-stage stage<n>_* copies are left to the 
 from learning.dashboard import Layout, Metric, RewardRule
 from learning.jelly_rewards import recovered_settings
 
+
 METRICS = (
+    Metric('navigation_lesson', 'Navigation lesson', '0: open pursuit; 1: simple barrier; 2: caves. Separate from team/combat stage.',
+           section='Navigation', digits=0),
+    Metric('idle_fraction', 'Time idle', 'Share of Jelly time in a sustained small area, regardless of throttle; the run records its grace window.',
+           section='Navigation', higher_is_better=False),
     Metric('catches_per_minute', 'Catches per minute',
            'Target catches per minute over all episodes. Ship-fight episodes have no target, so they pull it down.',
            unit='/min', section='Outcome', higher_is_better=True, short='Catches / min', digits=1),
@@ -49,7 +54,7 @@ _STAGE_KEYS = {1: ('episodes', 'catches', 'seconds', 'catches_per_minute', 'stuc
                3: ('episodes', 'seconds', 'stuck_fraction', 'time_to_contact', 'ship_hits', 'ship_kills',
                    'jelly_deaths', 'survival_fraction', 'time_to_ship_kill')}
 # Raw counters behind the charted rates, and imitation_loss (imitation bootstrap is off for the Jelly).
-HIDDEN = ('catches', 'seconds', 'stuck_seconds', 'ship_kills', 'bunched_seconds', 'flank_seconds', 'time_to_ship_kill',
+HIDDEN = ('idle_seconds', 'catches', 'seconds', 'stuck_seconds', 'ship_kills', 'bunched_seconds', 'flank_seconds', 'time_to_ship_kill',
           'mean_episode_return', 'episodes', 'imitation_loss',
           *(f'stage{stage}_{key}' for stage, keys in _STAGE_KEYS.items() for key in keys))
 
@@ -57,6 +62,12 @@ HIDDEN = ('catches', 'seconds', 'stuck_seconds', 'ship_kills', 'bunched_seconds'
 # A run recorded before they were settings reports them as not recorded, with these defaults (what it trained with).
 # Stage 3 mixes stage-1 and stage-2 retention cases into its training, where catches still pay.
 REWARD_RULES = (
+    RewardRule('boredom', 'Boredom: idle', 'Per decision after remaining inside the configured movement radius for the full grace window, even while braking. Own catches or ship hits reset the grace period.',
+               'penalty', (1, 2, 3), 'jelly_boredom_penalty', 0.),
+    RewardRule('boredom_window', 'Idle grace window', 'Seconds of little movement before the boredom penalty begins; turning and moving detours are allowed.',
+               'shaping', (1, 2, 3), 'jelly_boredom_window', 2.),
+    RewardRule('boredom_distance', 'Idle movement radius', 'Pixel radius of the recent position window; independent of target direction and acceleration.',
+               'shaping', (1, 2, 3), 'jelly_boredom_distance', 10.),
     RewardRule('catch', 'Catch', 'To the Jelly that touches the target with its body; the target reappears at least '
                '300 px from every Jelly. Stages 1-2 (and the stage-3 retention cases).',
                'reward', (1, 2, 3), 'jelly_catch_reward', 10.),

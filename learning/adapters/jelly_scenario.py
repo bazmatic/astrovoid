@@ -21,7 +21,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from learning.environment import Snapshot, Transition
-from learning import jelly_rewards
+from learning import jelly_rewards, jelly_curriculum
 from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled
 from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
@@ -80,13 +80,16 @@ class JellyEnvironment:
     spec = SPEC
     adapter = sys.modules[__name__]   # the collector asks the adapter for enabled() and teacher_action()
 
-    def __init__(self, horizon=60.0, arenas=None, scripted=False, rewards=None):
+    def __init__(self, horizon=60.0, arenas=None, scripted=False, rewards=None, lessons=None):
         self.rewards = dict(jelly_rewards.DEFAULTS, **(rewards or {}))
         self.horizon, self.arenas, self.scripted = horizon, arenas, scripted
+        if self.rewards['boredom_window'] <= 0 or self.rewards['boredom_distance'] <= 0 or self.rewards['boredom_penalty'] < 0:
+            raise ValueError('boredom needs a positive window/distance and a nonnegative penalty')
+        self.lessons = lessons or jelly_curriculum.metadata()
         self.world = None
         self.render_frames = None
 
-    def reset(self, seed, level=11, team_size=1, stage=1):
+    def reset(self, seed, level=11, team_size=1, stage=1, lesson='cave'):
         import pygame
         import config
         import creatures
@@ -101,6 +104,12 @@ class JellyEnvironment:
         from physics.obstacle_world import ObstacleWorld
         from level_layout import parse_layout
         from maze.config import MazeComplexity
+        if lesson not in jelly_curriculum.LESSONS:
+            raise ValueError(f'unknown navigation lesson: {lesson}')
+        self.lesson = lesson
+        self.episode_horizon = min(self.horizon, self.lessons['episode_seconds'].get(lesson, self.horizon))
+        if lesson != 'cave' and (stage != 1 or team_size != 1):
+            raise ValueError('introductory navigation lessons are solo pursuit')
         if stage not in STAGES:
             raise ValueError(f'unknown jelly stage: {stage}')
         if type(team_size) is not int or not 1 <= team_size <= MAX_TEAM:
@@ -114,6 +123,8 @@ class JellyEnvironment:
         self._screen_settings = config.SCREEN_WIDTH, config.SCREEN_HEIGHT
         config.SCREEN_WIDTH, config.SCREEN_HEIGHT = 1352, 878
         arena = self.arenas.get(str(level)) if self.arenas else level_config.load_level_config(level)
+        if lesson != 'cave':
+            arena = self.lessons['arenas'][lesson]
         grid_size = arena['maze']['grid_size']
         complexity = MazeComplexity[arena['maze']['complexity'].upper()]
         layout = parse_layout(arena['layout'], grid_size) if 'layout' in arena else None
@@ -127,6 +138,20 @@ class JellyEnvironment:
                  for r in range(1, maze.grid_height-1) for c in range(1, maze.grid_width-1) if not maze.grid[r][c]]
         rng.shuffle(cells)
         self.cells = [p for p in cells if maze.is_open(p, TARGET_RADIUS+2)]
+        from hunter.maze_route import MazeRoutes
+        from creatures.wallcrawler_team import capsule_hits
+        self._spawn_routes = MazeRoutes()
+        self.cells = [p for p in self.cells if not any(
+            w.active and capsule_hits(p, p, TARGET_RADIUS+2, w.start, w.end) for w in maze.gate_segments)]
+        # Prefer the largest usable connected region, not a tiny sealed spawn pocket.
+        remaining, largest = set(range(len(self.cells))), set()
+        while remaining:
+            first = min(remaining)
+            component = set(self._spawn_routes.reachable_targets(maze, self.cells[first], self.cells))
+            if len(component) > len(largest):
+                largest = component
+            remaining -= component
+        self.cells = [p for i, p in enumerate(self.cells) if i in largest]
         starts = [p for p in self.cells if maze.is_open(p, 11)]
         scoring = ScoringSystem()
         scoring.power_drain_enabled = False
@@ -187,6 +212,8 @@ class JellyEnvironment:
         self.trails = {c.agent_id: deque([c.get_pos()], maxlen=STUCK_WINDOW//DECISION_FRAMES+1)
                        for c in self.team.members()}
         self.pushes = {c.agent_id: deque(maxlen=STUCK_WINDOW//DECISION_FRAMES) for c in self.team.members()}
+        self.idle_frames = Counter()
+        self.idle_trails = {c.agent_id: deque([(0, c.get_pos())]) for c in self.team.members()}
         self.action_trace = []
         return self.snapshot()
 
@@ -195,10 +222,16 @@ class JellyEnvironment:
         jellies = [c.get_pos() for c in self.team.members()]
         def clearance(p):
             return min((math.dist(p, q) for q in jellies), default=float('inf'))
-        for p in self.rng.sample(self.cells, len(self.cells)):
+        cells = self.cells
+        # A teacher cannot demonstrate pursuit across genuinely disconnected pockets.
+        reachable = self._spawn_routes.reachable_targets(self.world.maze, jellies[0], cells)
+        cells = [cells[i] for i in reachable]
+        if not cells:
+            raise ValueError('arena has no reachable quarry spawn')
+        for p in self.rng.sample(cells, len(cells)):
             if clearance(p) >= distance:
                 return p
-        return max(self.cells, key=clearance)
+        return max(cells, key=clearance)
 
     def launch(self, target):
         from learning.adapters.practice_targets import TARGET_SPEED_MIN, TARGET_SPEED_MAX
@@ -227,7 +260,7 @@ class JellyEnvironment:
         return not self.team.members() or (self.ship is not None and not self.ship.active)
 
     def ended(self):
-        return self.finished or self.frames >= self.horizon*60 or self.terminal()
+        return self.finished or self.frames >= self.episode_horizon*60 or self.terminal()
 
     def catch(self, rewards):
         """Body contact with a target is a catch: the toucher takes CATCH_REWARD, each other living Jelly a share."""
@@ -327,6 +360,7 @@ class JellyEnvironment:
             accelerating = {i: intent.accel > STUCK_ACCEL for i, intent in intents.items()}
         self.action_trace.append({str(i): [float(v) for v in a] for i, a in actions.items()})
         before = {c.agent_id: self.pursuit(c) for c in members}
+        contacts_before = {c.agent_id: self.agent_catches[c.agent_id] + self.agent_ship_hits[c.agent_id] for c in members}
         rewards = {i: 0. for i in self.agent_ids}
         frames = 0
         for _ in range(DECISION_FRAMES):
@@ -361,10 +395,23 @@ class JellyEnvironment:
                     and math.dist(trail[0], trail[-1]) < STUCK_DISTANCE):
                 rewards[i] -= self.rewards['stuck_penalty']
                 self.agent_stuck_frames[i] += frames
+        window = self.rewards['boredom_window'] * 60
+        for c in self.team.members():
+            i = c.agent_id
+            trail = self.idle_trails[i]
+            if self.agent_catches[i] + self.agent_ship_hits[i] > contacts_before.get(i, 0):
+                trail.clear()   # Useful contact earns a fresh grace period.
+            trail.append((self.frames, c.get_pos()))
+            while len(trail) > 1 and trail[1][0] <= self.frames - window:
+                trail.popleft()
+            if (self.frames - trail[0][0] >= window
+                    and max(math.dist(trail[0][1], pos) for _, pos in trail) < self.rewards['boredom_distance']):
+                rewards[i] -= self.rewards['boredom_penalty'] * frames / DECISION_FRAMES
+                self.idle_frames[i] += frames
         self.formation(rewards, frames)
         self.agent_returns.update(rewards)
         terminated = self.terminal()
-        truncated = self.frames >= self.horizon*60 and not terminated
+        truncated = self.frames >= self.episode_horizon*60 and not terminated
         return Transition(self.snapshot(), sum(rewards.values()), terminated, truncated, self.events(),
                           agent_rewards=rewards)
 
@@ -400,7 +447,7 @@ class JellyEnvironment:
         self.bunched_frames += len(bunched)*frames
 
     def events(self):
-        return {'catches': sum(self.agent_catches.values()), 'agent_catches': dict(self.agent_catches),
+        result = {'catches': sum(self.agent_catches.values()), 'agent_catches': dict(self.agent_catches),
                 'seconds': self.frames/60, 'stuck_seconds': sum(self.agent_stuck_frames.values())/60,
                 'agent_stuck_seconds': {i: f/60 for i, f in self.agent_stuck_frames.items()},
                 'alive': len(self.team.members()), 'stage': self.stage,
@@ -412,6 +459,9 @@ class JellyEnvironment:
                 'survival_fraction': len(self.team.members())/self.team_size,
                 'time_to_ship_kill': self.ship_killed_frame/60 if self.ship_killed_frame is not None else None,
                 'time_to_contact': self.contact_frame/60 if self.contact_frame is not None else None}
+        result['idle_seconds'] = sum(self.idle_frames.values()) / 60
+        result['navigation_lesson'] = jelly_curriculum.LESSONS.index(self.lesson)
+        return result
 
     def close(self):
         if hasattr(self, '_screen_settings'):
@@ -429,14 +479,14 @@ def teacher_action(env, agent_id, sampled):
     return teacher(c, env.enc)
 
 
-def environment(horizon=60.0, arenas=None, scripted=False, rewards=None, **ignored):
+def environment(horizon=60.0, arenas=None, scripted=False, rewards=None, lessons=None, **ignored):
     """The trainer also passes `opponent` and `muted`; Jellies have no frozen opponent and no message channel."""
-    return JellyEnvironment(horizon=horizon, arenas=arenas, scripted=scripted, rewards=rewards)
+    return JellyEnvironment(horizon=horizon, arenas=arenas, scripted=scripted, rewards=rewards, lessons=lessons)
 
 
 def environment_options(manifest):
     """Run-specific environment arguments for rollout workers and evaluation."""
-    return dict(rewards=jelly_rewards.from_manifest(manifest))
+    return dict(rewards=jelly_rewards.from_manifest(manifest), lessons=manifest['navigation'])
 
 
 # Scenario policy belongs to this adapter, not to the optimiser or run manager.
@@ -462,8 +512,9 @@ def metadata(args):
     configured = jelly_rewards.from_args(args)
     rewards = {field: configured[name] * sign for name, (block, field, sign) in jelly_rewards.MANIFEST_FIELDS.items()
                if block == 'rewards'}
-    # Version 4: episodes report time_to_contact, and validation/evaluation cover all three stages.
-    return dict(task=SPEC.task, scenario_version=4, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    # Version 6: the navigation curriculum (open pursuit, a barrier, then caves) is the only mode, and the boredom
+    # rule is always recorded.
+    result = dict(task=SPEC.task, scenario_version=6, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': configured['team_catch_share']},
@@ -483,9 +534,12 @@ def metadata(args):
                 promotion={'1': 'training_catches_per_minute_and_stuck_fraction_beat_scripted_holdout_baseline',
                            '2': 'training_angular_spread_and_team_catches_per_minute_beat_scripted_holdout_team_baseline',
                            '3': 'final'},
-                selection={'gate': 'stage1_2_catches_per_minute_above_and_stuck_fraction_below_scripted_on_validation_cases',
+                selection={'gate': 'positive catches in introductory lessons; scripted cave gate at the cave lesson',
                            'score': 'reward_weighted_catches_per_minute_times_unstuck_share',
+                           'context': 'current_navigation_lesson; cave benchmark reported separately',
                            'validation_cases': validation_cases()},
+                navigation=jelly_curriculum.metadata(),
+                boredom=dict(window_seconds=configured['boredom_window'], distance_pixels=configured['boredom_distance']),
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',
                       'pilot_sha256': hashlib.sha256(SHIP_PILOT.read_bytes()).hexdigest() if SHIP_PILOT.is_file() else None,
@@ -496,9 +550,10 @@ def metadata(args):
                 opponent_sha256=hashlib.sha256(opponent.read_bytes()).hexdigest() if opponent.is_file() else None,
                 decision_frames=DECISION_FRAMES, horizon=args.horizon,
                 train_levels=list(TRAIN_LEVELS), holdout_levels=list(HOLDOUT_LEVELS))
+    return result
 
 
-def training_cases(iteration, count, stage, bootstrap=False):
+def training_cases(iteration, count, stage, bootstrap=False, curriculum=None):
     """Stage 1: solo Jellies. Stage 2: slots cycle through team sizes 2, 3, 4 plus one stage-1 solo case in every
     RETENTION_SHARE, so the navigation learnt in stage 1 keeps being rehearsed. Stage 3: the same slots, with teams of
     2, 3 and 4 against the ship in three of every four cases; the fourth (retention) slot alternates between a stage-2
@@ -525,6 +580,10 @@ def training_cases(iteration, count, stage, bootstrap=False):
                               stage=stage))
         else:
             cases.append(dict(level=level, seed=seed, team_size=1, stage=1 if stage >= 2 else stage))
+    if curriculum is not None:
+        if curriculum['stage'] < 2:
+            cases = [dict(c, stage=1, team_size=1) for c in cases]
+        return jelly_curriculum.cases(cases, curriculum)
     return cases
 
 
@@ -604,6 +663,9 @@ def metrics(rows):
     all rows, then the same per stage (stage1_catches_per_minute, stage3_survival_fraction, ...): flat numbers, as
     learning.run writes them into train.log lines."""
     summary = summarise(rows)
+    summary['idle_seconds'] = sum(r.get('idle_seconds', 0) for r in rows)
+    summary['idle_fraction'] = summary['idle_seconds'] / max(sum(r['seconds'] * r['team_size'] for r in rows), 1e-9)
+    summary['navigation_lesson'] = max((r.get('navigation_lesson', 0) for r in rows), default=0)
     for stage, keys in STAGE_KEYS.items():
         part = [r for r in rows if r.get('stage', 1) == stage]
         if part:
@@ -646,9 +708,9 @@ _baselines = {}
 run_horizon = 60.0   # the run's episode horizon (set by metadata), so promote's baseline matches the run's episodes
 
 
-def scripted_metrics(cases, horizon):
+def scripted_metrics(cases, horizon, **options):
     """The scripted Jelly (Chase + Drift, no policy) flown on `cases` at `horizon`."""
-    env = JellyEnvironment(horizon=horizon, scripted=True)
+    env = JellyEnvironment(horizon=horizon, scripted=True, **options)
     rows = []
     try:
         for case in cases:
@@ -727,3 +789,56 @@ def ship_pilot():
         from hunter.neural.policy import NeuralPolicy
         _ship_pilot.append(NeuralPolicy.load(SHIP_PILOT) if SHIP_PILOT.is_file() else None)
     return _ship_pilot[0]
+
+
+# Curriculum hooks consumed by learning.run: every Jelly run starts in the first navigation lesson.
+CURRICULUM_METRIC = 'navigation_lesson'
+
+
+def initial_curriculum(args):
+    return jelly_curriculum.initial(args.horizon, environment_options(metadata(args)))
+
+
+advance_curriculum = jelly_curriculum.advance
+
+
+def curriculum_key(state):
+    return jelly_curriculum.LESSONS[state['stage']]
+
+
+def curriculum_validation_cases(state):
+    if state['stage'] >= 2:
+        return validation_cases()
+    return jelly_curriculum.cases([dict(level=n, seed=VALIDATION_SEED+j, team_size=1, stage=1)
+                                   for j, n in enumerate(HOLDOUT_LEVELS)], state)
+
+
+def curriculum_evaluation_cases(state):
+    if state['stage'] >= 2:
+        return evaluation_cases()
+    return jelly_curriculum.cases([dict(level=n, seed=1000+2*j+k, team_size=1, stage=1)
+                                   for j, n in enumerate(HOLDOUT_LEVELS) for k in range(2)], state)
+
+
+def curriculum_benchmark_cases(state):
+    """A separate cave navigation report, never mixed into the easier lesson's score."""
+    return evaluation_cases(1) if state['stage'] < 2 else []
+
+
+def curriculum_selection_score(summary, state):
+    if state['stage'] < 2:
+        return (summary['catches_per_minute'] * (1-summary.get('idle_fraction', 0.))
+                if summary['catches'] > 0 else -math.inf)
+    key = ('navigation_validation', state['horizon'], str(state['environment']))
+    if key not in _baselines:
+        _baselines[key] = scripted_metrics(validation_cases(), state['horizon'], **state['environment'])
+    return selection_score(summary, _baselines[key])
+
+
+def curriculum_promote(stage, summary, state):
+    if state['stage'] < 2 or summary.get('navigation_lesson', 0) < 2:
+        return stage
+    key = ('navigation_promotion', stage, state['horizon'], str(state['environment']))
+    if key not in _baselines:
+        _baselines[key] = scripted_metrics(evaluation_cases(stage), state['horizon'], **state['environment'])
+    return promote(stage, summary, _baselines[key])

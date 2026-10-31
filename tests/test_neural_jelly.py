@@ -1026,13 +1026,14 @@ def test_teacher_routes_around_a_wall_and_reaches_the_target_without_clipping_it
     pytest.fail('teacher failed to take the open route around the wall')
 
 
-def test_teacher_brakes_for_an_unreachable_target_and_uses_a_newly_opened_route():
+def test_teacher_follows_a_wall_when_route_is_unavailable_and_uses_a_new_opening():
     from maze.wall_segment import WallSegment
     wall = WallSegment((200, 0), (200, 400), 3)
     (jelly,), enc, team = team_scene(positions=((150., 150.),), ship=target((250., 150.)))
     enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
                                    offset_x=0, offset_y=0, grid_width=4, grid_height=4)
-    assert adapter.intention(adapter.teacher(jelly, enc)).accel < 0
+    exploring = adapter.intention(adapter.teacher(jelly, enc))
+    assert exploring.accel > .9 and abs(exploring.heading) > .3
     wall.active = False
     intent = adapter.intention(adapter.teacher(jelly, enc))
     assert abs(intent.heading) < .01 and intent.accel > .9

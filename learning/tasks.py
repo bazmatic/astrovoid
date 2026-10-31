@@ -60,7 +60,8 @@ TASKS = {
         Capabilities(fresh_weights=True, actor_damping=True, replay_mode='hooks', settings_scope='listed')),
     # Imitation remains opt-in while teacher warm-start experiments are evaluated.
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
-        dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0),
+        dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0,
+             jelly_boredom_penalty=.02),
         ('budget_seconds','bootstrap_episodes','bootstrap_epochs','seed') + JELLY_REWARD_SETTINGS, 'learning.replay',
         'learning.adapters.jelly_replay', 'learning.adapters.jelly_dashboard',
         Capabilities(fresh_weights=True, actor_damping=False, replay_mode='hooks', settings_scope='listed')),

@@ -91,6 +91,21 @@ class MazeRoutes:
             step = came[step]
         return goals[reached], route, extra
 
+    def reachable_targets(self, maze, origin, targets):
+        """Indices of targets connected to origin by open cells, including the current live gate layout."""
+        cell, _, linked = self._geometry(maze)
+        start = cell(origin)
+        seen, queue = {start}, deque([start])
+        while queue:
+            here = queue.popleft()
+            for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                there = (here[0] + dx, here[1] + dy)
+                if (0 <= there[0] < maze.grid_width and 0 <= there[1] < maze.grid_height
+                        and there not in seen and linked(here, there)):
+                    seen.add(there)
+                    queue.append(there)
+        return [i for i, target in enumerate(targets) if cell(target) in seen]
+
     def route(self, maze, origin, targets):
         """The shortest cell route from `origin` to the nearest of `targets` (by route), as (index, route): the
         index of the target reached and the cell centres from the target's cell back to the one after the start

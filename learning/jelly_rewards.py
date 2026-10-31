@@ -1,15 +1,16 @@
-"""Jelly reward defaults and their version-4 manifest locations, shared by training, replay and the dashboard.
-
-The manifest shape predates configurable rewards. Keeping it lets old default runs replay and resume unchanged.
-"""
+"""Jelly reward defaults and their manifest locations, shared by training, replay and the dashboard."""
 DEFAULTS = {
     'catch_reward': 10., 'team_catch_share': .25, 'progress_reward': .002, 'stuck_penalty': .05,
     'flank_reward': .005, 'flank_range': 200., 'bunch_distance': 40., 'bunch_penalty': .01,
     'ship_hit_reward': 4., 'ship_kill_reward': 10., 'team_ship_share': .25,
     'death_penalty': 5., 'team_death_share': .25,
+    'boredom_penalty': 0., 'boredom_window': 2., 'boredom_distance': 10.,
 }
 # setting -> (manifest block, field, multiplier); penalties are recorded as negative reward terms.
 MANIFEST_FIELDS = {
+    'boredom_penalty': ('rewards', 'boredom_per_decision', -1),
+    'boredom_window': ('boredom', 'window_seconds', 1),
+    'boredom_distance': ('boredom', 'distance_pixels', 1),
     'catch_reward': ('rewards', 'catch', 1),
     'team_catch_share': ('rewards', 'team_catch_share', 1),
     'progress_reward': ('rewards', 'progress_per_pixel', 1),

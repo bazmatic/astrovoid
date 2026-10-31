@@ -133,9 +133,20 @@ def train(args):
     else:
         torch.manual_seed(args.seed)
     curriculum = dict(saved['curriculum']) if saved and saved.get('curriculum') is not None else (
+        adapter.initial_curriculum(args) if hasattr(adapter, 'initial_curriculum') else
         dict(adapter.INITIAL_CURRICULUM) if hasattr(adapter,'INITIAL_CURRICULUM') else None)
     def case_options():
         return {'curriculum':curriculum} if curriculum is not None else {}
+    def validation_cases():
+        return (adapter.curriculum_validation_cases(curriculum)
+                if curriculum is not None and hasattr(adapter, 'curriculum_validation_cases')
+                else adapter.validation_cases())
+    def selection_score(summary):
+        return (adapter.curriculum_selection_score(summary, curriculum)
+                if curriculum is not None and hasattr(adapter, 'curriculum_selection_score')
+                else adapter.selection_score(summary))
+    def selection_context():
+        return adapter.curriculum_key(curriculum) if curriculum is not None and hasattr(adapter, 'curriculum_key') else None
     pool = Rollouts(args.workers)
     started = entered
     unlimited = args.budget_seconds == 0
@@ -143,7 +154,7 @@ def train(args):
     reserve = 0. if unlimited else min(600., args.budget_seconds/6)
     training_limit = float('inf') if unlimited else max(0., args.budget_seconds-reserve)
     (out/'episodes').mkdir(exist_ok=True)
-    validation = adapter.validation_cases()
+    validation = validation_cases()
     best = out/'best.npz'
     history = []
     demonstrations=[]
@@ -195,7 +206,7 @@ def train(args):
             policy.save(best)
             bootstrap_evaluation = evaluate(pool, args, best, validation)
             (out/'bootstrap-evaluation.json').write_text(json.dumps(bootstrap_evaluation, indent=2))
-            best_score = adapter.selection_score(bootstrap_evaluation['summary'])
+            best_score = selection_score(bootstrap_evaluation['summary'])
             save_resume(0)
         iterations = itertools.count(first) if args.iterations == 0 else range(first, args.iterations)
         for iteration in iterations:
@@ -220,13 +231,26 @@ def train(args):
                           episodes=rows, actions=[result[2] for result in flown])
             (out/'episodes'/f'iter{iteration:04d}.json').write_text(json.dumps(record))
             if iteration % 5 == 0:
-                score = adapter.selection_score(evaluate(pool, args, out/current, validation)['summary'])
+                score = selection_score(evaluate(pool, args, out/current, validation)['summary'])
                 if score > best_score:
                     best_score = score; policy.save(best)
             if curriculum is not None:
-                summary['battle_stage'] = curriculum['stage']
+                summary[getattr(adapter, 'CURRICULUM_METRIC', 'battle_stage')] = curriculum['stage']
+                previous_context = selection_context()
                 curriculum = adapter.advance_curriculum(curriculum,summary)
-            team_size = adapter.promote(team_size,summary)
+                if previous_context != selection_context():
+                    # Scores on different lessons are incomparable. Keep the previous winner, then select anew.
+                    shutil.copyfile(best, out/f'best-{previous_context}.npz')
+                    policy.save(best)
+                    best_score = -math.inf
+                    validation = validation_cases()
+                    save_resume(iteration+1)
+                    lesson_evaluation = evaluate(pool, args, best, validation)
+                    (out/f'{selection_context()}-evaluation.json').write_text(json.dumps(lesson_evaluation, indent=2))
+                    best_score = selection_score(lesson_evaluation['summary'])
+            team_size = (adapter.curriculum_promote(team_size, summary, curriculum)
+                         if curriculum is not None and hasattr(adapter, 'curriculum_promote')
+                         else adapter.promote(team_size,summary))
             line = dict(iteration=iteration, update_s=round(time.monotonic()-update_at,3),
                         mean_return=sum(sum(e['rewards']) for r in flown for e in r[0])/sum(len(r[0]) for r in flown),
                         rollout_s=round(rollout_seconds,3), team_size=team_size, elapsed_s=round(used(),1), **summary, **stats)
@@ -237,7 +261,9 @@ def train(args):
                 (out/PAUSE_FILE).unlink(); write_state(out, 'paused', iteration)
                 return dict(paused=True, history=history, last=str(out/current))
         # Fixed held-out arenas and seeds: no best-checkpoint selection on these results.
-        cases = adapter.evaluation_cases()
+        cases = (adapter.curriculum_evaluation_cases(curriculum)
+                 if curriculum is not None and hasattr(adapter, 'curriculum_evaluation_cases')
+                 else adapter.evaluation_cases())
         policy.save(out/current)
         if not best.exists(): policy.save(best)
         gate_passed = note_selection()
@@ -247,6 +273,12 @@ def train(args):
         reports['versus_scripted'] = adapter.compare(reports['trained'],reports['scripted'])
         reports['wall_seconds'] = used()
         reports['selection_gate_passed'] = gate_passed
+        if selection_context() is not None:
+            reports['selection_context'] = selection_context()
+        if curriculum is not None and hasattr(adapter, 'curriculum_benchmark_cases'):
+            benchmark_cases = adapter.curriculum_benchmark_cases(curriculum)
+            if benchmark_cases:
+                reports['cave_benchmark'] = evaluate(pool, args, best, benchmark_cases)
         reports['opponent_sha256'] = expected['opponent_sha256']
         (out/'evaluation.json').write_text(json.dumps(reports, indent=2))
         write_state(out,'finished',history[-1]['iteration'] if history else first)
@@ -254,7 +286,7 @@ def train(args):
     except (TimeoutError, __import__('multiprocessing').TimeoutError):
         (out/'evaluation.json').write_text(json.dumps(dict(budget_exhausted=True, wall_seconds=used(),
             message='Stopped at the wall-clock limit; completed checkpoints remain available.',
-            selection_gate_passed=note_selection())))
+            selection_gate_passed=note_selection(), selection_context=selection_context())))
         write_state(out,'finished',history[-1]['iteration'] if history else first)
         return dict(paused=False,history=history,last=str(best if best.exists() else out/current))
     finally:

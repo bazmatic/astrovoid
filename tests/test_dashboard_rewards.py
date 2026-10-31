@@ -92,7 +92,7 @@ def test_active_rules_follow_the_runs_current_stage(server):
     assert {'catch', 'progress', 'stuck'} <= active['run1'] and not active['run1'] & {'flank', 'bunch', 'ship_hit'}
     assert {'flank', 'bunch', 'catch'} <= active['run2'] and not active['run2'] & {'ship_hit', 'ship_kill', 'death'}
     assert {'flank', 'bunch', 'ship_hit', 'ship_kill', 'death'} <= active['run3'] and 'catch' in active['run3']  # retention cases still pay catches
-    assert active['run4'] == {r['key'] for r in rewards(server, 'run4')['rules']}
+    assert active['run4'] == {r['key'] for r in rewards(server, 'run4')['rules'] if r['value']}   # boredom defaults to 0
 
 
 # The old page's Wallcrawler cards (loadRules) for a run that recorded these rewards: every reward and penalty it could

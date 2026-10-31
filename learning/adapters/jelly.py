@@ -134,7 +134,8 @@ def teacher(c, enc):
     """Follow the furthest body-clear waypoint on an open cell route to the quarry.
 
     The teacher may inspect the maze; the student's observations remain unchanged. Route links are cached for this
-    encounter and invalidated by MazeRoutes when walls change. No route means brake rather than push into a wall.
+    encounter and invalidated by MazeRoutes when walls change. Missing routes fall back to local wall following;
+    braking is the last resort when no body-clear escape is available.
     """
     pos = enc.target_for(c)
     if pos is None:
@@ -161,6 +162,12 @@ def teacher(c, enc):
                 if overlapping:
                     waypoint = next((p for p in points if math.dist(c.get_pos(), p) > 1
                                      and not wall_between(c.get_pos(), p, maze)), None)
+    if waypoint is None:
+        from learning.adapters.jelly_wall_follow import waypoint as follow_wall
+        waypoint = follow_wall(c, enc, pos)
+    else:
+        from learning.adapters.jelly_wall_follow import clear
+        clear(c, enc)
     if waypoint is None:
         return math.atanh(clip(math.remainder(facing(c), 2*math.pi)/math.pi, -.999, .999)), -FULL
     desired = math.atan2(waypoint[1]-c.y, waypoint[0]-c.x)

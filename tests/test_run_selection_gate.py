@@ -10,7 +10,7 @@ def run_jelly(tmp_path, monkeypatch, score):
     from learning import run
     from learning.adapters import jelly_scenario as scenario
     from tools import ppo_neural
-    monkeypatch.setattr(scenario, 'selection_score', lambda summary, baseline=None: score)
+    monkeypatch.setattr(scenario, 'curriculum_selection_score', lambda summary, state: score)
     monkeypatch.setattr(scenario, '_baselines', {})
     monkeypatch.setattr(scenario, 'run_horizon', scenario.run_horizon)
     out = tmp_path/'run'
