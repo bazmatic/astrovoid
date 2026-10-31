@@ -1008,3 +1008,20 @@ def test_jelly_runs_do_not_bootstrap_from_the_weak_teacher_by_default(tmp_path):
     start(from_='new', changes={'task': 'jelly_team', 'budget_seconds': 10}, root=tmp_path, processes=[],
           launch=lambda command, log: calls.append(command))
     assert ppo_neural.build_parser().parse_args(calls[0][3:]).bootstrap_episodes == 0
+
+
+def test_level_27_is_not_a_jelly_training_level_and_every_case_type_visits_every_other_level():
+    from learning.adapters import jelly_scenario as scenario
+    assert 27 not in scenario.TRAIN_LEVELS
+    levels = len(scenario.TRAIN_LEVELS)
+    for stage in (1, 2, 3):
+        cases = [c for iteration in range(levels*scenario.RETENTION_SHARE)
+                 for c in scenario.training_cases(iteration, scenario.RETENTION_SHARE, stage)]
+        assert all(c['level'] != 27 for c in cases)
+    cases = [c for iteration in range(levels) for c in scenario.training_cases(iteration, 16, 2)]
+    # 16 * levels cases span 4 passes of 28; each (stage, team size) must meet every training level
+    visited = {}
+    for c in cases:
+        visited.setdefault((c['stage'], c['team_size']), set()).add(c['level'])
+    assert set(visited) == {(1, 1), (2, 2), (2, 3), (2, 4)}
+    assert all(seen == set(scenario.TRAIN_LEVELS) for seen in visited.values())

@@ -22,8 +22,12 @@ import numpy as np
 
 from learning.environment import Snapshot, Transition
 from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled
-from learning.adapters.crawler_scenario import TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
+from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
+
+# Level 27 spawns targets and Jellies inside small pockets that are hard to reach, so it is no use for learning to hunt.
+UNSUITABLE_TRAIN_LEVELS = (27,)
+TRAIN_LEVELS = tuple(n for n in CRAWLER_TRAIN_LEVELS if n not in UNSUITABLE_TRAIN_LEVELS)
 
 STAGES = (1, 2, 3)             # stage 2 (flanking) shares stage 1's scene and adds the flank/bunch shaping below;
                                # stage 3 swaps the plain target for the hunting training ship
@@ -482,20 +486,22 @@ def training_cases(iteration, count, stage, bootstrap=False):
     """Stage 1: solo Jellies. Stage 2: slots cycle through team sizes 2, 3, 4 plus one stage-1 solo case in every
     RETENTION_SHARE, so the navigation learnt in stage 1 keeps being rehearsed. Stage 3: the same slots, with teams of
     2, 3 and 4 against the ship in three of every four cases; the fourth (retention) slot alternates between a stage-2
-    flanking case (team sizes cycling 2, 3, 4) and a stage-1 solo case. Each block of len(TRAIN_LEVELS) cases is thus
-    six stage-3 cases (two of each team size), one stage-2 and one stage-1."""
+    flanking case (team sizes cycling 2, 3, 4) and a stage-1 solo case. Over RETENTION_SHARE passes through
+    TRAIN_LEVELS the mix is three stage-3 cases to one retention case, split between stage 2 and stage 1."""
     cases = []
     for i in range(count):
         index = iteration*count+i
         level, seed = TRAIN_LEVELS[index % len(TRAIN_LEVELS)], 100+i if bootstrap else 300+index % 100
-        # Shift the slot by one each pass through TRAIN_LEVELS, else index % 8 fixes index % 4 and every team size
-        # trains on the same two levels. Each block of len(TRAIN_LEVELS) cases still holds the 1-in-4 retention share.
-        slot = (index + index//len(TRAIN_LEVELS)) % RETENTION_SHARE
+        # The slot is the level's position plus the pass number, so each pass through TRAIN_LEVELS shifts every level
+        # to the next slot; indexing by the case number alone would tie each level to a fixed team size whenever
+        # len(TRAIN_LEVELS) shares a factor with RETENTION_SHARE. Over RETENTION_SHARE passes every level meets every
+        # slot once, and the retention slot (0) is 1 case in 4 over that span.
+        slot = (index % len(TRAIN_LEVELS) + index//len(TRAIN_LEVELS)) % RETENTION_SHARE
         if stage == 3 and slot:
             cases.append(dict(level=level, seed=seed, team_size=STAGE3_TEAM_SIZES[(slot-1) % len(STAGE3_TEAM_SIZES)],
                               stage=3))
         elif stage == 3 and (index//RETENTION_SHARE) % 2 == 0:
-            # The two retention slots in a block of len(TRAIN_LEVELS) fall in opposite halves, so they alternate.
+            # Retention cases alternate between a stage-2 team and a stage-1 solo case.
             size = STAGE2_TEAM_SIZES[(index//len(TRAIN_LEVELS)) % len(STAGE2_TEAM_SIZES)]
             cases.append(dict(level=level, seed=seed, team_size=size, stage=2))
         elif stage >= 2 and slot:
