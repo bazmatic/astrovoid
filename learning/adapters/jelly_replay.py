@@ -4,18 +4,21 @@ scenario_version, rewards, creature stats, the ship pilot's checksum) rejects th
 from types import SimpleNamespace
 
 from learning.replay import check_rules
+from learning import jelly_rewards
 
 
 def metadata_args(path, manifest):
     """learning.run copies the trainer's --opponent file into every run and the manifest records its checksum, so the
     rules are rebuilt against that copy even though no Jelly flies against it."""
-    return SimpleNamespace(opponent=path/'opponent.npz', horizon=manifest['horizon'])
+    return SimpleNamespace(opponent=path/'opponent.npz', horizon=manifest['horizon'],
+                           **jelly_rewards.recovered_settings({'manifest': manifest}))
 
 
 def open_environment(path, manifest):
     from learning.adapters import jelly_scenario
     check_rules(path, manifest, jelly_scenario.metadata, metadata_args=metadata_args)
-    return jelly_scenario.JellyEnvironment(horizon=manifest['horizon'], arenas=manifest['arenas'])
+    return jelly_scenario.JellyEnvironment(horizon=manifest['horizon'], arenas=manifest['arenas'],
+                                          **jelly_scenario.environment_options(manifest))
 
 
 def outcome(manifest, events, transition, total_reward):

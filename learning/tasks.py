@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field
 import importlib
 
+from learning.jelly_rewards import SETTINGS as JELLY_REWARD_SETTINGS
+
 
 REPLAY_MODES = ('hooks', 'builtin', None)
 SETTINGS_SCOPES = ('listed', 'unclaimed')
@@ -59,7 +61,7 @@ TASKS = {
     # No imitation bootstrap by default: the scripted Jelly teacher (learning.adapters.jelly.teacher) is weak.
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
         dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0),
-        ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
+        ('budget_seconds','bootstrap_episodes','seed') + JELLY_REWARD_SETTINGS, 'learning.replay',
         'learning.adapters.jelly_replay', 'learning.adapters.jelly_dashboard',
         Capabilities(fresh_weights=True, actor_damping=False, replay_mode='hooks', settings_scope='listed')),
 }

@@ -153,3 +153,30 @@ def test_credit_settings_round_trip_and_old_runs_keep_their_actual_defaults(tmp_
     changed_values = apply_changes(values, {'gamma': '0.995', 'gae_lambda': '0.98'})
     args = args_for(to_argv(changed_values))
     assert args['gamma'] == 0.995 and args['gae_lambda'] == 0.98
+
+
+def test_continuing_an_old_jelly_run_keeps_its_rewards_instead_of_borrowing_a_newer_experiment(tmp_path):
+    from learning.adapters import jelly_scenario
+    from tools.trainer.settings import scoped_settings
+    from tools.trainer.control import start
+    from tests.test_trainer_control import make_run as checkpoint_run
+    from types import SimpleNamespace
+    old = checkpoint_run(tmp_path, 'run1', 1)
+    config = json.loads((old / 'config.json').read_text())
+    config['task'] = 'jelly_team'
+    config['args'] = {k: v for k, v in config['args'].items() if not k.startswith('jelly_')}
+    # Old runs recorded actual reward rules in the manifest, before CLI arguments existed.
+    config['manifest'] = jelly_scenario.metadata(SimpleNamespace(horizon=60))
+    (old / 'config.json').write_text(json.dumps(config))
+    newer = make_run(tmp_path, 'run2', dict(task='jelly_team', args=dict(jelly_catch_reward=99., jelly_flank_range=450.)))
+    values = read_settings(old, [old, newer])
+    assert values['jelly_catch_reward'] == Value(10., 'recovered')
+    assert values['jelly_flank_range'] == Value(200., 'recovered')
+    started = start(from_='run1', root=tmp_path, processes=[], launch=lambda *a: None,
+                    changes={'jelly_catch_reward': 12., 'jelly_flank_range': 250.})
+    args = ppo.build_parser().parse_args(started.command[3:])
+    assert (args.jelly_catch_reward, args.jelly_flank_range) == (12., 250.)
+    offered = {s.dest: s for s in scoped_settings()}
+    for dest in ('jelly_catch_reward', 'jelly_flank_range', 'jelly_death_penalty'):
+        assert offered[dest].tasks == ('jelly_team',) and offered[dest].group == 'Rewards'
+    assert 'jelly_team' not in offered['death_penalty'].tasks

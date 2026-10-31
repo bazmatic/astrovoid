@@ -20,8 +20,9 @@ def rollout_job(job):
     adapter = task(job['task']).adapter()
     config_path = Path(job['weights']).parent/'config.json'
     recorded = json.loads(config_path.read_text()) if config_path.exists() else {}
+    options = getattr(adapter, 'environment_options', lambda manifest: {})(recorded.get('manifest', {}))
     env = adapter.environment(opponent=job['opponent'], horizon=job['horizon'], muted=job['muted'],
-                              arenas=recorded.get('manifest', {}).get('arenas'), scripted=job['mode']=='scripted')
+                              arenas=recorded.get('manifest', {}).get('arenas'), scripted=job['mode']=='scripted', **options)
     policy = RecurrentPolicy.load(job['weights'], adapter.SPEC)
     teacher = env.adapter.teacher_action if job['mode'] == 'teacher' else None
     case = dict(job['case']); seed = case.pop('seed')

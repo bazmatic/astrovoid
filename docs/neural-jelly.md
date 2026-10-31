@@ -179,3 +179,18 @@ JELLY_POLICY=/path/to/best.npz ./run.sh
 - **The first selection is slow.** The first `selection_score` call in a run flies the 9 scripted validation
   episodes synchronously in the trainer process to build the baseline. That is a one-off stall of about 15 s at a
   60 s horizon. Later calls use the cached baseline.
+
+### Per-run reward settings
+
+The Next run form offers Jelly rewards, team shares, flank range and bunch distance under Rewards. CLI names use
+`jelly_` prefixes, for example `--set jelly_catch_reward=12` and `--set jelly_death_penalty=7`. A new run may change
+them; resuming the same run requires the recorded values. Defaults reproduce the original rules. Rollout workers
+and episode replay use the run's recorded rules, including for old runs whose rewards predate these settings.
+
+Checkpoint selection keeps its original fixed reward weights as a comparable evaluation benchmark. Changing training
+rewards changes what PPO learns, while catches, ship hits, kills and deaths retain the same selection weights. This
+also allows a zero catch reward without changing score normalization.
+
+The spread and bunching charts, and scripted promotion baselines, retain their original benchmark geometry
+(200 px flank range and 40 px bunch distance). Configured distances govern paid shaping; keeping measurement
+geometry fixed makes training progress comparable across reward experiments.

@@ -343,9 +343,10 @@ def settings_by_task(setup, keys):
     return {key: sorted(s['dest'] for s in settings if key in s['tasks']) for key in keys}
 
 
-def test_each_creatures_settings_form_offers_the_same_settings_as_before_capabilities(setup):
+def test_hunter_and_wallcrawler_settings_forms_offer_the_same_settings_as_before_capabilities(setup):
     """Recorded from the task-name rules (commit a7ccfee) before the settings scope became a task capability."""
     golden = json.loads((Path(__file__).parent / 'fixtures' / 'trainer_settings_scope.json').read_text())
+    golden = {key: golden[key] for key in ('hunter', 'wallcrawler_team')}
     assert settings_by_task(setup, golden) == golden
 
 

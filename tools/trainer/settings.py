@@ -50,6 +50,9 @@ LABELS = {
     'workers': ('Training', 'Workers'),
 }
 
+from learning.jelly_rewards import DEFAULTS as JELLY_REWARD_DEFAULTS
+LABELS.update({f'jelly_{name}': ('Rewards', 'Jelly ' + name.replace('_', ' ')) for name in JELLY_REWARD_DEFAULTS})
+
 # The rewards summary of older runs, by row name: (dest, what the value was multiplied by). Rows are only written
 # when non-zero, so a run with a summary but no row for one of these trained with it at 0.
 def _reward_rows():
@@ -170,7 +173,11 @@ def _recovered(config):
     """What can be worked out from an older run's episode block and rewards summary."""
     if not config:
         return {}
-    out = {}
+    from learning.dashboard import declaration
+    try:
+        out = declaration(config.get('task', UNTAGGED_TASK)).recovered_settings(config)
+    except ValueError:   # a task this trainer no longer knows
+        out = {}
     for key, dest in EPISODE_KEYS.items():
         if key in (config.get('episode') or {}):
             out[dest] = config['episode'][key]

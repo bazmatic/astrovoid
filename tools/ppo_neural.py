@@ -391,6 +391,10 @@ def build_parser():
     parser.add_argument('--budget-seconds', type=float, default=7200, help='total team training and evaluation wall time; 0 means no time limit')
     parser.add_argument('--bootstrap-episodes', type=int, default=8, help='scripted imitation encounters for new team runs')
     parser.add_argument('--seed', type=int, default=0, help='team model and training seed')
+    from learning.jelly_rewards import DEFAULTS
+    for name, default in DEFAULTS.items():
+        parser.add_argument('--jelly-' + name.replace('_', '-'), type=float, default=default,
+                            help='Jelly ' + name.replace('_', ' '))
     parser.add_argument('--start', default=str(DEFAULT_START))
     parser.add_argument('--out', default=str(DEFAULT_OUT))
     parser.add_argument('--iterations', type=int, default=100, help='training iterations; 0 means unlimited for creature teams')

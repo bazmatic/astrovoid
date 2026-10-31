@@ -21,6 +21,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from learning.environment import Snapshot, Transition
+from learning import jelly_rewards
 from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled
 from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
@@ -35,20 +36,20 @@ TARGET_COUNT = 1               # one plain target: every Jelly in the team hunts
 TARGET_START_DISTANCE = 250.   # px: targets start at least this far from every Jelly (else the farthest open cell)
 RESPAWN_DISTANCE = 300.        # px: a caught target reappears at least this far from every Jelly
 JELLY_SPACING = 60.            # px between Jelly starts
-CATCH_REWARD = 10.             # to the Jelly that touches the target
-TEAM_CATCH_SHARE = .25         # every other living Jelly gets this share of CATCH_REWARD for a teammate's catch
-PROGRESS_REWARD = .002         # per pixel a Jelly closes on its target over a decision (about .03 at full speed)
+CATCH_REWARD = jelly_rewards.DEFAULTS['catch_reward'] # to the Jelly that touches the target
+TEAM_CATCH_SHARE = jelly_rewards.DEFAULTS['team_catch_share'] # every other living Jelly gets this share of CATCH_REWARD for a teammate's catch
+PROGRESS_REWARD = jelly_rewards.DEFAULTS['progress_reward'] # per pixel a Jelly closes on its target over a decision (about .03 at full speed)
 STUCK_WINDOW = 60              # frames (one second) over which displacement is measured
 STUCK_DISTANCE = 10.           # px: moving less than this over the window, accelerating throughout it, is stuck
 STUCK_ACCEL = .1               # an intent's accel above this counts as accelerating
-STUCK_PENALTY = .05            # per decision spent stuck (.5 per second)
+STUCK_PENALTY = jelly_rewards.DEFAULTS['stuck_penalty'] # per decision spent stuck (.5 per second)
 MAX_TEAM = 8                   # the critic's member slots
 # Stage 2 shaping, kept small beside CATCH_REWARD: a perfect pincer held for a whole minute earns each Jelly 3, under
 # a third of one catch, so catches dominate while two Jellies converging from opposite sides beats one rushing alone.
-FLANK_REWARD = .005            # per decision to every living Jelly, times flank_spread of the Jellies in range
-FLANK_RANGE = 200.             # px: Jellies this close to the target count towards its flank_spread
-BUNCH_DISTANCE = 40.           # px between Jelly centres: closer than this is bunched (about two body widths apart)
-BUNCH_PENALTY = .01            # per decision, to each Jelly of every pair closer than BUNCH_DISTANCE
+FLANK_REWARD = jelly_rewards.DEFAULTS['flank_reward'] # per decision to every living Jelly, times flank_spread of the Jellies in range
+FLANK_RANGE = jelly_rewards.DEFAULTS['flank_range'] # px: Jellies this close to the target count towards its flank_spread
+BUNCH_DISTANCE = jelly_rewards.DEFAULTS['bunch_distance'] # px between Jelly centres: closer than this is bunched (about two body widths apart)
+BUNCH_PENALTY = jelly_rewards.DEFAULTS['bunch_penalty'] # per decision, to each Jelly of every pair closer than BUNCH_DISTANCE
 STAGE2_TEAM_SIZES = (2, 3, 4)
 RETENTION_SHARE = 4            # one stage-2 training case in this many is a stage-1 solo case, so navigation is kept
 # Stage 3, the hunting ship. A Jelly's death costs more than one touch on the ship earns, so trading a life for a single
@@ -58,11 +59,11 @@ STAGE3_TEAM_SIZES = (2, 3, 4)  # teams against the ship; a team of one is allowe
 SHIP_START_DISTANCE = 300.     # px: the ship starts at least this far from every Jelly (else the farthest open cell)
 SHIP_KIND = 'training_ship'    # its stats live in config/enemies.json; its pilot is the frozen neural hunter below
 SHIP_PILOT = Path(__file__).resolve().parents[2] / 'assets/neural/hunter.npz'
-SHIP_HIT_REWARD = 4.           # to the Jelly whose touch costs the ship a hit point (none during hull immunity)
-SHIP_KILL_REWARD = 10.         # on top, to the Jelly whose touch kills the ship (worth a stage 1-2 catch)
-TEAM_SHIP_SHARE = TEAM_CATCH_SHARE   # every other living Jelly gets this share of a teammate's hit and kill rewards
-DEATH_PENALTY = 5.             # to a Jelly the ship kills, on the decision it dies
-TEAM_DEATH_SHARE = .25         # every surviving Jelly loses this share of DEATH_PENALTY for each teammate lost
+SHIP_HIT_REWARD = jelly_rewards.DEFAULTS['ship_hit_reward'] # to the Jelly whose touch costs the ship a hit point (none during hull immunity)
+SHIP_KILL_REWARD = jelly_rewards.DEFAULTS['ship_kill_reward'] # on top, to the Jelly whose touch kills the ship (worth a stage 1-2 catch)
+TEAM_SHIP_SHARE = jelly_rewards.DEFAULTS['team_ship_share'] # every other living Jelly gets this share of a teammate's hit and kill rewards
+DEATH_PENALTY = jelly_rewards.DEFAULTS['death_penalty'] # to a Jelly the ship kills, on the decision it dies
+TEAM_DEATH_SHARE = jelly_rewards.DEFAULTS['team_death_share'] # every surviving Jelly loses this share of DEATH_PENALTY for each teammate lost
 
 
 def flank_spread(positions, target):
@@ -79,7 +80,8 @@ class JellyEnvironment:
     spec = SPEC
     adapter = sys.modules[__name__]   # the collector asks the adapter for enabled() and teacher_action()
 
-    def __init__(self, horizon=60.0, arenas=None, scripted=False):
+    def __init__(self, horizon=60.0, arenas=None, scripted=False, rewards=None):
+        self.rewards = dict(jelly_rewards.DEFAULTS, **(rewards or {}))
         self.horizon, self.arenas, self.scripted = horizon, arenas, scripted
         self.world = None
         self.render_frames = None
@@ -174,7 +176,7 @@ class JellyEnvironment:
         self.agent_stuck_frames = Counter()
         self.spread_frames = 0.      # flank_spread times frames, over decisions with two or more Jellies in range
         self.flank_frames = 0
-        self.bunched_frames = 0      # Jelly-frames spent closer than BUNCH_DISTANCE to another Jelly
+        self.bunched_frames = 0      # Jelly-frames spent closer than the configured bunch distance to another Jelly
         self.generation = Counter()   # how many times each target has respawned
         self.agent_ship_hits = Counter()
         self.living = set(self.agent_ids)   # Jellies alive after the last frame, so deaths are counted once
@@ -242,7 +244,8 @@ class JellyEnvironment:
             self.agent_catches[toucher.agent_id] += 1
             self.touched()
             for c in members:
-                rewards[c.agent_id] += CATCH_REWARD if c is toucher else TEAM_CATCH_SHARE*CATCH_REWARD
+                earned = self.rewards['catch_reward']
+                rewards[c.agent_id] += earned if c is toucher else self.rewards['team_catch_share'] * earned
             self.respawn(target)
         return caught
 
@@ -253,7 +256,7 @@ class JellyEnvironment:
     def contacts(self, rewards):
         """Stage 3: the game's allied-hunter contact rule, one Jelly at a time so the toucher is known. A touching
         Jelly bounces off and, unless the hull's immunity from the last hit still runs, costs the ship a hit point:
-        SHIP_HIT_REWARD to the toucher, a share to its teammates, and on the last hit point SHIP_KILL_REWARD likewise."""
+        The configured hit reward goes to the toucher, a share to teammates, and a kill reward on the last hull point."""
         ship = self.ship
         for c in self.team.members():
             if not ship.active:
@@ -264,11 +267,11 @@ class JellyEnvironment:
                 continue
             self.agent_ship_hits[c.agent_id] += 1
             self.touched()
-            earned = SHIP_HIT_REWARD + (0. if ship.active else SHIP_KILL_REWARD)
+            earned = self.rewards['ship_hit_reward'] + (0. if ship.active else self.rewards['ship_kill_reward'])
             if not ship.active:
                 self.ship_killed_frame = self.frames+1
             for o in self.team.members():
-                rewards[o.agent_id] += earned if o is c else TEAM_SHIP_SHARE*earned
+                rewards[o.agent_id] += earned if o is c else self.rewards['team_ship_share']*earned
 
     def touched(self):
         """Note the first contact with the quarry (a catch or a ship hit), counted on the frame being stepped."""
@@ -303,9 +306,9 @@ class JellyEnvironment:
         self.dead += died
         if self.stage == 3:
             for i in died:
-                rewards[i] -= DEATH_PENALTY
+                rewards[i] -= self.rewards['death_penalty']
             for i in living:
-                rewards[i] -= TEAM_DEATH_SHARE*DEATH_PENALTY*len(died)
+                rewards[i] -= self.rewards['team_death_share']*self.rewards['death_penalty']*len(died)
 
     def step(self, actions):
         if self.ended():
@@ -350,13 +353,13 @@ class JellyEnvironment:
             i = c.agent_id
             now, then = self.pursuit(c), before.get(i)
             if now is not None and then is not None and now[:2] == then[:2]:
-                rewards[i] += PROGRESS_REWARD*(then[2]-now[2])
+                rewards[i] += self.rewards['progress_reward']*(then[2]-now[2])
             trail, pushes = self.trails[i], self.pushes[i]
             trail.append(c.get_pos())
             pushes.append(accelerating.get(i, False))
             if (len(pushes) == pushes.maxlen and all(pushes)
                     and math.dist(trail[0], trail[-1]) < STUCK_DISTANCE):
-                rewards[i] -= STUCK_PENALTY
+                rewards[i] -= self.rewards['stuck_penalty']
                 self.agent_stuck_frames[i] += frames
         self.formation(rewards, frames)
         self.agent_returns.update(rewards)
@@ -366,29 +369,34 @@ class JellyEnvironment:
                           agent_rewards=rewards)
 
     def formation(self, rewards, frames):
-        """Flank spread and bunching, measured at every stage; rewarded only from stage 2, so stage 1 is unchanged."""
+        """Benchmark geometry stays fixed across runs; paid shaping uses the configured range and distance.
+
+        The same fixed 200/40 px metrics feed charts and scripted promotion baselines, even in a reward experiment.
+        """
         members = self.team.members()
         shaped = self.stage >= 2
         for target in self.quarry():
             if not target.active:
                 continue
-            near = [c.get_pos() for c in members if math.dist(c.get_pos(), target.get_pos()) <= FLANK_RANGE]
-            if len(near) < 2:
-                continue
-            spread = flank_spread(near, target.get_pos())
-            self.spread_frames += spread*frames
-            self.flank_frames += frames
+            positions = [(c.get_pos(), math.dist(c.get_pos(), target.get_pos())) for c in members]
+            near = [pos for pos, distance in positions if distance <= FLANK_RANGE]
+            if len(near) >= 2:
+                self.spread_frames += flank_spread(near, target.get_pos())*frames
+                self.flank_frames += frames
             if shaped:
+                paid_near = [pos for pos, distance in positions if distance <= self.rewards['flank_range']]
+                spread = flank_spread(paid_near, target.get_pos())
                 for c in members:
-                    rewards[c.agent_id] += FLANK_REWARD*spread
+                    rewards[c.agent_id] += self.rewards['flank_reward']*spread
         bunched = set()
         for k, a in enumerate(members):
             for b in members[k+1:]:
-                if math.dist(a.get_pos(), b.get_pos()) < BUNCH_DISTANCE:
+                distance = math.dist(a.get_pos(), b.get_pos())
+                if distance < BUNCH_DISTANCE:
                     bunched.update((a.agent_id, b.agent_id))
-                    if shaped:
-                        rewards[a.agent_id] -= BUNCH_PENALTY
-                        rewards[b.agent_id] -= BUNCH_PENALTY
+                if shaped and distance < self.rewards['bunch_distance']:
+                    rewards[a.agent_id] -= self.rewards['bunch_penalty']
+                    rewards[b.agent_id] -= self.rewards['bunch_penalty']
         self.bunched_frames += len(bunched)*frames
 
     def events(self):
@@ -421,9 +429,14 @@ def teacher_action(env, agent_id, sampled):
     return teacher(c, env.enc)
 
 
-def environment(horizon=60.0, arenas=None, scripted=False, **ignored):
+def environment(horizon=60.0, arenas=None, scripted=False, rewards=None, **ignored):
     """The trainer also passes `opponent` and `muted`; Jellies have no frozen opponent and no message channel."""
-    return JellyEnvironment(horizon=horizon, arenas=arenas, scripted=scripted)
+    return JellyEnvironment(horizon=horizon, arenas=arenas, scripted=scripted, rewards=rewards)
+
+
+def environment_options(manifest):
+    """Run-specific environment arguments for rollout workers and evaluation."""
+    return dict(rewards=jelly_rewards.from_manifest(manifest))
 
 
 # Scenario policy belongs to this adapter, not to the optimiser or run manager.
@@ -446,11 +459,14 @@ def metadata(args):
     global run_horizon
     run_horizon = args.horizon   # learning.run calls this in the process that later calls promote
     opponent = Path(getattr(args, 'opponent', '') or '')
+    configured = jelly_rewards.from_args(args)
+    rewards = {field: configured[name] * sign for name, (block, field, sign) in jelly_rewards.MANIFEST_FIELDS.items()
+               if block == 'rewards'}
     # Version 4: episodes report time_to_contact, and validation/evaluation cover all three stages.
     return dict(task=SPEC.task, scenario_version=4, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
-                rewards=dict(REWARDS), reward_scope='individual', critic_context='focal_agent_first_v1',
+                rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
-                       'team_share': TEAM_CATCH_SHARE},
+                       'team_share': configured['team_catch_share']},
                 stuck={'window_frames': STUCK_WINDOW, 'distance_pixels': STUCK_DISTANCE,
                        'accelerating_above': STUCK_ACCEL, 'accelerating_throughout_window': True, 'scripted_counts_as_accelerating': True},
                 practice_targets={'count': TARGET_COUNT, 'radius': TARGET_RADIUS, 'firing': False,
@@ -458,8 +474,8 @@ def metadata(args):
                                   'start_distance': TARGET_START_DISTANCE},
                 jelly={'max_speed': MAX_SPEED, 'accel_rate': ACCEL_RATE, 'turn_rate_radians': TURN_RATE,
                        'spacing': JELLY_SPACING, 'creature': dataclasses.asdict(enemy_kinds.kind('neural_jelly'))},
-                flank={'reward_per_decision': FLANK_REWARD, 'range': FLANK_RANGE, 'spread': '1_minus_mean_bearing_resultant',
-                       'bunch_distance': BUNCH_DISTANCE, 'bunch_penalty_per_pair_decision': BUNCH_PENALTY,
+                flank={'reward_per_decision': configured['flank_reward'], 'range': configured['flank_range'], 'spread': '1_minus_mean_bearing_resultant',
+                       'bunch_distance': configured['bunch_distance'], 'bunch_penalty_per_pair_decision': configured['bunch_penalty'],
                        'shaped_from_stage': 2},
                 curriculum={'stage2_team_sizes': list(STAGE2_TEAM_SIZES), 'stage1_retention_every': RETENTION_SHARE,
                             'stage3_team_sizes': list(STAGE3_TEAM_SIZES),

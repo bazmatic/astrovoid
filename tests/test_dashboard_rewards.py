@@ -165,3 +165,18 @@ def test_a_hunter_run_shows_its_recorded_rewards_and_episode_card(server):
     (run / 'config.json').write_text(json.dumps(config))
     _, legacy_items = shown(rewards(server, 'run83'))
     assert '−3' in item(legacy_items, 'Powerup collected') and '+5' in item(legacy_items, 'Death')
+
+
+def test_new_jelly_runs_panel_displays_the_reward_values_the_environment_uses(server):
+    from tools import ppo_neural
+    from learning.adapters import jelly_scenario
+    args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-catch-reward', '12',
+                                               '--jelly-flank-range', '250', '--jelly-death-penalty', '7'])
+    manifest = jelly_scenario.metadata(args)
+    add_run(server, 'run150', dict(task=args.task, args=vars(args), manifest=manifest))
+    payload = rewards(server, 'run150')
+    text, items = shown(payload)
+    assert '+12' in item(items, 'Catch') and 'not recorded' not in item(items, 'Catch')
+    assert '250' in item(items, 'Flank range') and '−7' in item(items, 'Jelly killed')
+    assert manifest['rewards']['catch'] == 12 and manifest['flank']['range'] == 250
+    assert manifest['rewards']['stage3_death'] == -7

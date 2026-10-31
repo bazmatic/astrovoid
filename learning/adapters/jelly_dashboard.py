@@ -1,6 +1,7 @@
 """The Jelly team's starter dashboard: keys from jelly_scenario.summarise(), which metrics() writes into train.log over
 all of an iteration's episodes. The per-stage stage<n>_* copies are left to the automatic "Other" section for now."""
 from learning.dashboard import Layout, Metric, RewardRule
+from learning.jelly_rewards import recovered_settings
 
 METRICS = (
     Metric('catches_per_minute', 'Catches per minute',
@@ -69,9 +70,9 @@ REWARD_RULES = (
     RewardRule('flank', 'Flanking', 'Per decision to every living Jelly, times the flank spread (0 all from one side, 1 '
                'an even ring) of the Jellies within the flank range of the quarry, when two or more are that close.',
                'reward', (2, 3), 'jelly_flank_reward', .005),
-    RewardRule('flank_range', 'Flank range', 'px: Jellies this close to the quarry count towards its flank spread.',
+    RewardRule('flank_range', 'Flank range', 'px: Jellies this close to the quarry count towards its reward spread (the chart uses a fixed 200 px benchmark).',
                'shaping', (2, 3), 'jelly_flank_range', 200.),
-    RewardRule('bunch_distance', 'Bunching distance', 'px between Jelly centres: closer than this is bunched (about two '
+    RewardRule('bunch_distance', 'Bunching distance', 'px between Jelly centres for the shaping penalty (the chart uses a fixed 40 px benchmark; about two '
                'body widths).', 'shaping', (2, 3), 'jelly_bunch_distance', 40.),
     RewardRule('bunch', 'Bunching', 'Per decision, to each Jelly of every pair closer than the bunching distance.',
                'penalty', (2, 3), 'jelly_bunch_penalty', .01),
