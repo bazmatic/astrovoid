@@ -11,11 +11,23 @@ p.sub{margin:4px 0 0;color:var(--muted);max-width:65ch}
 .stat b{display:block;font-family:var(--mono);font-size:20px;font-variant-numeric:tabular-nums}
 .stat span{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
 .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:12px}
-.rules ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
-.rules li{display:flex;gap:10px;align-items:baseline}
-.rules li b{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right}
-.rules li small{color:var(--muted);font-size:12px}
-.rules .gain b{color:var(--good)}.rules .cost b{color:var(--bad)}
+.rules:empty{display:none}
+:is(.rules,.rewards) ul{list-style:none;margin:6px 0 0;padding:0;display:flex;flex-direction:column;gap:6px}
+:is(.rules,.rewards) li{display:flex;gap:10px;align-items:baseline}
+:is(.rules,.rewards) li b{font-family:var(--mono);font-variant-numeric:tabular-nums;min-width:4.5em;text-align:right;flex:none}
+:is(.rules,.rewards) li small{color:var(--muted);font-size:12px}
+/* The reward rules panel stays in view beside the charts while they scroll; below the charts' width it sits above them. */
+.board{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,320px);gap:12px;align-items:start}
+.rewards{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.rewards:empty{display:none}
+.rewards summary{cursor:pointer;display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.rewards summary small{color:var(--muted);font-size:12px}
+.rewards h3{font-size:12px;margin:12px 0 0;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rewards .reward b{color:var(--good)}.rewards .penalty b{color:var(--bad)}
+.rewards li.inactive{opacity:.5}
+.rewards em{font-style:normal;color:var(--muted);font-size:12px}
+.rewards i{font-style:normal;color:var(--bad)}
+@media (max-width:900px){.board{grid-template-columns:1fr}.rewards{position:static;max-height:none;order:-1}}
 .grid{display:grid;grid-template-columns:1fr;gap:12px}
 .card{background:var(--panel);border:1px solid var(--grid);border-radius:6px;padding:12px;min-width:0}
 .card.wide{grid-column:1/-1}

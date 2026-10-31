@@ -133,20 +133,26 @@ assert.equal(p.el('from-run').innerHTML,'<option value="run1">run1 (newest)</opt
 """, dict(run1=RUN1))
 
 
-@pytest.mark.parametrize('bonus', [0, .01])
-def test_crawler_rules_show_reward_and_penalty_cards_from_recorded_run(bonus):
+def test_the_pinned_rewards_panel_shows_the_viewed_runs_rules_values_and_which_are_inactive():
+    """The Wallcrawler and Hunter facts the old cards showed are checked in tests/test_dashboard_rewards.py."""
     run_js(r"""
-const config={task:'wallcrawler_team',args:{episodes:8},manifest:{horizon:60,
- rewards:{team_hit:2,shot:-.02,...(given.bonus?{predicted_shot_accuracy:given.bonus}:{})}}};
-const p=await page({routes:{'api/runs/run92/config':config}});
-p.S.VIEW='run92';
+const rule=(key,title,kind,stages,active,value,recorded=true)=>({key,title,description:`${title} rule`,kind,stages,active,value,recorded});
+const payload={stage:2,episodes:24,cards:[],rules:[rule('catch','Catch','reward',[1,2],true,12),
+  rule('stuck','Stuck','penalty',[1,2,3],true,.05,false),rule('flank_range','Flank range','shaping',[2,3],true,200),
+  rule('ship_hit','Ship hit','reward',[3],false,4),rule('reverse_reward','Reversed reward','reward',[],true,-2),
+  rule('reverse_penalty','Reversed penalty','penalty',[],true,-3)]};
+const p=await page({routes:{'api/runs/run9/rewards':payload}});
+p.S.VIEW='run9';
 await p.rules.loadRules();
-const rules=p.el('rules').innerHTML;
-assert.match(rules,/Active rewards/);assert.match(rules,/Active penalties/);
-assert.match(rules,/Accepted projectile hit/);assert.match(rules,/>\+2</);
-assert.match(rules,/Actual shot/);assert.match(rules,/0.02/);assert.match(rules,/8 episodes per iteration/);
-assert.equal(rules.includes('Predicted shot accuracy'),given.bonus>0);
-""", dict(bonus=bonus))
+const html=p.el('rewards').innerHTML,text=html.replace(/<[^>]*>/g,' ').replace(/\s+/g,' ');
+const li=t=>html.match(new RegExp(`<li[^>]*>(?:(?!</li>).)*${t}(?:(?!</li>).)*</li>`,'s'))[0].replace(/<[^>]*>/g,' ');
+assert.match(text,/Reward rules/);assert.match(text,/stage 2/);
+assert.match(li('Catch'),/\+12/);assert.match(li('Stuck'),/not recorded/);assert.match(li('Stuck'),/0\.05/);
+assert.match(li('Flank range'),/200/);
+assert.match(li('Ship hit'),/inactive/);assert.doesNotMatch(li('Catch'),/inactive/);
+assert.match(li('Reversed reward'),/−2/);assert.match(li('Reversed penalty'),/\+3/);
+assert.equal(p.S.EPI,24);
+""")
 
 
 def test_chart_start_filters_charts_and_strip_and_is_remembered_per_run():

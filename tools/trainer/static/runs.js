@@ -59,7 +59,7 @@ export async function loadRuns(){
     if(S.VIEW&&viewTask()!==S.VIEW_TASK){S.VIEW_TASK=viewTask();render()}}catch(e){}
 }
 export function viewTask(){return taskOf(S.RUNS.find(r=>r.name===S.VIEW))}
-export function setView(run){if(run===S.VIEW)return;S.VIEW=run;S.VIEW_TASK=viewTask();S.D=[];S.CHART_START=savedChartStart(run);$('chart-start').value=String(S.CHART_START);$('rules').innerHTML='';render();refresh();loadRules()}
+export function setView(run){if(run===S.VIEW)return;S.VIEW=run;S.VIEW_TASK=viewTask();S.D=[];S.CHART_START=savedChartStart(run);$('chart-start').value=String(S.CHART_START);$('rules').innerHTML='';$('rewards').innerHTML='';render();refresh();loadRules()}
 export function initRuns(){
   $('view-run').onchange=()=>{const v=$('view-run').value;S.FOLLOW=!v;setView(v||S.STATUS?.run||null)};
 }

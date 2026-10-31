@@ -30,6 +30,25 @@ class Layout:
     strip: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class RewardRule:
+    """One term of a task's training signal. setting: the run setting holding its value (a key of config.json's args
+    unless the task's recorded(config) says otherwise); default: its value for a run whose config does not record it
+    (None when no value can be assumed). stages: the curriculum stages in which it applies; empty means every stage.
+    kind 'shaping' is a parameter of other terms (a distance, a share) rather than a reward or penalty itself."""
+    key: str
+    title: str
+    description: str
+    kind: str
+    stages: tuple[int, ...]
+    setting: str
+    default: float | None = None
+
+    def __post_init__(self):
+        if self.kind not in ('reward', 'penalty', 'shaping'):
+            raise ValueError(f'reward rule {self.key}: kind must be reward, penalty or shaping, not {self.kind!r}')
+
+
 SHARED_METRICS = (
     Metric('mean_return', 'Training return', 'Higher is better. What training maximises. Only comparable within a run.',
            higher_is_better=True, wide=True),
@@ -46,17 +65,30 @@ HIDDEN_KEYS = frozenset({'iteration', 'rollout_s', 'update_s', 'elapsed_s', 'pol
                          'selection_gate_passed', 'policy_loss', 'value_loss', 'clip_fraction'})
 
 
+def _recorded_args(rules):
+    """The default recorded(config): each rule's setting as config.json's args recorded it."""
+    def recorded(config):
+        args = (config or {}).get('args') or {}
+        return {r.key: args[r.setting] for r in rules if isinstance(args.get(r.setting), (int, float))
+                and not isinstance(args.get(r.setting), bool)}
+    return recorded
+
+
 def declaration(task_key: str) -> SimpleNamespace:
-    """The task's declared METRICS, LAYOUT, HIDDEN, REWARD_RULES and cards(config); empty ones for a task with no
-    module."""
+    """The task's declared METRICS, LAYOUT, HIDDEN, REWARD_RULES, cards(config) (structured cards: title, rows of
+    label/value/description, note), recorded(config) (the rule values a run's config.json records, by rule key) and
+    stage(row) (the curriculum stage a train.log row reports, or None); empty ones for a task with no module."""
     spec = task(task_key)
     module = importlib.import_module(spec.dashboard) if spec.dashboard else None
+    rules = tuple(getattr(module, 'REWARD_RULES', ()))
     return SimpleNamespace(
         METRICS=tuple(getattr(module, 'METRICS', ())),
         LAYOUT=getattr(module, 'LAYOUT', Layout()),
         HIDDEN=tuple(getattr(module, 'HIDDEN', ())),
-        REWARD_RULES=tuple(getattr(module, 'REWARD_RULES', ())),
-        cards=getattr(module, 'cards', lambda config: []))
+        REWARD_RULES=rules,
+        cards=getattr(module, 'cards', lambda config: []),
+        recorded=getattr(module, 'recorded', _recorded_args(rules)),
+        stage=getattr(module, 'stage', lambda row: None))
 
 
 def resolve(task_key: str) -> dict:
@@ -64,7 +96,40 @@ def resolve(task_key: str) -> dict:
     return dict(key=spec.key, label=spec.label, capabilities=asdict(spec.capabilities),
                 metrics=[dict(asdict(m), aliases=list(m.aliases)) for m in SHARED_METRICS + declared.METRICS],
                 sections=list(declared.LAYOUT.sections), strip=list(declared.LAYOUT.strip),
-                rewards=[], hidden=sorted(HIDDEN_KEYS | set(declared.HIDDEN)))
+                rewards=[dict(asdict(r), stages=list(r.stages)) for r in declared.REWARD_RULES], hidden=sorted(HIDDEN_KEYS | set(declared.HIDDEN)))
+
+
+def rewards(task_key: str, config: dict, row: dict) -> dict:
+    """What the viewed run trained with: its task's rules with the values its own config records, the stage its last
+    log row reports, and the task's cards. A value the config lacks is reported unrecorded, with the rule's default. A
+    rule is active when it applies at that stage (every stage when the stage is unknown) and its value is set and not
+    zero. A task this trainer does not know has no rules. episodes: the run's episodes per iteration, for the strip's
+    game time."""
+    try:
+        declared = declaration(task_key)
+    except ValueError:
+        return dict(stage=None, rules=[], cards=[], episodes=None)
+    config = config if isinstance(config, dict) else {}
+    stage = declared.stage(row or {})
+    try:
+        values = declared.recorded(config)
+    except (AttributeError, KeyError, TypeError, ValueError):   # a config.json too old or odd to read: nothing recorded
+        values = {}
+    rules = []
+    for r in declared.REWARD_RULES:
+        recorded = r.key in values
+        value = values[r.key] if recorded else r.default
+        applies = stage is None or not r.stages or stage in r.stages
+        rules.append(dict(key=r.key, title=r.title, description=r.description, kind=r.kind, stages=list(r.stages),
+                          active=bool(applies and value), value=value, recorded=recorded))
+    try:
+        cards = declared.cards(config)
+    except (AttributeError, KeyError, TypeError, ValueError):
+        cards = []
+    episode, args = config.get('episode'), config.get('args')
+    episodes = ((episode.get('episodes_per_iteration') if isinstance(episode, dict) else None)
+                or (args.get('episodes') if isinstance(args, dict) else None))
+    return dict(stage=stage, rules=rules, cards=cards, episodes=episodes)
 
 
 def resolve_all() -> list[dict]:
@@ -89,3 +154,8 @@ def unclaimed(task_key: str, keys: Iterable[str]) -> list[str]:
         claimed.add(metric.key)
         claimed.update(metric.aliases)
     return sorted(set(keys) - claimed)
+
+
+def number(value) -> str:
+    """A recorded number as the page has always printed it (JavaScript's way): 60.0 as 60, 0.25 as 0.25."""
+    return str(int(value)) if isinstance(value, float) and value.is_integer() else str(value)

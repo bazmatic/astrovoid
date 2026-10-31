@@ -16,7 +16,7 @@ PAGE = Path(__file__).with_name('page.html')
 STATIC = Path(__file__).with_name('static').resolve()
 STATIC_PATH = re.compile(r'/static/([A-Za-z0-9_-]+\.(js|css))')
 STATIC_KINDS = {'js': 'text/javascript; charset=utf-8', 'css': 'text/css; charset=utf-8'}
-RUN_PATH = re.compile(r'/api/runs/(run\d+)/(data|config|settings)')
+RUN_PATH = re.compile(r'/api/runs/(run\d+)/(data|config|settings|rewards)')
 
 
 def available_levels():
@@ -74,6 +74,11 @@ def make_handler(root, processes, launch, allowed_hosts=()):
                     return self.send(200, runs.log_rows(run_dir))
                 if what == 'config':
                     return self.send(200, config_of(run_dir) or {})
+                if what == 'rewards':
+                    from learning import dashboard
+                    config, rows = config_of(run_dir) or {}, runs.log_rows(run_dir)
+                    return self.send(200, dashboard.rewards(config.get('task', UNTAGGED_TASK), config,
+                                                            rows[-1] if rows else {}))
                 values = read_settings(run_dir, runs.run_folders(root))
                 return self.send(200, {dest: asdict(v) for dest, v in values.items()})
             self.send(404, {'error': 'not found'})
