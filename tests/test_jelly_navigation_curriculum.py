@@ -176,3 +176,10 @@ def test_training_rollouts_end_early_after_a_long_gap_without_a_catch_but_evalua
             env.close()
     assert run(training=True) == pytest.approx(3., abs=.2)
     assert run(training=False) == 30.
+
+
+def test_a_run_can_start_straight_in_the_cave_lesson():
+    args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2'])
+    state = scenario.initial_curriculum(args)
+    assert scenario.curriculum_key(state) == 'cave'
+    assert {c['lesson'] for c in scenario.training_cases(0, 8, 1, curriculum=state)} == {'cave'}

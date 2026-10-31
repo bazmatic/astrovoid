@@ -571,7 +571,8 @@ def metadata(args):
                            'context': 'current_navigation_lesson; cave benchmark reported separately',
                            'validation_cases': validation_cases()},
                 navigation=jelly_curriculum.metadata(),
-                training_limits=dict(no_catch_timeout_seconds=configured['no_catch_timeout']),
+                training_limits=dict(no_catch_timeout_seconds=configured['no_catch_timeout'],
+                                     start_lesson=int(configured['start_lesson'])),
                 boredom=dict(window_seconds=configured['boredom_window'], distance_pixels=configured['boredom_distance']),
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',
@@ -829,7 +830,9 @@ CURRICULUM_METRIC = 'navigation_lesson'
 
 
 def initial_curriculum(args):
-    return jelly_curriculum.initial(args.horizon, environment_options(metadata(args)))
+    state = jelly_curriculum.initial(args.horizon, environment_options(metadata(args)))
+    state['stage'] = min(int(getattr(args, 'jelly_start_lesson', 0)), len(jelly_curriculum.LESSONS)-1)
+    return state
 
 
 advance_curriculum = jelly_curriculum.advance
