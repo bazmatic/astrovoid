@@ -35,3 +35,6 @@ METRICS = (
     Metric('hits_taken_per_min', 'Enemy hits taken per minute',
            'Lower is better.', higher_is_better=False),
 )
+
+# Logged by tools/ppo_neural.py but never charted.
+HIDDEN = ('score', 'rules_episodes')

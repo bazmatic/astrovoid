@@ -6,7 +6,7 @@ import pytest
 
 from learning import dashboard
 from learning.adapters import crawler_scenario, jelly_scenario
-from learning.tasks import TASKS, Capabilities
+from learning.tasks import TASKS, Capabilities, Task
 
 FIXTURES = Path(__file__).parent / 'fixtures' / 'dashboard'
 # What learning.run merges into every team-task log row besides the adapter's metrics(): its own bookkeeping and the
@@ -89,7 +89,7 @@ def test_each_old_chart_is_declared_by_exactly_one_place_with_its_text_verbatim(
     owners = {}
     for metric in dashboard.SHARED_METRICS:
         owners.setdefault(metric.key, []).append(('shared', metric))
-    for task_key in ('hunter', 'wallcrawler_team'):
+    for task_key in (key for key in TASKS if key != 'jelly_team'):   # every task the old page drew charts for
         for metric in declared(task_key):
             owners.setdefault(metric.key, []).append((task_key, metric))
     for chart in OLD_PAGE:
@@ -130,3 +130,52 @@ def test_task_capabilities():
     assert {key: spec.dashboard for key, spec in TASKS.items()} == {
         'hunter': 'learning.adapters.hunter_dashboard', 'wallcrawler_team': 'learning.adapters.crawler_dashboard',
         'jelly_team': 'learning.adapters.jelly_dashboard'}
+
+
+GLOBAL_HIDDEN = {'iteration', 'rollout_s', 'update_s', 'elapsed_s', 'policy', 'team_size', 'selection_gate_passed',
+                 'policy_loss', 'value_loss', 'clip_fraction'}
+GENERIC = ['hits', 'shots', 'score', 'episodes']
+
+
+def test_global_hidden_keys_are_only_bookkeeping_and_shared_training_stats():
+    assert dashboard.HIDDEN_KEYS == GLOBAL_HIDDEN
+
+
+def test_a_plain_task_sees_only_the_global_hidden_keys_and_keeps_generic_names(monkeypatch):
+    monkeypatch.setitem(TASKS, 'plain', Task('plain', 'learning.adapters.hunter', 'Plain'))
+    assert dashboard.declaration('plain').HIDDEN == ()
+    assert dashboard.resolve('plain')['hidden'] == sorted(GLOBAL_HIDDEN)
+    assert dashboard.unclaimed('plain', GENERIC + sorted(GLOBAL_HIDDEN)) == sorted(GENERIC)
+
+
+def test_a_tasks_hidden_keys_do_not_leak_into_another_task():
+    for owner in TASKS:
+        own = set(dashboard.declaration(owner).HIDDEN)
+        for other in TASKS:
+            if other == owner:
+                continue
+            leaked = own - set(dashboard.declaration(other).HIDDEN) - GLOBAL_HIDDEN
+            claimed = {k for m in dashboard.declaration(other).METRICS for k in (m.key, *m.aliases)}
+            assert leaked.isdisjoint(dashboard.resolve(other)['hidden'])
+            assert dashboard.unclaimed(other, leaked) == sorted(leaked - claimed)
+    # The Wallcrawler hides its raw hit and shot counts; nobody else does.
+    assert {'hits', 'shots'} <= set(dashboard.resolve('wallcrawler_team')['hidden'])
+    assert dashboard.unclaimed('hunter', GENERIC) == ['episodes', 'hits', 'shots']
+    assert dashboard.unclaimed('jelly_team', GENERIC) == ['hits', 'score', 'shots']
+
+
+def test_resolved_hidden_is_the_global_set_plus_the_tasks_own():
+    for key in TASKS:
+        assert dashboard.resolve(key)['hidden'] == sorted(GLOBAL_HIDDEN | set(dashboard.declaration(key).HIDDEN))
+
+
+def test_other_is_empty_for_the_recorded_jelly_log():
+    # A new Jelly log key turns up in "Other" on the page; to keep it out, declare it in jelly_dashboard.METRICS
+    # (a chart) or add it to jelly_dashboard.HIDDEN. This pins today's fixture only.
+    assert dashboard.unclaimed('jelly_team', fixture_keys('jelly')) == []
+
+
+def test_jelly_hides_every_per_stage_copy():
+    hidden = set(dashboard.declaration('jelly_team').HIDDEN)
+    assert {f'stage{n}_{k}' for n, keys in jelly_scenario.STAGE_KEYS.items() for k in keys} <= hidden
+    assert 'imitation_loss' in hidden

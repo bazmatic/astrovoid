@@ -42,3 +42,12 @@ METRICS = (
     Metric('survival', 'Crawler survival',
            'Share of the team still alive at trial end.', higher_is_better=True),
 )
+
+# Raw counts and per-drill copies crawler_scenario.metrics() logs that the page has never charted.
+HIDDEN = ('hits', 'shots', 'episodes', 'hit_probability', 'hits_per_crawler', 'aim_drill_episodes',
+          'battle_trials', 'battle_episodes', 'battle_crawlers', 'battle_survivors', 'battle_successes',
+          'jump_reward_per_minute', 'landings_per_minute', 'contact_hits_received_per_minute',
+          'bullet_hits_received_per_minute', 'reposition_targets_per_episode',
+          'precision_survival', 'precision_mean_return', 'precision_hits_per_minute',
+          'tracking_survival', 'tracking_mean_return', 'tracking_hits_per_minute',
+          'pursuit_mean_return', 'pursuit_hits_per_minute')

@@ -38,3 +38,15 @@ METRICS = (
 
 # Training return first and policy drift last, as for every task, with the Jelly's own sections between them.
 LAYOUT = Layout(sections=('Training', 'Outcome', 'Navigation', 'Teamwork', 'Ship fight', 'Policy'))
+
+# The per-stage copies jelly_scenario.metrics() writes as stage<n>_<key> (its STAGE_KEYS, repeated here so the dashboard
+# need not import the game; a test checks they match). Per-stage charts are a later addition.
+_STAGE_KEYS = {1: ('episodes', 'catches', 'seconds', 'catches_per_minute', 'stuck_fraction', 'time_to_contact'),
+               2: ('episodes', 'catches', 'seconds', 'catches_per_minute', 'stuck_fraction', 'time_to_contact',
+                   'angular_spread', 'bunched_fraction'),
+               3: ('episodes', 'seconds', 'stuck_fraction', 'time_to_contact', 'ship_hits', 'ship_kills',
+                   'jelly_deaths', 'survival_fraction', 'time_to_ship_kill')}
+# Raw counters behind the charted rates, and imitation_loss (imitation bootstrap is off for the Jelly).
+HIDDEN = ('catches', 'seconds', 'stuck_seconds', 'ship_kills', 'bunched_seconds', 'flank_seconds', 'time_to_ship_kill',
+          'mean_episode_return', 'episodes', 'imitation_loss',
+          *(f'stage{stage}_{key}' for stage, keys in _STAGE_KEYS.items() for key in keys))

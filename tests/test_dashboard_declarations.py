@@ -19,7 +19,7 @@ def test_resolve_shared_metrics_come_first_for_every_task():
 def test_resolve_is_json_serialisable():
     resolved = dashboard.resolve_all()
     assert json.loads(json.dumps(resolved)) == resolved
-    assert resolved[0]['hidden'] == sorted(dashboard.HIDDEN_KEYS)
+    assert all(set(dashboard.HIDDEN_KEYS) <= set(r['hidden']) and r['hidden'] == sorted(r['hidden']) for r in resolved)
     assert {'key', 'label', 'capabilities', 'metrics', 'sections', 'strip', 'rewards', 'hidden'} <= set(resolved[0])
 
 
@@ -30,7 +30,7 @@ def test_unknown_task_raises_value_error_naming_the_task():
 
 def test_unclaimed_ignores_hidden_declared_and_aliased_keys(monkeypatch):
     extra = dashboard.Metric('hits', 'Hits', aliases=('hits_old',))
-    monkeypatch.setattr(dashboard, 'declaration', lambda key: __import__('types').SimpleNamespace(METRICS=(extra,)))
+    monkeypatch.setattr(dashboard, 'declaration', lambda key: __import__('types').SimpleNamespace(METRICS=(extra,), HIDDEN=()))
     keys = ['iteration', 'rollout_s', 'kl', 'hits', 'hits_old', 'zeta', 'alpha']
     assert dashboard.unclaimed('hunter', keys) == ['alpha', 'zeta']
 

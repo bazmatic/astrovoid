@@ -37,30 +37,21 @@ SHARED_METRICS = (
            section='Policy'),
 )
 
-# Log keys that are bookkeeping, timing or gate flags rather than something to chart.
+# Log keys every trainer writes that are bookkeeping, timing, gate flags or optimiser internals rather than something to
+# chart. A task hides its own such keys with HIDDEN in its dashboard module.
 HIDDEN_KEYS = frozenset({'iteration', 'rollout_s', 'update_s', 'elapsed_s', 'policy', 'team_size',
-                         'selection_gate_passed',
-                         # optimiser internals and episode counts every trainer logs
-                         'policy_loss', 'value_loss', 'clip_fraction', 'episodes',
-                         # Hunter keys the page never charted (tools/ppo_neural.py)
-                         'score', 'rules_episodes',
-                         # Wallcrawler keys the page never charted (crawler_scenario.metrics)
-                         'hits', 'shots', 'hit_probability', 'hits_per_crawler', 'aim_drill_episodes',
-                         'battle_trials', 'battle_episodes', 'battle_crawlers', 'battle_survivors', 'battle_successes',
-                         'jump_reward_per_minute', 'landings_per_minute', 'contact_hits_received_per_minute',
-                         'bullet_hits_received_per_minute', 'reposition_targets_per_episode',
-                         'precision_survival', 'precision_mean_return', 'precision_hits_per_minute',
-                         'tracking_survival', 'tracking_mean_return', 'tracking_hits_per_minute',
-                         'pursuit_mean_return', 'pursuit_hits_per_minute'})
+                         'selection_gate_passed', 'policy_loss', 'value_loss', 'clip_fraction'})
 
 
 def declaration(task_key: str) -> SimpleNamespace:
-    """The task's declared METRICS, LAYOUT, REWARD_RULES and cards(config); empty ones for a task with no module."""
+    """The task's declared METRICS, LAYOUT, HIDDEN, REWARD_RULES and cards(config); empty ones for a task with no
+    module."""
     spec = task(task_key)
     module = importlib.import_module(spec.dashboard) if spec.dashboard else None
     return SimpleNamespace(
         METRICS=tuple(getattr(module, 'METRICS', ())),
         LAYOUT=getattr(module, 'LAYOUT', Layout()),
+        HIDDEN=tuple(getattr(module, 'HIDDEN', ())),
         REWARD_RULES=tuple(getattr(module, 'REWARD_RULES', ())),
         cards=getattr(module, 'cards', lambda config: []))
 
@@ -70,7 +61,7 @@ def resolve(task_key: str) -> dict:
     return dict(key=spec.key, label=spec.label, capabilities=asdict(spec.capabilities),
                 metrics=[dict(asdict(m), aliases=list(m.aliases)) for m in SHARED_METRICS + declared.METRICS],
                 sections=list(declared.LAYOUT.sections), strip=list(declared.LAYOUT.strip),
-                rewards=[], hidden=sorted(HIDDEN_KEYS))
+                rewards=[], hidden=sorted(HIDDEN_KEYS | set(declared.HIDDEN)))
 
 
 def resolve_all() -> list[dict]:
@@ -89,8 +80,9 @@ def charted(task_key: str, keys: Iterable[str]) -> list[dict]:
 
 
 def unclaimed(task_key: str, keys: Iterable[str]) -> list[str]:
-    claimed = set(HIDDEN_KEYS)
-    for metric in SHARED_METRICS + declaration(task_key).METRICS:
+    declared = declaration(task_key)
+    claimed = set(HIDDEN_KEYS) | set(declared.HIDDEN)
+    for metric in SHARED_METRICS + declared.METRICS:
         claimed.add(metric.key)
         claimed.update(metric.aliases)
     return sorted(set(keys) - claimed)
