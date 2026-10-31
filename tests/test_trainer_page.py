@@ -246,10 +246,12 @@ def log_rows(name, n=3, **extra):
 
 
 def test_render_draws_only_the_task_layout_charts():
-    from learning import dashboard
-    keys = json.loads((FIXTURES / 'jelly_log_keys.json').read_text())['keys']
     page = render('jelly_team', log_rows('jelly'))
-    assert page['charts'] == [[m['title'], m['sub']] for m in dashboard.charted('jelly_team', keys)]
+    titles = {title for title, subtitle in page['charts']}
+    assert {'Catches per minute', 'Time stuck', 'Flank spread'} <= titles
+    # Real Jelly logs include imitation_loss; it must not bring back the Wallcrawler's teacher chart.
+    assert titles.isdisjoint({'Demonstration rehearsal loss', 'Team projectile hits per minute',
+                              'Voluntary jumps per trial'})
     assert page['sections'] == ['Training', 'Outcome', 'Navigation', 'Teamwork', 'Ship fight', 'Policy']
 
 
