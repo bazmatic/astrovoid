@@ -80,7 +80,8 @@ workers, 10000 iterations and **no imitation bootstrap** (`bootstrap_episodes=0`
 python -m tools.ppo_neural --task jelly_team --start '' --out <run dir> --bootstrap-episodes 0 --budget-seconds 3600
 ```
 
-The command-line default for `--bootstrap-episodes` is 8, so pass `0` explicitly there. Replays work like the
+The command-line default for `--bootstrap-episodes` is still 8. The trainer path overrides it to 0, but a
+hand-launched `python -m tools.ppo_neural --task jelly_team` run needs `--bootstrap-episodes 0`. Replays work like the
 crawler's: `learning.replay` through `learning/adapters/jelly_replay.py`.
 
 ## Evaluation and the selection gate
@@ -105,8 +106,17 @@ validation cases* at the run's horizon (`validation_baseline()`, cached per hori
 - a strictly lower stuck share of Jelly time, over all validation episodes. If both sides are never stuck, that
   counts as not worse.
 
-A checkpoint that fails the gate never becomes `best.npz`. If no checkpoint ever passes, `best.npz` stays the
-policy saved when the run started (the bootstrap policy, which is the random initial policy when bootstrap is off).
+A checkpoint that fails the gate never becomes `best.npz` by score. But `learning.run` always leaves a `best.npz`.
+If no checkpoint ever passes, it is only a fallback: the policy saved when the run started (the bootstrap policy, or
+the random initial one when bootstrap is off), or the last iteration's weights if nothing was saved earlier.
+
+`evaluation.json` records which case happened in `selection_gate_passed`:
+- `true`: a checkpoint was chosen because its score cleared the gate;
+- `false`: `best.npz` is the fallback, and `train.log` and the console also show one
+  `selection_gate_passed=False` line.
+
+**Check `selection_gate_passed` before trusting `best.npz`.** When it is `false`, no checkpoint beat the scripted
+Jelly, and the scripted Jelly is the better brain.
 
 Checkpoints that pass are ordered by what the rewards value, in catch-equivalents per minute over every
 validation episode: catches, plus ship hits ×0.4 and ship kills ×1, minus Jelly deaths ×0.5, all multiplied by the
@@ -153,6 +163,19 @@ JELLY_POLICY=/path/to/best.npz ./run.sh
 - **The training ship's pilot misreads its health.** It reads its own health against the neural hunter's 10
   points, so on its 3-point hull a fresh ship feels like 30% health. It still hunts and kills, but it may fly
   more cautiously than a full-health hunter would.
-- **Validation is small.** Nine episodes with one seed make the gate noisy for any single checkpoint. The final
-  evaluation is on separate seeds of the same held-out arenas, so it is independent of the seeds selection saw,
-  but not of the arenas.
+- **`best.npz` can be a fallback.** Check `selection_gate_passed` in `evaluation.json` first (see above).
+- **The gate is noisy.** It runs on only 9 validation episodes, 3 per stage, and the catch comparison uses only the
+  6 stage-1/2 ones. Both comparisons are strict (`>` and `<`), so one lucky or unlucky catch can flip it. If the gate
+  flips on luck, raise the episode count in `validation_cases()`.
+- **The stuck half of the gate is weaker than it looks.** The scripted Jelly always counts as accelerating, so
+  every slow second can count as stuck. A policy counts only above 0.1 accel, because it may legitimately wait for
+  its flankers. Beating the scripted stuck share is therefore easy, which is why the catch rate must also beat the
+  scripted Jelly. Also, `stuck_fraction` includes the stage-3 episodes, while the catch rate uses stages 1-2 only.
+- **Validation and the final evaluation share arenas.** Both use held-out levels 15, 20 and 23 and differ only by
+  seed (900 vs 1000/1001). The final report is independent of the episodes selection saw, but not of the arenas.
+- **The bootstrap CLI default is still 8.** `tools/ppo_neural`'s `--bootstrap-episodes` defaults to 8, so a
+  hand-launched `python -m tools.ppo_neural --task jelly_team` run needs `--bootstrap-episodes 0`. The trainer path
+  sets 0.
+- **The first selection is slow.** The first `selection_score` call in a run flies the 9 scripted validation
+  episodes synchronously in the trainer process to build the baseline. That is a one-off stall of about 15 s at a
+  60 s horizon. Later calls use the cached baseline.

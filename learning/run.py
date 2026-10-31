@@ -158,6 +158,14 @@ def train(args):
         return rehearsal.rehearse(model,random,getattr(adapter,'IMITATION_REHEARSAL_HEADS',adapter.IMITATION_HEADS))*adapter.IMITATION_REHEARSAL_WEIGHT
     log = (out/'train.log').open('a', buffering=1)
     def used(): return elapsed+time.monotonic()-started
+    def note_selection():
+        """Whether best.npz was chosen by selection_score (a finite score beat the start); if not, say so once."""
+        if best_score > -math.inf:
+            return True
+        text = ('selection_gate_passed=False: no checkpoint passed selection_score; '
+                'best.npz is only the fallback policy, not a selected one')
+        print(text, flush=True); log.write(text+'\n')
+        return False
     def save_resume(next_iteration):
         temp = out/'resume.tmp'
         torch.save(dict(net=net.state_dict(), optimiser=optimiser.state_dict(), rng=rng.bit_generator.state,
@@ -224,18 +232,21 @@ def train(args):
         cases = adapter.evaluation_cases()
         policy.save(out/current)
         if not best.exists(): policy.save(best)
+        gate_passed = note_selection()
         reports = {mode: evaluate(pool, args, best, cases, mode='scripted' if mode=='scripted' else 'greedy',
                                   muted=mode=='muted') for mode in ('trained','scripted','muted')}
         reports['communication_effect'] = adapter.compare(reports['trained'],reports['muted'])
         reports['versus_scripted'] = adapter.compare(reports['trained'],reports['scripted'])
         reports['wall_seconds'] = used()
+        reports['selection_gate_passed'] = gate_passed
         reports['opponent_sha256'] = expected['opponent_sha256']
         (out/'evaluation.json').write_text(json.dumps(reports, indent=2))
         write_state(out,'finished',history[-1]['iteration'] if history else first)
         return dict(paused=False,history=history,last=str(best))
     except (TimeoutError, __import__('multiprocessing').TimeoutError):
         (out/'evaluation.json').write_text(json.dumps(dict(budget_exhausted=True, wall_seconds=used(),
-            message='Stopped at the wall-clock limit; completed checkpoints remain available.')))
+            message='Stopped at the wall-clock limit; completed checkpoints remain available.',
+            selection_gate_passed=note_selection())))
         write_state(out,'finished',history[-1]['iteration'] if history else first)
         return dict(paused=False,history=history,last=str(best if best.exists() else out/current))
     finally:
