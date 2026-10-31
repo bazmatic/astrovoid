@@ -1129,3 +1129,9 @@ def test_neural_jellies_do_not_overlap_each_other_or_the_scripted_ones():
     for i, a in enumerate(bodies):
         for b in bodies[i + 1:]:
             assert math.dist(a.get_pos(), b.get_pos()) >= a.radius + b.radius - 1e-6
+
+
+def test_training_levels_never_include_the_held_out_levels():
+    from learning.adapters import jelly_scenario as scenario
+    assert not set(scenario.TRAIN_LEVELS) & set(scenario.HOLDOUT_LEVELS)
+    assert len(scenario.TRAIN_LEVELS) == len(set(scenario.TRAIN_LEVELS)) > 8

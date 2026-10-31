@@ -29,7 +29,9 @@ from creatures.traits.rooted import wall_between
 
 # Level 27 spawns targets and Jellies inside small pockets that are hard to reach, so it is no use for learning to hunt.
 UNSUITABLE_TRAIN_LEVELS = (27,)
-TRAIN_LEVELS = tuple(n for n in CRAWLER_TRAIN_LEVELS if n not in UNSUITABLE_TRAIN_LEVELS)
+# More campaign arenas than the crawlers train on, so the Jelly learns caves in general and not these few layouts.
+EXTRA_TRAIN_LEVELS = (7, 9, 10, 22, 25, 28, 29)
+TRAIN_LEVELS = tuple(n for n in CRAWLER_TRAIN_LEVELS + EXTRA_TRAIN_LEVELS if n not in UNSUITABLE_TRAIN_LEVELS)
 
 STAGES = (1, 2, 3)             # stage 2 (flanking) shares stage 1's scene and adds the flank/bunch shaping below;
                                # stage 3 swaps the plain target for the hunting training ship
@@ -549,7 +551,7 @@ def metadata(args):
                if block == 'rewards'}
     # Version 6: the navigation curriculum (open pursuit, a barrier, then caves) is the only mode, and the boredom
     # rule is always recorded.
-    result = dict(task=SPEC.task, scenario_version=9, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    result = dict(task=SPEC.task, scenario_version=10, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': configured['team_catch_share']},
