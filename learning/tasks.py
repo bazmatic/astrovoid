@@ -42,16 +42,20 @@ class Task:
 
 
 TASKS = {
-    'hunter': Task('hunter', 'learning.adapters.hunter', 'Hunter'),
+    'hunter': Task('hunter', 'learning.adapters.hunter', 'Hunter', dashboard='learning.adapters.hunter_dashboard',
+        capabilities=Capabilities(fresh_weights=False, actor_damping=False, replay_mode='legacy_check',
+                                  settings_scope='unclaimed')),
     'wallcrawler_team': Task('wallcrawler_team', 'learning.adapters.crawler_scenario', 'Wallcrawler team',
         dict(horizon=60.0,workers=4,iterations=10000),
         ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
-        'learning.adapters.crawler_replay'),
+        'learning.adapters.crawler_replay', 'learning.adapters.crawler_dashboard',
+        Capabilities(fresh_weights=True, actor_damping=True, replay_mode='hooks', settings_scope='listed')),
     # No imitation bootstrap by default: the scripted Jelly teacher (learning.adapters.jelly.teacher) is weak.
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
         dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0),
         ('budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
-        'learning.adapters.jelly_replay'),
+        'learning.adapters.jelly_replay', 'learning.adapters.jelly_dashboard',
+        Capabilities(fresh_weights=True, actor_damping=False, replay_mode='hooks', settings_scope='listed')),
 }
 
 # Replayable runs recorded before config.json named its task were all Wallcrawler team runs.

@@ -1,0 +1,29 @@
+{
+ "source": "Hunter-era train.log of run83 under .astrovoid-local/neural/rl (18 rows): union of the numeric keys",
+ "keys": [
+  "bored_fraction",
+  "clip_fraction",
+  "compass_follow",
+  "deaths_per_episode",
+  "entropy",
+  "hits_per_episode",
+  "hits_taken_per_min",
+  "iteration",
+  "kills_per_min",
+  "kl",
+  "mean_return",
+  "panic_fraction",
+  "policy_loss",
+  "powerups_per_episode",
+  "rollout_s",
+  "rules_beaten",
+  "rules_episodes",
+  "score",
+  "speed_fraction",
+  "unaimed_shots_per_episode",
+  "update_s",
+  "upgraded_fraction",
+  "value_loss",
+  "wall_quotient_per_min"
+ ]
+}

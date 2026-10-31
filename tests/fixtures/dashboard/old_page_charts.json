@@ -1,0 +1,162 @@
+[
+ {
+  "key": "mean_return",
+  "title": "Training return",
+  "sub": "Higher is better. What training maximises. Only comparable within a run."
+ },
+ {
+  "key": "hits_per_minute",
+  "title": "Team projectile hits per minute",
+  "sub": "Wallcrawler team: accepted bullet impacts on the frozen opponents."
+ },
+ {
+  "key": "mean_aim_quality",
+  "title": "Predicted shot quality",
+  "sub": "Mean launch-time interception quality, from 0 to 1. A shaping signal, not measured hits."
+ },
+ {
+  "key": "target_clear_rate",
+  "title": "Targets cleared",
+  "sub": "Share of practice trials in which every target was hit."
+ },
+ {
+  "key": "accuracy",
+  "title": "Team accuracy",
+  "sub": "Accepted hits divided by actual crawler shots."
+ },
+ {
+  "key": "precision_accuracy",
+  "title": "Stationary-target accuracy",
+  "sub": "Accepted hits / shots in harmless stationary-target drills."
+ },
+ {
+  "key": "tracking_accuracy",
+  "title": "Moving-target accuracy",
+  "sub": "Accepted hits / shots in harmless moving-target drills."
+ },
+ {
+  "key": "battle_stage",
+  "title": "Battle curriculum stage",
+  "sub": "0: one Jelly; 1: two; 2: four; 3: four plus the armed hunter."
+ },
+ {
+  "key": "pursuit_survival",
+  "title": "Battle survival",
+  "sub": "Fraction of battle crawlers alive at trial end."
+ },
+ {
+  "key": "pursuit_accuracy",
+  "title": "Combat accuracy",
+  "sub": "Accepted hits / shots in retained Jellyfish and neural-hunter encounters."
+ },
+ {
+  "key": "reversals_per_episode",
+  "title": "Walking reversals per trial",
+  "sub": "Actual direction changes while walking; stops and airborne motion excluded."
+ },
+ {
+  "key": "jumps_per_episode",
+  "title": "Voluntary jumps per trial",
+  "sub": "Actual voluntary launches, excluding damage-induced detachment."
+ },
+ {
+  "key": "bullet_hits_taken_per_episode",
+  "title": "Bullet hits received per trial",
+  "sub": "Average damaging bullet impacts received by the whole crawler team per trial. Lower is better."
+ },
+ {
+  "key": "contact_hits_taken_per_episode",
+  "title": "Jellyfish contact hits per trial",
+  "sub": "Average accepted damaging contacts received by crawlers; repeated overlap is limited by a shared cooldown."
+ },
+ {
+  "key": "imitation_loss",
+  "title": "Demonstration rehearsal loss",
+  "sub": "Weighted auxiliary loss that helps retain demonstrated jump and landing choices. This is not an escape-success score."
+ },
+ {
+  "key": "airborne_fraction",
+  "title": "Time airborne",
+  "sub": "Share of crawler simulation time spent unattached, including stun and voluntary flight."
+ },
+ {
+  "key": "survival",
+  "title": "Crawler survival",
+  "sub": "Share of the team still alive at trial end."
+ },
+ {
+  "key": "speed_fraction",
+  "title": "Speed",
+  "sub": "Higher is better. Average speed as a share of top speed."
+ },
+ {
+  "key": "powerups_per_episode",
+  "title": "Powerups per episode",
+  "sub": "Higher is better. Crystals the hunter collects."
+ },
+ {
+  "key": "upgraded_fraction",
+  "title": "Hunter power boost",
+  "sub": "Share of time the generic power boost is active."
+ },
+ {
+  "key": "deaths_per_episode",
+  "title": "Deaths per episode",
+  "sub": "Lower is better. Share of episodes in which the hunter is destroyed."
+ },
+ {
+  "key": "compass_follow",
+  "title": "Follows the enemy compass",
+  "sub": "Higher is better. Share of the time with no enemy in sight that the hunter heads within 45° of the compass."
+ },
+ {
+  "key": "hits_per_episode",
+  "title": "Hits per episode",
+  "sub": "Higher is better. Hunter shots that reach an enemy."
+ },
+ {
+  "key": "unaimed_shots_per_episode",
+  "title": "Unaimed shots per episode",
+  "sub": "Shots not within 20° of an enemy in sight (at walls, at nothing, or well wide), each at the shot price."
+ },
+ {
+  "key": "panic_fraction",
+  "title": "Time in panic",
+  "sub": "Share of decisions made in panic: after the last 5 s scored below the panic level, choices are more random until the score recovers."
+ },
+ {
+  "key": "bored_fraction",
+  "title": "Bored time",
+  "sub": "Lower is better. Share of the time with no enemy in sight in which nothing new has come into view for a second: the same nearby walls (within 3 cells) and crystals as in the last 10 s."
+ },
+ {
+  "key": "rules_beaten",
+  "title": "Rules hunter beaten",
+  "sub": "Higher is better. Share of Rules-hunter episodes in which it is destroyed."
+ },
+ {
+  "key": "kills_per_min",
+  "title": "Kills per minute",
+  "sub": "Must not fall."
+ },
+ {
+  "key": "wall_quotient_per_min",
+  "title": "Wall collision quotient (per minute)",
+  "sub": "Lower is better. Harder crashes count more."
+ },
+ {
+  "key": "hits_taken_per_min",
+  "title": "Enemy hits taken per minute",
+  "sub": "Lower is better."
+ },
+ {
+  "key": "kl",
+  "title": "Distance from the starting policy (KL)",
+  "sub": "How far the policy has moved from where the run started."
+ },
+ {
+  "key": "entropy",
+  "title": "Policy entropy",
+  "sub": "Randomness of the controls. Near zero means it has stopped exploring."
+ }
+]

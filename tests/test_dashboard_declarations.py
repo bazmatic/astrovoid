@@ -35,12 +35,12 @@ def test_unclaimed_ignores_hidden_declared_and_aliased_keys(monkeypatch):
     assert dashboard.unclaimed('hunter', keys) == ['alpha', 'zeta']
 
 
-def test_a_task_without_a_dashboard_module_gets_only_shared_metrics():
-    assert TASKS['hunter'].dashboard is None
-    declared = dashboard.declaration('hunter')
+def test_a_task_without_a_dashboard_module_gets_only_shared_metrics(monkeypatch):
+    monkeypatch.setitem(TASKS, 'plain', Task('plain', 'learning.adapters.hunter', 'Plain'))
+    declared = dashboard.declaration('plain')
     assert declared.METRICS == () and declared.REWARD_RULES == () and declared.cards({}) == []
     assert declared.LAYOUT == dashboard.Layout()
-    resolved = dashboard.resolve('hunter')
+    resolved = dashboard.resolve('plain')
     assert [m['key'] for m in resolved['metrics']] == SHARED and resolved['rewards'] == []
 
 

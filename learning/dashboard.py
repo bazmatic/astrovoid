@@ -30,13 +30,28 @@ class Layout:
 SHARED_METRICS = (
     Metric('mean_return', 'Training return', 'Higher is better. What training maximises. Only comparable within a run.',
            higher_is_better=True, wide=True),
-    Metric('kl', 'Distance from the starting policy (KL)', 'How far the policy has moved from where the run started.'),
-    Metric('entropy', 'Policy entropy', 'Randomness of the controls. Near zero means it has stopped exploring.'),
+    # Their own section, so they come after every task's charts, where the page has always drawn them.
+    Metric('kl', 'Distance from the starting policy (KL)', 'How far the policy has moved from where the run started.',
+           section='Policy'),
+    Metric('entropy', 'Policy entropy', 'Randomness of the controls. Near zero means it has stopped exploring.',
+           section='Policy'),
 )
 
 # Log keys that are bookkeeping, timing or gate flags rather than something to chart.
 HIDDEN_KEYS = frozenset({'iteration', 'rollout_s', 'update_s', 'elapsed_s', 'policy', 'team_size',
-                         'selection_gate_passed'})
+                         'selection_gate_passed',
+                         # optimiser internals and episode counts every trainer logs
+                         'policy_loss', 'value_loss', 'clip_fraction', 'episodes',
+                         # Hunter keys the page never charted (tools/ppo_neural.py)
+                         'score', 'rules_episodes',
+                         # Wallcrawler keys the page never charted (crawler_scenario.metrics)
+                         'hits', 'shots', 'hit_probability', 'hits_per_crawler', 'aim_drill_episodes',
+                         'battle_trials', 'battle_episodes', 'battle_crawlers', 'battle_survivors', 'battle_successes',
+                         'jump_reward_per_minute', 'landings_per_minute', 'contact_hits_received_per_minute',
+                         'bullet_hits_received_per_minute', 'reposition_targets_per_episode',
+                         'precision_survival', 'precision_mean_return', 'precision_hits_per_minute',
+                         'tracking_survival', 'tracking_mean_return', 'tracking_hits_per_minute',
+                         'pursuit_mean_return', 'pursuit_hits_per_minute'})
 
 
 def declaration(task_key: str) -> SimpleNamespace:
@@ -60,6 +75,17 @@ def resolve(task_key: str) -> dict:
 
 def resolve_all() -> list[dict]:
     return [resolve(key) for key in TASKS]
+
+
+def charted(task_key: str, keys: Iterable[str]) -> list[dict]:
+    """The resolved metrics the page draws for a run whose last log row has these keys, in drawing order: a metric is
+    drawn iff its key or an alias is present; metrics group by section, sections in the layout's order and then in
+    order of first appearance, declaration order within a section."""
+    resolved, present = resolve(task_key), set(keys)
+    order = list(resolved['sections'])
+    order += [m['section'] for m in resolved['metrics'] if m['section'] not in order]
+    drawn = [m for m in resolved['metrics'] if present & {m['key'], *m['aliases']}]
+    return sorted(drawn, key=lambda m: order.index(m['section']))   # stable: declaration order within a section
 
 
 def unclaimed(task_key: str, keys: Iterable[str]) -> list[str]:
