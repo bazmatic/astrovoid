@@ -118,3 +118,22 @@ def test_the_state_says_whether_any_enemy_is_still_alive_even_out_of_sight():
     hidden.active = False
     assert read(HunterPerception(), ship, world, [hidden], 0)['enemies_present'] is False
     assert read(HunterPerception(), ship, world, [], 0)['enemies_present'] is False
+
+
+def test_route_updates_when_a_gate_closes_and_reopens_without_wall_changes():
+    from entities.ship import Ship
+    world = maze()
+    gate = WallSegment((200, 0), (200, 1000), 3)
+    gate.active = False
+    world.gate_segments = [gate]
+    p, h, player = HunterPerception(), HunterRig((150, 150)), Ship((350, 150))
+
+    def route_distance():
+        obs = p.observe(h, world, player, [], [], NEUTRAL, 0, 1)
+        return json.loads(obs.state_json)['follow_player']['route_distance']
+
+    assert route_distance() == 200
+    gate.active = True
+    assert route_distance() is None
+    gate.active = False
+    assert route_distance() == 200

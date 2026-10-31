@@ -4,14 +4,15 @@ import math
 import numpy as np
 from hunter.senses import RAYS, ray_distances
 from learning.policy import PolicySpec, RecurrentPolicy
-from creatures.jelly_team import Intent, MAX_SPEED
+from creatures.jelly_team import Intent, MAX_SPEED, ACCEL_RATE, DECISION_FRAMES
+from hunter.maze_route import MazeRoutes
+from creatures.wallcrawler_team import path_clear, capsule_hits
 from creatures.traits.rooted import wall_between
 
 RAY_REACH = 550.           # px: how far a wall ray sees, as the crawler's senses do
 DISTANCE_SCALE = 1600.     # px: about the arena diagonal, so a distance stays within [0, 1]
 CLOSING_SCALE = 8.         # px per frame: closing speeds against fast ships, clipped to [-1, 1]
 TEAMMATES = 4
-BLOCK_DISTANCE = 30.       # px: the teacher brakes when a wall is this close along the way to its target
 FULL = 3.                  # pre-tanh activation the teacher uses for "full" (tanh(3) ~ 0.995)
 
 HEADS = (('heading', 2), ('accel', 2))
@@ -130,16 +131,47 @@ def critic(team, focal_agent=None):
 
 
 def teacher(c, enc):
-    """Scripted pre-tanh labels: head straight for the target at full accel, braking when a wall blocks the way;
-    with no target, hold the facing and coast."""
+    """Follow the furthest body-clear waypoint on an open cell route to the quarry.
+
+    The teacher may inspect the maze; the student's observations remain unchanged. Route links are cached for this
+    encounter and invalidated by MazeRoutes when walls change. No route means brake rather than push into a wall.
+    """
     pos = enc.target_for(c)
     if pos is None:
         return math.atanh(clip(math.remainder(facing(c), 2*math.pi)/math.pi, -.999, .999)), 0.
-    desired = math.atan2(pos[1]-c.y, pos[0]-c.x)
+    waypoint = pos if path_clear(c, enc, pos) else None
+    if waypoint is None:
+        routes = getattr(enc, '_jelly_teacher_routes', None)
+        if routes is None:
+            enc._jelly_teacher_routes = routes = MazeRoutes()
+        found = routes.route(enc.maze, c.get_pos(), [pos])
+        if found is not None:
+            maze = enc.maze
+            # Include the current cell centre: smoothing a corner can leave the body unable to reach the next cell
+            # directly, even though returning to the centre makes that turn possible.
+            centre = (maze.offset_x + (int((c.x-maze.offset_x)//maze.cell_size_x)+.5)*maze.cell_size_x,
+                      maze.offset_y + (int((c.y-maze.offset_y)//maze.cell_size_y)+.5)*maze.cell_size_y)
+            points = found[1] + [centre]
+            waypoint = next((p for p in points if math.dist(c.get_pos(), p) > 1 and path_clear(c, enc, p)), None)
+            if waypoint is None:
+                # Moving gates can already overlap a spawn. Allow an escape along a clear centre line instead of
+                # demanding body clearance at a starting position that does not have it.
+                overlapping = any(w.active and capsule_hits(c.get_pos(), c.get_pos(), c.radius+.2, w.start, w.end)
+                                  for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ())))
+                if overlapping:
+                    waypoint = next((p for p in points if math.dist(c.get_pos(), p) > 1
+                                     and not wall_between(c.get_pos(), p, maze)), None)
+    if waypoint is None:
+        return math.atanh(clip(math.remainder(facing(c), 2*math.pi)/math.pi, -.999, .999)), -FULL
+    desired = math.atan2(waypoint[1]-c.y, waypoint[0]-c.x)
     heading = math.atanh(clip(desired/math.pi, -.999, .999))
-    ahead = float(rays(c, enc.maze, desired, BLOCK_DISTANCE*2)[0])
-    blocked = ahead < BLOCK_DISTANCE and ahead < math.dist(c.get_pos(), pos) and wall_between(c.get_pos(), pos, enc.maze)
-    return heading, -FULL if blocked else FULL
+    speed = math.hypot(c.vx, c.vy)
+    # Turning the facing does not turn existing momentum. Brake before a corner (or a close waypoint), rather than
+    # taking a geometrically clear shortcut with enough sideways velocity to slide into its wall.
+    turn = abs(math.remainder(desired - math.atan2(c.vy, c.vx), 2*math.pi))
+    stopping = speed*speed/(2*ACCEL_RATE) + speed*DECISION_FRAMES
+    brake = speed > .3 and (turn > math.pi/6 or math.dist(c.get_pos(), waypoint) < stopping)
+    return heading, -FULL if brake else FULL
 
 
 def enabled(x, action, masks):

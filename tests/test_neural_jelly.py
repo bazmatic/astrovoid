@@ -1000,3 +1000,39 @@ def test_level_27_is_not_a_jelly_training_level_and_every_case_type_visits_every
         visited.setdefault((c['stage'], c['team_size']), set()).add(c['level'])
     assert set(visited) == {(1, 1), (2, 2), (2, 3), (2, 4)}
     assert all(seen == set(scenario.TRAIN_LEVELS) for seen in visited.values())
+
+
+@pytest.mark.parametrize('barrier', ['wall', 'gate'])
+def test_teacher_routes_around_a_wall_and_reaches_the_target_without_clipping_it(barrier):
+    from maze.wall_segment import WallSegment
+    from creatures.jelly_team import advance
+    from creatures.wallcrawler_team import capsule_hits
+    wall = WallSegment((200, 0), (200, 200), 3)
+    goal = (250., 150.)
+    (jelly,), enc, team = team_scene(positions=((150., 150.),), ship=target(goal))
+    enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
+                                   offset_x=0, offset_y=0, grid_width=4, grid_height=4)
+    if barrier == 'gate':
+        enc.maze.walls = []
+        enc.maze.gate_segments = [wall]
+    for _ in range(150):
+        intent = adapter.intention(adapter.teacher(jelly, enc))
+        for _ in range(DECISION_FRAMES):
+            before = jelly.get_pos()
+            advance(jelly, intent)
+            assert not capsule_hits(before, jelly.get_pos(), jelly.radius, wall.start, wall.end)
+            if math.dist(jelly.get_pos(), goal) < 15:
+                return
+    pytest.fail('teacher failed to take the open route around the wall')
+
+
+def test_teacher_brakes_for_an_unreachable_target_and_uses_a_newly_opened_route():
+    from maze.wall_segment import WallSegment
+    wall = WallSegment((200, 0), (200, 400), 3)
+    (jelly,), enc, team = team_scene(positions=((150., 150.),), ship=target((250., 150.)))
+    enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
+                                   offset_x=0, offset_y=0, grid_width=4, grid_height=4)
+    assert adapter.intention(adapter.teacher(jelly, enc)).accel < 0
+    wall.active = False
+    intent = adapter.intention(adapter.teacher(jelly, enc))
+    assert abs(intent.heading) < .01 and intent.accel > .9

@@ -34,7 +34,10 @@ class MazeRoutes:
                 self._links[key] = not any(
                     w.active and line_line_collision(centre(a), centre(b), w.start, w.end)
                     for w in near)
-            return self._links[key]
+            # Gates move independently of the wall layout, so never cache their connectivity.
+            return self._links[key] and not any(
+                gate.active and line_line_collision(centre(a), centre(b), gate.start, gate.end)
+                for gate in getattr(maze, 'gate_segments', ()))
         return cell, centre, linked
 
     def cheapest_route(self, maze, origin, targets, hit_point_cells):

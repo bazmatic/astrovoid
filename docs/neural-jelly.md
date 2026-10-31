@@ -154,12 +154,15 @@ JELLY_POLICY=/path/to/best.npz ./run.sh
 
 - **An untrained policy mostly sits still.** A random initial policy steered greedily outputs small accelerations,
   so it barely moves. On the held-out stage-1 cases it caught nothing in 60 s.
-- **The scripted teacher is weak.** On `evaluation_cases(1)` at a 60 s horizon, the teacher
-  (`learning.adapters.jelly.teacher`) catches 0.50 per minute, against 4.17 for the scripted `aggressive` Jelly.
-  It heads straight for the target and brakes when a wall is in the way, and then waits behind the wall until the
-  target comes into line.
-- **Imitation bootstrap is not recommended** until the teacher improves. That is why `bootstrap_episodes`
-  defaults to 0 for `jelly_team`.
+- **The teacher uses privileged maze routes.** `learning.adapters.jelly.teacher` follows the existing `MazeRoutes`
+  cell search, takes the furthest waypoint with body clearance, and brakes for turns and stopping distance. Moving
+  gates are checked live by the route finder. It returns towards the current cell centre for tight corners and can
+  escape a gate overlapping its spawn; an unreachable quarry makes it brake. The student's observations are unchanged.
+- **Route finding improves the teacher, but imitation remains unproven.** On the same six `evaluation_cases(1)`
+  episodes at a 60 s horizon, the routed teacher catches 2.83 per minute, versus the old teacher's 0.50 and the
+  scripted `aggressive` Jelly's 4.17. The cell graph can still report no route in gated or disconnected areas.
+  These are teacher scores, not a cloned student's performance. `bootstrap_episodes` stays 0 for `jelly_team`
+  until a separate imitation experiment demonstrates a useful student.
 - **The training ship's pilot misreads its health.** It reads its own health against the neural hunter's 10
   points, so on its 3-point hull a fresh ship feels like 30% health. It still hunts and kills, but it may fly
   more cautiously than a full-health hunter would.
