@@ -176,7 +176,7 @@ class JellyEnvironment:
         self.agent_stuck_frames = Counter()
         self.spread_frames = 0.      # flank_spread times frames, over decisions with two or more Jellies in range
         self.flank_frames = 0
-        self.bunched_frames = 0      # Jelly-frames spent closer than the configured bunch distance to another Jelly
+        self.bunched_frames = 0      # Jelly-frames within the fixed 40px benchmark distance of another Jelly
         self.generation = Counter()   # how many times each target has respawned
         self.agent_ship_hits = Counter()
         self.living = set(self.agent_ids)   # Jellies alive after the last frame, so deaths are counted once

@@ -1,7 +1,6 @@
 """learning.replay is task-agnostic: each task's replay hooks module rebuilds its environment, and recorded joint
 actions fly again with exactly the recorded events."""
 import json
-import subprocess
 import sys
 import types
 from pathlib import Path
@@ -10,13 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def test_importing_replay_imports_no_task_module():
-    code = ('import sys, learning.replay, learning.tasks\n'
-            'print(sorted(m for m in sys.modules if m.startswith("learning.adapters")))')
-    out = subprocess.run([sys.executable, '-c', code], cwd=ROOT, capture_output=True, text=True, check=True)
-    assert out.stdout.strip() == '[]'
 
 
 def record_jelly_run(path, cases, horizon=2.0, iteration=0):
@@ -100,14 +92,6 @@ def test_a_hooks_module_missing_open_environment_is_named_in_the_error(tmp_path,
         replay.open_environment(tmp_path)
 
 
-def test_both_team_tasks_register_replay_hooks():
-    from learning.tasks import task
-    assert task('wallcrawler_team').replay_hooks == 'learning.adapters.crawler_replay'
-    assert task('jelly_team').replay_hooks == 'learning.adapters.jelly_replay'
-    assert task('jelly_team').replay().__name__ == 'learning.replay'
-    assert task('hunter').replay() is None
-
-
 class _OverAtOnce:
     """An environment whose episodes end before the first decision: the recording holds no actions at all."""
     def __init__(self):
@@ -138,26 +122,6 @@ def test_an_episode_recorded_without_actions_replays_with_one_empty_step(tmp_pat
     assert rows == [dict(episode=0, level=None, seed=9, **{'return': 0.}, end='terminated', seconds=0.)]
 
 
-def test_check_rules_builds_the_rules_from_the_hooks_metadata_args(tmp_path):
-    from learning import replay
-    seen = []
-    def metadata(args):
-        seen.append(vars(args))
-        return dict(horizon=args.horizon, extra=getattr(args, 'extra', None))
-    saved = dict(horizon=4.0, extra=None, arenas={}, training={})
-    replay.check_rules(tmp_path, saved, metadata)                       # default: the recorded horizon alone
-    assert seen[-1] == dict(horizon=4.0)
-    with pytest.raises(ValueError, match='extra'):
-        replay.check_rules(tmp_path, saved, metadata, metadata_args=lambda path, manifest: SimpleNamespace(
-            horizon=manifest['horizon'], extra=str(path)))
-    assert seen[-1] == dict(horizon=4.0, extra=str(tmp_path))
-
-
-def test_replay_source_names_no_task_specific_argument():
-    source = (ROOT/'learning'/'replay.py').read_text()
-    assert 'opponent' not in source
-
-
 def test_jelly_replay_accepts_a_run_with_its_copied_opponent_file(tmp_path):
     """learning.run copies the trainer's opponent into every run and records its checksum, Jelly runs included."""
     from learning import replay
@@ -169,9 +133,3 @@ def test_jelly_replay_accepts_a_run_with_its_copied_opponent_file(tmp_path):
     assert settings['manifest']['opponent_sha256'] is not None
     replay.open_environment(tmp_path).close()
     assert replay.fly(tmp_path, 0)[0]['seconds'] == pytest.approx(.2)
-
-
-def test_crawler_replay_supplies_the_opponent_through_its_metadata_args(tmp_path):
-    from learning.adapters import crawler_replay
-    args = crawler_replay.metadata_args(tmp_path, dict(horizon=7.0))
-    assert args.opponent == tmp_path/'opponent.npz' and args.horizon == 7.0

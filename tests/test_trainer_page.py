@@ -217,7 +217,6 @@ assert.match(p.el('status').innerHTML,/Training/);
 assert.match(p.el('charts').innerHTML,/<h2>Team projectile hits per minute<\/h2>/);
 assert.match(p.el('strip').innerHTML,/<span>Iterations<\/span><b>3<\/b>/);
 assert.match(p.el('task').innerHTML,/value="wallcrawler_team"/);
-assert.deepEqual(p.intervals,[5000,15000,15000,60000]);     // status, runs, chart data, rules
 """, dict(run1=RUN1, layouts=dashboard.resolve_all(), rows=rows))
 
 

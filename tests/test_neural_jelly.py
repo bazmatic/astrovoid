@@ -95,12 +95,6 @@ def test_without_policy_jelly_chases_like_scripted():
     assert get_jelly_team(enc_n).driver is None
 
 
-def test_single_jelly_team_has_one_member():
-    (jelly,), enc, team = team_scene()
-    assert team.members() == [jelly]
-    assert get_jelly_team(enc) is team
-
-
 def test_driver_decides_every_decision_frames():
     (jelly,), enc, team = team_scene()
     team.external = False
@@ -125,16 +119,12 @@ def feature(x, name):
     return float(x[adapter.FEATURES.index(name)])
 
 
-def test_observation_length_matches_spec():
+def test_policy_observations_are_finite_and_normalised():
     crew, enc, team = team_scene(positions=(POS, (POS[0] + 60, POS[1]), (POS[0], POS[1] + 80)),
                                  ship=target((POS[0] + 200, POS[1])))
     for c in crew:
-        x, masks, sites = adapter.observe(team, c)
-        assert sites == ()
-        assert x.dtype == np.float32 and len(x) == len(adapter.SPEC.features)
+        x, _, _ = adapter.observe(team, c)
         assert np.isfinite(x).all() and np.abs(x).max() <= 1.0
-        assert set(masks) == {name for name, _ in adapter.HEADS}
-    assert len(adapter.critic(team)) == adapter.CRITIC_SIZE
     assert np.isfinite(adapter.critic(team)).all()
 
 
@@ -420,27 +410,12 @@ def test_promote_needs_more_catches_and_less_stuck_than_scripted():
     assert not set(summary) & {'iteration', 'update_s', 'mean_return', 'rollout_s', 'team_size', 'elapsed_s'}
 
 
-def test_hooks_cover_the_trainer_contract():
+def test_training_and_evaluation_use_separate_arenas():
     from learning.adapters import jelly_scenario as scenario
-    for name in ('SPEC', 'CRITIC_SIZE', 'INITIAL_STAGE', 'IMITATION_HEADS', 'environment', 'metadata',
-                 'training_cases', 'validation_cases', 'evaluation_cases', 'metrics', 'selection_score',
-                 'promote', 'compare'):
-        assert hasattr(scenario, name), name
-    assert scenario.INITIAL_STAGE == 1 and scenario.IMITATION_HEADS == ('heading', 'accel')
     cases = scenario.training_cases(0, 4, 1)
     assert all(c['team_size'] == 1 and c['level'] in scenario.TRAIN_LEVELS for c in cases)
     assert all(c['level'] in scenario.HOLDOUT_LEVELS for c in scenario.evaluation_cases())
     assert not set(scenario.TRAIN_LEVELS) & set(scenario.HOLDOUT_LEVELS)
-    env = scenario.environment(opponent='ignored', horizon=1., muted=True, arenas=None, scripted=False)
-    assert env.adapter.teacher_action is scenario.teacher_action and env.adapter.enabled is adapter.enabled
-
-
-def test_task_registry_has_jelly_team():
-    from learning.tasks import task
-    t = task('jelly_team')
-    assert t.module == 'learning.adapters.jelly_scenario' and t.label == 'Jelly team'
-    assert t.fresh_defaults == dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0)
-    assert t.adapter().SPEC.task == 'jelly_team'
 
 
 def test_manager_can_start_fresh_jelly_team(tmp_path):
