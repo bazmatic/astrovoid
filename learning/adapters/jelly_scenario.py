@@ -25,6 +25,7 @@ from learning import jelly_rewards, jelly_curriculum
 from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled
 from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
+from creatures.traits.rooted import wall_between
 
 # Level 27 spawns targets and Jellies inside small pockets that are hard to reach, so it is no use for learning to hunt.
 UNSUITABLE_TRAIN_LEVELS = (27,)
@@ -217,17 +218,32 @@ class JellyEnvironment:
         self.action_trace = []
         return self.snapshot()
 
-    def free_cell(self, distance):
-        """A random open cell at least `distance` from every living Jelly, else the one farthest from them."""
+    def reachable_cells(self, origin):
+        """The spawn cells connected to `origin` by open cells. A body squeezed against a curved cave wall can sit in
+        a grid cell whose centre is walled off from the rest of the arena, so if its own cell links nowhere, the
+        neighbouring cells it can see are tried instead."""
+        maze, routes = self.world.maze, self._spawn_routes
+        found = routes.reachable_targets(maze, origin, self.cells)
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1), (1, 1), (1, -1), (-1, 1), (-1, -1)):
+            if found:
+                break
+            neighbour = (origin[0] + dx*maze.cell_size_x, origin[1] + dy*maze.cell_size_y)
+            if not wall_between(origin, neighbour, maze):
+                found = routes.reachable_targets(maze, neighbour, self.cells)
+        return [self.cells[i] for i in found]
+
+    def free_cell(self, distance, strict=True):
+        """A random open cell at least `distance` from every living Jelly, else the one farthest from them. A teacher
+        cannot demonstrate pursuit across genuinely disconnected pockets, so `strict` placement (an episode's start)
+        rejects an arena with no reachable cell; a respawn mid-episode never ends the run for want of one."""
         jellies = [c.get_pos() for c in self.team.members()]
         def clearance(p):
             return min((math.dist(p, q) for q in jellies), default=float('inf'))
-        cells = self.cells
-        # A teacher cannot demonstrate pursuit across genuinely disconnected pockets.
-        reachable = self._spawn_routes.reachable_targets(self.world.maze, jellies[0], cells)
-        cells = [cells[i] for i in reachable]
+        cells = self.reachable_cells(jellies[0])
         if not cells:
-            raise ValueError('arena has no reachable quarry spawn')
+            if strict:
+                raise ValueError('arena has no reachable quarry spawn')
+            cells = self.cells
         for p in self.rng.sample(cells, len(cells)):
             if clearance(p) >= distance:
                 return p
@@ -239,7 +255,7 @@ class JellyEnvironment:
         target.vx, target.vy = math.cos(heading)*speed, math.sin(heading)*speed
 
     def respawn(self, target):
-        target.x, target.y = self.free_cell(RESPAWN_DISTANCE)
+        target.x, target.y = self.free_cell(RESPAWN_DISTANCE, strict=False)
         self.launch(target)
         self.generation[id(target)] += 1
 

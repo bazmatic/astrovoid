@@ -143,3 +143,19 @@ def test_navigation_run_records_its_lesson_evaluates_caves_separately_and_resume
     train(args)
     saved = torch.load(tmp_path/'resume.pt', map_location='cpu', weights_only=False)
     assert saved['curriculum']['episodes'] == 4
+
+
+def test_a_caught_target_respawns_even_when_the_jelly_hugs_a_curved_cave_wall(tmp_path):
+    """Run 154 crashed here: a Jelly in the thin strip of open floor along a curved wall sat in a grid cell whose
+    centre was behind the wall, so no spawn looked reachable and the whole training run died."""
+    args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--horizon', '10'])
+    manifest = dict(scenario.metadata(args), training={})
+    env = scenario.environment(horizon=10, arenas=manifest['arenas'], **scenario.environment_options(manifest))
+    try:
+        env.reset(level=14, seed=358, stage=1, team_size=1, lesson='open')
+        env.team.members()[0].x, env.team.members()[0].y = 722.8, 101.3   # pressed against the top wall
+        target = env.targets[0]
+        env.respawn(target)
+        assert any(math.dist((target.x, target.y), cell) < 1e-6 for cell in env.cells)
+    finally:
+        env.close()
