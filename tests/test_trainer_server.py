@@ -228,3 +228,68 @@ def test_tailscale_aliases_accept_replays_and_reject_untrusted_origins(tmp_path)
         assert not handler.from_this_page()
     handler.headers = {'Host': 'unrelated.example:8766', 'Origin': 'http://unrelated.example:8766'}
     assert not handler.from_this_page()
+
+
+def test_flying_a_stale_crawler_run_names_the_changed_rules(setup):
+    """Old Wallcrawler team runs need their original code revision; the page must say which rules changed."""
+    from types import SimpleNamespace
+    from learning.adapters import crawler_scenario
+    run = setup['root'] / 'run60'
+    run.mkdir()
+    (run / 'iter0000.npz').write_bytes(b'')
+    (run / 'opponent.npz').write_bytes(b'the frozen opponent learning.run copied in')
+    manifest = json.loads(json.dumps(crawler_scenario.metadata(SimpleNamespace(opponent=run / 'opponent.npz', horizon=1.0))))
+    manifest.setdefault('arenas', [])
+    manifest['training'] = {'seed': 0}
+    manifest['scenario_version'] = 'an older one'
+    (run / 'config.json').write_text(json.dumps(dict(task='wallcrawler_team', manifest=manifest, shaping={},
+                                                     episode={'horizon_seconds': 1.0})))
+    (run / 'episodes').mkdir()
+    (run / 'episodes' / 'iter0000.json').write_text(json.dumps(dict(
+        jobs=[dict(level=11, seed=1, team_size=1)], episodes=[{}], actions=[[]])))
+    code, body = post(setup, '/api/episodes', {'run': 'run60', 'iteration': 0, 'fly': True})
+    assert code == 409
+    assert body['error'] == ('run60 iteration 0 cannot be flown again: '
+                             'replay rules or schemas differ from the recorded run: scenario_version')
+
+
+def test_the_server_flies_a_jelly_run_without_a_window_and_still_stops_on_sigterm(tmp_path):
+    """Flying ran pygame inside the server on a request thread: macOS refuses a window off the main thread, and
+    pygame's signal handlers then left the server deaf to SIGTERM and ctrl-c."""
+    import os
+    import signal
+    import subprocess
+    import sys
+    import time
+    from learning import replay as learning_replay
+    from tests.test_replay_general import ROOT, record_jelly_run
+    run = tmp_path / 'run7'
+    record_jelly_run(run, [dict(level=11, seed=301, team_size=1, stage=1)], horizon=.5)
+    (run / 'iter0000.npz').write_bytes(b'')
+    expected = json.loads(json.dumps(learning_replay.fly(run, 0)))
+    env = {k: v for k, v in os.environ.items() if not k.startswith('SDL_')}     # the server's own environment
+    code = ('import sys\nfrom tools.trainer import server\n'
+            'httpd = server.make_server(0, root=sys.argv[1], processes=lambda: [])\n'
+            'print(httpd.server_address[1], flush=True)\nhttpd.serve_forever()\n')
+    child = subprocess.Popen([sys.executable, '-c', code, str(tmp_path)], cwd=ROOT, env=env,
+                             stdout=subprocess.PIPE, text=True)
+    try:
+        port = int(child.stdout.readline())
+        request = urllib.request.Request(f'http://127.0.0.1:{port}/api/episodes', method='POST',
+                                         data=json.dumps({'run': 'run7', 'iteration': 0, 'fly': True}).encode(),
+                                         headers={'Content-Type': 'application/json'})
+        try:
+            with urllib.request.urlopen(request, timeout=120) as response:
+                answer = response.status, json.loads(response.read())
+        except urllib.error.HTTPError as e:
+            answer = e.code, json.loads(e.read())
+        assert answer == (200, expected)
+        child.send_signal(signal.SIGTERM)
+        deadline = time.monotonic() + 10
+        while child.poll() is None and time.monotonic() < deadline:
+            time.sleep(.1)
+        assert child.poll() is not None, 'the server ignored SIGTERM'
+    finally:
+        if child.poll() is None:
+            child.kill()
+        child.wait()

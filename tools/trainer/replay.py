@@ -53,11 +53,28 @@ def fly(run, iteration, root=RL_ROOT, workers=8):
     from learning.tasks import task
     adapter = task((config_of(path) or {}).get('task','hunter')).replay()
     if adapter is not None:
-        return adapter.fly(path, iteration)
+        return _fly_apart(path, iteration)
     _jobs(path, iteration)
     return [{'episode': i, 'level': level, 'panic': panic, 'return': ret, 'kills': kills, 'end': end,
              'seconds': seconds}
             for i, (level, panic, ret, kills, end, seconds) in enumerate(fly_all(path, iteration, workers))]
+
+
+def _fly_apart(path, iteration):
+    """A creature task's episodes flown again in a process of their own. Flying starts pygame, which in the server
+    would open its window on a request thread (macOS refuses) and take over SIGTERM and ctrl-c for good."""
+    import json
+    import os
+    import subprocess
+    from tools.trainer.processes import REPO
+    env = dict(os.environ, SDL_VIDEODRIVER='dummy', SDL_AUDIODRIVER='dummy', PYGAME_HIDE_SUPPORT_PROMPT='1')
+    flown = subprocess.run([sys.executable, '-m', 'tools.watch_episode', str(path), str(iteration)], cwd=REPO,
+                           env=env, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if flown.returncode:
+        reason = (flown.stderr or flown.stdout).strip().splitlines()
+        raise TrainerError(f'{path.name} iteration {iteration} cannot be flown again: '
+                           f'{reason[-1] if reason else f"exit status {flown.returncode}"}')
+    return json.loads(flown.stdout)
 
 
 def watch(run, iteration, episode, speed=1.0, root=RL_ROOT, launch=None):

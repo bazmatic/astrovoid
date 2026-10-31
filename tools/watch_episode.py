@@ -176,7 +176,11 @@ def main(argv=None):
                 raise SystemExit(str(exc)) from None
             return
         if args.episode is None:
-            print(json.dumps(replay.fly(args.run, args.iteration), indent=2))
+            try:
+                rows = replay.fly(args.run, args.iteration)
+            except (ValueError, OSError, KeyError) as exc:     # changed rules, a diverged episode, a missing file
+                raise SystemExit(str(exc)) from None
+            print(json.dumps(rows, indent=2))
         else:
             replay.watch(args.run, args.iteration, args.episode, args.speed)
         return
