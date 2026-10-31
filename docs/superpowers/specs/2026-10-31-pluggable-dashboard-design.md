@@ -21,6 +21,9 @@ metric means writing one declaration in one place, with no page or server edits.
 - The page is split into small single-purpose ES modules (no framework, no build step) that the server serves as
   static files, and the page tests import those modules directly instead of slicing `page.html` by marker text.
 - A Jelly run shows Jelly charts. Hunter and Wallcrawler runs show exactly the charts they show today.
+- A task's reward signal rules (the list of what is rewarded and penalised, with values) are declared by the
+  task, shown in a panel that is always visible beside the charts, and configurable per run (user requirement,
+  added after the first draft; the details below are the assistant's reading of it and are marked as such).
 
 ## Non-goals and anti-goals
 
@@ -72,9 +75,24 @@ metric means writing one declaration in one place, with no page or server edits.
 9. **Starter Jelly set** (easy to extend later): catches per minute, catch probability, stuck fraction, time to
    contact, team catches per minute, angular (flank) spread, bunched fraction, ship hits, Jelly deaths,
    survival fraction. Per-stage (`stageN_*`) charts are a later addition.
+11. **Reward rules, declared per task (assistant's reading of the user's requirement).** Each task declares its
+    reward signal rules as data: key, title, description, kind (reward / penalty / shaping), the stages in which it
+    applies, and the name of the run setting that holds its value. The dashboard shows them as a panel that stays
+    on screen next to the charts (pinned, collapsible), using the values recorded in the viewed run's own
+    config/manifest (what that run actually trained with, not today's code), and highlights the rules active at
+    the run's current stage. This generalises today's Wallcrawler-only "Active rewards / penalties / episodes"
+    cards (`loadRules`), which this replaces.
+12. **Reward values are run settings (assistant's reading).** "Configurable" means each reward value is a named
+    setting in the "Next run" form, recorded in the run's config, and read by the environment, as the Hunter's
+    and Wallcrawler's reward settings already are. The Jelly's reward constants (`CATCH_REWARD`,
+    `TEAM_CATCH_SHARE`, `PROGRESS_REWARD`, `STUCK_PENALTY`, flank/bunch shaping, ship hit/kill rewards, death
+    penalties; currently module constants in `learning/adapters/jelly_scenario.py`) become settings whose defaults
+    are exactly today's values, so default behaviour and existing results are unchanged. Resuming a run with
+    different reward values is rejected by the existing manifest-compatibility check; a new run may change them.
 10. **Staging**, each stage working and reviewable: (a) descriptors, resolved-layout endpoint, page draws from it,
     Hunter/Wallcrawler moved over unchanged, Jelly starter set; (b) split the page into ES modules and rewrite
-    the page tests; (c) capabilities replace task-name checks across page and server.
+    the page tests; (c) capabilities replace task-name checks across page and server; (d) reward rules declared
+    per task, shown in the pinned panel, and the Jelly's reward constants become run settings.
 
 ## Left to the builder
 
@@ -131,3 +149,7 @@ metric means writing one declaration in one place, with no page or server edits.
   renders with one generic card renderer. The card markup may change as long as the same text and values appear;
   the page tests are rewritten to assert on that. Hunter's "Episodes" card also becomes a provider (Hunter's own
   default), so no card logic stays in the page.
+- Reward rules (items 11-12): where the user said "list of what reward signal rules are in place for the
+  training", I read it as a per-task, per-run list shown in a pinned panel; "configurable" as editable per run in
+  the "Next run" form with today's values as defaults. If the user meant something else (for example a schedule of
+  values changing over a run), this section changes.
