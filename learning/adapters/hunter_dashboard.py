@@ -85,7 +85,8 @@ def recorded(config):
     found = {}
     for key, names, *_ in _RULES:
         value = next((by_name[n] for n in names if n in by_name), 0.)
-        found[key] = abs(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.
+        # Summary values retain the setting's sign; the renderer applies the rule's reward/penalty direction.
+        found[key] = value if isinstance(value, (int, float)) and not isinstance(value, bool) else 0.
     return found
 
 

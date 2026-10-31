@@ -145,6 +145,7 @@ def test_a_hunter_run_shows_its_recorded_rewards_and_episode_card(server):
     from tools import ppo_neural
     run = make_run(server.root, 'run83', 2)              # an untagged (Hunter) run as the trainer records it
     config = json.loads((run / 'config.json').read_text())
+    config['args'].update(powerup_reward=-3.0, death_penalty=-5.0)
     config['rewards'] = ppo_neural.reward_summary(Namespace(**config['args']))
     config['episode'] = dict(horizon_seconds=60.0, after_clear_seconds=30.0, episodes_per_iteration=96, health=10,
                              wall_energy=4.0, levels=[3, 5, 6, 7, 25])
@@ -157,4 +158,10 @@ def test_a_hunter_run_shows_its_recorded_rewards_and_episode_card(server):
     assert ('Up to 60 s of fighting, then up to 30 s more to collect powerups once the last enemy is dead. '
             '96 episodes per iteration.') in text
     assert 'The hunter survives 10 energy' in text and 'Levels: 3,5-7,25.' in text
+    assert '−3' in item(items, 'Powerup collected') and '+5' in item(items, 'Death')
     assert payload['episodes'] == 96
+    # Legacy reward summaries remain sufficient even when the original arguments are unavailable.
+    config.pop('args')
+    (run / 'config.json').write_text(json.dumps(config))
+    _, legacy_items = shown(rewards(server, 'run83'))
+    assert '−3' in item(legacy_items, 'Powerup collected') and '+5' in item(legacy_items, 'Death')
