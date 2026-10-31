@@ -74,7 +74,7 @@ training only and no level uses it.
 
 Use the trainer dashboard / trainer tools with task `jelly_team`. A fresh run defaults to a 60 s horizon, 4
 workers, 10000 iterations and **no imitation bootstrap** (`bootstrap_episodes=0`). The options are
-`budget_seconds`, `bootstrap_episodes` and `seed`. From the command line:
+`budget_seconds`, `bootstrap_episodes`, `bootstrap_epochs` and `seed`. From the command line:
 
 ```
 python -m tools.ppo_neural --task jelly_team --start '' --out <run dir> --bootstrap-episodes 0 --budget-seconds 3600
@@ -83,6 +83,15 @@ python -m tools.ppo_neural --task jelly_team --start '' --out <run dir> --bootst
 The command-line default for `--bootstrap-episodes` is still 8. The trainer path overrides it to 0, but a
 hand-launched `python -m tools.ppo_neural --task jelly_team` run needs `--bootstrap-episodes 0`. Replays work like the
 crawler's: `learning.replay` through `learning/adapters/jelly_replay.py`.
+
+`bootstrap_episodes` controls how many teacher encounters are collected; `bootstrap_epochs` controls passes over
+those saved demonstrations. Zero epochs means the task default (4 for Jelly; existing other task defaults are
+preserved). An experiment with `--set bootstrap_episodes=64 --set bootstrap_epochs=20` makes 1,280 imitation
+updates for solo Jelly episodes, versus 32 for 8 episodes and 4 passes. The requested pass count is recorded in
+the run config and manifest; changing it on resume is refused. Old runs with no override keep their original
+default rather than borrowing another run's experiment. Bootstrap evaluation runs before PPO; a lower
+imitation loss alone does not establish better held-out catching. Its results are saved in
+`bootstrap-evaluation.json` before the first PPO iteration. The total wall-clock budget includes warm-start.
 
 ## Evaluation and the selection gate
 

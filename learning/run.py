@@ -81,8 +81,13 @@ def train(args):
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
     if args.resume:
         args.opponent = str((out/'opponent.npz').resolve())
+    bootstrap_epochs = getattr(args, 'bootstrap_epochs', 0)
+    if bootstrap_epochs < 0:
+        raise ValueError('bootstrap epochs must be nonnegative (0 uses the task default)')
     expected = json.loads(json.dumps(adapter.metadata(args)))
     expected['training'] = {k:getattr(args,k) for k in ('seed','lr','gamma','gae_lambda','episodes','bootstrap_episodes')}
+    if bootstrap_epochs:
+        expected['training']['bootstrap_epochs'] = bootstrap_epochs
     config_path = out/'config.json'
     resume_path = out/'resume.pt'
     if args.resume:
@@ -184,11 +189,13 @@ def train(args):
             demonstrations=[e for result in demonstrated for e in result[0]]
             torch.save(demonstrations,demonstration_path)
             clone_behaviour(net,demonstrations,dict(adapter.SPEC.heads),selected_heads=adapter.IMITATION_HEADS,
-                            epochs=getattr(adapter,'IMITATION_EPOCHS',4),balanced=getattr(adapter,'IMITATION_BALANCED',False))
+                            epochs=bootstrap_epochs or getattr(adapter,'IMITATION_EPOCHS',4),balanced=getattr(adapter,'IMITATION_BALANCED',False))
             rehearsal=build_rehearsal(demonstrations)
             policy = export(net, policy); current = 'bootstrap.npz'; policy.save(out/current)
             policy.save(best)
-            best_score = adapter.selection_score(evaluate(pool,args,best,validation)['summary'])
+            bootstrap_evaluation = evaluate(pool, args, best, validation)
+            (out/'bootstrap-evaluation.json').write_text(json.dumps(bootstrap_evaluation, indent=2))
+            best_score = adapter.selection_score(bootstrap_evaluation['summary'])
             save_resume(0)
         iterations = itertools.count(first) if args.iterations == 0 else range(first, args.iterations)
         for iteration in iterations:

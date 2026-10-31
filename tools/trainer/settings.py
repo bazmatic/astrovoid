@@ -17,6 +17,7 @@ DEFAULT_ITERATIONS = 1000     # what run52 uses: the guess for a run that never 
 
 # dest: (group, label). A trainer option missing here still appears, under Training.
 LABELS = {
+    'bootstrap_epochs': ('Training', 'Teacher training passes (0: task default)'),
     'powerup_reward': ('Rewards', 'Powerup collected'),
     'upgrade_bonus': ('Rewards', 'Hunter power boost, per second'),
     'rules_bounty': ('Rewards', 'Rules hunter destroyed'),
@@ -207,7 +208,7 @@ def read_settings(run_dir, all_runs):
             out[s.dest] = Value(_normal(s, recorded[s.dest]), 'recorded')
         elif s.dest in recovered:
             out[s.dest] = Value(_normal(s, recovered[s.dest]), 'recovered')
-        elif s.dest in ('gamma', 'gae_lambda'):
+        elif s.dest in ('gamma', 'gae_lambda') or (s.dest == 'bootstrap_epochs' and config is not None):
             # Older runs used these hardcoded values; do not borrow a newer run's experiment.
             out[s.dest] = Value(s.default, 'recovered')
         else:

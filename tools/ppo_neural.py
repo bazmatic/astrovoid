@@ -390,6 +390,8 @@ def build_parser():
     parser.add_argument('--opponent', type=str, default=str(DEFAULT_START), help='frozen player weights for team training')
     parser.add_argument('--budget-seconds', type=float, default=7200, help='total team training and evaluation wall time; 0 means no time limit')
     parser.add_argument('--bootstrap-episodes', type=int, default=8, help='scripted imitation encounters for new team runs')
+    parser.add_argument('--bootstrap-epochs', type=int, default=0,
+                        help='passes over teacher demonstrations; 0 uses the task default')
     parser.add_argument('--seed', type=int, default=0, help='team model and training seed')
     from learning.jelly_rewards import DEFAULTS
     for name, default in DEFAULTS.items():

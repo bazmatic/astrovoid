@@ -58,10 +58,10 @@ TASKS = {
         ('opponent','budget_seconds','bootstrap_episodes','seed'), 'learning.replay',
         'learning.adapters.crawler_replay', 'learning.adapters.crawler_dashboard',
         Capabilities(fresh_weights=True, actor_damping=True, replay_mode='hooks', settings_scope='listed')),
-    # No imitation bootstrap by default: the scripted Jelly teacher (learning.adapters.jelly.teacher) is weak.
+    # Imitation remains opt-in while teacher warm-start experiments are evaluated.
     'jelly_team': Task('jelly_team', 'learning.adapters.jelly_scenario', 'Jelly team',
         dict(horizon=60.0, workers=4, iterations=10000, bootstrap_episodes=0),
-        ('budget_seconds','bootstrap_episodes','seed') + JELLY_REWARD_SETTINGS, 'learning.replay',
+        ('budget_seconds','bootstrap_episodes','bootstrap_epochs','seed') + JELLY_REWARD_SETTINGS, 'learning.replay',
         'learning.adapters.jelly_replay', 'learning.adapters.jelly_dashboard',
         Capabilities(fresh_weights=True, actor_damping=False, replay_mode='hooks', settings_scope='listed')),
 }
