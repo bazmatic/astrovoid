@@ -96,6 +96,14 @@ def _source(from_, runs):
     return run, checkpoint
 
 
+def _actor_damping(key):
+    from learning.tasks import task
+    try:
+        return task(key).capabilities.actor_damping
+    except ValueError:            # a run of a task this trainer does not know
+        return False
+
+
 def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, actor_scale=1.):
     """Start a new run carrying on from a checkpoint (default: the newest run's last), with settings changed."""
     if not 0<actor_scale<=1:
@@ -105,13 +113,13 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, a
     with _lock(root):
         runs = _runs(root, processes)
         _refuse_if_busy(runs)
-        requested_task = (changes or {}).get('task', 'hunter')
-        from learning.tasks import task
+        from learning.tasks import UNTAGGED_TASK, task
+        requested_task = (changes or {}).get('task', UNTAGGED_TASK)
         try:
             definition = task(requested_task)
         except ValueError as e:
             raise TrainerError(str(e)) from None
-        if definition.fresh_defaults and from_ in (None, 'new', 'random'):
+        if definition.capabilities.fresh_weights and from_ in (None, 'new', 'random'):
             from tools.trainer.settings import SETTINGS, Value
             base = {s.dest: Value(s.default, 'recorded') for s in SETTINGS}
             for key, value in dict(task=requested_task, **definition.fresh_defaults).items():
@@ -128,8 +136,8 @@ def start(from_=None, changes=None, root=RL_ROOT, processes=None, launch=None, a
             return Started(name, 'random', changed(base, values), command)
         source, checkpoint = _source(from_, runs)
         base = read_settings(source.path, run_folders(root))
-        source_task = (config_of(source.path) or {}).get('task', 'hunter')
-        if actor_scale!=1 and source_task!='wallcrawler_team':
+        source_task = (config_of(source.path) or {}).get('task', UNTAGGED_TASK)
+        if actor_scale!=1 and not _actor_damping(source_task):
             raise TrainerError('actor damping is supported only for wallcrawler runs')
         if 'task' in (changes or {}) and changes['task'] != source_task:
             raise TrainerError('cannot transfer a checkpoint between creature tasks; start a new task')

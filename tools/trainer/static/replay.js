@@ -1,10 +1,10 @@
 // Replays: an iteration's episodes, optionally flown again to see how each went, each one watchable.
-import {S,$} from './state.js';
+import {S,$,taskOf} from './state.js';
 import {post} from './api.js';
 import {currentTask,loadRuns,loadStatus} from './runs.js';
 import {setIters,snapIter} from './settings-form.js';
 
-export function replayRuns(){return S.RUNS.filter(r=>r.replayable&&r.checkpoints.length&&(r.task||'hunter')===currentTask())}
+export function replayRuns(){return S.RUNS.filter(r=>r.replayable&&r.checkpoints.length&&taskOf(r)===currentTask())}
 export function fillReplay(){
   const sel=$('rp-run'),keep=sel.value,usable=replayRuns().reverse();
   sel.innerHTML=usable.map(r=>`<option value="${r.name}">${r.name}</option>`).join('');
@@ -54,7 +54,7 @@ export async function watchLatest(){
   const m=$('rp-msg'),level=$('rp-level').value;
   m.className='msg';m.textContent='Checking the latest episode…';
   await loadStatus();await loadRuns();
-  const active=S.RUNS.find(r=>r.name===S.STATUS?.run&&(r.task||'hunter')===currentTask());
+  const active=S.RUNS.find(r=>r.name===S.STATUS?.run&&taskOf(r)===currentTask());
   if(active&&(!active.replayable||!active.checkpoints.length)){m.className='msg';m.textContent=`${active.name} is preparing its first episode. It will open automatically when ready; click again to cancel.`;button.textContent='Cancel waiting for episode';S.LATEST_WAIT=setTimeout(retry,5000);return}
   button.textContent='Watch the last episode';
   const run=active||replayRuns().at(-1);

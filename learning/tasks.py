@@ -64,7 +64,7 @@ UNTAGGED_REPLAY_TASK = 'wallcrawler_team'
 UNTAGGED_TASK = 'hunter'
 
 
-def task(key='hunter'):
+def task(key=UNTAGGED_TASK):
     try:
         return TASKS[key]
     except KeyError:

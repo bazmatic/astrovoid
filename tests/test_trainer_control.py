@@ -208,3 +208,16 @@ def test_output_damping_is_explicit_once_and_not_inherited(root):
     assert scaled.command[-2:]==['--actor-scale','0.5']
     ordinary=start('run52',root=root,processes=[],launch=fake)
     assert '--actor-scale' not in ordinary.command
+
+
+@pytest.mark.parametrize('task,allowed', [('wallcrawler_team', True), ('jelly_team', False), ('hunter', False)])
+def test_actor_damping_is_offered_only_for_the_wallcrawler(root, task, allowed):
+    path = root / 'run52' / 'config.json'
+    path.write_text(json.dumps(dict(json.loads(path.read_text()), task=task)))
+    fake = FakeLaunch()
+    if allowed:
+        assert start('run52', root=root, processes=[], launch=fake, actor_scale=.5).command[-2:] == ['--actor-scale', '0.5']
+    else:
+        with pytest.raises(TrainerError, match='^actor damping is supported only for wallcrawler runs$'):
+            start('run52', root=root, processes=[], launch=fake, actor_scale=.5)
+        assert fake.commands == []

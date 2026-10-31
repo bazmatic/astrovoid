@@ -99,9 +99,10 @@ assert.equal(typed({kind:'float'},'0.97'),0.97);
 
 
 def test_the_creature_follows_the_active_run_until_chosen_and_replays_offer_only_its_runs():
+    from learning import dashboard
     run_js(r"""
 const p=await page();
-p.S.STATUS={run:'run2'};
+p.S.LAYOUTS=given.layouts;p.S.STATUS={run:'run2'};
 p.S.RUNS=[given.run1,{...given.run1,name:'run2',task:'wallcrawler_team'}];
 p.el('task').value='hunter';
 p.runs.syncCreature();
@@ -111,6 +112,24 @@ p.el('task').value='hunter';p.runs.syncCreature();assert.equal(p.el('task').valu
 p.S.STATUS.run='run1';p.runs.syncCreature();
 assert.equal(p.el('task').value,'hunter');assert.equal(p.el('fresh-team').disabled,true);
 assert.equal(p.el('rp-run').innerHTML,'<option value="run1">run1</option>');
+""", dict(run1=RUN1, layouts=dashboard.resolve_all()))
+
+
+def test_a_task_the_page_has_never_heard_of_gets_fresh_weights_and_its_own_runs():
+    """The Next run form and replays follow the task's declared capabilities, not its name."""
+    run_js(r"""
+const p=await page();
+const demo={key:'demo',label:'Demo',capabilities:{fresh_weights:true,actor_damping:false,replay_mode:'hooks',settings_scope:'listed'}};
+const closed={...demo,key:'closed',label:'Closed',capabilities:{...demo.capabilities,fresh_weights:false}};
+p.S.LAYOUTS=[demo,closed];p.S.STATUS={run:'run2'};
+p.S.RUNS=[{...given.run1,task:'closed'},{...given.run1,name:'run2',task:'demo'}];
+p.runs.syncCreature();
+assert.equal(p.el('task').value,'demo');assert.equal(p.el('fresh-team').disabled,false);
+assert.equal(p.el('from-run').innerHTML,'<option value="new">Fresh weights</option><option value="run2">run2 (newest)</option>');
+assert.equal(p.el('rp-run').innerHTML,'<option value="run2">run2</option>');
+p.S.STATUS.run='run1';p.runs.syncCreature();
+assert.equal(p.el('task').value,'closed');assert.equal(p.el('fresh-team').disabled,true);
+assert.equal(p.el('from-run').innerHTML,'<option value="run1">run1 (newest)</option>');
 """, dict(run1=RUN1))
 
 

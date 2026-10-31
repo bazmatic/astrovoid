@@ -6,9 +6,10 @@ trainer's own defaults, which are far from what recent runs use.
 """
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
+from learning.tasks import UNTAGGED_TASK
 from tools import ppo_neural
 
 NOT_SETTINGS = {'start', 'out', 'resume', 'help', 'actor_scale'}
@@ -80,7 +81,7 @@ class Setting:
     group: str
     label: str
     display_scale: float = 1.0
-    tasks: tuple = ('hunter', 'wallcrawler_team')
+    tasks: tuple = ()     # the task keys whose settings form offers it, see applies_to
 
 
 @dataclass(frozen=True)
@@ -101,11 +102,26 @@ def _kind(action):
     return 'optional_float' if action.default is None else 'float'
 
 
+COMMON_SETTINGS = ('task','iterations','episodes','workers','lr','gamma','gae_lambda','horizon')
+
+
+def applies_to(dest):
+    """The registered tasks a setting applies to: every task for a common setting, else each task listing it in its
+    options, and each task whose settings scope is 'unclaimed' unless another task lists it."""
+    from learning.tasks import TASKS
+    def claimed_by_another(t):
+        return any(dest in other.options for other in TASKS.values() if other.key != t.key)
+    return tuple(t.key for t in TASKS.values() if dest in COMMON_SETTINGS or dest in t.options or
+                 (t.capabilities.settings_scope == 'unclaimed' and not claimed_by_another(t)))
+
+
+def scoped_settings():
+    """SETTINGS, each with the tasks it applies to as the registry stands now."""
+    return [replace(s, tasks=applies_to(s.dest)) for s in SETTINGS]
+
+
 def _settings():
     from experiments.score import Weights
-    from learning.tasks import TASKS
-    common = ('task','iterations','episodes','workers','lr','gamma','gae_lambda','horizon')
-    extra = {key for t in TASKS.values() for key in t.options}
     out = []
     for action in ppo_neural.build_parser()._actions:
         if action.dest in NOT_SETTINGS:
@@ -116,8 +132,7 @@ def _settings():
                      if action.dest == 'hit_scale' else action.help or '')
         out.append(Setting(action.dest, action.option_strings[0], _kind(action), default, help_text,
                            group, label, Weights().hit if action.dest == 'hit_scale' else 1.0,
-                           tuple(t.key for t in TASKS.values() if action.dest in common or
-                                 action.dest in t.options or (t.key=='hunter' and action.dest not in extra))))
+                           applies_to(action.dest)))
     return out
 
 
@@ -178,7 +193,7 @@ def read_settings(run_dir, all_runs):
     recorded, recovered = _recorded(config), _recovered(config)
     others = [{**_recovered(c), **_recorded(c)} for c in
               (config_of(r) for r in sorted(all_runs, key=_number, reverse=True) if Path(r) != Path(run_dir))
-              if (c or {}).get('task', 'hunter') == (config or {}).get('task', 'hunter')]
+              if (c or {}).get('task', UNTAGGED_TASK) == (config or {}).get('task', UNTAGGED_TASK)]
     out = {}
     for s in SETTINGS:
         if s.dest in recorded:

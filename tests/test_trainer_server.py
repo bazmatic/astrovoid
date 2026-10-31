@@ -3,6 +3,7 @@ import socket
 import threading
 import urllib.error
 import urllib.request
+from pathlib import Path
 
 import pytest
 
@@ -335,3 +336,55 @@ def test_static_refuses_traversal_encoded_separators_absolute_paths_and_other_fi
     status, _, body = raw_get(setup, path)
     assert status == 404
     assert b'make_handler' not in body and b'root:' not in body
+
+
+def settings_by_task(setup, keys):
+    settings = get_json(setup, '/api/settings')['settings']
+    return {key: sorted(s['dest'] for s in settings if key in s['tasks']) for key in keys}
+
+
+def test_each_creatures_settings_form_offers_the_same_settings_as_before_capabilities(setup):
+    """Recorded from the task-name rules (commit a7ccfee) before the settings scope became a task capability."""
+    golden = json.loads((Path(__file__).parent / 'fixtures' / 'trainer_settings_scope.json').read_text())
+    assert settings_by_task(setup, golden) == golden
+
+
+def test_a_new_task_plugs_in_without_changing_the_dashboard_or_trainer(setup, monkeypatch):
+    """Registering a task is all it takes: it is listed, its settings are its own, it starts from fresh weights,
+    it refuses actor damping it does not support, and its episodes are listed through its replay hooks."""
+    import sys
+    import types
+    from learning import tasks
+    from learning.dashboard import Metric
+    from tools.trainer import control
+    replay_hooks = types.ModuleType('tests._demo_replay')
+    replay_hooks.episodes = lambda path, iteration: [{'episode': 0, 'level': 7, 'seed': 3}]
+    dashboard = types.ModuleType('tests._demo_dashboard')
+    dashboard.METRICS = (Metric('demo_score', 'Demo score'),)
+    for module in (replay_hooks, dashboard):
+        monkeypatch.setitem(sys.modules, module.__name__, module)
+    monkeypatch.setitem(tasks.TASKS, 'demo', tasks.Task(
+        'demo', 'tests._demo_adapter', 'Demo', fresh_defaults=dict(horizon=30.0), options=('budget_seconds', 'seed'),
+        replay_module=replay_hooks.__name__, dashboard=dashboard.__name__,
+        capabilities=tasks.Capabilities(fresh_weights=True, actor_damping=False, replay_mode='hooks',
+                                        settings_scope='listed')))
+
+    demo = next(t for t in get_json(setup, '/api/tasks') if t['key'] == 'demo')
+    assert demo['label'] == 'Demo' and demo['capabilities']['fresh_weights'] is True
+    assert 'demo_score' in [m['key'] for m in demo['metrics']]
+    assert settings_by_task(setup, ['demo'])['demo'] == sorted(
+        ['task', 'iterations', 'episodes', 'workers', 'lr', 'gamma', 'gae_lambda', 'horizon', 'budget_seconds', 'seed'])
+
+    code, body = post(setup, '/api/start', {'from': 'new', 'changes': {'task': 'demo'}})
+    assert code == 200 and body['started_from'] == 'random'
+    command = setup['launch'].commands[-1]
+    assert command[command.index('--task') + 1] == 'demo' and command[command.index('--horizon') + 1] == '30.0'
+
+    run = setup['root'] / 'run60'
+    run.mkdir()
+    (run / 'iter0000.npz').write_bytes(b'')
+    (run / 'config.json').write_text(json.dumps({'task': 'demo', 'shaping': {}, 'episode': {}}))
+    with pytest.raises(control.TrainerError, match='^actor damping is supported only for wallcrawler runs$'):
+        control.start('run60', root=setup['root'], processes=[], launch=FakeLaunch(), actor_scale=.5)
+    assert post(setup, '/api/episodes', {'run': 'run60', 'iteration': 0}) == \
+        (200, [{'episode': 0, 'level': 7, 'seed': 3}])

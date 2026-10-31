@@ -1,12 +1,12 @@
 // The Next run form: the creature, where it carries on from, the settings it changes, and Start.
-import {S,$,esc,fmtLevels} from './state.js';
+import {S,$,esc,fmtLevels,taskOf,capabilities} from './state.js';
 import {api,post} from './api.js';
 import {loadRuns,loadStatus} from './runs.js';
 
 export function nextNumber(){return S.RUNS.length?Math.max(...S.RUNS.map(r=>+r.name.slice(3)))+1:1}
 export function fillFrom(){
-  const sel=$('from-run'),keep=sel.value,usable=S.RUNS.filter(r=>r.checkpoints.length && (r.task||'hunter')===$('task').value).reverse();
-  sel.innerHTML=($('task').value==='hunter'?'':'<option value="new">Fresh weights</option>')+usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
+  const sel=$('from-run'),keep=sel.value,usable=S.RUNS.filter(r=>r.checkpoints.length && taskOf(r)===$('task').value).reverse();
+  sel.innerHTML=(capabilities($('task').value).fresh_weights?'<option value="new">Fresh weights</option>':'')+usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
   if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;}
   fromChanged();fillIters();
 }
@@ -94,7 +94,7 @@ export async function start(){
   catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message;b.disabled=false}
 }
 export function initSettingsForm(){
-  $('task').onchange=()=>{fillFrom();renderStart();$('fresh-team').disabled=$('task').value==='hunter'};
+  $('task').onchange=()=>{fillFrom();renderStart();$('fresh-team').disabled=!capabilities($('task').value).fresh_weights};
   $('fresh-team').onclick=()=>{$('from-run').value='new';fromChanged()};
   $('from-run').onchange=fromChanged;
   $('edit').onclick=()=>{$('form').hidden=!$('form').hidden;$('edit').textContent=$('form').hidden?'Edit settings':'Hide settings'};

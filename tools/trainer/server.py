@@ -6,10 +6,11 @@ from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from learning.tasks import UNTAGGED_TASK
 from tools.trainer import control, replay, runs
 from tools.trainer.control import TrainerError
 from tools.trainer.processes import REPO, list_processes
-from tools.trainer.settings import SETTINGS, config_of, read_settings
+from tools.trainer.settings import config_of, read_settings, scoped_settings
 
 PAGE = Path(__file__).with_name('page.html')
 STATIC = Path(__file__).with_name('static').resolve()
@@ -58,13 +59,13 @@ def make_handler(root, processes, launch, allowed_hosts=()):
             if path == '/api/status':
                 return self.send(200, runs.status(root, processes()))
             if path == '/api/runs':
-                return self.send(200, [dict(run_json(r), task=(config_of(r.path) or {}).get('task', 'hunter')) for r in runs.list_runs(root, processes())])
+                return self.send(200, [dict(run_json(r), task=(config_of(r.path) or {}).get('task', UNTAGGED_TASK)) for r in runs.list_runs(root, processes())])
             if path == '/api/tasks':
                 from learning import dashboard
                 return self.send(200, dashboard.resolve_all())
             if path == '/api/settings':
                 from learning.tasks import TASKS
-                return self.send(200, {'settings': [asdict(s) for s in SETTINGS], 'levels': available_levels(),
+                return self.send(200, {'settings': [asdict(s) for s in scoped_settings()], 'levels': available_levels(),
                                        'tasks':[dict(key=t.key,label=t.label,defaults=t.fresh_defaults) for t in TASKS.values()]})
             match = RUN_PATH.fullmatch(path)
             if match and (root / match.group(1)).is_dir():

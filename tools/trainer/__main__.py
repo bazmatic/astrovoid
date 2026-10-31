@@ -35,7 +35,10 @@ def _parser():
     commands.add_parser('runs', help='every run').add_argument('--json', action='store_true')
     start = commands.add_parser('start', help='start a new run (refuses while one is training or paused)')
     start.add_argument('--from', dest='from_', help='RUN or RUN/iterNNNN to continue, or new for fresh creature weights (default: newest run)')
-    start.add_argument('--actor-scale', type=float, default=1.,help='one-time wallcrawler output-head damping (0 < scale <= 1)')
+    from learning.tasks import TASKS
+    damped = ', '.join(t.label for t in TASKS.values() if t.capabilities.actor_damping) or 'no task'
+    start.add_argument('--actor-scale', type=float, default=1.,
+                       help=f'one-time output-head damping, for {damped} runs only (0 < scale <= 1)')
     start.add_argument('--set', action='append', default=[], metavar='NAME=VALUE', help='change a setting')
     commands.add_parser('stop', help='end the training run')
     commands.add_parser('pause', help='pause the training run after its current iteration')

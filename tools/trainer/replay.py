@@ -19,10 +19,31 @@ def _run_dir(root, run, iteration):
     return path
 
 
+def _task(path):
+    """The registered task the run in `path` trained (ValueError for one this trainer does not know)."""
+    from learning.tasks import UNTAGGED_TASK, task
+    from tools.trainer.settings import config_of
+    return task((config_of(path) or {}).get('task', UNTAGGED_TASK))
+
+
+def _replay_mode(path):
+    """How the run's episodes replay: 'hooks' (its task's replay module), 'legacy_check' (the Hunter's own episode
+    jobs) or None (its task cannot replay). Refuses a task that cannot."""
+    mode = _task(path).capabilities.replay_mode
+    if mode is None:
+        raise TrainerError(f'{path.name} cannot be replayed: its task does not replay episodes')
+    return mode
+
+
 def replayable(path):
     """Whether the run recorded enough to fly its episodes again (runs from before replays did not)."""
     from tools.trainer.settings import config_of
     config = config_of(Path(path)) or {}
+    try:
+        if _task(Path(path)).capabilities.replay_mode is None:
+            return False
+    except ValueError:            # an unknown task: the episodes request names it
+        pass
     return 'shaping' in config and 'episode' in config
 
 
@@ -37,11 +58,8 @@ def _jobs(path, iteration):
 def episodes(run, iteration, root=RL_ROOT):
     """The iteration's episodes as training flew them, each with its level: quick, nothing is flown."""
     path = _run_dir(root, run, iteration)
-    from tools.trainer.settings import config_of
-    from learning.tasks import task
-    adapter = task((config_of(path) or {}).get('task','hunter')).replay()
-    if adapter is not None:
-        return adapter.episodes(path, iteration)
+    if _replay_mode(path) == 'hooks':
+        return _task(path).replay().episodes(path, iteration)
     return [{'episode': i, 'level': level, 'seed': seed} for i, (level, seed, _) in enumerate(_jobs(path, iteration))]
 
 
@@ -49,10 +67,7 @@ def fly(run, iteration, root=RL_ROOT, workers=8):
     """The iteration's episodes flown again, with how each went. Takes a while, and slows any training."""
     from tools.watch_episode import fly_all
     path = _run_dir(root, run, iteration)
-    from tools.trainer.settings import config_of
-    from learning.tasks import task
-    adapter = task((config_of(path) or {}).get('task','hunter')).replay()
-    if adapter is not None:
+    if _replay_mode(path) == 'hooks':
         return _fly_apart(path, iteration)
     _jobs(path, iteration)
     return [{'episode': i, 'level': level, 'panic': panic, 'return': ret, 'kills': kills, 'end': end,
@@ -87,8 +102,7 @@ def watch(run, iteration, episode, speed=1.0, root=RL_ROOT, launch=None):
         raise TrainerError(f'the speed must be one of {", ".join(f"{s:g}" for s in SPEEDS)}')
     command = [sys.executable, '-m', 'tools.watch_episode', str(path), str(iteration), str(episode),
                '--speed', f'{speed:g}']
-    from tools.trainer.settings import config_of
-    if (config_of(path) or {}).get('task','hunter')!='hunter':
+    if _replay_mode(path) == 'hooks':    # check the recorded rules still replay before opening a window
         import subprocess
         try:
             checked=subprocess.run(command+['--check'],capture_output=True,text=True,timeout=20)

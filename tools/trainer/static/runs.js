@@ -1,5 +1,5 @@
 // The runs: the status strip with its Pause/Resume/Stop buttons, the run list, and which run the charts show.
-import {S,UNTAGGED,$,esc} from './state.js';
+import {S,$,esc,taskOf,capabilities} from './state.js';
 import {api,post} from './api.js';
 import {savedChartStart} from './charts.js';
 import {render,withAliases} from './layout.js';
@@ -8,13 +8,13 @@ import {fillFrom,renderStart} from './settings-form.js';
 import {fillReplay} from './replay.js';
 
 export async function refresh(){if(!S.VIEW)return;const asked=S.VIEW;try{const r=await fetch(`api/runs/${S.VIEW}/data`,{cache:'no-store'});if(r.ok){const n=await r.json();withAliases(n);if(asked===S.VIEW&&n.length!==S.D.length){S.D=n;render()}}}catch(e){}}
-export function currentTask(){return (S.RUNS.find(r=>r.name===S.STATUS?.run)||S.RUNS.at(-1))?.task||'hunter'}
+export function currentTask(){return taskOf(S.RUNS.find(r=>r.name===S.STATUS?.run)||S.RUNS.at(-1))}
 export function taskLabel(key){return S.SCHEMA?.tasks.find(t=>t.key===key)?.label||key}
 export function syncCreature(){
   const run=S.STATUS?.run||S.RUNS.at(-1)?.name;
   if(run===S.DEFAULT_RUN)return;
   S.DEFAULT_RUN=run;$('task').value=currentTask();
-  $('fresh-team').disabled=$('task').value==='hunter';
+  $('fresh-team').disabled=!capabilities($('task').value).fresh_weights;
   $('from-run').value='';fillFrom();fillReplay();
 }
 
@@ -58,7 +58,7 @@ export async function loadRuns(){
     sel.value=keep;renderStart();
     if(S.VIEW&&viewTask()!==S.VIEW_TASK){S.VIEW_TASK=viewTask();render()}}catch(e){}
 }
-export function viewTask(){return S.RUNS.find(r=>r.name===S.VIEW)?.task||UNTAGGED}
+export function viewTask(){return taskOf(S.RUNS.find(r=>r.name===S.VIEW))}
 export function setView(run){if(run===S.VIEW)return;S.VIEW=run;S.VIEW_TASK=viewTask();S.D=[];S.CHART_START=savedChartStart(run);$('chart-start').value=String(S.CHART_START);$('rules').innerHTML='';render();refresh();loadRules()}
 export function initRuns(){
   $('view-run').onchange=()=>{const v=$('view-run').value;S.FOLLOW=!v;setView(v||S.STATUS?.run||null)};
