@@ -183,3 +183,13 @@ def test_a_run_can_start_straight_in_the_cave_lesson():
     state = scenario.initial_curriculum(args)
     assert scenario.curriculum_key(state) == 'cave'
     assert {c['lesson'] for c in scenario.training_cases(0, 8, 1, curriculum=state)} == {'cave'}
+
+
+def test_a_run_capped_at_stage_one_stays_on_solo_navigation_however_well_it_does():
+    args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2', '--jelly-max-stage', '1'])
+    state = scenario.initial_curriculum(args)
+    great = dict(episodes=96, catches_per_minute=99., stuck_fraction=0., navigation_lesson=2, angular_spread=1.,
+                 team_catches_per_minute=99.)
+    assert scenario.curriculum_promote(1, great, state) == 1
+    uncapped = scenario.initial_curriculum(ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2']))
+    assert scenario.curriculum_promote(1, great, uncapped) == 2

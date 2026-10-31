@@ -575,7 +575,8 @@ def metadata(args):
                            'validation_cases': validation_cases()},
                 navigation=jelly_curriculum.metadata(),
                 training_limits=dict(no_catch_timeout_seconds=configured['no_catch_timeout'],
-                                     start_lesson=int(configured['start_lesson'])),
+                                     start_lesson=int(configured['start_lesson']),
+                                     max_stage=int(configured['max_stage'])),
                 boredom=dict(window_seconds=configured['boredom_window'], distance_pixels=configured['boredom_distance']),
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',
@@ -871,6 +872,8 @@ def curriculum_selection_score(summary, state):
 
 def curriculum_promote(stage, summary, state):
     if state['stage'] < 2 or summary.get('navigation_lesson', 0) < 2:
+        return stage
+    if stage >= state['environment']['rewards']['max_stage']:
         return stage
     key = ('navigation_promotion', stage, state['horizon'], str(state['environment']))
     if key not in _baselines:

@@ -6,6 +6,7 @@ DEFAULTS = {
     'death_penalty': 5., 'team_death_share': .25,
     'boredom_penalty': 0., 'boredom_window': 2., 'boredom_distance': 10.,
     'start_lesson': 0.,       # navigation lesson a run begins in (0 open, 1 barrier, 2 cave); a trained start may skip ahead
+    'max_stage': 3.,          # the last stage a run may be promoted to (1 keeps it on solo navigation)
     'no_catch_timeout': 0.,   # training rollouts only: end an episode this many seconds after its last catch (0: never)
 }
 # setting -> (manifest block, field, multiplier); penalties are recorded as negative reward terms.
@@ -14,6 +15,7 @@ MANIFEST_FIELDS = {
     'boredom_window': ('boredom', 'window_seconds', 1),
     'boredom_distance': ('boredom', 'distance_pixels', 1),
     'start_lesson': ('training_limits', 'start_lesson', 1),
+    'max_stage': ('training_limits', 'max_stage', 1),
     'no_catch_timeout': ('training_limits', 'no_catch_timeout_seconds', 1),
     'catch_reward': ('rewards', 'catch', 1),
     'team_catch_share': ('rewards', 'team_catch_share', 1),
