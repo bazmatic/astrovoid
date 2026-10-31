@@ -17,11 +17,12 @@ FULL = 3.                  # pre-tanh activation the teacher uses for "full" (ta
 
 HEADS = (('heading', 2), ('accel', 2))
 SELF = ('speed', 'heading_sin', 'heading_cos', 'velocity_forward', 'velocity_side') + tuple(f'ray_{i}' for i in range(RAYS))
-TARGET = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'closing_speed')
+TARGET = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'closing_speed',
+          'route_present', 'route_bearing_sin', 'route_bearing_cos', 'route_distance')
 TEAM = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'heading_sin', 'heading_cos', 'speed')
 FEATURES = SELF + tuple(f'target_{n}' for n in TARGET)
 FEATURES += tuple(f'teammate{i}_{n}' for i in range(TEAMMATES) for n in TEAM)
-SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=2, continuous=('heading', 'accel'))
+SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=3, continuous=('heading', 'accel'))
 CRITIC_TARGETS = 4
 CRITIC_MEMBERS = 8
 CRITIC_SIZE = 2*5 + CRITIC_TARGETS*5 + CRITIC_MEMBERS*7
@@ -63,6 +64,56 @@ def relative(c, f, pos):
     return math.sin(bearing), math.cos(bearing), min(1., d/DISTANCE_SCALE)
 
 
+class Guide:
+    """Where Jelly c should head to reach pos: `waypoint` (None when no body-clear one exists) and the walking
+    `distance` to pos along the cell route (None when pos is unreachable)."""
+    def __init__(self, waypoint, distance):
+        self.waypoint, self.distance = waypoint, distance
+
+
+def route_guide(c, enc, pos):
+    """Straight at pos when the body fits through; else the furthest body-clear waypoint on the open cell route
+    (the current cell centre included, since smoothing a corner can leave the body unable to reach the next cell
+    directly). The teacher steers by it and the policy senses it, so what the teacher does follows from what the
+    Jelly sees. Cached per position pair: observation, teacher and progress ask in the same state."""
+    cache = getattr(enc, '_jelly_guides', None)
+    if cache is None:
+        enc._jelly_guides = cache = {}
+    key = (c.x, c.y, pos[0], pos[1], sum(1 for w in enc.maze.walls if w.active), getattr(enc.maze, 'wall_generation', 0),
+           tuple(g.active for g in getattr(enc.maze, 'gate_segments', ())))
+    hit = cache.get(id(c))
+    if hit is not None and hit[0] == key:
+        return hit[1]
+    here = c.get_pos()
+    if path_clear(c, enc, pos):
+        guide = Guide(pos, math.dist(here, pos))
+    else:
+        routes = getattr(enc, '_jelly_teacher_routes', None)
+        if routes is None:
+            enc._jelly_teacher_routes = routes = MazeRoutes()
+        found = routes.route(enc.maze, here, [pos])
+        if found is None:
+            guide = Guide(None, None)
+        else:
+            maze = enc.maze
+            centre = (maze.offset_x + (int((c.x-maze.offset_x)//maze.cell_size_x)+.5)*maze.cell_size_x,
+                      maze.offset_y + (int((c.y-maze.offset_y)//maze.cell_size_y)+.5)*maze.cell_size_y)
+            points = found[1] + [centre]
+            waypoint = next((p for p in points if math.dist(here, p) > 1 and path_clear(c, enc, p)), None)
+            if waypoint is None:
+                # Moving gates can already overlap a spawn. Allow an escape along a clear centre line instead of
+                # demanding body clearance at a starting position that does not have it.
+                overlapping = any(w.active and capsule_hits(here, here, c.radius+.2, w.start, w.end)
+                                  for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ())))
+                if overlapping:
+                    waypoint = next((p for p in points if math.dist(here, p) > 1
+                                     and not wall_between(here, p, maze)), None)
+            line = [here] + found[1][::-1] + [pos]
+            guide = Guide(waypoint, sum(math.dist(a, b) for a, b in zip(line, line[1:])))
+    cache[id(c)] = (key, guide)
+    return guide
+
+
 def observe(team, c):
     enc = team.enc
     f = facing(c)
@@ -81,6 +132,12 @@ def observe(team, c):
         tvx, tvy = getattr(entity, 'vx', 0.), getattr(entity, 'vy', 0.)
         closing = -((tvx-c.vx)*dx + (tvy-c.vy)*dy)/dist
         x += [1., bs, bc, d, clip(closing/CLOSING_SCALE)]
+        guide = route_guide(c, enc, pos)
+        if guide.waypoint is None:
+            x += [0., 0., 0., 0. if guide.distance is None else min(1., guide.distance/DISTANCE_SCALE)]
+        else:
+            wbs, wbc, _ = relative(c, f, guide.waypoint)
+            x += [1., wbs, wbc, min(1., guide.distance/DISTANCE_SCALE)]
     others = sorted((o for o in team.members() if o is not c),
                     key=lambda o: (math.dist(c.get_pos(), o.get_pos()), o.agent_id))[:TEAMMATES]
     for i in range(TEAMMATES):
@@ -140,35 +197,15 @@ def critic(team, focal_agent=None):
 def teacher(c, enc):
     """Follow the furthest body-clear waypoint on an open cell route to the quarry.
 
-    The teacher may inspect the maze; the student's observations remain unchanged. Route links are cached for this
-    encounter and invalidated by MazeRoutes when walls change. Missing routes fall back to local wall following;
-    braking is the last resort when no body-clear escape is available.
+    The student senses the same waypoint (route_guide), so the teacher's heading follows from the observation. Route
+    links are cached for this encounter and invalidated by MazeRoutes when walls change. Missing routes fall back to
+    local wall following; braking is the last resort when no body-clear escape is available.
     """
     pos = enc.target_for(c)
     if pos is None:
         return 0., 0.
-    waypoint = pos if path_clear(c, enc, pos) else None
-    if waypoint is None:
-        routes = getattr(enc, '_jelly_teacher_routes', None)
-        if routes is None:
-            enc._jelly_teacher_routes = routes = MazeRoutes()
-        found = routes.route(enc.maze, c.get_pos(), [pos])
-        if found is not None:
-            maze = enc.maze
-            # Include the current cell centre: smoothing a corner can leave the body unable to reach the next cell
-            # directly, even though returning to the centre makes that turn possible.
-            centre = (maze.offset_x + (int((c.x-maze.offset_x)//maze.cell_size_x)+.5)*maze.cell_size_x,
-                      maze.offset_y + (int((c.y-maze.offset_y)//maze.cell_size_y)+.5)*maze.cell_size_y)
-            points = found[1] + [centre]
-            waypoint = next((p for p in points if math.dist(c.get_pos(), p) > 1 and path_clear(c, enc, p)), None)
-            if waypoint is None:
-                # Moving gates can already overlap a spawn. Allow an escape along a clear centre line instead of
-                # demanding body clearance at a starting position that does not have it.
-                overlapping = any(w.active and capsule_hits(c.get_pos(), c.get_pos(), c.radius+.2, w.start, w.end)
-                                  for w in list(maze.walls) + list(getattr(maze, 'gate_segments', ())))
-                if overlapping:
-                    waypoint = next((p for p in points if math.dist(c.get_pos(), p) > 1
-                                     and not wall_between(c.get_pos(), p, maze)), None)
+    guide = route_guide(c, enc, pos)
+    waypoint = guide.waypoint
     if waypoint is None:
         from learning.adapters.jelly_wall_follow import waypoint as follow_wall
         waypoint = follow_wall(c, enc, pos)
@@ -209,6 +246,24 @@ class JellyDriver:
             action, self.states[i] = self.policy.choose(batch[i][0], state, batch[i][1], self.greedy, rng)
             intents[i] = intention(action, facing(c))
         team.commit(intents)
+
+
+def load_transfer_policy(path):
+    """A checkpoint of an older observation layout, carried over: features it already had keep their weights and
+    normalisation, and each new feature starts with zero weights, so the migrated Jelly behaves exactly as the old one
+    did until training finds a use for the new inputs."""
+    old = RecurrentPolicy.load(path)
+    if old.spec == SPEC:
+        return old
+    if old.spec.task != SPEC.task or old.spec.heads != SPEC.heads or old.spec.continuous != SPEC.continuous:
+        raise ValueError('checkpoint is not a Jelly policy with these action heads')
+    where = {name: i for i, name in enumerate(old.spec.features)}
+    embed = np.zeros((old.params['embed_w'].shape[0], len(FEATURES)), np.float32)
+    mean, scale = np.zeros(len(FEATURES), np.float32), np.ones(len(FEATURES), np.float32)
+    for i, name in enumerate(FEATURES):
+        if name in where:
+            embed[:, i], mean[i], scale[i] = old.params['embed_w'][:, where[name]], old.mean[where[name]], old.scale[where[name]]
+    return RecurrentPolicy(dict(old.params, embed_w=embed), mean, scale, SPEC)
 
 
 def load_policy(path):

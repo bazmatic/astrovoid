@@ -1055,21 +1055,21 @@ def test_training_pulls_the_policy_toward_what_the_teacher_would_do_in_the_state
     finally:
         env.close()
     assert any(t is not None for t in episodes[0]['teacher'])
-    net = build_network(policy, adapter.CRITIC_SIZE)
     x = torch.as_tensor(np.asarray(episodes[0]['x']), dtype=torch.float32)[None]
     critic = torch.as_tensor(np.asarray(episodes[0]['critic']), dtype=torch.float32)[None]
     taught = torch.as_tensor([t is not None for t in episodes[0]['teacher']])
     target = torch.as_tensor([t[0] if t else 0. for t in episodes[0]['teacher']]).tanh()
 
-    def gap():
+    def gap_after_training(teacher_weight):
+        torch.manual_seed(0)
+        net = build_network(policy, adapter.CRITIC_SIZE)
+        optimiser = torch.optim.Adam(net.parameters(), lr=3e-3)
+        rng = np.random.default_rng(0)
+        for _ in range(30):
+            update_team(net, optimiser, episodes, rng, teacher_weight=teacher_weight, teacher_heads=('heading', 'accel'))
         with torch.no_grad():
             return float((net(x, critic)[0]['heading'][0, :, 0].tanh()-target)[taught].square().mean())
-    before = gap()
-    optimiser = torch.optim.Adam(net.parameters(), lr=3e-3)
-    rng = np.random.default_rng(0)
-    for _ in range(30):
-        update_team(net, optimiser, episodes, rng, teacher_weight=1., teacher_heads=('heading', 'accel'))
-    assert gap() < before * .7
+    assert gap_after_training(10.) < gap_after_training(0.) * .7
 
 
 def test_neural_jellies_switch_replaces_every_campaign_jelly_and_leaves_other_enemies(monkeypatch):
@@ -1078,3 +1078,38 @@ def test_neural_jellies_switch_replaces_every_campaign_jelly_and_leaves_other_en
     monkeypatch.setenv('NEURAL_JELLIES', '1')
     assert make_enemy('aggressive', POS, 5, None).kind.key == 'neural_jelly'
     assert make_enemy('static', POS, 5, None).kind.key == 'static'
+
+
+def test_a_jelly_senses_the_way_round_a_wall_not_just_the_direction_of_its_target():
+    from maze.wall_segment import WallSegment
+    wall = WallSegment((200, 0), (200, 200), 3)
+    (jelly,), enc, team = team_scene(positions=((150., 150.),), ship=target((250., 150.)))
+    jelly.jelly_facing = 0.
+    enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
+                                     offset_x=0, offset_y=0, grid_width=4, grid_height=4)
+    x, _, _ = adapter.observe(team, jelly)
+    assert abs(feature(x, 'target_bearing_sin')) < .01        # the target is dead ahead, behind the wall
+    assert feature(x, 'target_route_present') == 1.
+    assert feature(x, 'target_route_bearing_sin') > .3        # but the way round starts off to the side
+    assert feature(x, 'target_route_distance') * adapter.DISTANCE_SCALE > 100 + 1   # longer than the straight line
+    wall.active = False
+    x, _, _ = adapter.observe(team, jelly)
+    assert abs(feature(x, 'target_route_bearing_sin')) < .01   # nothing in the way: straight at it
+    assert math.isclose(feature(x, 'target_route_distance'), 100 / adapter.DISTANCE_SCALE, rel_tol=1e-3)
+
+
+
+def test_an_older_jelly_checkpoint_migrates_and_behaves_as_before_until_it_learns_to_use_the_new_inputs(tmp_path):
+    old_features = tuple(f for f in adapter.FEATURES if 'route' not in f)
+    old_spec = PolicySpec(adapter.SPEC.task, old_features, adapter.SPEC.heads, 2, adapter.SPEC.continuous)
+    old = random_policy(old_spec, 4)
+    old.mean[:] = np.linspace(-1, 1, len(old_features))
+    old.save(tmp_path/'old.npz')
+    migrated = adapter.load_transfer_policy(str(tmp_path/'old.npz'))
+    assert migrated.spec == adapter.SPEC
+    senses = np.random.default_rng(0).uniform(-1, 1, len(adapter.FEATURES)).astype(np.float32)
+    kept = np.array([f in old_features for f in adapter.FEATURES])
+    old_out, _ = old.step(senses[kept], old.initial_state())
+    new_out, _ = migrated.step(senses, migrated.initial_state())   # the route inputs are non-zero and change nothing
+    for head in old_out:
+        assert np.allclose(old_out[head], new_out[head], atol=1e-5)

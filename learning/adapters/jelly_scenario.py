@@ -22,7 +22,7 @@ import numpy as np
 
 from learning.environment import Snapshot, Transition
 from learning import jelly_rewards, jelly_curriculum
-from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled, facing
+from learning.adapters.jelly import SPEC, CRITIC_SIZE, observe, critic, intention, teacher, enabled, facing, route_guide, load_transfer_policy
 from learning.adapters.crawler_scenario import TRAIN_LEVELS as CRAWLER_TRAIN_LEVELS, HOLDOUT_LEVELS, SilentSound
 from creatures.jelly_team import DECISION_FRAMES
 from creatures.traits.rooted import wall_between
@@ -271,11 +271,14 @@ class JellyEnvironment:
         self.generation[id(target)] += 1
 
     def pursuit(self, c):
-        """The Jelly's current target, its respawn generation and the distance to it."""
+        """The Jelly's current target, its respawn generation and the distance to it: along the open route when there
+        is one, so only getting nearer by the way round is progress (pushing at a wall that blocks the straight
+        line is not)."""
         t = self.enc.target_entity_for(c)
         if t is None:
             return None
-        return id(t), self.generation[id(t)], math.dist(c.get_pos(), t.get_pos())
+        distance = route_guide(c, self.enc, t.get_pos()).distance
+        return id(t), self.generation[id(t)], math.dist(c.get_pos(), t.get_pos()) if distance is None else distance
 
     def snapshot(self):
         batch = {c.agent_id: observe(self.team, c) for c in self.team.members()}
@@ -546,7 +549,7 @@ def metadata(args):
                if block == 'rewards'}
     # Version 6: the navigation curriculum (open pursuit, a barrier, then caves) is the only mode, and the boredom
     # rule is always recorded.
-    result = dict(task=SPEC.task, scenario_version=7, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    result = dict(task=SPEC.task, scenario_version=8, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': configured['team_catch_share']},
