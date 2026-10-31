@@ -46,6 +46,9 @@ def make_handler(root, processes, launch, allowed_hosts=()):
                 return self.send(200, runs.status(root, processes()))
             if path == '/api/runs':
                 return self.send(200, [dict(run_json(r), task=(config_of(r.path) or {}).get('task', 'hunter')) for r in runs.list_runs(root, processes())])
+            if path == '/api/tasks':
+                from learning import dashboard
+                return self.send(200, dashboard.resolve_all())
             if path == '/api/settings':
                 from learning.tasks import TASKS
                 return self.send(200, {'settings': [asdict(s) for s in SETTINGS], 'levels': available_levels(),
