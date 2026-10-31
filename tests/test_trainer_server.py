@@ -293,3 +293,45 @@ def test_the_server_flies_a_jelly_run_without_a_window_and_still_stops_on_sigter
         if child.poll() is None:
             child.kill()
         child.wait()
+
+
+def raw_get(setup, path):
+    """A GET that sends `path` exactly as written (urllib would tidy some of it)."""
+    import http.client
+    connection = http.client.HTTPConnection(setup['url'].split('//', 1)[1])
+    try:
+        connection.request('GET', path)
+        response = connection.getresponse()
+        return response.status, response.getheader('Content-Type'), response.read()
+    finally:
+        connection.close()
+
+
+def test_static_serves_every_script_and_stylesheet_the_page_loads_with_content_types(setup):
+    import re
+    status, _, page = raw_get(setup, '/')
+    assert status == 200
+    wanted = re.findall(r'(?:href|src)="(static/[^"]+)"', page.decode())
+    assert 'static/main.js' in wanted and 'static/style.css' in wanted
+    kinds = {'.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8'}
+    seen = set()
+    while wanted:                                       # the page's files and every module they import
+        url = wanted.pop()
+        if url in seen:
+            continue
+        seen.add(url)
+        status, kind, body = raw_get(setup, '/' + url)
+        assert status == 200, url
+        assert kind == kinds[url[url.rindex('.'):]], url
+        wanted += ['static/' + name for name in re.findall(r"""from\s+['"]\./([^'"]+)['"]""", body.decode())]
+    assert len(seen) > 3
+
+
+@pytest.mark.parametrize('path', ['/static/../server.py', '/static/%2e%2e/server.py', '/static/..%2fserver.py',
+                                  '/static/%2E%2E%2Fserver.py', '/static//etc/passwd', '/static/%2fetc%2fpasswd',
+                                  '/static/x.html', '/static/x.py', '/static/main.js/', '/static/', '/static',
+                                  '/static/missing.js', '/static/main.JS', '/static/.css'])
+def test_static_refuses_traversal_encoded_separators_absolute_paths_and_other_files(setup, path):
+    status, _, body = raw_get(setup, path)
+    assert status == 404
+    assert b'make_handler' not in body and b'root:' not in body

@@ -12,6 +12,9 @@ from tools.trainer.processes import REPO, list_processes
 from tools.trainer.settings import SETTINGS, config_of, read_settings
 
 PAGE = Path(__file__).with_name('page.html')
+STATIC = Path(__file__).with_name('static').resolve()
+STATIC_PATH = re.compile(r'/static/([A-Za-z0-9_-]+\.(js|css))')
+STATIC_KINDS = {'js': 'text/javascript; charset=utf-8', 'css': 'text/css; charset=utf-8'}
 RUN_PATH = re.compile(r'/api/runs/(run\d+)/(data|config|settings)')
 
 
@@ -38,10 +41,20 @@ def make_handler(root, processes, launch, allowed_hosts=()):
             self.end_headers()
             self.wfile.write(data)
 
+        def static_file(self, match):
+            """One of the page's own scripts or stylesheets: a plain name, never a path, from the static folder only."""
+            file = (STATIC / match.group(1)).resolve()
+            if file.parent != STATIC or not file.is_file():
+                return self.send(404, {'error': 'not found'})
+            return self.send(200, file.read_bytes(), STATIC_KINDS[match.group(2)])
+
         def do_GET(self):
             path = self.path.split('?')[0]
             if path in ('/', '/index.html'):
                 return self.send(200, PAGE.read_bytes(), 'text/html; charset=utf-8')
+            static = STATIC_PATH.fullmatch(path)
+            if static:
+                return self.static_file(static)
             if path == '/api/status':
                 return self.send(200, runs.status(root, processes()))
             if path == '/api/runs':
