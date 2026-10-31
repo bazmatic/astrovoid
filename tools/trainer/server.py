@@ -111,6 +111,8 @@ def make_handler(root, processes, launch, allowed_hosts=()):
                     return self.send(200, {'watching': body.get('episode')})
             except TrainerError as e:
                 return self.send(409, {'error': str(e)})
+            except Exception as e:      # an uncaught error drops the connection and the page only sees "Failed to fetch"
+                return self.send(500, {'error': f'{path} failed: {type(e).__name__}: {e}'})
             self.send(404, {'error': 'not found'})
 
         def log_message(self, *args):

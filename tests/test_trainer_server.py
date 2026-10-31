@@ -169,6 +169,16 @@ def test_a_run_from_before_replays_says_so(setup):
     assert code == 409 and body['error'].startswith('run52 cannot be replayed')
 
 
+def test_an_unexpected_replay_failure_answers_with_a_json_error(setup):
+    """A server whose task list predates the run's task (a dashboard left running across a new task) raised
+    ValueError, which dropped the connection: the page could only say "Failed to fetch"."""
+    run = replayable(setup)
+    config = json.loads((run / 'config.json').read_text())
+    (run / 'config.json').write_text(json.dumps(dict(config, task='no_such_task')))
+    code, body = post(setup, '/api/episodes', {'run': 'run52', 'iteration': 2})
+    assert code == 500 and 'unknown training task: no_such_task' in body['error']
+
+
 def test_flying_reports_how_each_episode_went(setup, monkeypatch):
     replayable(setup)
     import tools.watch_episode as watch_episode
