@@ -111,7 +111,10 @@
       "takesHits": {
         "hitPoints": 1
       },
-      "dropsPickup": {}
+      "dropsPickup": {},
+      "keepsApart": {
+        "crowd": "chasers"
+      }
     }
   },
   "replay": {

@@ -1113,3 +1113,19 @@ def test_an_older_jelly_checkpoint_migrates_and_behaves_as_before_until_it_learn
     new_out, _ = migrated.step(senses, migrated.initial_state())   # the route inputs are non-zero and change nothing
     for head in old_out:
         assert np.allclose(old_out[head], new_out[head], atol=1e-5)
+
+
+def test_neural_jellies_do_not_overlap_each_other_or_the_scripted_ones():
+    neural = [creatures.build('neural_jelly', p, 5) for p in ((300., 300.), (300., 300.), (304., 300.))]
+    scripted = creatures.build('aggressive', (302., 301.), 5)
+    enc = encounter(*neural, scripted, world_=world(ship=target((600., 300.))))
+    enc.ready()
+    team = get_jelly_team(enc)
+    team.external = True
+    team.commit({c.agent_id: Intent(heading=0., accel=1.) for c in team.members()})   # all pushing the same way
+    for _ in range(30):
+        enc.step(1.0)
+    bodies = neural + [scripted]
+    for i, a in enumerate(bodies):
+        for b in bodies[i + 1:]:
+            assert math.dist(a.get_pos(), b.get_pos()) >= a.radius + b.radius - 1e-6
