@@ -33,3 +33,25 @@ def status(env, job):
     for c in env.team.members():
         lines.append(f'{c.agent_id}: return {env.agent_returns[c.agent_id]:.2f}')
     return lines
+
+
+ROUTE_COLOUR, WAYPOINT_COLOUR = (70, 150, 200), (255, 215, 60)
+
+
+def draw(env, screen):
+    """The game's own drawing, plus each Jelly's route to its target (blue) and the waypoint it is steering for
+    (yellow): what the policy senses as its compass."""
+    import pygame
+    from learning.replay import _draw_world
+    from learning.adapters.jelly import route_guide
+    _draw_world(env, screen)
+    for c in env.team.members():
+        target = env.enc.target_entity_for(c)
+        if target is None:
+            continue
+        guide = route_guide(c, env.enc, target.get_pos())
+        if len(guide.path) > 1:
+            pygame.draw.lines(screen, ROUTE_COLOUR, False, guide.path, 2)
+        if guide.waypoint is not None:
+            pygame.draw.line(screen, WAYPOINT_COLOUR, c.get_pos(), guide.waypoint, 2)
+            pygame.draw.circle(screen, WAYPOINT_COLOUR, guide.waypoint, 6, 2)

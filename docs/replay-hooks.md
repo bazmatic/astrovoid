@@ -46,4 +46,4 @@ the events. `watch(path, iteration, episode, speed)` flies one episode in a 1352
   opponent) and per-crawler status lines.
 - `learning/adapters/jelly_replay.py` (`jelly_team`): no opponent; the saved horizon and arenas rebuild
   `JellyEnvironment`, and a changed `scenario_version` or any other rule rejects the recording. Return is the summed
-  team reward; ends are `horizon`, `ship_killed` or `team_dead`. Draws with the default world drawing.
+  team reward; ends are `horizon`, `ship_killed` or `team_dead`. Draws the default world drawing plus each Jelly's route (blue) and the waypoint it steers for (yellow).

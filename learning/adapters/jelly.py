@@ -67,8 +67,8 @@ def relative(c, f, pos):
 class Guide:
     """Where Jelly c should head to reach pos: `waypoint` (None when no body-clear one exists) and the walking
     `distance` to pos along the cell route (None when pos is unreachable)."""
-    def __init__(self, waypoint, distance):
-        self.waypoint, self.distance = waypoint, distance
+    def __init__(self, waypoint, distance, path=()):
+        self.waypoint, self.distance, self.path = waypoint, distance, tuple(path)   # path: the route, for drawing
 
 
 def route_guide(c, enc, pos):
@@ -86,7 +86,7 @@ def route_guide(c, enc, pos):
         return hit[1]
     here = c.get_pos()
     if path_clear(c, enc, pos):
-        guide = Guide(pos, math.dist(here, pos))
+        guide = Guide(pos, math.dist(here, pos), (here, pos))
     else:
         routes = getattr(enc, '_jelly_teacher_routes', None)
         if routes is None:
@@ -109,7 +109,7 @@ def route_guide(c, enc, pos):
                     waypoint = next((p for p in points if math.dist(here, p) > 1
                                      and not wall_between(here, p, maze)), None)
             line = [here] + found[1][::-1] + [pos]
-            guide = Guide(waypoint, sum(math.dist(a, b) for a, b in zip(line, line[1:])))
+            guide = Guide(waypoint, sum(math.dist(a, b) for a, b in zip(line, line[1:])), line)
     cache[id(c)] = (key, guide)
     return guide
 

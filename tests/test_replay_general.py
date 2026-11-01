@@ -133,3 +133,19 @@ def test_jelly_replay_accepts_a_run_with_its_copied_opponent_file(tmp_path):
     assert settings['manifest']['opponent_sha256'] is not None
     replay.open_environment(tmp_path).close()
     assert replay.fly(tmp_path, 0)[0]['seconds'] == pytest.approx(.2)
+
+
+def test_the_jelly_replay_scene_draws_each_jellys_route_and_waypoint():
+    import pygame
+    from learning.adapters import jelly_replay, jelly_scenario
+    env = jelly_scenario.JellyEnvironment(horizon=5.)
+    pygame.init()
+    screen = pygame.Surface((1352, 878))
+    try:
+        env.reset(5, level=14, lesson='cave')
+        screen.fill((0, 0, 0))
+        jelly_replay.draw(env, screen)
+        colours = {tuple(screen.get_at((x, y)))[:3] for x in range(0, 1352, 2) for y in range(0, 878, 2)}
+        assert jelly_replay.WAYPOINT_COLOUR in colours       # the waypoint marker is on screen
+    finally:
+        env.close()
