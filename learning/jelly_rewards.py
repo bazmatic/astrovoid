@@ -6,6 +6,7 @@ DEFAULTS = {
     'death_penalty': 5., 'team_death_share': .25,
     'boredom_penalty': 0., 'boredom_window': 2., 'boredom_distance': 10.,
     'start_lesson': 0.,       # navigation lesson a run begins in (0 open, 1 barrier, 2 cave); a trained start may skip ahead
+    'dagger_weight': .5,      # how hard training pulls the policy toward the teacher's moves in its own states (0: no teacher)
     'max_stage': 3.,          # the last stage a run may be promoted to (1 keeps it on solo navigation)
     'no_catch_timeout': 0.,   # training rollouts only: end an episode this many seconds after its last catch (0: never)
 }
@@ -15,6 +16,7 @@ MANIFEST_FIELDS = {
     'boredom_window': ('boredom', 'window_seconds', 1),
     'boredom_distance': ('boredom', 'distance_pixels', 1),
     'start_lesson': ('training_limits', 'start_lesson', 1),
+    'dagger_weight': ('training_limits', 'dagger_weight', 1),
     'max_stage': ('training_limits', 'max_stage', 1),
     'no_catch_timeout': ('training_limits', 'no_catch_timeout_seconds', 1),
     'catch_reward': ('rewards', 'catch', 1),

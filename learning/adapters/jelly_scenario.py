@@ -93,6 +93,12 @@ class JellyEnvironment:
         self.world = None
         self.render_frames = None
 
+    @property
+    def teacher_weight(self):
+        """DAgger: while the Jelly flies its own episodes, the teacher is asked what it would do in every state it
+        reaches, and the policy is pulled toward those answers with this weight (0: no teacher)."""
+        return self.rewards['dagger_weight']
+
     def enable_training_limits(self):
         """Training rollouts may end an episode early (no_catch_timeout); evaluation and replay never do."""
         self.training_limits = True
@@ -526,9 +532,6 @@ def environment_options(manifest):
 # Scenario policy belongs to this adapter, not to the optimiser or run manager.
 INITIAL_STAGE = 1
 IMITATION_HEADS = ('heading', 'accel')
-# DAgger: while the Jelly flies its own episodes, the teacher is asked what it would do in every state the Jelly reaches,
-# and the policy is pulled toward those answers (weight of the squared error between tanh outputs).
-DAGGER_WEIGHT = .5
 REWARDS = {'catch': CATCH_REWARD, 'team_catch_share': TEAM_CATCH_SHARE, 'progress_per_pixel': PROGRESS_REWARD,
            'stuck_per_decision': -STUCK_PENALTY, 'stage2_flank_per_decision': FLANK_REWARD,
            'stage2_bunch_per_pair_decision': -BUNCH_PENALTY, 'stage3_ship_hit': SHIP_HIT_REWARD,
@@ -578,7 +581,8 @@ def metadata(args):
                 navigation=jelly_curriculum.metadata(),
                 training_limits=dict(no_catch_timeout_seconds=configured['no_catch_timeout'],
                                      start_lesson=int(configured['start_lesson']),
-                                     max_stage=int(configured['max_stage'])),
+                                     max_stage=int(configured['max_stage']),
+                                     dagger_weight=configured['dagger_weight']),
                 boredom=dict(window_seconds=configured['boredom_window'], distance_pixels=configured['boredom_distance']),
                 ship={'kind': SHIP_KIND, 'creature': dataclasses.asdict(enemy_kinds.kind(SHIP_KIND)),
                       'pilot': 'frozen_neural_hunter_greedy',
@@ -881,3 +885,7 @@ def curriculum_promote(stage, summary, state):
     if key not in _baselines:
         _baselines[key] = scripted_metrics(evaluation_cases(stage), state['horizon'], **state['environment'])
     return promote(stage, summary, _baselines[key])
+
+
+def teacher_weight(args):
+    return args.jelly_dagger_weight

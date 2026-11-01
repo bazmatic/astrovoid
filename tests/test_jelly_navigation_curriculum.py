@@ -193,3 +193,14 @@ def test_a_run_capped_at_stage_one_stays_on_solo_navigation_however_well_it_does
     assert scenario.curriculum_promote(1, great, state) == 1
     uncapped = scenario.initial_curriculum(ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2']))
     assert scenario.curriculum_promote(1, great, uncapped) == 2
+
+
+def test_the_teacher_can_be_switched_off_for_a_run():
+    on = ppo_neural.build_parser().parse_args(['--task', 'jelly_team'])
+    off = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-dagger-weight', '0'])
+    assert scenario.teacher_weight(on) > 0 and scenario.teacher_weight(off) == 0
+    env = scenario.environment(**scenario.environment_options(dict(scenario.metadata(off), training={})))
+    try:
+        assert env.teacher_weight == 0
+    finally:
+        env.close()
