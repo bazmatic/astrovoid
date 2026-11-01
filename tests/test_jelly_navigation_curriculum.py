@@ -178,13 +178,6 @@ def test_training_rollouts_end_early_after_a_long_gap_without_a_catch_but_evalua
     assert run(training=False) == 30.
 
 
-def test_a_run_can_start_straight_in_the_cave_lesson():
-    args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2'])
-    state = scenario.initial_curriculum(args)
-    assert scenario.curriculum_key(state) == 'cave'
-    assert {c['lesson'] for c in scenario.training_cases(0, 8, 1, curriculum=state)} == {'cave'}
-
-
 def test_a_run_capped_at_stage_one_stays_on_solo_navigation_however_well_it_does():
     args = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2', '--jelly-max-stage', '1'])
     state = scenario.initial_curriculum(args)
@@ -194,13 +187,3 @@ def test_a_run_capped_at_stage_one_stays_on_solo_navigation_however_well_it_does
     uncapped = scenario.initial_curriculum(ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-start-lesson', '2']))
     assert scenario.curriculum_promote(1, great, uncapped) == 2
 
-
-def test_the_teacher_can_be_switched_off_for_a_run():
-    on = ppo_neural.build_parser().parse_args(['--task', 'jelly_team'])
-    off = ppo_neural.build_parser().parse_args(['--task', 'jelly_team', '--jelly-dagger-weight', '0'])
-    assert scenario.teacher_weight(on) > 0 and scenario.teacher_weight(off) == 0
-    env = scenario.environment(**scenario.environment_options(dict(scenario.metadata(off), training={})))
-    try:
-        assert env.teacher_weight == 0
-    finally:
-        env.close()

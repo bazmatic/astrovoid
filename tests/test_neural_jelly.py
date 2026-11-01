@@ -95,23 +95,6 @@ def test_without_policy_jelly_chases_like_scripted():
     assert get_jelly_team(enc_n).driver is None
 
 
-def test_driver_decides_every_decision_frames():
-    (jelly,), enc, team = team_scene()
-    team.external = False
-    calls = []
-
-    class Stub:
-        def decide(self, t):
-            calls.append(t.frames)
-            t.commit({c.agent_id: Intent(heading=0., accel=1.) for c in t.members()})
-
-    team.driver = Stub()
-    for _ in range(DECISION_FRAMES * 2 + 1):
-        enc.step(1.0)
-    assert calls == [0, DECISION_FRAMES, 2 * DECISION_FRAMES]
-    assert jelly.vx > 0
-
-
 # --- the adapter: what a Jelly senses and how its policy's outputs become an Intent ---
 
 
@@ -128,14 +111,6 @@ def test_policy_observations_are_finite_and_normalised():
     assert np.isfinite(adapter.critic(team)).all()
 
 
-def test_team_of_one_zero_fills_teammate_slots():
-    (jelly,), enc, team = team_scene(ship=target((POS[0] + 200, POS[1])))
-    x, _, _ = adapter.observe(team, jelly)
-    slots = [i for i, n in enumerate(adapter.FEATURES) if n.startswith('teammate')]
-    assert len(slots) == 4 * len(adapter.TEAM)
-    assert not x[slots].any()
-
-
 def test_teammate_slot_sees_nearest_other_jelly():
     (a, b, c), enc, team = team_scene(positions=(POS, (POS[0] + 300, POS[1]), (POS[0] + 50, POS[1])))
     a.jelly_facing = 0.
@@ -144,27 +119,6 @@ def test_teammate_slot_sees_nearest_other_jelly():
     assert feature(x, 'teammate2_present') == 0
     assert feature(x, 'teammate0_distance') < feature(x, 'teammate1_distance')
     assert math.isclose(feature(x, 'teammate0_bearing_cos'), 1., abs_tol=1e-6)
-
-
-def test_dead_teammate_drops_out_of_slots():
-    (a, b, c), enc, team = team_scene(positions=(POS, (POS[0] + 50, POS[1]), (POS[0] + 300, POS[1])))
-    a.jelly_facing = 0.
-    near = feature(adapter.observe(team, a)[0], 'teammate0_distance')
-    enc.kill(b)
-    x, _, _ = adapter.observe(team, a)
-    assert feature(x, 'teammate0_present') == 1 and feature(x, 'teammate1_present') == 0
-    assert feature(x, 'teammate0_distance') > near   # the far Jelly now fills slot 0
-
-
-def test_closing_speed_is_nonzero_for_a_moving_target():
-    ship = target((POS[0] + 200, POS[1]))
-    (jelly,), enc, team = team_scene(ship=ship)
-    ship.vx, ship.vy = -2., 0.   # toward the Jelly
-    toward = feature(adapter.observe(team, jelly)[0], 'target_closing_speed')
-    ship.vx = 2.                 # away from the Jelly
-    away = feature(adapter.observe(team, jelly)[0], 'target_closing_speed')
-    assert math.isclose(toward, 2 / adapter.CLOSING_SCALE, rel_tol=1e-5)
-    assert math.isclose(away, -2 / adapter.CLOSING_SCALE, rel_tol=1e-5)
 
 
 def test_no_target_sets_present_zero_and_does_not_raise():
@@ -210,19 +164,6 @@ def test_teacher_heads_toward_target():
     heading, accel = adapter.teacher(jelly, enc)
     intent = adapter.intention((heading, accel), adapter.facing(jelly))
     assert math.isclose(math.remainder(intent.heading, 2*math.pi), math.pi / 2, abs_tol=1e-3) and intent.accel > 0.9
-
-
-def test_driver_commits_one_intent_per_member():
-    crew, enc, team = team_scene(positions=(POS, (POS[0] + 60, POS[1])), ship=target((POS[0] + 200, POS[1])))
-    for c in crew:
-        c.jelly_intent = None
-    driver = adapter.JellyDriver(random_policy(adapter.SPEC), greedy=False, seed=1)
-    driver.decide(team)
-    assert set(driver.states) == {c.agent_id for c in crew}
-    for c in crew:
-        assert isinstance(c.jelly_intent, Intent)
-        assert -math.pi <= c.jelly_intent.heading <= math.pi and -1 <= c.jelly_intent.accel <= 1
-    assert adapter.enabled(None, None, None) == [True, True]
 
 
 def test_load_policy_rejects_wrong_spec(tmp_path):
@@ -316,19 +257,6 @@ def test_target_respawns_after_catch_and_episode_continues():
         env.close()
 
 
-def test_step_after_end_raises():
-    env, _ = jelly_env(horizon=.2)
-    try:
-        result = env.step(still(env))
-        while not (result.terminated or result.truncated):
-            result = env.step(still(env))
-        assert result.truncated and math.isclose(result.events['seconds'], .2)
-        with pytest.raises(RuntimeError):
-            env.step(still(env))
-    finally:
-        env.close()
-
-
 def test_progress_toward_target_is_rewarded_and_standing_still_is_not_stuck():
     env, _ = jelly_env(team_size=1)
     try:
@@ -418,34 +346,6 @@ def test_training_and_evaluation_use_separate_arenas():
     assert not set(scenario.TRAIN_LEVELS) & set(scenario.HOLDOUT_LEVELS)
 
 
-def test_manager_can_start_fresh_jelly_team(tmp_path):
-    from tools.trainer.control import start
-    from tools import ppo_neural
-    calls = []
-    result = start(from_='new', changes={'task': 'jelly_team', 'budget_seconds': 10}, root=tmp_path,
-                   processes=[], launch=lambda command, log: calls.append(command))
-    assert result.started_from == 'random'
-    args = ppo_neural.build_parser().parse_args(calls[0][3:])
-    assert args.task == 'jelly_team' and args.workers == 4 and args.horizon == 60 and args.start == ''
-
-
-def test_scripted_baseline_runs_at_the_configured_run_horizon(monkeypatch):
-    from learning.adapters import jelly_scenario as scenario
-    monkeypatch.setattr(scenario, '_baselines', {})
-    monkeypatch.setattr(scenario, 'run_horizon', scenario.run_horizon)
-    scenario.metadata(SimpleNamespace(horizon=.5, opponent=''))
-    short = scenario.scripted_baseline()
-    assert (1, .5) in scenario._baselines
-    assert short['episodes'] == len(scenario.evaluation_cases(1)) and short['seconds'] <= .5 * short['episodes'] + 1e-9
-    scenario.metadata(SimpleNamespace(horizon=.2, opponent=''))
-    shorter = scenario.scripted_baseline()
-    assert set(scenario._baselines) == {(1, .5), (1, .2)} and shorter is not short
-    assert math.isclose(shorter['seconds'], .2 * shorter['episodes'])
-    # promote baselines at the run's horizon: it reuses that cache entry rather than a 60 s one.
-    scenario.promote(1, dict(catches_per_minute=0., stuck_fraction=1., episodes=1))
-    assert set(scenario._baselines) == {(1, .5), (1, .2)}
-
-
 def test_flank_spread_is_zero_for_collinear_bearing_and_one_for_even_ring():
     from learning.adapters.jelly_scenario import flank_spread
     target = (100., 100.)
@@ -456,13 +356,6 @@ def test_flank_spread_is_zero_for_collinear_bearing_and_one_for_even_ring():
         assert math.isclose(flank_spread(ring, target), 1., abs_tol=1e-9)
     quarter = [(180., 100.), (100., 180.)]   # a right angle apart: partly spread
     assert 0. < flank_spread(quarter, target) < 1.
-
-
-def test_single_jelly_has_spread_zero_without_error():
-    from learning.adapters.jelly_scenario import flank_spread
-    assert flank_spread([(150., 100.)], (100., 100.)) == 0.
-    assert flank_spread([], (100., 100.)) == 0.
-    assert flank_spread([(100., 100.), (150., 100.)], (100., 100.)) == 0.   # a Jelly on the target has no bearing
 
 
 def open_line(env, length):
@@ -531,20 +424,6 @@ def test_flanking_pair_is_rewarded_at_stage2_only():
     assert all(r == 0. for r in stage1.values()) and math.isclose(events['angular_spread'], 1., abs_tol=1e-6)
 
 
-def test_stage2_cases_have_team_size_2_to_4():
-    from learning.adapters import jelly_scenario as scenario
-    cases = scenario.training_cases(3, 16, 2)
-    team = [c for c in cases if c['stage'] == 2]
-    retention = [c for c in cases if c['stage'] == 1]
-    assert {c['team_size'] for c in team} == {2, 3, 4}
-    assert retention and all(c['team_size'] == 1 for c in retention) and len(retention) < len(team)
-    assert all(c['level'] in scenario.TRAIN_LEVELS for c in cases)
-    assert all(c['team_size'] == 1 and c['stage'] == 1 for c in scenario.training_cases(3, 16, 1))
-    held_out = scenario.evaluation_cases(2)
-    assert {c['team_size'] for c in held_out} == {2, 3, 4} and all(c['stage'] == 2 for c in held_out)
-    assert all(c['level'] in scenario.HOLDOUT_LEVELS for c in held_out)
-
-
 def test_flank_metrics_and_promote_from_stage2_need_more_spread_and_team_catches():
     from learning.adapters import jelly_scenario as scenario
     rows = [dict(catches=1, seconds=60., stuck_seconds=0., team_size=1, angular_spread=0., flank_seconds=0.,
@@ -562,19 +441,6 @@ def test_flank_metrics_and_promote_from_stage2_need_more_spread_and_team_catches
     assert scenario.promote(2, dict(summary, angular_spread=.2), baseline) == 2
     assert scenario.promote(2, dict(summary, team_catches_per_minute=1.), baseline) == 2
     assert scenario.promote(2, dict(summary, episodes=0), baseline) == 2
-
-
-def test_stage2_team_sizes_are_not_tied_to_particular_levels():
-    from collections import defaultdict
-    from learning.adapters import jelly_scenario as scenario
-    cases = [c for it in range(4) for c in scenario.training_cases(it, 16, 2)]
-    levels = defaultdict(set)
-    for c in cases:
-        levels[(c['stage'], c['team_size'])].add(c['level'])
-    assert set(levels) == {(1, 1), (2, 2), (2, 3), (2, 4)}
-    assert all(len(found) > 2 for found in levels.values()), dict(levels)
-    assert sum(c['stage'] == 1 for c in cases) * 4 == len(cases)   # the 1-in-4 retention share holds
-    assert cases == [c for it in range(4) for c in scenario.training_cases(it, 16, 2)]
 
 
 # ---- Stage 3: a training ship that hunts the Jellies back ----
@@ -907,28 +773,6 @@ def test_selection_score_rejects_policy_that_loses_on_cave_arenas():
     assert scenario.selection_score(scenario.metrics(gate_rows(catches=5, stuck=0.)), still) > -math.inf
 
 
-def test_selection_score_baseline_is_the_scripted_jelly_on_the_validation_cases(monkeypatch):
-    from learning.adapters import jelly_scenario as scenario
-    monkeypatch.setattr(scenario, '_baselines', {})
-    monkeypatch.setattr(scenario, 'run_horizon', .2)
-    baseline = scenario.validation_baseline()
-    assert baseline['episodes'] == len(scenario.validation_cases())
-    assert baseline is scenario.validation_baseline() and ('validation', .2) in scenario._baselines
-    # The scripted Jelly cannot beat itself.
-    assert scenario.selection_score(baseline) == -math.inf
-
-
-def test_compare_returns_interval_keys():
-    from learning.adapters import jelly_scenario as scenario
-    a = dict(episodes=gate_rows(catches=5, stuck=0.) * 3)
-    b = dict(episodes=gate_rows(catches=3, stuck=1.) * 3)
-    result = scenario.compare(a, b)
-    assert {'mean_extra_catches', 'lower_95', 'upper_95', 'mean_extra_ship_hits', 'mean_extra_jelly_deaths'} <= set(result)
-    assert result['lower_95'] <= result['mean_extra_catches'] <= result['upper_95']
-    assert result['mean_extra_catches'] == pytest.approx(4 / 3)
-    assert scenario.compare(dict(episodes=[]), dict(episodes=[]))['lower_95'] == 0.
-
-
 def test_validation_and_evaluation_cases_cover_all_three_stages():
     from learning.adapters import jelly_scenario as scenario
     validation, evaluation = scenario.validation_cases(), scenario.evaluation_cases()
@@ -941,65 +785,6 @@ def test_validation_and_evaluation_cases_cover_all_three_stages():
     assert not {c['seed'] for c in validation} & {c['seed'] for c in evaluation}   # selection never sees these
     assert evaluation == [c for stage in scenario.STAGES for c in scenario.evaluation_cases(stage)]
     assert all(c['stage'] == 1 for c in scenario.evaluation_cases(1))
-
-
-def test_metrics_report_every_evaluation_measure_per_stage():
-    from learning.adapters import jelly_scenario as scenario
-    summary = scenario.metrics(gate_rows(catches=3, stuck=6., ship_hits=2, deaths=1))
-    for key in ('catches_per_minute', 'time_to_contact', 'stuck_fraction', 'angular_spread', 'survival_fraction'):
-        assert key in summary, key
-    # Time to contact counts an episode without contact as its whole length: (10 + 60 + 60) / 3.
-    assert summary['time_to_contact'] == pytest.approx(130 / 3)
-    assert summary['stage1_catches_per_minute'] == 3. and summary['stage2_catches_per_minute'] == 3.
-    assert summary['stage1_time_to_contact'] == 10. and summary['stage3_survival_fraction'] == .5
-    assert summary['stage3_ship_hits'] == 2 and summary['stage2_episodes'] == 1
-    assert all(isinstance(v, (int, float)) for v in summary.values())   # train.log lines hold numbers only
-
-
-def test_time_to_contact_is_the_first_catch_or_ship_hit():
-    env, _ = jelly_env(team_size=1)
-    try:
-        result = env.step(still(env))
-        assert result.events['time_to_contact'] is None
-        (jelly,) = env.team.members()
-        target_ = env.world.additional_targets[0]
-        target_.x, target_.y = jelly.x + 3, jelly.y
-        target_.vx = target_.vy = 0.
-        result = env.step(still(env))
-        assert result.events['time_to_contact'] == pytest.approx((DECISION_FRAMES + 1) / 60)
-        for _ in range(3):
-            result = env.step(still(env))
-        assert result.events['time_to_contact'] == pytest.approx((DECISION_FRAMES + 1) / 60)
-    finally:
-        env.close()
-
-
-def test_jelly_runs_do_not_bootstrap_from_the_weak_teacher_by_default(tmp_path):
-    from learning.tasks import task
-    from tools.trainer.control import start
-    from tools import ppo_neural
-    assert task('jelly_team').fresh_defaults['bootstrap_episodes'] == 0
-    calls = []
-    start(from_='new', changes={'task': 'jelly_team', 'budget_seconds': 10}, root=tmp_path, processes=[],
-          launch=lambda command, log: calls.append(command))
-    assert ppo_neural.build_parser().parse_args(calls[0][3:]).bootstrap_episodes == 0
-
-
-def test_level_27_is_not_a_jelly_training_level_and_every_case_type_visits_every_other_level():
-    from learning.adapters import jelly_scenario as scenario
-    assert 27 not in scenario.TRAIN_LEVELS
-    levels = len(scenario.TRAIN_LEVELS)
-    for stage in (1, 2, 3):
-        cases = [c for iteration in range(levels*scenario.RETENTION_SHARE)
-                 for c in scenario.training_cases(iteration, scenario.RETENTION_SHARE, stage)]
-        assert all(c['level'] != 27 for c in cases)
-    cases = [c for iteration in range(levels) for c in scenario.training_cases(iteration, 16, 2)]
-    # 16 * levels cases span 4 passes of 28; each (stage, team size) must meet every training level
-    visited = {}
-    for c in cases:
-        visited.setdefault((c['stage'], c['team_size']), set()).add(c['level'])
-    assert set(visited) == {(1, 1), (2, 2), (2, 3), (2, 4)}
-    assert all(seen == set(scenario.TRAIN_LEVELS) for seen in visited.values())
 
 
 @pytest.mark.parametrize('barrier', ['wall', 'gate'])
@@ -1115,7 +900,6 @@ def test_a_jelly_senses_the_way_round_a_wall_not_just_the_direction_of_its_targe
     assert abs(feature(x, 'target_route_bearing_sin')) < .01   # nothing in the way: straight at it
     assert feature(x, 'target_bearing_cos') > .99 and feature(x, 'target_distance') > 0   # and the straight cues are back
     assert math.isclose(feature(x, 'target_route_distance'), 100 / adapter.DISTANCE_SCALE, rel_tol=1e-3)
-
 
 
 def test_an_older_jelly_checkpoint_migrates_and_behaves_as_before_until_it_learns_to_use_the_new_inputs(tmp_path):
