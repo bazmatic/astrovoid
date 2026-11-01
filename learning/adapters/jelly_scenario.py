@@ -554,7 +554,7 @@ def metadata(args):
                if block == 'rewards'}
     # Version 6: the navigation curriculum (open pursuit, a barrier, then caves) is the only mode, and the boredom
     # rule is always recorded.
-    result = dict(task=SPEC.task, scenario_version=10, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
+    result = dict(task=SPEC.task, scenario_version=11, policy_spec=SPEC.metadata(), observation_version=SPEC.version,
                 rewards=rewards, reward_scope='individual', critic_context='focal_agent_first_v1',
                 catch={'rule': 'body_contact', 'target_respawns': True, 'respawn_distance': RESPAWN_DISTANCE,
                        'team_share': configured['team_catch_share']},

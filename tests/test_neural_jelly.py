@@ -1088,13 +1088,16 @@ def test_a_jelly_senses_the_way_round_a_wall_not_just_the_direction_of_its_targe
     enc.world.maze = SimpleNamespace(walls=[wall], spatial_grid=None, cell_size_x=100, cell_size_y=100,
                                      offset_x=0, offset_y=0, grid_width=4, grid_height=4)
     x, _, _ = adapter.observe(team, jelly)
-    assert abs(feature(x, 'target_bearing_sin')) < .01        # the target is dead ahead, behind the wall
+    assert feature(x, 'target_present') == 1.
+    assert feature(x, 'target_bearing_cos') == feature(x, 'target_distance') == feature(x, 'target_closing_speed') == 0.
+    # behind a wall the straight-line cues are hidden, so the route is all the Jelly has to go on
     assert feature(x, 'target_route_present') == 1.
     assert feature(x, 'target_route_bearing_sin') > .3        # but the way round starts off to the side
     assert feature(x, 'target_route_distance') * adapter.DISTANCE_SCALE > 100 + 1   # longer than the straight line
     wall.active = False
     x, _, _ = adapter.observe(team, jelly)
     assert abs(feature(x, 'target_route_bearing_sin')) < .01   # nothing in the way: straight at it
+    assert feature(x, 'target_bearing_cos') > .99 and feature(x, 'target_distance') > 0   # and the straight cues are back
     assert math.isclose(feature(x, 'target_route_distance'), 100 / adapter.DISTANCE_SCALE, rel_tol=1e-3)
 
 

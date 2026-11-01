@@ -22,7 +22,7 @@ TARGET = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'closing_speed',
 TEAM = ('present', 'bearing_sin', 'bearing_cos', 'distance', 'heading_sin', 'heading_cos', 'speed')
 FEATURES = SELF + tuple(f'target_{n}' for n in TARGET)
 FEATURES += tuple(f'teammate{i}_{n}' for i in range(TEAMMATES) for n in TEAM)
-SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=3, continuous=('heading', 'accel'))
+SPEC = PolicySpec('jelly_team', FEATURES, HEADS, version=4, continuous=('heading', 'accel'))
 CRITIC_TARGETS = 4
 CRITIC_MEMBERS = 8
 CRITIC_SIZE = 2*5 + CRITIC_TARGETS*5 + CRITIC_MEMBERS*7
@@ -67,8 +67,9 @@ def relative(c, f, pos):
 class Guide:
     """Where Jelly c should head to reach pos: `waypoint` (None when no body-clear one exists) and the walking
     `distance` to pos along the cell route (None when pos is unreachable)."""
-    def __init__(self, waypoint, distance, path=()):
+    def __init__(self, waypoint, distance, path=(), direct=False):
         self.waypoint, self.distance, self.path = waypoint, distance, tuple(path)   # path: the route, for drawing
+        self.direct = direct   # the body fits straight through to the target
 
 
 def route_guide(c, enc, pos):
@@ -86,7 +87,7 @@ def route_guide(c, enc, pos):
         return hit[1]
     here = c.get_pos()
     if path_clear(c, enc, pos):
-        guide = Guide(pos, math.dist(here, pos), (here, pos))
+        guide = Guide(pos, math.dist(here, pos), (here, pos), direct=True)
     else:
         routes = getattr(enc, '_jelly_teacher_routes', None)
         if routes is None:
@@ -131,8 +132,13 @@ def observe(team, c):
         dist = math.hypot(dx, dy) or 1.
         tvx, tvy = getattr(entity, 'vx', 0.), getattr(entity, 'vy', 0.)
         closing = -((tvx-c.vx)*dx + (tvy-c.vy)*dy)/dist
-        x += [1., bs, bc, d, clip(closing/CLOSING_SCALE)]
         guide = route_guide(c, enc, pos)
+        if guide.waypoint is not None and not guide.direct:
+            # A wall is in the way and the route is known: the straight-line cues would only tempt the Jelly back
+            # toward the target when the route leads away from it, so it senses the route alone.
+            x += [1., 0., 0., 0., 0.]
+        else:
+            x += [1., bs, bc, d, clip(closing/CLOSING_SCALE)]
         if guide.waypoint is None:
             x += [0., 0., 0., 0. if guide.distance is None else min(1., guide.distance/DISTANCE_SCALE)]
         else:
