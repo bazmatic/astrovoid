@@ -44,57 +44,11 @@ def test_empty_slot_is_kept_skipped_and_refilled_without_duplicates():
     assert state.ammo==12 and len(state.inventory)==2
 
 
-def test_shield_toggles_once_per_press_and_only_spends_charge_while_on():
-    state=WeaponInventory()
-    state.equip('shield')
-    capacity=state.ammo
-    assert not state.try_fire((100,100),0).projectiles
-    assert state.shield_active
-    for _ in range(30):
-        state.try_fire((100,100),0)
-        state.update(1)
-    assert state.shield_active and state.ammo==capacity-30
-    state.release_trigger()
-    state.try_fire((100,100),0)
-    assert not state.shield_active
-    state.update(100)
-    assert state.ammo==capacity-30
-    state.release_trigger()
-    state.try_fire((100,100),0)
-    state.update(capacity)
-    assert not state.shield_active and state.weapon_id=='basic'
-    assert ammo(state)['shield']==0
-    state.equip('shield')
-    assert state.ammo==capacity and not state.shield_active
-
-
-def test_switching_away_stops_shield_and_keeps_charge():
-    state=WeaponInventory()
-    state.equip('shield')
-    state.try_fire((100,100),0)
-    state.update(15)
-    remaining=state.ammo
-    state.cycle()
-    state.update(60)
-    assert not state.shield_active and ammo(state)['shield']==remaining
-    state.cycle(False)
-    state.cycle()
-    # Holding Fire across a switch does not toggle the newly selected shield.
-    state.try_fire((100,100),0)
-    assert not state.shield_active
-    state.release_trigger()
-    state.try_fire((100,100),0)
-    assert state.shield_active
-
-
-def test_refilling_an_active_shield_keeps_it_on():
-    state=WeaponInventory()
-    state.equip('shield')
-    state.try_fire((100,100),0)
-    state.update(60)
-    state.equip('shield')
-    assert state.shield_active and state.ammo==CATALOG['shield'].capacity
-    assert len(state.inventory)==2
+def test_shield_pickup_is_not_held_in_the_inventory(game):
+    game.start_level()
+    game.ship.equip_weapon('shield')
+    assert ammo(game.ship.weapon)=={'basic':None}
+    assert game.ship.weapon.weapon_id=='basic'
 
 
 def play(game,monkeypatch):
@@ -117,45 +71,34 @@ def play(game,monkeypatch):
     return keys
 
 
-def test_game_down_cycles_once_and_fire_toggles_shield(game,monkeypatch):
+def test_shield_starts_at_once_runs_a_fixed_time_and_ignores_fire_and_cycling(game,monkeypatch):
     keys=play(game,monkeypatch)
-    game.ship.equip_weapon('shield')
+    ship=game.ship
+    ship.shield_initial_timer=0
+    ship.equip_weapon('railgun')
+    ship.equip_weapon('shield')
+    assert ship.is_shield_active() and ship.weapon.weapon_id=='railgun'
     keys[pygame.K_DOWN]=True
     game.update(1)
-    assert game.ship.weapon.weapon_id=='basic' and not game.ship.is_shield_active()
-    game.update(1)
-    assert game.ship.weapon.weapon_id=='basic'
+    assert ship.weapon.weapon_id=='basic' and ship.is_shield_active()
     keys[pygame.K_DOWN]=False
-    game.update(1)
-    keys[pygame.K_DOWN]=True
-    game.update(1)
-    assert game.ship.weapon.weapon_id=='shield'
-    keys[pygame.K_DOWN]=False
-    keys[pygame.K_SPACE]=True
-    for _ in range(5): game.update(1)
-    assert game.ship.is_shield_active() and not game.projectiles
-    remaining=game.ship.weapon.ammo
-    keys[pygame.K_SPACE]=False
-    game.update(1)
-    keys[pygame.K_SPACE]=True
-    game.update(1)
-    assert not game.ship.is_shield_active()
-    assert game.ship.weapon.ammo==remaining-1
+    fuel=ship.fuel
+    ship.update(config.SETTINGS.powerups.shieldDurationSeconds*config.FPS-5)
+    assert ship.is_shield_active() and ship.fuel==fuel
+    ship.update(10)
+    assert not ship.is_shield_active()
 
 
-def test_shield_protects_without_fuel_cost(game,monkeypatch):
+def test_shield_protects_while_it_runs(game,monkeypatch):
     play(game,monkeypatch)
     ship=game.ship
+    ship.shield_initial_timer=0
+    ship.shield_active=False
     ship.equip_weapon('shield')
-    ship.fire()
-    fuel=ship.fuel
-    ship.update(30)
-    assert ship.fuel==fuel and ship.is_shield_active()
     bullet=Projectile(ship.get_pos(),0,is_enemy=True)
     game.collision_handler.handle_projectile_ship_collision(bullet,ship,game.scoring)
     assert not ship.damaged
-    ship.weapon.release_trigger()
-    ship.fire()
+    ship.update(config.SETTINGS.powerups.shieldDurationSeconds*config.FPS+1)
     bullet=Projectile(ship.get_pos(),0,is_enemy=True)
     game.collision_handler.handle_projectile_ship_collision(bullet,ship,game.scoring)
     assert ship.damaged
@@ -179,7 +122,6 @@ def test_continuing_and_retry_start_with_only_basic(game,controller):
     game.ship.equip_weapon('railgun')
     game.ship.fire()
     game.ship.equip_weapon('shield')
-    game.ship.fire()  # already held: picking up Shield must not activate it
     game.level_complete_menu=Mock()
     game.level_complete_menu.get_selected_option.return_value='CONTINUE'
     handler=LevelCompleteStateHandler()
@@ -190,30 +132,6 @@ def test_continuing_and_retry_start_with_only_basic(game,controller):
     else:
         handler._handle_normal_keyboard(pygame.event.Event(pygame.KEYDOWN,key=pygame.K_RETURN),game)
     assert game.level==2 and ammo(game.ship.weapon)=={'basic':None}
-    assert not game.ship.weapon.shield_active
-    game.ship.fire()
-    game.ship.weapon.update(60)
     game.ship.equip_weapon('scattergun')
     game.restart_level()
-    assert ammo(game.ship.weapon)=={'basic':None} and not game.ship.weapon.shield_active
-
-
-def test_controller_cycles_once_and_shield_does_not_drain_while_paused(game,monkeypatch):
-    play(game,monkeypatch)
-    game.ship.equip_weapon('shield')
-    game.input_handler.is_controller_shield_pressed.return_value=True
-    game.update(1)
-    game.update(1)
-    assert game.ship.weapon.weapon_id=='basic'
-    game.input_handler.is_controller_shield_pressed.return_value=False
-    game.update(1)
-    game.input_handler.is_controller_shield_pressed.return_value=True
-    game.update(1)
-    game.input_handler.is_controller_shield_pressed.return_value=False
-    game.input_handler.is_controller_fire_pressed.return_value=True
-    game.update(1)
-    assert game.ship.weapon.shield_active
-    remaining=game.ship.weapon.ammo
-    game.state=config.STATE_MENU
-    game.update(60)
-    assert game.ship.weapon.ammo==remaining
+    assert ammo(game.ship.weapon)=={'basic':None}

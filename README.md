@@ -195,7 +195,7 @@ A failed level shows the "LEVEL FAILED" banner flanked by two of the game's squi
 
 ### Resources
 
-- **Power / fuel**: Movement, hits, and time retain their existing costs. The collectible shield uses its own charge instead of fuel.
+- **Power / fuel**: Movement, hits, and time retain their existing costs. The collectible shield costs no fuel.
 - **Weapon ammunition**: The basic gun is unlimited. Special weapons have their own finite ammo supply; emptying one returns you to basic.
 
 ### Weapon Pickups
@@ -210,7 +210,7 @@ Destroyed enemies can leave a weapon pickup. Flying near one pulls it in; touchi
 | Seeker | Green missiles with bounded homing toward visible enemies | 18 missiles |
 | The Inflator | Pink balloons make creatures enormous; any follow-up hit pops them | 18 shots |
 | Grenade Launcher | Bouncing fused shells; shared Belemnite explosions | 10 grenades |
-| Shield | Fire toggles protection; charge drains only while active | 10 seconds |
+| Shield | Starts at once on pickup, independent of Fire and weapon selection; invulnerable for the duration | 10 seconds |
 
 Grenades detonate when an enemy comes within 28 pixels of their proximity sensor (measured from the enemy hull), on contact, or after 1.2 seconds. Walls block the proximity sensor. Their blasts can hurt you and your ally, destroy walls, and start Belemnite chain reactions. Distinct symbols identify weapons as well as colours. The HUD highlights the selected weapon and shows every owned weapon’s ammo, including empty slots. Hold Fire to shoot; with Shield selected, press Fire once to turn protection on and again to turn it off. Switching weapons turns the shield off and preserves its charge. Shield depletion returns you to basic. Set `powerups.shieldDurationSeconds` in `config/settings.json` to tune its capacity. Normal level-start protection still applies.
 

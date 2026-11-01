@@ -261,8 +261,9 @@ class CollisionHandler:
         
         if crystal.check_circle_collision((ship.x, ship.y), ship.radius):
             if getattr(ship, 'weapon', None) is not None:
-                ship.equip_weapon(crystal.weapon_id or 'twin_blaster')
-                self.weapon_pickups[ship.weapon.view.id] += 1
+                weapon_id = crystal.weapon_id or 'twin_blaster'
+                ship.equip_weapon(weapon_id)
+                self.weapon_pickups[weapon_id] += 1
             else:
                 ship.activate_gun_upgrade()
             scoring.record_powerup_collected()

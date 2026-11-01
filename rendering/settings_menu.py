@@ -14,14 +14,14 @@ from user_settings import UserSettings
 CONTROL_GROUPS: List[Tuple[str, List[Tuple[str, str]]]] = [
     ("KEYBOARD", [
         ("ARROWS / WASD", "Move"),
-        ("SPACE", "Fire / toggle shield"),
+        ("SPACE", "Fire"),
         ("DOWN / S", "Next weapon"),
         ("ESC", "Quit level"),
         ("R", "Restart level"),
     ]),
     ("CONTROLLER", [
         ("STICKS", "Move"),
-        ("R / ZR / B", "Fire / toggle shield"),
+        ("R / ZR / B", "Fire"),
         ("A", "Next weapon"),
         ("L / ZL", "Thrust"),
         ("Y", "Restart level"),

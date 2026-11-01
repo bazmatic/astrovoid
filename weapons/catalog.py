@@ -111,7 +111,8 @@ CATALOG = WeaponCatalog([
                      inflation_scale=config.SETTINGS.powerups.inflationSizeMultiplier),
     WeaponDefinition('grenade_launcher', 'Grenade Launcher', 10, 45, (255, 205, 75), 'shell', 'grenade',
                      speed=0.65, lifetime=72, damage=2, radius=5, sound_pitch=110, sound_duration=.22, proximity_radius=28),
-    WeaponDefinition('shield', 'Shield', round(config.SETTINGS.powerups.shieldDurationSeconds*config.FPS),
+    # A pickup only: Ship.equip_weapon starts a timed shield instead of holding it (capacity/interval unused)
+    WeaponDefinition('shield', 'Shield', 1,
                      1, (100, 220, 255), 'shield', 'shield'),
 ])
 

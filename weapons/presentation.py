@@ -55,13 +55,10 @@ def draw_inventory(screen, inventory, rect):
             icon.set_alpha(65)
         screen.blit(icon,icon.get_rect(midtop=(slot.centerx,slot.top+2)))
         text = ('EMPTY' if empty else '∞' if view.ammo is None
-                else f'{view.ammo/config.FPS:.1f}s' if definition.behaviour == 'shield'
                 else str(view.ammo))
         label = font.render(text,True,color)
         screen.blit(label,label.get_rect(midbottom=(slot.centerx,slot.bottom-1)))
     hint = 'DOWN: NEXT'
-    if inventory.definition.behaviour == 'shield':
-        hint += '  FIRE: ' + ('OFF' if inventory.shield_active else 'ON')
     label = font.render(hint,True,(175,190,210))
     if label.get_width() > rect.width:
         label = pygame.transform.smoothscale(label,(rect.width,label.get_height()))

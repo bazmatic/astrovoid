@@ -1007,8 +1007,6 @@ class Game:
             self._execute_ship_command(cmd)
             self.command_recorder.record_command(cmd)
         
-        if inventory and not fire_pressed:
-            self.ship.weapon.release_trigger()
         if fire_pressed:
             if not hasattr(self, 'last_shot_time'):
                 self.last_shot_time = 0

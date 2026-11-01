@@ -65,6 +65,7 @@ class Ship(RotatingThrusterShip):
         self.shield_phase = 0.0  # Phase for pulsing animation when shield is active
         self.shield_initial_timer = 60  # Frames remaining for initial shield activation (1 second at 60 FPS) - no energy consumed during this period
         self.game_started = False  # Flag to prevent shield timer countdown until game starts
+        self.powerup_shield_timer = 0.0  # Frames of invulnerability left from a Shield pickup
         self.gun_upgrade_level = 0  # Powerups in effect: 0 = base gun, 1 = faster fire, 2+ = three-way spread
         self.gun_upgrade_timer = 0.0  # Frames until the powerups wear off
         self.upgrade_glow_phase = 0.0  # Phase for pulsing glow when upgraded
@@ -145,7 +146,9 @@ class Ship(RotatingThrusterShip):
                 self.powerup_flash_phase -= 2 * math.pi
         
         # Update shield phase and track energy when shield is active
-        if self.shield_active or self.weapon_shield_active:
+        if self.powerup_shield_timer > 0:
+            self.powerup_shield_timer = max(0.0, self.powerup_shield_timer - dt)
+        if self.shield_active or self.powerup_shield_timer > 0:
             self.shield_phase += 0.3  # Speed of pulse animation
             if self.shield_phase >= 2 * math.pi:
                 self.shield_phase -= 2 * math.pi
@@ -156,7 +159,7 @@ class Ship(RotatingThrusterShip):
                 # After initial period, automatically deactivate shield
                 if self.shield_initial_timer <= 0:
                     self.shield_active = False
-            elif self.game_started and not hasattr(self.weapon, 'inventory'):
+            elif self.game_started and self.shield_active and not hasattr(self.weapon, 'inventory'):
                 # Track energy used while shield is active (only after initial period)
                 self.fuel += config.SHIELD_FUEL_CONSUMPTION_PER_FRAME * dt
         
@@ -180,10 +183,7 @@ class Ship(RotatingThrusterShip):
         if self.weapon is not None:
             rad = math.radians(self.angle)
             pos = (self.x + math.cos(rad)*(self.radius+5), self.y + math.sin(rad)*(self.radius+5))
-            shield_was_active = self.weapon_shield_active
             result = self.weapon.try_fire(pos, self.angle)
-            if self.weapon_shield_active and not shield_was_active:
-                self.sound_manager.play_powerup_activation()
             if result.projectiles:
                 self.sound_manager.play_weapon_fire(result.weapon_id)
             return list(result.projectiles) or None
@@ -314,11 +314,7 @@ class Ship(RotatingThrusterShip):
         Returns:
             True if shield is active, False otherwise.
         """
-        return self.shield_active or self.weapon_shield_active or self.observer
-    
-    @property
-    def weapon_shield_active(self):
-        return bool(getattr(self.weapon, 'shield_active', False))
+        return self.shield_active or self.powerup_shield_timer > 0 or self.observer
 
     def cycle_weapon(self, pressed):
         if self.weapon.cycle(pressed):
@@ -326,6 +322,13 @@ class Ship(RotatingThrusterShip):
             self._start_powerup_flash()
 
     def equip_weapon(self, weapon_id):
+        if self.weapon.catalog[weapon_id].behaviour == 'shield':
+            # Not a weapon: it starts at once, runs for a fixed time, and leaves the inventory and Fire alone
+            self.powerup_shield_timer = config.SETTINGS.powerups.shieldDurationSeconds * config.FPS
+            self.weapon_notice = self.weapon.catalog[weapon_id].name
+            self._start_powerup_flash()
+            self.sound_manager.play_powerup_activation()
+            return
         self.weapon.equip(weapon_id)
         self.weapon_notice = self.weapon.definition.name
         self._start_powerup_flash()
@@ -478,7 +481,7 @@ class Ship(RotatingThrusterShip):
         self._draw_trail(screen)
         
         # Draw shield glow effect when shield is active
-        if self.shield_active or self.weapon_shield_active:
+        if self.shield_active or self.powerup_shield_timer > 0:
             # During initial activation, fade out over time
             if self.shield_initial_timer > 0:
                 fade_factor = self.shield_initial_timer / 60.0

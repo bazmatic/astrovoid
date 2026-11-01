@@ -69,8 +69,6 @@ class WeaponInventory(EquippedWeapon):
     """Owned weapons in pickup order, each retaining its own ammunition."""
     def reset(self):
         self._ammo = {}
-        self.shield_active = False
-        self._trigger_down = False
         self._cycle_down = False
         super().reset()
 
@@ -88,11 +86,6 @@ class WeaponInventory(EquippedWeapon):
                                 self.cooldown, self.catalog[key].interval)
                      for key, ammo in self._ammo.items())
 
-    def equip(self, weapon_id):
-        keep_shield = self.shield_active and weapon_id == self.weapon_id
-        super().equip(weapon_id)
-        self.shield_active = keep_shield
-
     def cycle(self, pressed=True):
         """Advance once per press, skipping empty slots but retaining them for refills."""
         edge = pressed and not self._cycle_down
@@ -106,26 +99,5 @@ class WeaponInventory(EquippedWeapon):
             if self._ammo[key] is None or self._ammo[key] > 0:
                 changed = key != self.weapon_id
                 self.weapon_id = key
-                self.shield_active = False
                 return changed
         return False
-
-    def release_trigger(self):
-        self._trigger_down = False
-
-    def try_fire(self, pos, angle, source='player'):
-        edge = not self._trigger_down
-        self._trigger_down = True
-        if self.definition.behaviour == 'shield':
-            if edge and self.ammo > 0:
-                self.shield_active = not self.shield_active
-            return FireResult(self.weapon_id)
-        return super().try_fire(pos,angle,source)
-
-    def update(self, dt):
-        super().update(dt)
-        if self.shield_active:
-            self.ammo = max(0,self.ammo-dt)
-            if self.ammo <= 0:
-                self.shield_active = False
-                self.weapon_id = 'basic'
