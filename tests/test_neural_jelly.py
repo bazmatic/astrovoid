@@ -1072,12 +1072,28 @@ def test_training_pulls_the_policy_toward_what_the_teacher_would_do_in_the_state
     assert gap_after_training(10.) < gap_after_training(0.) * .7
 
 
-def test_neural_jellies_switch_replaces_every_campaign_jelly_and_leaves_other_enemies(monkeypatch):
+def test_every_campaign_jelly_is_neural_unless_scripted_is_asked_for(monkeypatch):
     from game_handlers.spawn_manager import make_enemy
-    assert make_enemy('aggressive', POS, 5, None).kind.key == 'aggressive'
-    monkeypatch.setenv('NEURAL_JELLIES', '1')
+    monkeypatch.delenv('SCRIPTED_JELLIES', raising=False)
     assert make_enemy('aggressive', POS, 5, None).kind.key == 'neural_jelly'
     assert make_enemy('static', POS, 5, None).kind.key == 'static'
+    monkeypatch.setenv('SCRIPTED_JELLIES', '1')
+    assert make_enemy('aggressive', POS, 5, None).kind.key == 'aggressive'
+
+
+def test_a_trained_brain_is_used_by_default_and_the_environment_can_name_another_or_switch_it_off(tmp_path, monkeypatch):
+    from utils import neural_policy as policies
+    import utils.resource_path as resources
+    (tmp_path/'assets/neural').mkdir(parents=True)
+    (tmp_path/'assets/neural/jelly.npz').write_bytes(b'x')
+    monkeypatch.setattr(policies, 'resource_path', lambda relative: str(tmp_path/relative))
+    monkeypatch.delenv('JELLY_POLICY', raising=False)
+    assert policies.neural_policy_path('JELLY_POLICY', 'jelly.npz') == str(tmp_path/'assets/neural/jelly.npz')
+    assert policies.neural_policy_path('JELLY_POLICY', 'wallcrawler.npz') is None          # nothing bundled
+    monkeypatch.setenv('JELLY_POLICY', '/elsewhere/other.npz')
+    assert policies.neural_policy_path('JELLY_POLICY', 'jelly.npz') == '/elsewhere/other.npz'
+    monkeypatch.setenv('JELLY_POLICY', '')
+    assert policies.neural_policy_path('JELLY_POLICY', 'jelly.npz') is None                # empty: scripted
 
 
 def test_a_jelly_senses_the_way_round_a_wall_not_just_the_direction_of_its_target():

@@ -8,6 +8,7 @@ import os
 from typing import List, Optional, Tuple
 import config
 import enemy_kinds
+from utils.neural_policy import neural_policy_path
 from rendering.fonts import get_font
 from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
@@ -120,18 +121,21 @@ class Game:
         
         # Every enemy on the level
         self.roster = EnemyRoster()
+        # Neural brains are the default wherever a trained one exists: an environment variable names another file (or,
+        # empty, selects the scripted controller); otherwise the bundled assets/neural/<name>.npz is used if present.
         self.wallcrawler_policy = None
-        crawler_weights = os.getenv('WALLCRAWLER_POLICY')
+        crawler_weights = neural_policy_path('WALLCRAWLER_POLICY', 'wallcrawler.npz')
         if crawler_weights:
             from learning.adapters.wallcrawler import load_policy
             try:
                 self.wallcrawler_policy = load_policy(crawler_weights)
             except (ValueError, OSError, KeyError) as exc:
                 logging.getLogger(__name__).warning('Wallcrawler policy unavailable: %s', exc)
-        # Opt-in trained brain for the `neural_jelly` kind (creatures/jelly_team.py reads world.jelly_policy, and the
-        # game is its encounter's world). Without it, those Jellies keep the scripted chase.
+        # The `neural_jelly` kind replaces every campaign Jelly (game_handlers.spawn_manager.make_enemy); creatures/
+        # jelly_team.py reads world.jelly_policy, and the game is its encounter's world. Without a brain, those Jellies
+        # keep the scripted chase.
         self.jelly_policy = None
-        jelly_weights = os.getenv('JELLY_POLICY')
+        jelly_weights = neural_policy_path('JELLY_POLICY', 'jelly.npz')
         if jelly_weights:
             from learning.adapters.jelly import load_policy as load_jelly_policy
             try:

@@ -9,7 +9,8 @@ from game_handlers.spawn_manager import make_enemy
 
 
 @pytest.mark.parametrize('kind', [k for k in enemy_kinds.kinds() if k not in enemy_kinds.hunters()])
-def test_every_kind_but_the_hunters_is_made_by_the_factory_and_says_its_kind(kind):
+def test_every_kind_but_the_hunters_is_made_by_the_factory_and_says_its_kind(kind, monkeypatch):
+    monkeypatch.setenv('SCRIPTED_JELLIES', '1')   # by default the factory swaps the scripted Jelly for the neural one
     enemy = make_enemy(kind, (400.0, 400.0), 5, CommandRecorder())
     assert enemy.type == kind
     # Where it is placed has room for all of it
