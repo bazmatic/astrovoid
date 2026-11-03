@@ -293,3 +293,39 @@ def test_unknown_task_shows_a_message_and_shared_charts_only():
     assert 'made_up_task' in page['text'] and 'not one this trainer knows' in page['text']
     declared = [title for title, sub in page['charts'] if sub]   # Other charts have no subtitle
     assert declared == ['Training return', 'Distance from the starting policy (KL)', 'Policy entropy']
+
+
+def test_evaluation_is_not_labelled_as_training_or_live_iteration_timing():
+    run_js(r"""
+const p=await page();
+p.S.STATUS={run:'run7',state:'training',phase:'evaluating',iteration:30,iterations:10000,seconds_per_iteration:13.82};
+p.runs.renderStatus();
+assert.match(p.el('status').innerHTML,/Evaluating/);
+assert.doesNotMatch(p.el('status').innerHTML,/>Training<|>Pause</);
+assert.match(p.el('status-facts').outerHTML,/last iteration 13\.8 s/);
+p.S.STATUS.phase='finished';p.runs.renderStatus();
+assert.match(p.el('status').innerHTML,/Finishing/);
+""")
+
+
+def test_resume_submits_pending_settings_for_the_paused_source_run():
+    run_js(r"""
+const run={...given,name:'run192',task:'flocker_team',state:'paused'};
+const p=await page({routes:{'api/runs':[run],'api/resume':{run:'run192'}}});
+p.S.RUNS=[run];p.S.STATUS={run:'run192',state:'paused'};
+p.el('from-run').value='run192';p.el('task').value='flocker_team';
+p.S.EDITS={flocker_hit_reward:5};
+await p.runs.act({dataset:{act:'resume'},disabled:false});
+assert.deepEqual(p.posted('api/resume'),[{run:'run192',changes:{flocker_hit_reward:5}}]);
+""", RUN1)
+
+
+def test_run_poll_does_not_discard_pending_reward_edits():
+    run_js(r"""
+const p=await page();
+p.S.RUNS=[{...given,name:'run192',task:'flocker_team'}];
+p.el('from-run').value='run192';p.el('task').value='flocker_team';
+p.S.EDITS={flocker_hit_reward:5};
+p.form.fillFrom();await p.settle();
+assert.deepEqual(p.S.EDITS,{flocker_hit_reward:5});
+""", RUN1)

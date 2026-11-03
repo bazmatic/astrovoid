@@ -384,7 +384,20 @@ def unit_interval(value):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(description=__doc__)
+    class TaskParser(argparse.ArgumentParser):
+        def parse_args(self, args=None, namespace=None):
+            values = list(sys.argv[1:] if args is None else args)
+            result = super().parse_args(values, namespace)
+            if result.task == 'flocker_team' and not any(v.split('=')[0]=='--bootstrap-episodes' for v in values):
+                result.bootstrap_episodes = 0
+            if result.task == 'inchworm':
+                from learning.tasks import task
+                explicit = {v.split('=')[0] for v in values if v.startswith('--')}
+                for dest, default in task('inchworm').fresh_defaults.items():
+                    if '--'+dest.replace('_','-') not in explicit:
+                        setattr(result,dest,default)
+            return result
+    parser = TaskParser(description=__doc__)
     from learning.tasks import TASKS
     parser.add_argument('--task', choices=tuple(TASKS), default='hunter', help='creature training task')
     parser.add_argument('--opponent', type=str, default=str(DEFAULT_START), help='frozen player weights for team training')
@@ -397,6 +410,14 @@ def build_parser():
     for name, default in DEFAULTS.items():
         parser.add_argument('--jelly-' + name.replace('_', '-'), type=float, default=default,
                             help='Jelly ' + name.replace('_', ' '))
+    from learning.flocker_rewards import DEFAULTS as FLOCKER_DEFAULTS
+    for name, default in FLOCKER_DEFAULTS.items():
+        parser.add_argument('--flocker-' + name.replace('_', '-'), type=float, default=default,
+                            help='Flocker ' + name.replace('_', ' '))
+    from learning.inchworm_rewards import DEFAULTS as INCHWORM_DEFAULTS
+    for name, default in INCHWORM_DEFAULTS.items():
+        parser.add_argument('--inchworm-' + name.replace('_', '-'), type=float, default=default,
+                            help='Inchworm ' + name.replace('_', ' '))
     parser.add_argument('--start', default=str(DEFAULT_START))
     parser.add_argument('--out', default=str(DEFAULT_OUT))
     parser.add_argument('--iterations', type=int, default=100, help='training iterations; 0 means unlimited for creature teams')
@@ -471,8 +492,9 @@ def main(argv=None):
     if args.task != 'hunter':
         from learning.run import train
         raw = sys.argv[1:] if argv is None else argv
-        if '--horizon' not in raw:
-            args.horizon = 60.0
+        if not any(v.split('=')[0] == '--horizon' for v in raw):
+            from learning.tasks import task
+            args.horizon = task(args.task).fresh_defaults.get('horizon', 60.0)
         if args.workers < 1 or args.episodes < 1 or args.horizon <= 0 or args.budget_seconds < 0 or args.iterations < 0:
             raise ValueError('workers, episodes and horizon must be positive; budget and iterations must be nonnegative')
         result = train(args)

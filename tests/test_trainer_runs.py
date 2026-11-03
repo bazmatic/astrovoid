@@ -138,3 +138,12 @@ def test_only_the_trainer_itself_counts_as_training_not_commands_that_mention_it
              Process(22, 1, f'grep tools.ppo_neural --out {out}')]
     assert training(procs, tmp_path) == {}
     assert training([Process(23, 1, f'/v/bin/python3.10 tools/ppo_neural.py --out {out}')], tmp_path) == {'run3': 23}
+
+
+def test_status_reports_evaluation_and_worker_cleanup_phases(tmp_path):
+    run=make_run(tmp_path,'run1',1,{'state.json':'{"state":"evaluating","iteration":0}'})
+    processes=[trainer(10,run)]
+    assert status(tmp_path,processes)['phase']=='evaluating'
+    (run/'state.json').write_text('{"state":"finished","iteration":0}')
+    assert status(tmp_path,processes)['phase']=='finished'
+    assert status(tmp_path,[])['state']=='idle'

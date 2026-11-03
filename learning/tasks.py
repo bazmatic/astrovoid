@@ -2,6 +2,8 @@
 from dataclasses import dataclass, field
 import importlib
 
+from learning.inchworm_rewards import SETTINGS as INCHWORM_REWARD_SETTINGS
+from learning.flocker_rewards import SETTINGS as FLOCKER_REWARD_SETTINGS
 from learning.jelly_rewards import SETTINGS as JELLY_REWARD_SETTINGS
 
 
@@ -50,6 +52,15 @@ class Task:
 
 
 TASKS = {
+    'inchworm': Task('inchworm', 'learning.adapters.inchworm_scenario', 'Inchworm',
+        dict(horizon=45., workers=4, iterations=5000, episodes=24, bootstrap_episodes=40,
+             bootstrap_epochs=4, lr=1e-4, gamma=.997, gae_lambda=.97, budget_seconds=7200, start='', seed=0),
+        ('budget_seconds','bootstrap_episodes','bootstrap_epochs','seed') + INCHWORM_REWARD_SETTINGS,
+        'learning.replay', 'learning.adapters.inchworm_replay', 'learning.adapters.inchworm_dashboard'),
+    'flocker_team': Task('flocker_team', 'learning.adapters.flocker_scenario', 'Flocker team',
+        dict(horizon=60., workers=4, iterations=10000, bootstrap_episodes=0),
+        ('budget_seconds','seed') + FLOCKER_REWARD_SETTINGS, 'learning.replay',
+        'learning.adapters.flocker_replay', 'learning.adapters.flocker_dashboard'),
     'hunter': Task('hunter', 'learning.adapters.hunter', 'Hunter', dashboard='learning.adapters.hunter_dashboard',
         capabilities=Capabilities(fresh_weights=False, actor_damping=False, replay_mode='builtin',
                                   settings_scope='unclaimed')),

@@ -30,6 +30,16 @@ def collect(env, policy, seed, scenario, greedy=False, teacher=None, labeller=No
     episodes = {i: dict(x=[], critic=[], actions=[], alive=[], rewards=[], enabled=[],
                         legal={k: [] for k,_ in policy.spec.heads}, teacher=[]) for i in ids}
     while True:
+        # New agents start independent trajectories at birth, with zero recurrent state.
+        # Prefix padding would incorrectly advance their GRU before their first action.
+        for i in snap.observations:
+            if i in episodes:
+                continue
+            states[i] = policy.initial_state()
+            rngs[i] = np.random.default_rng(np.random.SeedSequence([seed, i]))
+            episodes[i] = dict(x=[], critic=[], actions=[], alive=[], rewards=[], enabled=[],
+                               legal={k:[] for k,_ in policy.spec.heads}, teacher=[])
+        ids = tuple(episodes)
         actions = {}
         for i in ids:
             e = episodes[i]

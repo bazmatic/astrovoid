@@ -9,6 +9,9 @@ import numpy as np
 
 
 def _worker_init():
+    # SDL must not turn worker SIGTERM into a queued window event: Pool.terminate()
+    # would otherwise wait forever for workers that never poll that event queue.
+    os.environ['SDL_NO_SIGNAL_HANDLERS'] = '1'
     os.environ['SDL_VIDEODRIVER'] = os.environ['SDL_AUDIODRIVER'] = 'dummy'
     os.environ['OMP_NUM_THREADS'] = os.environ['OPENBLAS_NUM_THREADS'] = '1'
 
@@ -38,6 +41,7 @@ def rollout_job(job):
 
 class Rollouts:
     def __init__(self, workers):
+        _worker_init()  # Also applies to in-process scripted validation and baselines.
         import multiprocessing
         self.deadline = float('inf')
         self.pool = multiprocessing.get_context('spawn').Pool(workers, initializer=_worker_init) if workers > 1 else None
@@ -83,7 +87,8 @@ def train(args):
     adapter = task(args.task).adapter()
     torch.set_num_threads(1)
     out = Path(args.out); out.mkdir(parents=True, exist_ok=True)
-    if args.resume:
+    uses_opponent = getattr(adapter, 'USES_OPPONENT', True)
+    if args.resume and uses_opponent:
         args.opponent = str((out/'opponent.npz').resolve())
     bootstrap_epochs = getattr(args, 'bootstrap_epochs', 0)
     if bootstrap_epochs < 0:
@@ -113,7 +118,8 @@ def train(args):
         if actor_scale!=1.:
             from learning.initialization import dampen_actor
             policy=dampen_actor(policy,actor_scale)
-        shutil.copyfile(args.opponent, out/'opponent.npz')
+        if uses_opponent:
+            shutil.copyfile(args.opponent, out/'opponent.npz')
         (out/'initial.npz').parent.mkdir(parents=True, exist_ok=True)
         policy.save(out/'initial.npz')
         record=dict(task=args.task, args=vars(args), manifest=expected,
@@ -123,7 +129,7 @@ def train(args):
                 'preserved':'recurrent_backbone_and_normalization','applied':'once_before_first_iteration'}
         config_path.write_text(json.dumps(record,indent=2))
     # Use the immutable copy in every worker/replay, never whichever model is later installed in assets.
-    args.opponent = str((out/'opponent.npz').resolve())
+    args.opponent = str((out/'opponent.npz').resolve()) if uses_opponent else ''
     torch.manual_seed(args.seed)
     net = build_network(policy, adapter.CRITIC_SIZE)
     optimiser = torch.optim.Adam(net.parameters(), lr=args.lr)
@@ -194,6 +200,7 @@ def train(args):
                         team_size=team_size, best_score=best_score, policy=current, curriculum=curriculum), temp)
         temp.replace(resume_path)
     try:
+        write_state(out, 'training', first-1 if first else None)
         if not saved:
             teacher_cases=adapter.training_cases(0,args.bootstrap_episodes,team_size,bootstrap=True,**case_options())
             teacher_jobs = make_jobs(args,out/current,teacher_cases,'teacher')
@@ -236,7 +243,10 @@ def train(args):
                           episodes=rows, actions=[result[2] for result in flown])
             (out/'episodes'/f'iter{iteration:04d}.json').write_text(json.dumps(record))
             if iteration % 5 == 0:
-                score = selection_score(evaluate(pool, args, out/current, validation)['summary'])
+                validation_summary = evaluate(pool, args, out/current, validation)['summary']
+                if hasattr(adapter, 'validation_evidence'):
+                    summary.update(adapter.validation_evidence(validation_summary, curriculum, args, deadline=pool.deadline))
+                score = selection_score(validation_summary)
                 if score > best_score:
                     best_score = score; policy.save(best)
             if curriculum is not None:
@@ -265,6 +275,7 @@ def train(args):
             if (out/PAUSE_FILE).exists():
                 (out/PAUSE_FILE).unlink(); write_state(out, 'paused', iteration)
                 return dict(paused=True, history=history, last=str(out/current))
+        write_state(out, 'evaluating', history[-1]['iteration'] if history else first)
         # Fixed held-out arenas and seeds: no best-checkpoint selection on these results.
         cases = (adapter.curriculum_evaluation_cases(curriculum)
                  if curriculum is not None and hasattr(adapter, 'curriculum_evaluation_cases')
@@ -273,9 +284,14 @@ def train(args):
         if not best.exists(): policy.save(best)
         gate_passed = note_selection()
         reports = {mode: evaluate(pool, args, best, cases, mode='scripted' if mode=='scripted' else 'greedy',
-                                  muted=mode=='muted') for mode in ('trained','scripted','muted')}
-        reports['communication_effect'] = adapter.compare(reports['trained'],reports['muted'])
+                                  muted=mode=='muted') for mode in getattr(adapter, 'EVALUATION_MODES', ('trained','scripted','muted'))}
+        if 'muted' in reports:
+            reports['communication_effect'] = adapter.compare(reports['trained'],reports['muted'])
         reports['versus_scripted'] = adapter.compare(reports['trained'],reports['scripted'])
+        if hasattr(adapter, 'deployment_report'):
+            reports['deployment'] = adapter.deployment_report(reports, args, deadline=pool.deadline)
+        import hashlib
+        reports['checkpoint_sha256'] = hashlib.sha256(best.read_bytes()).hexdigest()
         reports['wall_seconds'] = used()
         reports['selection_gate_passed'] = gate_passed
         if selection_context() is not None:

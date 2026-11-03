@@ -39,7 +39,7 @@ export function render(){
   const D=chartData(),layout=viewLayout();
   const last=D.at(-1)||{};
   document.getElementById('strip').innerHTML=renderStrip(layout,D);
-  const sections=groupCharts(layout,last).map(([name,metrics])=>[name,metrics.map(m=>chart({title:m.title,sub:m.sub,key:m.key,wide:m.wide})).join('')]);
+  const sections=groupCharts(layout,last).map(([name,metrics])=>[name,metrics.map(m=>chart({title:m.title,sub:m.sub,key:m.key,wide:m.wide,unit:m.unit})).join('')]);
   sections.push(['Other',unclaimed(layout,last).map(k=>chart({title:esc(k),sub:'',key:k})).join('')]);
   const note=layout.note?`<div class="card wide"><p>${layout.note}</p></div>`:'';
   document.getElementById('charts').innerHTML=note+sections.filter(([,html])=>html).map(([name,html])=>`<h3 class="section">${esc(name)}</h3>${html}`).join('');

@@ -22,16 +22,17 @@ export function syncCreature(){
 export function renderStatus(){
   const s=S.STATUS;if(!s)return;
   const state=s.run?s.state:'idle',iter=s.iteration!=null?s.iteration:'-';
+  const phase=(state==='training'||state==='pausing')?s.phase:null;
   const started=s.started?new Date(s.started).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'-';
-  const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · ${esc(taskLabel(currentTask()))} · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · ${s.seconds_per_iteration.toFixed(1)} s per iteration`:''}</span>`:'<span class="facts">No runs yet</span>';
-  const buttons={training:['pause','stop'],pausing:['stop'],paused:['resume','stop'],interrupted:['resume','stop'],idle:[]}[state]||[];
+  const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · ${esc(taskLabel(currentTask()))} · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · last iteration ${s.seconds_per_iteration.toFixed(1)} s`:''}</span>`:'<span class="facts">No runs yet</span>';
+  const buttons=(phase==='evaluating'||phase==='finished')?['stop']:({training:['pause','stop'],pausing:['stop'],paused:['resume','stop'],interrupted:['resume','stop'],idle:[]}[state]||[]);
   const label={pause:'Pause',resume:'Resume',stop:'Stop'};
-  const note={pausing:'Pausing after this iteration…',paused:'Paused: resume to carry on where it stopped.',interrupted:'Interrupted (it ended without a pause or stop): resume to carry on from its last iteration.'}[state]||'';
+  const note=phase==='evaluating'?'Running final evaluation; the iteration count stays fixed.':phase==='finished'?'Training finished; shutting down workers.':{pausing:'Pausing after this iteration…',paused:'Paused: resume to carry on where it stopped.',interrupted:'Interrupted (it ended without a pause or stop): resume to carry on from its last iteration.'}[state]||'';
   // The 5 s refresh only updates the numbers: rebuilding the strip would undo an armed Stop and clear a message.
-  const key=`${state}|${s.run}`;
+  const key=`${state}|${phase}|${s.run}`;
   if(key!==S.STATUS_KEY){
     S.STATUS_KEY=key;
-    $('status').innerHTML=`<span class="badge ${state}">${{training:'Training',pausing:'Pausing',paused:'Paused',interrupted:'Interrupted',idle:'Idle'}[state]}</span><span id="status-facts"></span>${note?`<span class="msg">${note}</span>`:''}<span class="msg" id="status-msg"></span><span class="actions">${buttons.map(b=>`<button data-act="${b}" class="${b==='stop'?'danger':''}">${label[b]}</button>`).join('')}</span>`;
+    $('status').innerHTML=`<span class="badge ${state}">${phase==='evaluating'?'Evaluating':phase==='finished'?'Finishing':{training:'Training',pausing:'Pausing',paused:'Paused',interrupted:'Interrupted',idle:'Idle'}[state]}</span><span id="status-facts"></span>${note?`<span class="msg">${note}</span>`:''}<span class="msg" id="status-msg"></span><span class="actions">${buttons.map(b=>`<button data-act="${b}" class="${b==='stop'?'danger':''}">${label[b]}</button>`).join('')}</span>`;
     $('status').querySelectorAll('button').forEach(b=>b.onclick=()=>act(b));
   }
   $('status-facts').outerHTML=facts.replace('<span class="facts">','<span class="facts" id="status-facts">');
@@ -43,7 +44,13 @@ export async function act(button){
     button.classList.add('armed');button.textContent='Really stop?';
     setTimeout(()=>{if(button.isConnected){button.classList.remove('armed');button.textContent='Stop'}},5000);return}
   button.disabled=true;
-  try{const r=await post(`api/${what}`,what==='resume'?{run:S.STATUS.run}:{});
+  try{const body=what==='resume'?{run:S.STATUS.run}:{};
+    if(what==='resume'&&Object.keys(S.EDITS).length){
+      if($('from-run').value!==S.STATUS.run||$('task').value!==currentTask())throw new Error('Select the paused run as the settings source before resuming with edits.');
+      body.changes={...S.EDITS};
+    }
+    const r=await post(`api/${what}`,body);
+    if(what==='resume')S.EDITS={};
     S.STATUS_KEY=null;await loadStatus();$('status-msg').textContent={pause:`${r.run} will pause once its current iteration is saved.`,resume:`Resumed ${r.run}.`,stop:`Stopped ${r.run}.`}[what];
     await loadRuns()}
   catch(e){const m=$('status-msg');m.className='msg error';m.textContent=e.message;button.disabled=false}

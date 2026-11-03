@@ -20,7 +20,7 @@ export function setChartStart(value){
 export const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 export function smooth(v,k=5){return v.map((_,i)=>{const s=v.slice(Math.max(0,i-k+1),i+1);return s.reduce((a,b)=>a+b,0)/s.length})}
 // rows: the rows in the chosen range; start: the first iteration of that range (the chart's left edge).
-export function chart({title,sub,key,ref,base,gate,wide},rows=chartData(),start=S.CHART_START){
+export function chart({title,sub,key,ref,base,gate,wide,unit},rows=chartData(),start=S.CHART_START){
   const D=rows;
   if(!D.length)return '';
   if(D.length&&!(key in D.at(-1)))return '';        // a run that does not log this one
@@ -29,10 +29,12 @@ export function chart({title,sub,key,ref,base,gate,wide},rows=chartData(),start=
   const g=gate?D.filter(d=>'gate_score' in d):[];
   let all=ys.concat(ref!=null?[ref]:[],base!=null?[base]:[],g.map(d=>d.gate_score));
   let lo=Math.min(...all),hi=Math.max(...all);const pad=(hi-lo||1)*.08;lo-=pad;hi+=pad;
+  if(unit==='%'){lo=Math.max(0,lo);hi=Math.min(1,hi)}
+  const tick=v=>unit==='%'?`${(v*100).toFixed(0)}%`:v.toFixed(Math.abs(hi)<10?2:0);
   const x0=start,x1=Math.max(x0+10,...xs);
   const X=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r),Y=v=>H-m.b-(v-lo)/(hi-lo)*(H-m.t-m.b);
   let s=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${title}">`;
-  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css('--grid')}"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${v.toFixed(Math.abs(hi)<10?2:0)}</text>`}
+  for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4;s+=`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css('--grid')}"/><text x="${m.l-6}" y="${Y(v)+4}" text-anchor="end">${tick(v)}</text>`}
   for(let i=0;i<=4;i++){const v=Math.round(x0+(x1-x0)*i/4);s+=`<text x="${X(v)}" y="${H-6}" text-anchor="middle">${v}</text>`}
   const hl=(v,c,d)=>v==null?'':`<line x1="${m.l}" x2="${W-m.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${css(c)}" stroke-dasharray="${d}" stroke-width="1.5"/>`;
   s+=hl(ref,'--ref','6 4')+hl(base,'--base','2 4');
@@ -41,7 +43,7 @@ export function chart({title,sub,key,ref,base,gate,wide},rows=chartData(),start=
   s+=`<path d="${path(smooth(ys,5))}" fill="none" stroke="${css('--line')}" stroke-opacity=".6" stroke-width="1.4"/>`;
   s+=`<path d="${path(smooth(ys,25))}" fill="none" stroke="${css('--ref')}" stroke-width="2.8"/>`;
   // The highest and lowest the 5-iteration average has reached so far, labelled at the right.
-  const av=smooth(ys,5),fmt=v=>v.toFixed(Math.abs(hi)<10?2:1);
+  const av=smooth(ys,5),fmt=v=>unit==='%'?`${(v*100).toFixed(1)}%`:v.toFixed(Math.abs(hi)<10?2:1);
   // Each is marked on the x axis where it was seen: a triangle pointing up for the high, down for the low.
   const ay=H-m.b,c=css('--base');
   for(const [v,dy,up] of [[Math.max(...av),-5,true],[Math.min(...av),13,false]]){

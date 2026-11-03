@@ -8,7 +8,8 @@ export function fillFrom(){
   const sel=$('from-run'),keep=sel.value,usable=S.RUNS.filter(r=>r.checkpoints.length && taskOf(r)===$('task').value).reverse();
   sel.innerHTML=(capabilities($('task').value).fresh_weights?'<option value="new">Fresh weights</option>':'')+usable.map((r,i)=>`<option value="${r.name}">${r.name}${i===0?' (newest)':''}</option>`).join('');
   if(keep&&usable.some(r=>r.name===keep))sel.value=keep;else if(usable.length){sel.value=usable[0].name;}
-  fromChanged();fillIters();
+  if(sel.value!==keep||!Object.keys(S.EDITS).length)fromChanged();
+  fillIters();
 }
 // An iteration box: any finished iteration of the run, typed or stepped; Last jumps to the newest.
 export function setIters(input,range,checkpoints){
@@ -28,7 +29,10 @@ export function fillIters(){
   const run=S.RUNS.find(r=>r.name===$('from-run').value);
   setIters($('from-iter'),$('from-range'),run?run.checkpoints:[]);
 }
+let sourceRequest=0;
 export async function fromChanged(){
+  const source=$('from-run').value,request=++sourceRequest;
+  S.EDITS={};
   fillIters();
   if($('from-run').value==='new'){
     S.BASE=Object.fromEntries(S.SCHEMA.settings.map(s=>[s.dest,{value:s.default,source:'recorded'}]));
@@ -36,7 +40,9 @@ export async function fromChanged(){
     for(const [key,value] of Object.entries({...task.defaults,task:task.key}))S.BASE[key]={value,source:'recorded'};
     S.EDITS={};renderForm();renderStart();return;
   }
-  try{S.BASE=await api(`api/runs/${$('from-run').value}/settings`);S.EDITS={};renderForm()}catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message}
+  try{const base=await api(`api/runs/${source}/settings`);
+    if(request!==sourceRequest||source!==$('from-run').value)return;
+    S.BASE=base;renderForm()}catch(e){$('next-msg').className='msg error';$('next-msg').textContent=e.message}
 }
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 // A typed value as the trainer stores it (a display_scale shows a setting in friendlier units).

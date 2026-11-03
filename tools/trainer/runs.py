@@ -102,7 +102,7 @@ def status(root=RL_ROOT, processes=None):
              [r for r in runs if r.state in ('paused', 'interrupted')][-1:]
     run = active[0] if active else (runs[-1] if runs else None)
     if run is None:
-        return {'state': 'idle', 'run': None, 'iteration': None, 'iterations': None,
+        return {'state': 'idle', 'phase': None, 'run': None, 'iteration': None, 'iterations': None,
                 'seconds_per_iteration': None, 'started': None, 'latest': {}}
     rows = log_rows(run.path)
     last = rows[-1] if rows else {}
@@ -110,7 +110,11 @@ def status(root=RL_ROOT, processes=None):
         started = datetime.datetime.fromtimestamp((run.path / 'config.json').stat().st_mtime).isoformat(timespec='seconds')
     except OSError:
         started = None
-    return {'state': run.state if active else 'idle', 'run': run.name,
+    try:
+        phase = json.loads((run.path / ppo_neural.STATE_FILE).read_text()).get('state') if run.pid else None
+    except (OSError, ValueError, AttributeError):
+        phase = None
+    return {'state': run.state if active else 'idle', 'phase': phase, 'run': run.name,
             'iteration': int(last['iteration']) if 'iteration' in last else None, 'iterations': run.total,
             'seconds_per_iteration': (last['rollout_s'] + last['update_s']) if 'rollout_s' in last else None,
             'started': started, 'latest': last, 'pid': run.pid}

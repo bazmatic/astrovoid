@@ -197,7 +197,69 @@ def pause(root=RL_ROOT, processes=None):
     return run.name
 
 
-def resume(run=None, root=RL_ROOT, processes=None, launch=None):
+def _resume_setting_updates(path, base, changes):
+    """Validate editable Flocker settings and prepare checkpoint-consistent records."""
+    import copy
+    import math
+    from types import SimpleNamespace
+    from learning import flocker_rewards
+    if not isinstance(changes, dict):
+        raise TrainerError('resume changes must be a settings object')
+    try:
+        values = apply_changes(base,changes)
+    except ValueError as exc:
+        raise TrainerError(str(exc)) from None
+    edits = changed(base,values)
+    if not edits:
+        return values,{}
+    config = copy.deepcopy(config_of(path))
+    if config.get('task')!='flocker_team' or not isinstance(config.get('manifest'),dict):
+        raise TrainerError('Resume setting edits currently require a recorded Flocker run; use a new run for this task.')
+    allowed = set(flocker_rewards.SETTINGS)|{'lr','workers','iterations','budget_seconds'}
+    unsupported = [key for key,_,_ in edits if key not in allowed]
+    if unsupported:
+        raise TrainerError('These settings require a new run: '+', '.join(unsupported))
+    args = config['args']
+    for key,_,value in edits:
+        args[key]=value
+    if not math.isfinite(args['lr']) or args['lr']<=0:
+        raise TrainerError('learning rate must be finite and positive')
+    if args['workers']<1 or args['iterations']<0 or not math.isfinite(args['budget_seconds']) or args['budget_seconds']<0:
+        raise TrainerError('workers must be positive; iterations and budget must be nonnegative')
+    try:
+        rewards = flocker_rewards.from_args(SimpleNamespace(**args))
+    except ValueError as exc:
+        raise TrainerError(str(exc)) from None
+    config['manifest']['rewards']=rewards
+    config['shaping']=rewards
+    updates={}
+    if any(key=='lr' for key,_,_ in edits):
+        import io
+        import torch
+        saved=torch.load(path/'resume.pt',map_location='cpu',weights_only=False)
+        for group in saved['optimiser']['param_groups']:
+            group['lr']=args['lr']
+            if 'initial_lr' in group:
+                group['initial_lr']=args['lr']
+        output=io.BytesIO();torch.save(saved,output)
+        updates[path/'resume.pt']=output.getvalue()
+        config['manifest'].setdefault('training',{})['lr']=args['lr']
+    state_path=path/'state.json'
+    state=json.loads(state_path.read_text()) if state_path.exists() else {}
+    config.setdefault('resume_settings_changes',[]).append(dict(
+        time=time.time(),after_iteration=state.get('iteration'),
+        changes=[dict(setting=key,previous=old,value=new) for key,old,new in edits]))
+    updates[path/'config.json']=json.dumps(config,indent=2).encode()
+    return values,updates
+
+
+def _atomic_bytes(path, data):
+    temporary=path.with_name(path.name+'.resume-settings.tmp')
+    temporary.write_bytes(data)
+    temporary.replace(path)
+
+
+def resume(run=None, root=RL_ROOT, processes=None, launch=None, changes=None):
     """Carry on a paused or interrupted run in its own folder, as if it had never stopped."""
     root = Path(root)
     with _lock(root):
@@ -220,8 +282,26 @@ def resume(run=None, root=RL_ROOT, processes=None, launch=None):
         if not isinstance(args, dict):
             raise TrainerError(f'{target.name} was started before pausing existed; it cannot resume')
         values = read_settings(target.path, run_folders(root))
-        (target.path / ppo_neural.PAUSE_FILE).unlink(missing_ok=True)
+        updates={}
+        if changes:
+            values,updates=_resume_setting_updates(target.path,values,changes)
+        backups={path:path.read_bytes() for path in updates}
+        pause_file=target.path/ppo_neural.PAUSE_FILE
+        had_pause=pause_file.exists()
         command = [sys.executable, '-m', 'tools.ppo_neural', '--start', str(args['start']), '--out',
                    str(target.path), *to_argv(values), '--resume']
-        (launch or launch_process)(command, root / f'{target.name}.log')
+        try:
+            if updates:
+                _atomic_bytes(target.path/f'config-before-resume-{time.time_ns()}.json',
+                              (target.path/'config.json').read_bytes())
+            for path,data in updates.items():
+                _atomic_bytes(path,data)
+            pause_file.unlink(missing_ok=True)
+            (launch or launch_process)(command, root / f'{target.name}.log')
+        except Exception:
+            for path,data in backups.items():
+                _atomic_bytes(path,data)
+            if had_pause:
+                pause_file.touch()
+            raise
     return target.name

@@ -221,3 +221,37 @@ def test_actor_damping_is_offered_only_for_the_wallcrawler(root, task, allowed):
         with pytest.raises(TrainerError, match='^actor damping is supported only for wallcrawler runs$'):
             start('run52', root=root, processes=[], launch=fake, actor_scale=.5)
         assert fake.commands == []
+
+
+def test_resume_applies_flocker_reward_edits_to_command_and_recorded_rules(root):
+    from learning import flocker_rewards
+    path=root/'run52'
+    config=json.loads((path/'config.json').read_text())
+    config['task']='flocker_team'
+    config['args'].update(task='flocker_team',bootstrap_episodes=0,flocker_hit_reward=2.)
+    config['manifest']={'task':'flocker_team','rewards':flocker_rewards.validate({'hit_reward':2.}),
+                        'training':{'lr':config['args']['lr']}}
+    (path/'config.json').write_text(json.dumps(config))
+    (path/'resume.pt').write_text('unchanged optimizer')
+    (path/'state.json').write_text('{"state":"paused","iteration":2}')
+    launch=FakeLaunch()
+    resume('run52',root=root,processes=[],launch=launch,changes={'flocker_hit_reward':5.})
+    command=launch.commands[0]
+    assert command[command.index('--flocker-hit-reward')+1]=='5.0'
+    updated=json.loads((path/'config.json').read_text())
+    assert updated['args']['flocker_hit_reward']==5.
+    assert updated['manifest']['rewards']['hit_reward']==5.
+    assert updated['shaping']['hit_reward']==5.
+    assert (path/'resume.pt').read_text()=='unchanged optimizer'
+
+
+def test_resume_rejects_invalid_flocker_reward_edits_without_mutating_run(root):
+    from learning import flocker_rewards
+    path=root/'run52';config=json.loads((path/'config.json').read_text())
+    config['task']='flocker_team';config['args'].update(task='flocker_team',flocker_hit_reward=2.)
+    config['manifest']={'rewards':flocker_rewards.validate({'hit_reward':2.})}
+    (path/'config.json').write_text(json.dumps(config));before=(path/'config.json').read_bytes()
+    (path/'resume.pt').write_text('');(path/'state.json').write_text('{"state":"paused","iteration":2}')
+    with pytest.raises(TrainerError):
+        resume('run52',root=root,processes=[],launch=FakeLaunch(),changes={'flocker_hit_reward':-1.})
+    assert (path/'config.json').read_bytes()==before

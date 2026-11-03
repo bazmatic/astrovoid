@@ -122,7 +122,7 @@ def make_handler(root, processes, launch, allowed_hosts=()):
                     return self.send(200, {'run': control.pause(root=root, processes=processes())})
                 if path == '/api/resume':
                     return self.send(200, {'run': control.resume(body.get('run'), root=root, processes=processes(),
-                                                                 launch=launch)})
+                                                                 launch=launch,changes=body.get('changes'))})
                 if path == '/api/episodes':
                     if body.get('fly'):
                         return self.send(200, replay.fly(body.get('run'), body.get('iteration'), root=root))
