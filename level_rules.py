@@ -75,10 +75,13 @@ MAX_BOSSES = 3
 
 # Level each enemy type first appears on (anemones: config.ANEMONE_FIRST_LEVEL)
 FIRST_LEVELS = {'static': 1, 'patrol': 2, 'aggressive': 3, 'replay': 8,
-                'flocker': 5, 'flighthouse': 10, 'egg': 4}
+                'flocker': 5, 'flighthouse': 10, 'egg': 4, 'wallcrawler': 11}
 
-# Each enemy added beyond the arc goes to the next type in this order, round and round
-GROWTH_ORDER = ('aggressive', 'replay', 'flocker', 'static', 'patrol', 'anemone')
+# The types a level can be built around, and the most of each that one level carries (a Flocker team is at most eight)
+THEMES = ('aggressive', 'flocker', 'patrol', 'wallcrawler')
+DOMINANT_CAP = {'aggressive': 12, 'flocker': 8, 'patrol': 12}
+# What fills out the active roster beside the dominant type; Jellies and Flockers are never a token one or two
+SUPPORT_ORDER = ('patrol', 'replay')
 
 # What level 23, the last ordinary level of the arc, carries
 ARC_END_MIX = {'static': 4, 'patrol': 3, 'aggressive': 4, 'replay': 3, 'flocker': 3,
@@ -193,18 +196,40 @@ def get_enemy_mix(level: int) -> Dict[str, int]:
 
     count = get_enemy_count(level)
     if level > ARC_LEVELS:
-        mix.update(ARC_END_MIX)
-        order = GROWTH_ORDER
+        mix.update({n: ARC_END_MIX[n] for n in ('static', 'flighthouse', 'egg', 'anemone')})
+        mix['static'] = 3
     else:
         # Only what the player has already met; one flighthouse and one egg once they have
         for enemy_type in ('flighthouse', 'egg'):
             if level >= first_level(enemy_type):
                 mix[enemy_type] = 1
-        order = [enemy_type for enemy_type in GROWTH_ORDER if level >= first_level(enemy_type)]
-
-    for i in range(count - sum(mix.values())):
-        mix[order[i % len(order)]] += 1
+    # Every level has one dominant active type, in numbers; whatever the roster cannot fill with it is urchins
+    theme = dominant_type(level)
+    room = count - sum(mix.values())
+    if theme in ('aggressive', 'flocker', 'patrol'):
+        dominant = min(DOMINANT_CAP[theme], max(1, -(-room * 2 // 3)))
+        mix[theme] = min(room, dominant)
+        support = min(room - mix[theme], mix[theme] // 2)
+    elif theme == 'wallcrawler':
+        support = min(room, -(-generated_wallcrawler_count(level) // 2))
+    else:
+        support = 0
+    minors = [t for t in SUPPORT_ORDER if t != theme and level >= first_level(t)]
+    for i in range(support if minors else 0):
+        mix[minors[i % len(minors)]] += 1
+    mix['static'] += count - sum(mix.values())
     return mix
+
+
+def dominant_type(level: int) -> str:
+    """The active enemy type a level is built around: the Jellies, Flockers, Crabs and Wallcrawlers it has met, in turn."""
+    met = [t for t in THEMES if level >= first_level(t)]
+    return met[level % len(met)] if met else 'static'
+
+
+def generated_wallcrawler_count(level: int) -> int:
+    """Wallcrawlers on a level without a level file: none, unless it is built around them, and then a crowd."""
+    return min(8, 5 + (level - 11) // 12) if dominant_type(level) == 'wallcrawler' else 0
 
 
 def get_anemone_count(level: int) -> int:

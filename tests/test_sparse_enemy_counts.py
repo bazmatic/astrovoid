@@ -25,7 +25,7 @@ def test_missing_roster_keeps_generated_defaults(monkeypatch):
     assert level_config.get_level_egg_count(18) == level_rules.get_enemy_counts(18).egg
     assert level_config.get_level_split_boss_count(18) == level_rules.get_split_boss_count(18)
     assert level_config.get_level_mother_boss_count(18) == level_rules.get_mother_boss_count(18)
-    assert level_config.get_level_wallcrawler_count(18) == 2
+    assert level_config.get_level_wallcrawler_count(18) == level_rules.generated_wallcrawler_count(18)
 
 
 def test_layout_roster_still_wins_over_the_counts_section(monkeypatch):

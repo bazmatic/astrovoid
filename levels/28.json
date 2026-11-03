@@ -263,62 +263,6 @@
     ],
     "enemies": [
       {
-        "type": "flighthouse",
-        "cell": [
-          16,
-          4
-        ]
-      },
-      {
-        "type": "flighthouse",
-        "cell": [
-          27,
-          28
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          9,
-          23
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          9,
-          25
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          19,
-          6
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          19,
-          8
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          15,
-          12
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          25,
-          19
-        ]
-      },
-      {
         "type": "static",
         "cell": [
           6,
@@ -342,29 +286,22 @@
       {
         "type": "patrol",
         "cell": [
-          6,
-          25
+          25,
+          30
         ]
       },
       {
-        "type": "patrol",
-        "cell": [
-          26,
-          23
-        ]
-      },
-      {
-        "type": "aggressive",
+        "type": "flighthouse",
         "cell": [
           16,
-          26
+          4
         ]
       },
       {
-        "type": "aggressive",
+        "type": "flighthouse",
         "cell": [
           27,
-          5
+          28
         ]
       },
       {
@@ -380,16 +317,72 @@
           26,
           15
         ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          10,
+          26
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          12,
+          11
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          18,
+          26
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          19,
+          2
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          19,
+          14
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          24,
+          9
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          26,
+          20
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          26,
+          30
+        ]
       }
     ],
     "beacon": null
   },
   "enemies": {
     "static": 3,
-    "patrol": 2,
-    "aggressive": 2,
+    "patrol": 1,
+    "aggressive": 0,
     "flighthouse": 2,
     "anemone": 2,
-    "belemnite": 6
+    "belemnite": 8
   }
 }

@@ -5,9 +5,9 @@
     "grid_size": 16
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 1,
+    "static": 1,
+    "patrol": 5,
+    "aggressive": 0,
     "egg": 1
   },
   "layout": {
@@ -83,20 +83,6 @@
     ],
     "enemies": [
       {
-        "type": "patrol",
-        "cell": [
-          7,
-          1
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          14,
-          4
-        ]
-      },
-      {
         "type": "static",
         "cell": [
           10,
@@ -104,24 +90,38 @@
         ]
       },
       {
-        "type": "aggressive",
+        "type": "patrol",
+        "cell": [
+          5,
+          8
+        ]
+      },
+      {
+        "type": "patrol",
         "cell": [
           6,
-          12
+          1
         ]
       },
       {
-        "type": "static",
+        "type": "patrol",
+        "cell": [
+          7,
+          13
+        ]
+      },
+      {
+        "type": "patrol",
         "cell": [
           12,
-          12
+          3
         ]
       },
       {
-        "type": "static",
+        "type": "patrol",
         "cell": [
-          2,
-          14
+          14,
+          10
         ]
       },
       {

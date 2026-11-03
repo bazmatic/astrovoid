@@ -5,18 +5,18 @@
     "grid_size": 32
   },
   "enemies": {
-    "patrol": 1,
-    "aggressive": 3,
-    "replay": 3,
-    "flocker": 3,
+    "patrol": 0,
+    "aggressive": 0,
+    "replay": 0,
+    "flocker": 8,
     "flighthouse": 1,
     "egg": 1,
     "anemone": 2,
     "rules_hunter": 1,
-    "vibelet": 2,
-    "belemnite": 2,
-    "wallcrawler": 4,
-    "static": 1
+    "vibelet": 0,
+    "belemnite": 0,
+    "wallcrawler": 0,
+    "static": 0
   },
   "exit_policy": {
     "type": "all_cleared"
@@ -71,31 +71,59 @@
     ],
     "enemies": [
       {
-        "type": "aggressive",
+        "type": "flocker",
         "cell": [
-          22,
-          1
+          15,
+          28
         ]
       },
       {
-        "type": "replay",
+        "type": "flocker",
         "cell": [
-          1,
-          2
+          15,
+          29
         ]
       },
       {
-        "type": "static",
+        "type": "flocker",
         "cell": [
-          10,
-          2
+          16,
+          26
         ]
       },
       {
-        "type": "wallcrawler",
+        "type": "flocker",
         "cell": [
-          30,
-          2
+          16,
+          28
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          16,
+          29
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          17,
+          28
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          17,
+          29
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          18,
+          28
         ]
       },
       {
@@ -103,55 +131,6 @@
         "cell": [
           16,
           6
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          25,
-          9
-        ]
-      },
-      {
-        "type": "rules_hunter",
-        "cell": [
-          1,
-          10
-        ]
-      },
-      {
-        "type": "anemone",
-        "cell": [
-          22,
-          10
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          19,
-          11
-        ]
-      },
-      {
-        "type": "vibelet",
-        "cell": [
-          30,
-          12
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          7,
-          14
-        ]
-      },
-      {
-        "type": "replay",
-        "cell": [
-          24,
-          14
         ]
       },
       {
@@ -169,73 +148,17 @@
         ]
       },
       {
-        "type": "flocker",
-        "cell": [
-          12,
-          17
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          1,
-          18
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          13,
-          18
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          27,
-          18
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          20,
-          21
-        ]
-      },
-      {
-        "type": "vibelet",
-        "cell": [
-          15,
-          25
-        ]
-      },
-      {
-        "type": "replay",
-        "cell": [
-          30,
-          29
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          10,
-          30
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          19,
-          30
-        ]
-      },
-      {
-        "type": "patrol",
+        "type": "anemone",
         "cell": [
           22,
-          30
+          10
+        ]
+      },
+      {
+        "type": "rules_hunter",
+        "cell": [
+          1,
+          10
         ]
       }
     ],

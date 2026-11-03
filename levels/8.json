@@ -5,11 +5,11 @@
     "grid_size": 22
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 2,
+    "static": 2,
+    "patrol": 0,
+    "aggressive": 0,
     "replay": 1,
-    "flocker": 1,
+    "flocker": 7,
     "egg": 1,
     "anemone": 1
   },
@@ -250,24 +250,10 @@
     ],
     "enemies": [
       {
-        "type": "replay",
+        "type": "static",
         "cell": [
-          16,
-          1
-        ]
-      },
-      {
-        "type": "egg",
-        "cell": [
-          1,
-          2
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          20,
-          3
+          3,
+          11
         ]
       },
       {
@@ -278,51 +264,72 @@
         ]
       },
       {
-        "type": "aggressive",
+        "type": "replay",
         "cell": [
-          13,
-          6
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          3,
+          16,
           11
         ]
       },
       {
-        "type": "patrol",
+        "type": "flocker",
         "cell": [
-          19,
-          11
+          10,
+          14
         ]
       },
       {
-        "type": "static",
+        "type": "flocker",
         "cell": [
-          12,
+          11,
           12
         ]
       },
       {
-        "type": "aggressive",
+        "type": "flocker",
         "cell": [
-          7,
+          11,
+          13
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          11,
           14
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          11,
+          15
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          11,
+          16
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          12,
+          14
+        ]
+      },
+      {
+        "type": "egg",
+        "cell": [
+          1,
+          2
         ]
       },
       {
         "type": "anemone",
         "cell": [
           5,
-          20
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          13,
           20
         ]
       }

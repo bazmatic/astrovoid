@@ -5,10 +5,10 @@
     "grid_size": 32
   },
   "enemies": {
-    "static": 5,
-    "aggressive": 3,
-    "belemnite": 10,
-    "wallcrawler": 4
+    "static": 3,
+    "aggressive": 0,
+    "belemnite": 12,
+    "wallcrawler": 6
   },
   "exit_policy": {
     "type": "type_cleared",
@@ -575,80 +575,10 @@
     ],
     "enemies": [
       {
-        "type": "belemnite",
+        "type": "static",
         "cell": [
-          11,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          12,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          13,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          23,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          24,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          25,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          26,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          27,
-          3
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          11,
-          4
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          13,
-          4
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          13,
-          9
+          4,
+          23
         ]
       },
       {
@@ -666,66 +596,129 @@
         ]
       },
       {
-        "type": "aggressive",
+        "type": "belemnite",
         "cell": [
-          13,
-          21
+          6,
+          29
         ]
       },
       {
-        "type": "aggressive",
+        "type": "belemnite",
         "cell": [
-          24,
-          22
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          4,
-          23
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          13,
-          24
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          25,
-          24
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          30,
+          12,
           30
         ]
       },
       {
-        "type": "wallcrawler",
+        "type": "belemnite",
         "cell": [
-          5,
+          13,
           1
         ]
       },
       {
-        "type": "wallcrawler",
+        "type": "belemnite",
+        "cell": [
+          13,
+          8
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          13,
+          23
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          16,
+          17
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          18,
+          27
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          20,
+          1
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          21,
+          10
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          23,
+          23
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          26,
+          7
+        ]
+      },
+      {
+        "type": "belemnite",
         "cell": [
           30,
-          3
+          14
         ]
       },
       {
         "type": "wallcrawler",
         "cell": [
-          4,
-          30
+          13,
+          26
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          15,
+          2
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          18,
+          22
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          20,
+          11
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          21,
+          2
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          29,
+          4
         ]
       }
     ],

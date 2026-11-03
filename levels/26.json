@@ -178,6 +178,69 @@
     ],
     "enemies": [
       {
+        "type": "static",
+        "cell": [
+          9,
+          14
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          12,
+          21
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          18,
+          28
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          12,
+          12
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          12,
+          30
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          19,
+          22
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          21,
+          11
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          27,
+          11
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          29,
+          30
+        ]
+      },
+      {
         "type": "egg",
         "cell": [
           19,
@@ -206,34 +269,6 @@
         ]
       },
       {
-        "type": "static",
-        "cell": [
-          9,
-          14
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          6,
-          16
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          3,
-          18
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          12,
-          21
-        ]
-      },
-      {
         "type": "anemone",
         "cell": [
           28,
@@ -245,20 +280,6 @@
         "cell": [
           20,
           26
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          18,
-          28
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          5,
-          29
         ]
       }
     ],
@@ -272,8 +293,8 @@
   },
   "hunter": false,
   "enemies": {
-    "static": 4,
-    "patrol": 2,
+    "static": 3,
+    "patrol": 6,
     "egg": 1,
     "anemone": 4,
     "neural_hunter": 1

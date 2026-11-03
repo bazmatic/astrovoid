@@ -5,9 +5,9 @@
     "grid_size": 14
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 1
+    "static": 2,
+    "patrol": 0,
+    "aggressive": 4
   },
   "layout": {
     "walls": [
@@ -92,20 +92,6 @@
       {
         "type": "static",
         "cell": [
-          12,
-          1
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          9,
-          5
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
           2,
           7
         ]
@@ -113,22 +99,36 @@
       {
         "type": "static",
         "cell": [
-          3,
+          12,
+          1
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          2,
+          10
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          5,
+          5
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          6,
           9
         ]
       },
       {
         "type": "aggressive",
         "cell": [
-          10,
-          10
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          12,
-          12
+          9,
+          4
         ]
       }
     ],

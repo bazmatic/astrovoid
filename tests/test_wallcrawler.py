@@ -164,10 +164,9 @@ def test_it_can_be_placed_in_the_editor_and_campaign_and_generated_levels():
     assert level_config.get_level_wallcrawler_count(7) == 0
     assert level_config.get_level_wallcrawler_count(8) == 0
     assert level_config.get_level_wallcrawler_count(9) == 0
-    assert level_config.get_level_wallcrawler_count(11) == 1
-    assert level_config.get_level_wallcrawler_count(14) == 2
-    assert level_config.get_level_wallcrawler_count(21) == 4
-    assert level_config.get_level_wallcrawler_count(40) > 0
+    assert level_config.get_level_wallcrawler_count(11) == 5      # a crowd from their first level
+    counts = [level_config.get_level_wallcrawler_count(n) for n in range(34, 80)]
+    assert any(counts) and all(n == 0 or 5 <= n <= 8 for n in counts)
     from level_rules import EnemyCounts
     roster = EnemyRoster()
     manager = SpawnManager(roster)
@@ -211,7 +210,7 @@ def test_body_draws_attached_airborne_and_dying():
     c.draw_death(screen)
 
 
-@pytest.mark.parametrize('level', [11, 13, 14, 15, 16, 17, 19, 20, 21, 22, 23, 27])
+@pytest.mark.parametrize('level', [11, 14, 17, 21, 27])
 def test_campaign_starts_the_expected_crawlers_and_they_find_a_wall(game, monkeypatch, level):
     from tests.test_layout_play import real_level_config
     from tests.test_rules_hunter import SilentWorker

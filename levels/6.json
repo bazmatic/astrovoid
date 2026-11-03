@@ -5,10 +5,10 @@
     "grid_size": 18
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 2,
-    "flocker": 1,
+    "static": 2,
+    "patrol": 1,
+    "aggressive": 6,
+    "flocker": 0,
     "egg": 1
   },
   "layout": {
@@ -23,41 +23,6 @@
     ],
     "enemies": [
       {
-        "type": "patrol",
-        "cell": [
-          4,
-          1
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          8,
-          1
-        ]
-      },
-      {
-        "type": "egg",
-        "cell": [
-          1,
-          2
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          6,
-          2
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          16,
-          2
-        ]
-      },
-      {
         "type": "static",
         "cell": [
           5,
@@ -65,24 +30,66 @@
         ]
       },
       {
+        "type": "static",
+        "cell": [
+          16,
+          2
+        ]
+      },
+      {
         "type": "patrol",
         "cell": [
+          7,
+          3
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          1,
+          9
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
           2,
+          13
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          5,
           6
         ]
       },
       {
-        "type": "static",
+        "type": "aggressive",
         "cell": [
-          3,
-          10
+          15,
+          14
         ]
       },
       {
         "type": "aggressive",
         "cell": [
           16,
-          16
+          5
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          16,
+          10
+        ]
+      },
+      {
+        "type": "egg",
+        "cell": [
+          1,
+          2
         ]
       }
     ],

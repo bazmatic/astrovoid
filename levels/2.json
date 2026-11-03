@@ -5,8 +5,8 @@
     "grid_size": 12
   },
   "enemies": {
-    "static": 4,
-    "patrol": 1
+    "static": 2,
+    "patrol": 3
   },
   "layout": {
     "walls": [
@@ -43,13 +43,6 @@
       {
         "type": "static",
         "cell": [
-          8,
-          1
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
           1,
           2
         ]
@@ -57,22 +50,29 @@
       {
         "type": "static",
         "cell": [
-          5,
-          5
+          8,
+          1
         ]
       },
       {
         "type": "patrol",
         "cell": [
-          6,
-          9
+          2,
+          1
         ]
       },
       {
-        "type": "static",
+        "type": "patrol",
         "cell": [
-          3,
-          10
+          7,
+          7
+        ]
+      },
+      {
+        "type": "patrol",
+        "cell": [
+          9,
+          1
         ]
       }
     ],

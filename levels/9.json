@@ -5,11 +5,11 @@
     "grid_size": 22
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 2,
-    "replay": 1,
-    "flocker": 1,
+    "static": 2,
+    "patrol": 0,
+    "aggressive": 7,
+    "replay": 0,
+    "flocker": 0,
     "egg": 1,
     "anemone": 1,
     "belemnite": 1
@@ -207,17 +207,66 @@
     ],
     "enemies": [
       {
-        "type": "replay",
+        "type": "static",
         "cell": [
-          5,
+          2,
+          10
+        ]
+      },
+      {
+        "type": "static",
+        "cell": [
+          20,
+          11
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          4,
+          4
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          8,
+          7
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          9,
+          16
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          10,
+          11
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          11,
           1
         ]
       },
       {
-        "type": "belemnite",
+        "type": "aggressive",
         "cell": [
-          15,
-          1
+          19,
+          19
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          20,
+          13
         ]
       },
       {
@@ -235,59 +284,10 @@
         ]
       },
       {
-        "type": "aggressive",
+        "type": "belemnite",
         "cell": [
-          16,
-          9
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          2,
-          10
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          10,
-          10
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          20,
-          11
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          7,
+          9,
           13
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          13,
-          14
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          8,
-          20
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          18,
-          20
         ]
       }
     ],

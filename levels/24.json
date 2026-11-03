@@ -5,7 +5,7 @@
     "grid_size": 16
   },
   "enemies": {
-    "flocker": 2,
+    "flocker": 6,
     "egg": 2,
     "mother_boss": 1
   },
@@ -21,6 +21,48 @@
     ],
     "enemies": [
       {
+        "type": "flocker",
+        "cell": [
+          7,
+          3
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          7,
+          4
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          8,
+          3
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          8,
+          4
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          8,
+          5
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          9,
+          4
+        ]
+      },
+      {
         "type": "egg",
         "cell": [
           3,
@@ -28,10 +70,10 @@
         ]
       },
       {
-        "type": "flocker",
+        "type": "egg",
         "cell": [
-          8,
-          1
+          11,
+          14
         ]
       },
       {
@@ -39,20 +81,6 @@
         "cell": [
           13,
           2
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          6,
-          9
-        ]
-      },
-      {
-        "type": "egg",
-        "cell": [
-          11,
-          14
         ]
       }
     ],

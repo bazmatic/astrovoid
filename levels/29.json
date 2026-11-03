@@ -576,15 +576,15 @@
       {
         "type": "static",
         "cell": [
-          17,
-          29
+          7,
+          16
         ]
       },
       {
         "type": "static",
         "cell": [
-          7,
-          16
+          17,
+          29
         ]
       },
       {
@@ -597,71 +597,78 @@
       {
         "type": "patrol",
         "cell": [
-          10,
-          29
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          29,
-          16
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          17,
-          7
+          27,
+          25
         ]
       },
       {
         "type": "aggressive",
         "cell": [
-          29,
-          23
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          7,
-          10
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          12,
+          4,
           18
         ]
       },
       {
-        "type": "belemnite",
+        "type": "aggressive",
         "cell": [
-          3,
-          13
+          9,
+          14
         ]
       },
       {
-        "type": "belemnite",
+        "type": "aggressive",
         "cell": [
-          3,
-          17
+          15,
+          18
         ]
       },
       {
-        "type": "belemnite",
+        "type": "aggressive",
         "cell": [
-          23,
-          13
+          17,
+          11
         ]
       },
       {
-        "type": "belemnite",
+        "type": "aggressive",
         "cell": [
-          23,
-          16
+          20,
+          4
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          20,
+          20
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          25,
+          12
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          27,
+          19
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          29,
+          6
+        ]
+      },
+      {
+        "type": "flighthouse",
+        "cell": [
+          18,
+          18
         ]
       },
       {
@@ -672,10 +679,17 @@
         ]
       },
       {
-        "type": "flighthouse",
+        "type": "belemnite",
         "cell": [
-          18,
-          18
+          19,
+          30
+        ]
+      },
+      {
+        "type": "belemnite",
+        "cell": [
+          28,
+          5
         ]
       }
     ],
@@ -683,9 +697,9 @@
   },
   "enemies": {
     "static": 4,
-    "patrol": 3,
-    "aggressive": 3,
+    "patrol": 1,
+    "aggressive": 9,
     "flighthouse": 2,
-    "belemnite": 4
+    "belemnite": 2
   }
 }

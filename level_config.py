@@ -250,7 +250,7 @@ def get_level_wallcrawler_count(level: int) -> int:
     data = load_level_config(level)
     if data is not None and 'enemies' in data:
         return max(0, int(data['enemies'].get('wallcrawler', 0)))
-    return min(6, 1 + (level - 11) // 6) if level >= 11 else 0
+    return level_rules.generated_wallcrawler_count(level)
 
 
 def _placed_only_count(level: int, kind: str) -> int:

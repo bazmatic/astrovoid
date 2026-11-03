@@ -5,15 +5,15 @@
     "grid_size": 24
   },
   "enemies": {
-    "static": 3,
-    "patrol": 2,
-    "aggressive": 2,
-    "replay": 1,
-    "flocker": 1,
+    "static": 1,
+    "patrol": 1,
+    "aggressive": 0,
+    "replay": 0,
+    "flocker": 7,
     "flighthouse": 1,
     "egg": 1,
     "anemone": 1,
-    "belemnite": 1
+    "belemnite": 0
   },
   "layout": {
     "walls": [
@@ -287,38 +287,59 @@
         ]
       },
       {
-        "type": "replay",
-        "cell": [
-          19,
-          1
-        ]
-      },
-      {
-        "type": "egg",
-        "cell": [
-          2,
-          2
-        ]
-      },
-      {
         "type": "patrol",
         "cell": [
-          8,
-          3
+          3,
+          14
         ]
       },
       {
-        "type": "patrol",
+        "type": "flocker",
         "cell": [
-          1,
-          7
+          4,
+          15
         ]
       },
       {
-        "type": "aggressive",
+        "type": "flocker",
         "cell": [
-          22,
-          7
+          4,
+          16
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          5,
+          15
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          5,
+          16
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          5,
+          17
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          6,
+          15
+        ]
+      },
+      {
+        "type": "flocker",
+        "cell": [
+          6,
+          16
         ]
       },
       {
@@ -329,44 +350,16 @@
         ]
       },
       {
-        "type": "static",
+        "type": "egg",
         "cell": [
-          18,
-          12
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          1,
-          13
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          10,
-          17
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          1,
-          20
+          2,
+          2
         ]
       },
       {
         "type": "anemone",
         "cell": [
           6,
-          22
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          14,
           22
         ]
       }

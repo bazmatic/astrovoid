@@ -70,6 +70,30 @@ def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level
     game.start_level()
 
     placed = {kind: len(game.roster.of_kind(kind)) for kind in asked_for}
+    placed['aggressive'] += len(game.roster.of_kind('neural_jelly'))   # Jellies spawn as the neural kind
     assert placed == asked_for
     for enemy in game.roster.all():
         assert math.dist(enemy.get_pos(), game.maze.start_pos) >= config.ENEMY_START_CLEARANCE
+
+
+ACTIVE = ('patrol', 'aggressive', 'flocker', 'wallcrawler', 'replay', 'belemnite', 'vibelet', 'neural_hunter')
+
+
+def active_roster(level):
+    counts = dict(enemies(level)) if level_config.get_level_layout(level) or level_config.load_level_config(level) else {}
+    if not counts:
+        generated = level_rules.get_enemy_counts(level)
+        counts = {k: getattr(generated, k) for k in ('patrol', 'aggressive', 'flocker', 'replay')}
+        counts['wallcrawler'] = level_config.get_level_wallcrawler_count(level)
+    return {k: counts.get(k, 0) for k in ACTIVE if counts.get(k, 0)}
+
+
+@pytest.mark.parametrize('level', [n for n in range(3, 80) if n not in (12, 18, 24, 25, 30, 32, 33)
+                                   and not level_rules.is_boss_level(n)])
+def test_every_ordinary_level_is_built_around_one_active_type_in_numbers(level):
+    roster = active_roster(level)
+    assert roster, 'a level from the third on has something that moves'
+    top, count = max(roster.items(), key=lambda kv: kv[1])
+    assert count >= .5 * sum(roster.values()), f'no dominant type: {roster}'
+    for kind in ('aggressive', 'flocker', 'wallcrawler'):
+        assert roster.get(kind, 0) == 0 or roster[kind] >= 4, f'{kind} should come in numbers: {roster}'

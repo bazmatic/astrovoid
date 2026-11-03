@@ -154,7 +154,7 @@ def test_without_a_model_no_viber_is_placed_and_the_level_still_plays(game, monk
     kinds = game.roster.counts()
     assert not any(kinds.get(k) for k in VIBER_KINDS)
     assert 'neural' in caplog.text.lower()
-    assert kinds.get('static') and kinds.get('anemone')            # the rest of the level is there
+    assert kinds.get('wallcrawler') and kinds.get('anemone')            # the rest of the level is there
     from policies.exit import AllCleared
     game.exit_policy = AllCleared()                                 # the strictest exit: every enemy placed
     assert not game.exit_policy.is_open(game.exit_state())

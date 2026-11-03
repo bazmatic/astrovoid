@@ -5,17 +5,17 @@
     "grid_size": 30
   },
   "enemies": {
-    "patrol": 2,
-    "aggressive": 3,
-    "replay": 2,
-    "flocker": 2,
+    "patrol": 0,
+    "aggressive": 9,
+    "replay": 0,
+    "flocker": 0,
     "flighthouse": 1,
     "egg": 1,
     "anemone": 2,
     "vibelet": 1,
-    "belemnite": 2,
-    "wallcrawler": 3,
-    "static": 1
+    "belemnite": 1,
+    "wallcrawler": 0,
+    "static": 0
   },
   "exit_policy": {
     "type": "type_cleared",
@@ -262,29 +262,64 @@
       {
         "type": "aggressive",
         "cell": [
-          13,
-          1
+          3,
+          7
         ]
       },
       {
-        "type": "anemone",
+        "type": "aggressive",
         "cell": [
-          4,
-          3
+          9,
+          10
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          10,
+          18
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          13,
+          12
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          14,
+          17
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          17,
+          12
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          18,
+          24
+        ]
+      },
+      {
+        "type": "aggressive",
+        "cell": [
+          24,
+          2
         ]
       },
       {
         "type": "aggressive",
         "cell": [
           26,
-          3
-        ]
-      },
-      {
-        "type": "vibelet",
-        "cell": [
-          9,
-          4
+          7
         ]
       },
       {
@@ -295,34 +330,6 @@
         ]
       },
       {
-        "type": "replay",
-        "cell": [
-          10,
-          10
-        ]
-      },
-      {
-        "type": "replay",
-        "cell": [
-          19,
-          10
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          25,
-          10
-        ]
-      },
-      {
-        "type": "static",
-        "cell": [
-          4,
-          11
-        ]
-      },
-      {
         "type": "egg",
         "cell": [
           14,
@@ -330,31 +337,10 @@
         ]
       },
       {
-        "type": "wallcrawler",
+        "type": "anemone",
         "cell": [
-          28,
-          11
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          1,
-          15
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          17,
-          18
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          28,
-          18
+          4,
+          3
         ]
       },
       {
@@ -365,38 +351,17 @@
         ]
       },
       {
-        "type": "flocker",
+        "type": "vibelet",
         "cell": [
-          23,
+          11,
           20
         ]
       },
       {
-        "type": "patrol",
+        "type": "belemnite",
         "cell": [
           12,
-          24
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          19,
-          26
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          25,
-          26
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          16,
-          28
+          2
         ]
       }
     ],

@@ -6,15 +6,15 @@
   },
   "enemies": {
     "static": 2,
-    "patrol": 2,
-    "aggressive": 2,
-    "replay": 1,
-    "flocker": 2,
+    "patrol": 1,
+    "aggressive": 0,
+    "replay": 0,
+    "flocker": 0,
     "flighthouse": 1,
     "egg": 1,
     "anemone": 1,
-    "belemnite": 1,
-    "wallcrawler": 1
+    "belemnite": 0,
+    "wallcrawler": 5
   },
   "layout": {
     "walls": [
@@ -217,52 +217,10 @@
     ],
     "enemies": [
       {
-        "type": "anemone",
+        "type": "static",
         "cell": [
-          1,
-          1
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          11,
-          1
-        ]
-      },
-      {
-        "type": "egg",
-        "cell": [
-          21,
-          2
-        ]
-      },
-      {
-        "type": "wallcrawler",
-        "cell": [
-          20,
-          3
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          2,
-          4
-        ]
-      },
-      {
-        "type": "aggressive",
-        "cell": [
-          4,
-          6
-        ]
-      },
-      {
-        "type": "flocker",
-        "cell": [
-          4,
-          11
+          9,
+          22
         ]
       },
       {
@@ -275,29 +233,8 @@
       {
         "type": "patrol",
         "cell": [
-          8,
-          13
-        ]
-      },
-      {
-        "type": "replay",
-        "cell": [
-          12,
-          13
-        ]
-      },
-      {
-        "type": "patrol",
-        "cell": [
-          9,
-          19
-        ]
-      },
-      {
-        "type": "belemnite",
-        "cell": [
-          15,
-          20
+          11,
+          6
         ]
       },
       {
@@ -308,10 +245,52 @@
         ]
       },
       {
-        "type": "static",
+        "type": "egg",
+        "cell": [
+          21,
+          2
+        ]
+      },
+      {
+        "type": "anemone",
+        "cell": [
+          1,
+          1
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          1,
+          11
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          2,
+          4
+        ]
+      },
+      {
+        "type": "wallcrawler",
         "cell": [
           9,
+          9
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          11,
           22
+        ]
+      },
+      {
+        "type": "wallcrawler",
+        "cell": [
+          21,
+          19
         ]
       }
     ],
