@@ -1,9 +1,13 @@
 # Neural Jelly
 
-The neural Jelly is an opt-in, trained brain for the 1-HP Jelly. It replaces the scripted `chase`, `drift` and
+The neural Jelly is the trained brain for the 1-HP Jelly. It replaces the scripted `chase`, `drift` and
 `keepsApart` traits with one `neuralJelly` trait. A recurrent policy steers the Jelly through the cave, and teams of
-Jellies learn to close in on a target from different sides. The scripted Jelly (`aggressive`) is unchanged and stays
-the default everywhere. The neural brain only runs on Jellies of the separate `neural_jelly` kind.
+Jellies learn to close in on a target from different sides. Every campaign Jelly is of the `neural_jelly` kind, and
+the game flies it with the brain bundled as `assets/neural/jelly.npz` (run171's best checkpoint: 5.3 catches a
+minute against the scripted Jelly's 5.0, stuck 4% of the time against 21%). `JELLY_POLICY=/path/to.npz` selects
+another brain; `JELLY_POLICY=` (empty) gives the scripted chase; `SCRIPTED_JELLIES=1` spawns scripted `aggressive`
+Jellies again. The scripted kind is otherwise unchanged. Checkpoints from before the current observation schema
+(version 4, 58 inputs) no longer load.
 
 Design: `docs/superpowers/specs/2026-10-31-neural-jelly-design.md`. Trainer architecture: `docs/modular-training.md`.
 
