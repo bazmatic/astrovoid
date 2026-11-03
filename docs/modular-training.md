@@ -4,6 +4,8 @@ Astrovoid separates creature control, encounter design, numerical learning, and 
 
 For crawler mechanics and the history of reward changes, see [Creature training](creature-training.md). This guide describes the implementation and extension points as of scenario 56 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
 
+The `flocker_team` task adds continuous flight, articulated head aiming, learned local communication and wall perching; see [Neural Flockers](neural-flockers.md). A trained brain ships as `assets/neural/flocker.npz` (run196, packaged by hand with `tools/promote_flocker.py --accept-without-gate` after the deployment gate failed on cohesion and volleys); the gate remains advisory.
+
 ## Module map
 
 | Responsibility | Source | Owns |
@@ -93,7 +95,7 @@ Runs live under `.astrovoid-local/neural/rl/runN`. Process output is also captur
 
 ## Operating the trainer
 
-Open the dashboard with `./run-trainer.sh`; its default address is `http://localhost:8765`. Only one run may be active or paused.
+Open the dashboard with `./run-trainer.sh`; its default address is `http://localhost:8765`. Only one run may be active or paused. The timing label reports the last completed iteration, not a live countdown. During final evaluation the header says Evaluating and the iteration count stays fixed; Finishing means results are saved and workers are shutting down.
 
 ```sh
 # Inspect the active run and saved runs.

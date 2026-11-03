@@ -78,7 +78,7 @@ def test_blast_pops_the_enlarged_target_and_uses_normal_kill_accounting(game):
     game.roster.add(target)
     game.encounter.ready()
     game.encounter.apply_hit(target,make_projectile(target.get_pos(),0,'player',CATALOG['inflator']))
-    game.collision_handler.explosions.trigger(Blast((target.x,target.y+target.radius*4),5,source='player'))
+    game.collision_handler.explosions.trigger(Blast((target.x,target.y+target.hit_radius*.8),5,source='player'))
     game._update_explosions(1)
     assert not target.active and game.collision_handler.level_kills == 1
 

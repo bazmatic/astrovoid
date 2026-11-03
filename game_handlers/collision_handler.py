@@ -189,8 +189,7 @@ class CollisionHandler:
         shot.source = blast.source            # may be 'enemy': still a hit on enemies, but a kill for no one
         shot.is_enemy = False
         shot.weapon_id = blast.weapon_id
-        if blast.weapon_id is not None:
-            shot._blast_target = enemy
+        shot._blast_target = enemy
         return shot
 
     @staticmethod

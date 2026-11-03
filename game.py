@@ -144,6 +144,15 @@ class Game:
                 logging.getLogger(__name__).warning('Jelly policy unavailable: %s', exc)
 
         
+        self.flocker_policy = None
+        flocker_weights = neural_policy_path('FLOCKER_POLICY', 'flocker.npz')
+        if flocker_weights:
+            from learning.adapters.flocker import load_policy as load_flocker_policy
+            try:
+                self.flocker_policy = load_flocker_policy(flocker_weights)
+            except (ValueError, OSError, KeyError) as exc:
+                logging.getLogger(__name__).warning('Flocker policy unavailable: %s', exc)
+
         self.projectiles: List[Projectile] = []
         self.powerup_crystals: List[PowerupCrystal] = []
         self.scoring = ScoringSystem()

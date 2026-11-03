@@ -78,20 +78,27 @@ class Drift(Trait):
 class Thrusters(Trait):
     """Flies like a ship: it turns toward its brain's heading (or by its brain's turn) and thrusts along its own
     heading, coasting with friction between thrusts, bouncing off the screen edges, and sweeping into walls so it
-    never passes through one. Its top speed is `speedShare` of the player's unless `maxSpeed` is supplied."""
+    never passes through one. Its top speed is `speedShare` of the player's unless `maxSpeed` is supplied.
+    `mode='flocker'` instead couples velocity and heading into aerodynamic arcs with speed-dependent steering."""
     NAME = 'thrusters'
 
     def __init__(self, speedShare: float, thrust: float = config.SHIP_THRUST_FORCE,
                  turnRate: float = config.SHIP_ROTATION_SPEED, friction: float = config.SHIP_FRICTION,
-                 mode: str = 'standard', maxSpeed: Optional[float] = None):
-        if mode not in ('standard', 'hunter'):
+                 mode: str = 'standard', maxSpeed: Optional[float] = None,
+                 lateralAccel: float = .18, slipRecovery: float = 6., controlSpeedShare: float = .25):
+        if mode not in ('standard', 'hunter', 'flocker'):
             raise ValueError('thrusters: unknown mode')
         self.mode = mode
         self.max_speed = speedShare * config.SHIP_MAX_SPEED if maxSpeed is None else maxSpeed
         self.force, self.turn_rate, self.friction = thrust, turnRate, friction
+        self.lateral_accel, self.slip_recovery, self.control_speed_share = lateralAccel, slipRecovery, controlSpeedShare
+        if mode=='flocker' and (self.max_speed<=0 or thrust<0 or turnRate<0 or not 0<friction<=1
+                               or lateralAccel<=0 or slipRecovery<0 or not 0<controlSpeedShare<=1):
+            raise ValueError('flocker flight requires positive speed/lift, drag in (0,1] and a control speed share in (0,1]')
 
     def on_spawn(self, c, enc):
         c.prev_x, c.prev_y = c.x, c.y
+        c.propulsion_mode = self.mode
         c.max_speed, c.thrust_force, c.current_rotation_speed = self.max_speed, self.force, self.turn_rate
         c.friction = self.friction
         c.pilot_thrusting = False
@@ -102,6 +109,11 @@ class Thrusters(Trait):
         c.thrusting = False
 
     def on_frame(self, c, enc, dt):
+        if getattr(c, 'flocker_perched', False):
+            return
+        if self.mode == 'flocker':
+            self._fly_flocker(c, enc, dt)
+            return
         if self.mode == 'hunter':
             self._steer(c, enc, dt)
             return
@@ -111,7 +123,8 @@ class Thrusters(Trait):
         elif controls.turn:
             c.angle = (c.angle + controls.turn * self.turn_rate) % 360
         if controls.thrust:
-            thrust.apply_thrust(c, self.force, self.max_speed)
+            throttle = max(0., min(1., float(controls.thrust)))
+            thrust.apply_thrust(c, self.force * throttle, self.max_speed)
             c.emit('thrust', enc)
         thrust.coast(c, dt, self.friction)
         thrust.cap_speed(c, self.max_speed)
@@ -121,6 +134,27 @@ class Thrusters(Trait):
             if thrust.sweep_walls(c, maze.walls, maze.spatial_grid):
                 c.wall_impulse = (c.vx - vx, c.vy - vy)
                 c.emit('hit_wall', enc)
+
+    def _fly_flocker(self, c, enc, dt):
+        from physics.flocker_flight import advance
+        remaining = dt
+        while remaining>1e-9:
+            step = min(1.,remaining)
+            advance(c,self,step)
+            if c.controls.thrust>0:
+                c.emit('thrust',enc)
+            before = c.vx,c.vy
+            hit = bool(thrust.bounce_edges(c))
+            maze = enc.maze
+            if maze is not None:
+                hit = thrust.sweep_walls(c,maze.walls,maze.spatial_grid) or hit
+                gates = list(getattr(maze,'gate_segments',()))
+                if gates:
+                    hit = thrust.sweep_walls(c,gates) or hit
+            if hit:
+                c.wall_impulse = c.vx-before[0],c.vy-before[1]
+                c.emit('hit_wall',enc)
+            remaining -= step
 
     def _steer(self, c, enc, dt):
         action = c.controls

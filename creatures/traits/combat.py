@@ -163,7 +163,10 @@ class Gun(Trait):
             ready = c.burst_round_due
         c.just_fired = bool(ready and (self.aim_mode == 'nose' or controls.aim is not None))
         if c.just_fired:
-            if self.aim_mode == 'nose':
+            if getattr(c, 'flocker_aim_enabled', False):
+                from creatures.flocker_team import muzzle
+                pos, angle = muzzle(c)
+            elif self.aim_mode == 'nose':
                 angle = c.angle
                 rad = math.radians(angle)
                 pos = (c.x + math.cos(rad) * (c.radius + 5), c.y + math.sin(rad) * (c.radius + 5))
@@ -192,6 +195,9 @@ class Gun(Trait):
                 shot.lifetime *= self.shot_lifetime
                 shot.aim_range = c.gun_range
                 shot.actor_id = getattr(c, 'agent_id', None)
+                if getattr(c, 'flocker_aim_enabled', False):
+                    shot.flocker_target = getattr(c, 'flocker_target', None)
+                    shot.flocker_frame = getattr(getattr(enc, 'flocker_team', None), 'frames', 0)
                 if self.recoil:
                     from physics.recoil import apply_firing_recoil
                     if apply_firing_recoil(c,shot,launch_velocity,launch_spin):

@@ -18,6 +18,9 @@ class FlockerBody:
         self._creature = creature
         self.wing_phase = (creature.x*.013+creature.y*.017)%math.tau
         self.flinch_remaining = 0.0
+        self.flutter_remaining = 0.0
+        self.flutter_phase = 0.0
+        self.perch_blend = 0.0
 
     x = property(lambda self: self._creature.x)
     y = property(lambda self: self._creature.y)
@@ -25,12 +28,19 @@ class FlockerBody:
     angle = property(lambda self: self._creature.angle)
 
     def on_event(self, creature, name):
+        if name == 'hit_wall':
+            self.flutter_remaining = 12.0
         if name in ('hit','flinch'):
             self.flinch_remaining = self.FLINCH_FRAMES
 
     def update(self, creature, dt, target=None):
-        self.wing_phase = (self.wing_phase+dt*self.WING_SPEED)%math.tau
+        self.wing_phase = (self.wing_phase+dt*self.WING_SPEED*(1+2*getattr(creature,'flocker_throttle',0.)))%math.tau
         self._advance_flinch(dt)
+        self.flutter_phase += dt * math.tau / 4.0
+        self.flutter_remaining = max(0., self.flutter_remaining-dt)
+        perched = getattr(creature, 'flocker_perched', False)
+        self.perch_blend = (min(1., self.perch_blend+dt/12.) if perched
+                            else max(0., self.perch_blend-dt/6.))
 
     def update_death(self, creature, dt):
         self._advance_flinch(dt)
@@ -60,12 +70,20 @@ class FlockerBody:
         def point(x,y):
             return (center[0]+radius*(x*cs-y*sn),center[1]+radius*(x*sn+y*cs))
 
+        def head_point(x, y):
+            h = math.radians(getattr(self._creature, 'flocker_head', 0.))
+            ch, sh = math.cos(h), math.sin(h)
+            return point(.48+(x-.48)*ch-y*sh, (x-.48)*sh+y*ch)
+
+        perch = self.perch_blend*(1-progress)
+        flutter = self.flutter_remaining/12.0*(1-progress)*(1-perch)
+
         def color(rgb):
             flash = flinch*.85
             return tuple(round(channel+(255-channel)*flash) for channel in rgb)
 
         def polygon(rgb, points, outline=None):
-            vertices = [point(x,y) for x,y in points]
+            vertices = [point(min(x,.54),y) for x,y in points]
             pygame.draw.polygon(screen,color(rgb),vertices)
             if outline:
                 pygame.draw.aalines(screen,color(outline),True,vertices)
@@ -82,7 +100,11 @@ class FlockerBody:
         draw_glow_circle(screen,center,radius*.45,base,glow_radius=radius*.35,intensity=.2)
 
         # A flying fish's long lower tail lobe and two smaller pelvic gliding fins.
-        tail_sway = math.sin(self.wing_phase*1.6)*.1*(1-fold)
+        tail_sway = math.sin(self.wing_phase*1.6)*.1*(1-fold)*(1-perch)
+        tail_point = point
+        def tucked_point(x, y):
+            return tail_point(x*(1-.5*perch), y*(1-.7*perch))
+        point = tucked_point
         polygon((218,130,54),[(-.72,0),(-1.67,-.43+tail_sway),(-1.25,tail_sway),
                               (-1.85,.56+tail_sway),(-1.03,.14)],gold)
         line(dark,[(-.9,0),(-1.55,-.32+tail_sway)])
@@ -91,8 +113,12 @@ class FlockerBody:
             polygon((70,168,161),[(-.42,side*.2),(-1.06,side*.65*(1-.65*fold)),
                                    (-.87,side*.17)],fin_light)
 
+        point = tail_point
+
         # Broad pectoral membranes breathe gently, with scalloped edges and visible fin rays.
-        span = (1+.1*math.sin(self.wing_phase))*(1-.76*fold)*(1-.38*flinch)
+        span = ((1+.1*math.sin(self.wing_phase))*(1-.76*fold)*(1-.38*flinch)
+                *(1-.82*perch) * (1+.45*flutter*math.sin(self.flutter_phase)))
+        span *= 1+.025*perch*math.sin(self.wing_phase*.4)
         for side in (-1,1):
             root=(.32,side*.18)
             edge=[(.05,side*.95*span),(-.35,side*1.62*span),(-.64,side*1.54*span),
@@ -121,15 +147,23 @@ class FlockerBody:
         line((247,225,151),[(.64,-.25),(.58,-.05),(.66,.23)])
         polygon((57,134,145),[(.2,-.06),(-.36,-.12),(-.1,-.01)],fin_light)  # dorsal ridge
 
+        # The head pivots about the same .48-radius anchor used by the physical muzzle.
+        neck = [head_point(x,y) for x,y in ((.48,-.26),(.86,-.24),(1.2,0),(.94,.22),(.48,.26))]
+        pygame.draw.polygon(screen,color(base),neck)
+        pygame.draw.aalines(screen,color(dark),True,neck)
         # Raised eyes, dark pupils, tiny specular glints, and a pointed mouth.
         for side in (-1,1):
-            eye=point(.85,side*.16)
+            eye=head_point(.85,side*.16)
             er=max(1,round(radius*.115))
             pygame.draw.circle(screen,color((249,242,194)),(round(eye[0]),round(eye[1])),er+1)
             pygame.draw.circle(screen,(20,38,46),(round(eye[0]),round(eye[1])),er)
-            glint=point(.89,side*.16-.04)
+            glint=head_point(.89,side*.16-.04)
             screen.set_at((round(glint[0]),round(glint[1])),(255,255,245))
-        line(dark,[(1.2,0),(1.04,.035)])
+        pygame.draw.line(screen,color(dark),head_point(1.2,0),head_point(1.04,.035),1)
+        if perch > 0:
+            for side in (-1,1):
+                pygame.draw.lines(screen,color(fin_light),False,
+                    [point(-.35,side*.18),point(-.85,side*.28),point(-1.36,side*.2)],1)
 
         if flinch > 0:
             # A short, deterministic spray makes even a one-hit death read as an impact.

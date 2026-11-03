@@ -4,6 +4,7 @@ It holds what every creature has, and the state its traits keep. It does not act
 traits every frame and animates its Body.
 """
 import copy
+import math
 import random
 from dataclasses import dataclass
 from typing import Optional, Sequence, Tuple
@@ -20,7 +21,7 @@ DRAW_MARGIN = 100   # px: a creature further off screen than this is not drawn
 class Controls:
     """What a creature's brain asks of its propulsion and gun this frame."""
     turn: float = 0.0                         # -1 (left) to 1 (right)
-    thrust: bool = False
+    thrust: float = 0.0
     fire: bool = False
     heading: Optional[float] = None           # degrees: the way it wants to go
     aim: Optional[Tuple[float, float]] = None  # where it wants to shoot
@@ -65,7 +66,27 @@ class Creature(GameEntity):
 
     @property
     def hit_radius(self):
+        segments = getattr(self.body, 'collision_segments', None)
+        if segments is not None:
+            return max(math.dist(self.get_pos(), p)+radius
+                       for a, b, radius in segments(self) for p in (a, b))
         return self.radius*self.inflation.scale
+
+    def projectile_contact(self, start, delta, radius):
+        """Earliest swept projectile hit, following articulated anatomy when present."""
+        from weapons.geometry import circle_time, segment_contact
+        from utils import get_closest_point_on_line
+        segments = getattr(self.body, 'collision_segments', None)
+        if segments is None:
+            return circle_time(start, delta, self.get_pos(), self.hit_radius+radius)
+        earliest = None
+        for a, b, skin in segments(self):
+            if math.dist(start, get_closest_point_on_line(start, a, b)) <= skin+radius:
+                return 0.
+            hit = segment_contact(start, delta, a, b, skin+radius)
+            if hit is not None and (earliest is None or hit[0] < earliest):
+                earliest = hit[0]
+        return earliest
 
     def _draw_body(self, screen, draw):
         # Grow the body and shooting target without making it unable to fit its corridor.
@@ -77,7 +98,7 @@ class Creature(GameEntity):
         try:
             screen.set_clip(clip.clip((config.UI_ZONE_WIDTH,0,
                                       max(0,screen.get_width()-config.UI_ZONE_WIDTH),screen.get_height())))
-            self.radius = self.hit_radius
+            self.radius = radius*self.inflation.scale
             draw(screen,self)
         finally:
             self.radius = radius

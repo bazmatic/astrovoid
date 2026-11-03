@@ -45,6 +45,11 @@ def coast(body, dt: float, friction: float) -> int:
     body.vy *= friction
     body.x += body.vx * dt
     body.y += body.vy * dt
+    return bounce_edges(body)
+
+
+def bounce_edges(body) -> int:
+    """Keep a flying body inside the screen, reflecting actual collision velocity."""
     edges = 0
     if body.x < body.radius:
         body.x = body.radius

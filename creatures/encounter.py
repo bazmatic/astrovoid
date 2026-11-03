@@ -56,6 +56,9 @@ class Encounter:
         if any(c.active and any(t.NAME == 'neuralJelly' for t in c.traits) for c in creatures):
             from creatures.jelly_team import get_jelly_team
             get_jelly_team(self).before_frame()
+        if any(c.active and any(t.NAME == 'flockerFlight' for t in c.traits) for c in creatures):
+            from creatures.flocker_team import get_flocker_team
+            get_flocker_team(self).before_frame()
         crowds: Dict[Tuple[str, str], Tuple[object, List[Creature]]] = {}
         for creature in creatures:
             if not creature.active:
@@ -122,7 +125,8 @@ class Encounter:
                 return False
             for creature in self.creatures():
                 if (creature.active and creature.allegiance == 'enemy'
-                        and projectile.check_circle_collision(creature.get_pos(), creature.hit_radius)):
+                        and creature.projectile_contact(projectile.get_pos(), (0., 0.), projectile.radius) is not None):
+                    projectile.active = False
                     self.apply_hit(creature, projectile)
                     return True
         return False

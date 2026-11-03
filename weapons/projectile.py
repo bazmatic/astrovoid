@@ -32,6 +32,8 @@ class WeaponProjectile(Projectile):
         pass
 
     def target_contact(self, start, delta, target, segments):
+        if hasattr(target, 'projectile_contact'):
+            return target.projectile_contact(start, delta, self.radius)
         return circle_time(start,delta,target.get_pos(),getattr(target,'hit_radius',target.radius)+self.radius)
 
     def hit_target(self, target, apply_hit, trigger_blast):

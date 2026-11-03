@@ -45,6 +45,9 @@ class Flocks(Trait):
         self.close_range, self.close_angle, self.sync_chance = closeRange, closeAngle, syncChance
 
     def on_crowd(self, creatures, enc, dt):
+        team = getattr(enc, 'flocker_team', None)
+        if team is not None and team.neural:
+            return
         cache = FlockerNeighborCache(max(self.separation_radius, self.alignment_radius, self.cohesion_radius))
         cache.update(creatures)
         for index, c in enumerate(creatures):
@@ -58,6 +61,10 @@ class Flocks(Trait):
             controls.heading = None
             controls.turn = 0.0 if abs(off) <= config.SHIP_ROTATION_SPEED * 2.0 else math.copysign(1.0, off)
             controls.thrust = abs(off) < 45.0
+            if getattr(c, 'propulsion_mode', 'standard') == 'flocker':
+                # A stationary aerodynamic body cannot pivot. Keep enough airspeed
+                # to bank towards a target even when it starts behind the flock.
+                controls.thrust = 1.0 if abs(off) < 45.0 else .35
             controls.aim = goal
             controls.fire = goal is not None and self._fires(c, goal, cache, index, dt)
 
