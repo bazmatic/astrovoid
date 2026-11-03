@@ -7,6 +7,7 @@ from creatures.flocker_team import Intent, get_flocker_team, clamp, offset, visi
 class FlockerFlight(Trait):
     NAME = 'flockerFlight'
     REQUIRES = ('thrusters', 'gun')
+    LIVE = ('flocker_target', 'flocker_surface')
 
     def on_spawn(self, c, enc):
         c.flocker_intent = Intent()

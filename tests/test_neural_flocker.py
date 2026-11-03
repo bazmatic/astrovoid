@@ -778,3 +778,14 @@ def test_combat_gate_can_demand_more_survival_than_the_scripted_team(monkeypatch
     state=dict(stage=5,passing_blocks=0)
     assert scenario.validation_evidence(summary,state,args)['flocker_validation_passed']
     assert not scenario.validation_evidence(summary,dict(state,minimum_survival=.5),args)['flocker_validation_passed']
+
+
+def test_a_flocker_that_has_picked_a_target_can_still_be_copied_for_its_death_portrait():
+    import copy
+    import threading
+    (bird,),enc,team=scene(positions=((400.,300.),),ship=target((600.,300.)))
+    ship=target((600.,300.))
+    ship.sound=threading.Lock()          # a live ship carries unpicklable audio handles
+    bird.flocker_target=ship
+    portrait=copy.deepcopy(bird)
+    assert portrait.flocker_target is None and portrait.get_pos()==bird.get_pos()
