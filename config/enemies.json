@@ -173,7 +173,7 @@
     "spawnRadius": 0,
     "layer": 2,
     "tuning": {
-      "size": 12,
+      "size": 6,
       "color": [
         255,
         180,
@@ -196,12 +196,18 @@
         "closeAngle": 30,
         "syncChance": 0.8
       },
+      "flockerFlight": {},
       "thrusters": {
-        "speedShare": 0.4
+        "speedShare": 0.4,
+        "mode": "flocker",
+        "friction": 0.955,
+        "lateralAccel": 0.18,
+        "slipRecovery": 6.0,
+        "controlSpeedShare": 0.25
       },
       "gun": {
-        "intervalMin": 300,
-        "intervalMax": 300,
+        "intervalMin": 120,
+        "intervalMax": 120,
         "strengthLevel": 1
       },
       "ramsShip": {},
@@ -993,6 +999,34 @@
         "recoil": true
       },
       "ramsShip": {},
+      "takesHits": {
+        "hitPoints": 4
+      },
+      "dropsPickup": {}
+    }
+  },
+  "inchworm": {
+    "name": [
+      "Inchworm",
+      "Inchworms"
+    ],
+    "anchored": false,
+    "replaysPlayer": false,
+    "parWeight": "enemy",
+    "spawnRadius": 14,
+    "layer": 3,
+    "tuning": {
+      "size": 14,
+      "color": [
+        150,
+        220,
+        85
+      ]
+    },
+    "allegiance": "enemy",
+    "body": "inchworm",
+    "traits": {
+      "inchworms": {},
       "takesHits": {
         "hitPoints": 4
       },

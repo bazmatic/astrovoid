@@ -246,7 +246,7 @@ class SpawnManager:
                 hunters.append((kind, pos))
                 continue
             enemy = make_enemy(kind, pos, level, command_recorder)
-            if kind == 'wallcrawler':
+            if kind in ('wallcrawler', 'inchworm'):
                 self._place_layout_crawler(enemy, maze)
             self.roster.add(enemy)
         return hunters

@@ -174,3 +174,14 @@ set `WALLCRAWLER_POLICY=/absolute/path/to/checkpoint.npz` on the same command.
 Authored crawler placements are resolved from their cells onto nearby clear wall
 surfaces during level setup. All twenty Silkgrave crawlers begin attached on the
 first frame, rather than spending the opening seconds flying toward the walls.
+
+## Level 33: Inchworm playtest
+
+Four articulated inchworms crawl along two permanent horizontal platforms in an
+open arena. Five bend muscles drive each body through alternating physical grips.
+Approach a worm's head to provoke rearing, grabbing and feeding; shoot it to
+interrupt the hold. Ammo is unlimited, the exit is open, and there are no other
+enemies or allied beacons. Authored inchworms are placed on nearby wall surfaces
+at setup so their first stride starts immediately.
+
+Start directly with `START_LEVEL=33 ./run.sh`.
