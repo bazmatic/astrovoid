@@ -414,8 +414,11 @@ class SoundManager:
             rate, _, channels = pygame.mixer.get_init()
             from sounds.weapon_fire import samples
             pcm=(np.clip(samples(d,rate),-1,1)*32767).astype(np.int16)
-            if channels > 1:
+            # A profile gives one channel, or two for stereo
+            if pcm.ndim == 1 and channels > 1:
                 pcm = np.repeat(pcm[:, None], channels, axis=1)
+            elif pcm.ndim == 2 and channels == 1:
+                pcm = pcm.mean(axis=1).astype(np.int16)
             cache[weapon_id] = pygame.sndarray.make_sound(pcm)
         pygame.mixer.Channel(1).play(cache[weapon_id])
 
