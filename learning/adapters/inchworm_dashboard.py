@@ -23,7 +23,7 @@ REWARD_RULES = tuple(RewardRule(n,n.replace('_',' ').capitalize(),
     'About-face only: extra penalty per second on top of the time cost, so turning and getting going quickly pays.' if n=='about_face_time_cost' else
     'Walking only (Crawl, and About-face once it faces the goal): penalty per second when the tail or head link is more than 15 degrees off parallel to the ground, scaled up to a right angle.' if n=='end_pitch_cost' else
     'Weight pulling the policy toward the scripted controller in the states it reaches during About-face (not a reward).' if n=='dagger_weight' else
-    'Run-scoped inchworm reward coefficient; rates and events are documented in neural-inchworm.md.',
+    'Run-scoped inchworm reward coefficient; rates and events are documented in docs/notes/inchworm-training.md.',
     'penalty' if n.endswith(('cost','penalty')) else 'reward',(), 'inchworm_'+n,v) for n,v in DEFAULTS.items())
 
 

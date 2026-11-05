@@ -86,7 +86,7 @@ planar solver; it adds no planar impulse and is not an extra neural motor.
 The neural adapter combines this proprioception with local surface rays, visible
 target sensing, and the preceding motor command. The versioned recurrent controller
 and staged training environment are implemented; training has not been started.
-See [the neural training plan](neural-inchworm.md) for the saved configuration.
+See [the neural training notes](inchworm-training.md) for the saved configuration.
 Without installed weights, the reflex controller remains the playtest default.
 
 `inchworms` catalogue parameters are `strideFrames` (160 by default, excluding
