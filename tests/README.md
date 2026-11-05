@@ -1,126 +1,29 @@
-# Unit Tests for ASTRO VOID
+# Tests
 
-This directory contains unit tests for key functions in the ASTRO VOID game.
-
-## Running Tests
-
-To run all tests:
+About 200 test files cover the game, the creatures and the trainer. Run them headless:
 
 ```bash
-pytest tests/
+SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy venv/bin/python -m pytest tests/ -q
 ```
 
-To run a specific test file:
+Run one area by name, for example `tests/test_inchworm*.py`, `tests/test_hunter_*.py` or `tests/test_level_*.py`.
 
-```bash
-pytest tests/test_utils.py
-```
+## What's where
 
-To run with verbose output:
+| Files | Cover |
+|---|---|
+| `test_ship*`, `test_projectile*`, `test_ccd*`, `test_cave*`, `test_wall*` | Flight, shots, swept collision and the destructible curved rock |
+| `test_encounter*`, `test_traits_*`, `test_*_creature*` | Creatures built from the catalogue, and each trait on its own |
+| `test_jelly*`, `test_flocker*`, `test_wallcrawler*`, `test_inchworm*`, `test_neural*` | Each creature's body and the neural brains that drive it |
+| `test_hunter_*`, `test_rules_*`, `test_pilot*`, `test_duel*` | The hunter ship and its pilots |
+| `test_level_*`, `test_editor*` | Level files, the campaign arc and the level editor |
+| `test_scoring*`, `test_star*` | Score, stars and par |
+| `test_ppo*`, `test_training*`, `test_trainer*`, `test_replay*`, `test_dashboard*` | The training pipeline, the trainer and exact replays |
 
-```bash
-pytest tests/ -v
-```
+## Writing tests
 
-To run with coverage:
+Test what a feature does, not how it's built. A few tests that would catch a real regression are worth more than many that break whenever the code is rearranged.
 
-```bash
-pytest tests/ --cov=. --cov-report=html
-```
+The game's random brains make runs differ. Tests that need repeatable creature behaviour set the brain's policy variable empty (for example `INCHWORM_POLICY=""`) to use the scripted controller, or seed the brain explicitly. No test calls a paid service or needs an API key.
 
-## Test Coverage
-
-### `test_utils.py`
-
-Tests for utility functions:
-
-- Distance calculations
-- Angle conversions and normalization
-- Point rotation
-- Collision detection (circle-circle, circle-line, circle-rectangle, line-line)
-- Vector operations (reflection, wall normals)
-
-### `test_scoring.py`
-
-Tests for scoring system:
-
-- Score calculation with various penalties
-- Enemy destruction bonuses
-- Score percentage calculations
-- Edge cases (zero score, exceeding maximum)
-
-### `test_ship.py`
-
-Tests for ship physics:
-
-- Rotation (left/right, wrapping)
-- Thrust mechanics (direction, fuel consumption, speed limits)
-- Update behavior (friction, particle creation)
-- Collision detection
-- Projectile firing
-
-### `test_encounter.py`, `test_traits_*.py`, `test_*_creature.py`
-
-Tests for Creatures: the Encounter's order of hooks and shots, each trait on its own (being hit, shoved, bounced,
-patrolling, chasing, the gun), and the Urchin, Crab and Jelly built from the catalogue.
-
-### `test_projectile.py`
-
-Tests for projectile behavior:
-
-- Movement and direction
-- Lifetime management
-- Collision detection (walls, enemies)
-- Deactivation conditions
-
-### `test_ccd.py`
-
-Tests for continuous collision detection (swept collision):
-
-- Swept circle-line collision detection
-- Movement through walls
-- Edge cases and boundary conditions
-- Collision time calculations
-
-## Adding New Tests
-
-When adding new functionality, create corresponding test cases:
-
-1. Create a test file in `tests/` directory
-2. Follow naming convention: `test_*.py`
-3. Use descriptive test class and method names
-4. Test both normal cases and edge cases
-5. Use assertions to verify expected behavior
-
-Example:
-
-```python
-def test_new_functionality():
-    """Test description."""
-    # Arrange
-    obj = SomeClass()
-
-    # Act
-    result = obj.some_method()
-
-    # Assert
-    assert result == expected_value
-```
-
-## Hunter verification
-
-Run the hunter suite without live inference:
-
-```bash
-SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy venv/bin/python -m pytest tests/test_hunter_*.py -q
-```
-
-Tests cover local visibility, remembered geometry and sightings, input expiry,
-request cancellation, combat attribution, enemy retargeting, level restart and
-pause/resume. Clocks and decision clients are injected. The SDK transport test
-uses a local mock and is skipped when the optional SDK is absent. No test makes
-a paid request or requires an API key.
-
-Enable debug logging for `hunter.controller` during manual experiments to inspect
-request latency, action age, confidence and accepted/discarded results. Logs do
-not include API keys or request bodies.
+Anything that draws on screen behaves differently under the dummy video driver (it has no alpha channel), so check visual changes in the real game too.

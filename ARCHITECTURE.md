@@ -1,371 +1,87 @@
-# ASTRO VOID Architecture Documentation
-
-## Overview
-
-ASTRO VOID is a skill-based space navigation game built with Pygame. The game combines classic Asteroids-style flight mechanics with procedurally-generated maze challenges. Players pilot a momentum-based spacecraft through increasingly complex mazes, balancing speed, fuel conservation, precision flying, and combat efficiency.
-
-## System Design
-
-The codebase follows SOLID principles and DRY (Don't Repeat Yourself) practices:
-
-- **Single Responsibility Principle (SRP)**: Each class has a single, well-defined responsibility
-- **Open/Closed Principle (OCP)**: An enemy built as a Creature is a catalogue entry naming a Body and Traits, so a new kind made of existing traits needs no new code
-- **Dependency Inversion Principle (DIP)**: Abstractions (interfaces) are used where appropriate
-- **DRY**: Common logic is extracted into reusable components
-
-## Component Architecture
-
-### Core Modules
-
-#### `main.py`
-
-Entry point of the application. Initializes Pygame and starts the game loop.
-
-#### `game.py`
-
-Main game coordinator class. Manages game state, level progression, and coordinates between different systems. While it still contains some state management logic, the architecture supports future extraction to a state machine.
-
-#### `enemy_kinds.py`
-
-The Enemy Kind catalogue, read from `config/enemies.json`: one entry per kind, in the order the editor palette and the
-level counts use. `kind(key)` gives an `EnemyKind` (names, `anchored`, `replays_player`, `par_weight`, `spawn_radius`,
-its `pilot` mode, Body, Traits and its own `tuning`); `kinds()`, `anchored()` and `hunters()` list
-enemy keys; `all_kinds()` includes friends; `name()` and `plural()` give what the player reads. A missing or unknown field stops the game at startup.
-
-#### `config.py`
-
-Loads the centralized configuration from `config/settings.json`, and each Enemy Kind's own tuning from
-`config/enemies.json` (see `enemy_kinds.py` below), and exposes both:
-
-- A typed `config.SETTINGS` object with per-section dataclasses (`ScreenSettings`, `MazeSettings`, `PowerupSettings`, etc.)
-- Legacy uppercase constants for backwards compatibility (e.g., `config.FPS`, `config.COLOR_BACKGROUND`)
-
-The JSON file governs tunable sections such as:
-
-- Screen dimensions and framerate
-- Physics parameters (ship thrust, enemy speeds)
-- Resource limits (fuel, ammo, shields)
-- Difficulty scaling and maze presets
-- Visual settings (colors, UI animation speeds)
-
-### Entity System (`entities/`)
-
-The entity system provides a foundation for all game objects:
-
-#### Base Classes and Interfaces
-
-- **`base.py`**: `GameEntity` - Abstract base class for all game entities
-
-  - Common properties: position, velocity, radius, active state
-  - Common methods: `update()`, `draw()`, `get_pos()`
-
-- **`collidable.py`**: `Collidable` - Interface for collision detection
-
-  - Methods: `check_wall_collision()`, `check_circle_collision()`
-
-- **`drawable.py`**: `Drawable` - Interface for renderable objects
-  - Method: `draw()`
-
-#### Entity Implementations
-
-- **`ship.py`**: `Ship` - Player-controlled spacecraft
-
-  - Inherits from `GameEntity`, `Collidable`, `Drawable`
-  - Manages fuel, ammo, rotation, thrust, and collision responses
-  - Zero-G physics with low friction
-
-- **`urchin.py`**, **`patrol_crab.py`**, **`jellyfish.py`**: the `urchin`, `crab` and `jelly` Bodies of the Urchin,
-  Crab and Jelly Creatures (see `creatures/`): they animate and draw, and read only the creature's attributes
-- **`squid.py`**: `Squid`, the `squid` Body of the Squiddler, Squidlet, Squiddler Boss and Mother: mantle, blinking
-  eyes (a blink on the `flinch` event), trailing tentacles, the jet (on the `thrust` event) and the withdrawal on death
-- **`egg.py`**: `EggBody`, the jelly sac with its embryos developing as the egg grows; it splits open when the egg
-  hatches and bursts into blobs when it is shot (it hears `died`)
-- **`anemone.py`**: `AnemoneBody`, the rooted anemone with its reach streaks, tentacles leaning toward a ship it is
-  pulling and folding shut while it flinches; `pull_acceleration` and `apply_pull` are the pull maths `pullsShip` uses
-- **`flocker.py`**: `FlockerBody`, the swallow; **`flocker_neighbor_cache.py`** is the spatial hash `flocks` uses
-- **`flighthouse.py`**: `FlighthouseBody`, the lighthouse seen from above, its beam the size of what it can see,
-  turning red while it sees the player and flashing when it launches
-
-- **`explosion.py`**: `Blast`, `Explosions`, `Fireball` - reusable explosions (Belemnites now, bombs later)
-  - A `Blast` is a reach, damage, push, wall hits and whom its kills count for; `fuse` delays it so chains ripple
-  - `Explosions` (held by `CollisionHandler`) lights blasts and returns those going off; `CollisionHandler.handle_blast` applies one to the player, the hunter, the enemies (through the same path a shot takes, so each kind dies its own way) and the walls
-  - A Creature with the `explodes` trait lights its blast when it is killed (through `Encounter.explode`); any other
-    enemy with a `blast(source)` method does when `CollisionHandler.record_kill` counts it. So explosions chain
-- **`belemnite.py`**: `BelemniteBody` - the `belemnite` Body of the Belemnite Creature, a gunless squid with a
-  Jelly's chase brain that explodes when it dies
-
-- **`projectile.py`**: `Projectile` - Weapons fired by the ship
-  - Inherits from `GameEntity`, `Collidable`, `Drawable`
-  - Manages lifetime and collision detection
-
-### Maze System (`maze/`)
-
-- **`generator.py`**: `Maze` - Procedural maze generation
-  - Uses recursive backtracking algorithm
-  - Generates wider corridors for better maneuverability
-  - Provides spawn positions for enemies
-  - Converts grid to wall segments for collision detection
-
-### Creatures (`creatures/`)
-
-Every enemy and the allied hunter is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
-its `config/enemies.json` entry and run in the entry's order. A Creature is the only moving state; pilots and the lab use the same traits.
-
-- **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
-  `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits
-  keep. It does not act by itself. `deepcopy` (the death portrait) leaves out any Encounter and the live state
-  named by each trait in `LIVE` (a pilot’s flight and worker).
-- **`trait.py`**: `Trait`, whose hooks all do nothing by default: `on_spawn`, `on_frame`, `on_shot`, `on_death`,
-  `on_event`, `on_after_frame` for late integration, `on_close` when the encounter ends, and `on_crowd` for a `CROWD` trait (once a frame per crowd:
-  a kind, or a crowd the trait names, as Jellies and Belemnites share `chasers`). A trait is stateless; `REQUIRES` names traits it needs, and
-  `from_params` builds it from its catalogue parameters.
-- **`traits/`**: `brains.py` (`still`, `patrol`, `chase`, `replaysPlayer`), `propulsion.py` (`coasts`, `drift`,
-  `thrusters`, which flies like a ship through `physics/thrust.py`), `combat.py` (`takesHits`, `shovedByShots`,
-  `ramsShip`, `dropsPickup`, `bouncesOffWalls`, `gun`, `explodes`, `flinchesWhenHit`, which times a flinch its Body
-  draws: a squid blinks, an anemone clamps shut), `crowd.py` (`keepsApart`, which also keeps a crowd out of the walls),
-  `spawning.py` (`splitsOnDeath`, `laysEggs`), `growth.py` (`grows`, `hatches`: hatching is a plain death, not a
-  kill), `rooted.py` (`anchored`, `pullsShip`, a crowd trait whose pulls together never exceed one at full strength,
-  `flingsShip`), `flock.py` (`flocks`, a crowd brain that decides the whole flock's next frame, `tweets`),
-  `lighthouse.py` (`scans`, which watches the player's ship only, and `launchesFlock`), and
-  `piloted.py` (`pilot`, Jev/rules/neural, decides controls), `burst_fire.py` (`burstFire`, schedules queued rounds),
-  and `energy.py` (`energy`, health, damage immunity, wall loss and strongest-knock sensing). A pilot no longer
-  moves a private ship: thrusters steer, the gun emits its scheduled volley, then late propulsion integrates and
-  resolves walls. Energy handles contact/wall impulses as events. BurstFire works without a pilot; startup
-  validation rejects a burst paired with a gun that ignores its cadence.
-- **`registry.py`**: `TRAITS` and `BODIES` by catalogue name; `validate(catalogue)` rejects an unknown body or trait,
-  bad parameters or a missing requirement when the game starts
-- **`__init__.py`**: `build(kind, pos, level, recorder)`; `SpawnManager.make_enemy` calls it for every enemy kind; `hunter.build.make_hunter` resolves runtime pilot
-  settings for the friendly hunter without mutating the shared catalogue
-- **`encounter.py`**: `Encounter(roster, world)`. `step(dt)` runs each live creature's ordinary traits, late
-  integration and Body in roster order, then crowd traits; `step_creature` and `close_creature` also serve flights; `shoot(projectile)` offers a friendly shot to each live creature in
-  roster order and stops at the first it reaches; a miss returns False. `close()` runs every creature’s
-  `on_close` hooks, including dead creatures, and is safe to repeat. `ready()` runs every newcomer's spawn hooks
-  without a frame passing; the game calls it at level start, so creatures show their state (an anemone its reach) before the player moves.
-  Traits reach the world through it (`ship`, `hunter`, `maze`, `scoring`, `target_for`, `kill`, `drop_pickup`,
-  `add_shot`, `explode`, and `spawn`, which puts a new enemy of any kind on the roster). `Game` is its own world; `DuelEnemies` gives it a stand-in whose ship is the first hunter.
-
-`entities/hunter_ship_body.py` supplies `HunterShipBody` (`hunterShip`): the arrowhead geometry, kind colours, immunity
-flash, shared plume, optional hit-point bar and expanding death ring. It owns no moving ship; the old HunterShip
-class is removed. The beacon shares the Body’s hull shape and default colours.
-
-### Enemy Roster (`game_handlers/enemy_roster.py`)
-
-- **`EnemyRoster`**: every enemy on the level, of every kind, in the order they were added
-  - `add` (also `append`/`extend`, so spawning enemies can add to it as to a list), `clear`
-  - `of_kind(*kinds)`: a new list of those kinds; `all()`, `alive()`, `positions()`, `counts()` (alive, by kind)
-  - `update_dying(dt)`; `draw(screen)` draws each kind on its catalogue layer, then the death animations
-- `Game`, `DuelEnemies` and `SpawnManager` hold one; `CollisionHandler.shoot_into` hits a shot against it
-
-### Hunter System (`hunter/`)
-
-The hunter is the allied ship that flies itself (see `GLOSSARY.md` for its terms).
-
-- **`flight.py`**: `HunterFlight` - one hunter in play with its pilot, from its summons until it is closed
-  - Built from a Creature, its Encounter, a pilot (`WorkerPilot` for Jev or the rules pilot, `NeuralPilot` for the neural one) and its surroundings
-  - `step(dt)` runs one Creature frame and routes shots through its Encounter; `pause()` holds it still; `close()` ends it
-  - `decide()` picks the observer and controls; rules/Jev consult fire control, while the neural pilot aims along
-    its own nose. `step(dt)` runs the Creature once and places shots in the world sink; `pause()` advances no
-    physics or clocks and drops the queued burst. Enemy pilots are stepped only by their roster Encounter
-  - The ship's settings are the flight's, fixed for its life
-  - `on_observed(fn)`, `on_frame(fn)` and `on_event(fn)` let the lab record observations and actual trait effects;
-    shadow trials copy Creature state, preserve the held decision’s identity and use an isolated Encounter
-  - Closing stops an owned enemy worker once; Game/duel/lab close their borrowed workers. Portraits omit the
-    flight, worker, setup and Encounter, so copies retain no live callbacks or threads
-- **`surroundings.py`**: what the hunter may perceive at the moment it looks (maze, enemies, threats, pickups, the visible friend)
-  - `GameSurroundings` answers for a level; `DuelSurroundings` (in `duel.py`) for each side of a duel
-- **`duel.py`**: `DuelArena` - two hunter flights fighting each other
-
-`Game`, `DuelArena` and the experiments harness each hold a Creature-backed `HunterFlight`. The friendly flight
-has its own one-Creature Encounter outside the enemy roster. Duel sides use separate projectile sinks and explicit
-opponent routing; ordinary friendly shots never hit allies. The allied catalogue entry is excluded from enemy
-counts, par, exits, editor palettes and enemy-hunter enumeration.
-
-### Scoring System (`scoring/`)
-
-- **`system.py`**: `ScoringSystem` - Tracks game metrics
-
-  - Records collisions, shots, fuel usage, enemy destructions
-  - Delegates score calculation to `ScoreCalculator`
-  - Manages level and total score tracking
-
-- **`calculator.py`**: `ScoreCalculator` - Centralized score calculation
-  - Eliminates duplication between real-time and final score calculations
-  - Calculates penalties and bonuses
-  - Returns score breakdowns
-
-- **`stars.py`**: `StarTally`, `earned`, `describe` - the five stars from what the player did
-  - Finish, half the enemies, every enemy, every crystal, par
-  - Kills and crystals by the Jev hunter count as the player's
-
-- **`par.py`**: `route_cells`, `par_seconds` - par time from the maze route, the enemies at the start and the crystals
-
-### Rendering System (`rendering/`)
-
-- **`renderer.py`**: `Renderer` - Centralized rendering operations
-
-  - Provides common drawing operations
-  - Reduces code duplication
-
-- **`ui_elements.py`**: `UIElementRenderer` - UI component rendering
-  - HUD dials and the energy gauge
-  - `StarIndicator` (chimes as the live stars change) and `AnimatedStarRating` (the level-complete stars)
-
-- **`star_row.py`**: `draw_star_row` - the five stars you'd get now, drawn above the level number during play
-- **`stars.py`**: `draw_star`, `draw_glow`, `StarBurst` - the faceted star artwork shared by every star
-
-- **`fonts.py`**: `get_font` - the bundled typeface (Chakra Petch, in `assets/fonts`); all text goes through it
-- **`settings_menu.py`**: `SettingsMenu` - player settings (sound on/off) and the key and button mappings, reached from the main menu
-- **`dial.py`**: Neon HUD instrument dials (time, power, ammo)
-  - Segmented arc that fills clockwise, with a dim unlit track
-  - Static layers drawn once per size and colour, then cached
-
-### State Management (`states/`)
-
-- **`state_machine.py`**: State machine infrastructure
-  - `GameState` - Abstract base class for game states
-  - `StateMachine` - Manages state transitions
-  - Provides interface: `enter()`, `exit()`, `update()`, `draw()`, `handle_event()`
-
-Note: Individual state implementations (menu, playing, level complete, etc.) are planned but not yet fully implemented. The current `game.py` still handles state management directly, but the architecture supports future extraction.
-
-### Utilities (`utils/`)
-
-- **`math_utils.py`**: Mathematical operations and collision detection
-  - Distance calculations
-  - Angle conversions
-  - Point rotation
-  - Collision detection (circle-circle, circle-line, circle-rectangle)
-  - Vector operations (reflection, normalization)
-
-## Data Flow
-
-### Game Loop
-
-1. **Event Handling**: `game.py` processes pygame events
-2. **State Update**: Current state's `update()` method is called
-3. **Entity Updates**: All active entities update their positions and state
-4. **Collision Detection**: Entities check collisions with walls and each other
-5. **Scoring Updates**: Scoring system tracks metrics in real-time
-6. **Rendering**: Current state's `draw()` method renders all entities
-
-### Level Progression
-
-1. **Level Start**: `start_level()` generates maze, creates ship and enemies
-   - What is on a level comes from `level_config.py`: the level's file in `levels/` if it has one (levels 1-24 all do), otherwise the formulas in `level_rules.py` (level 25 onward). See `levels/README.md`.
-   - Enemies are placed at least `enemies.startClearance` pixels from the ship.
-   - A level with a Split Boss or Mother Boss is a boss level: the exit stays locked until every enemy is dead (on other levels, only eggs lock it), ammo is infinite, and no Jev beacon appears, so no hunter flies.
-2. **Gameplay**: Player navigates maze, avoids/fights enemies
-3. **Level Complete**: Ship reaches exit or score reaches zero
-4. **Score Calculation**: Final score calculated with penalties and bonuses
-5. **State Transition**: Move to level complete screen or game over
-
-### Scoring Flow
-
-1. **Real-time Tracking**: `ScoringSystem` records events (collisions, shots, etc.)
-2. **Potential Score**: `calculate_current_potential_score()` provides real-time feedback
-3. **Final Calculation**: `calculate_level_score()` computes final score on completion
-4. **Stars**: `Game.star_tally()` counts kills, enemies alive, crystals and play time against par (fixed at level
-   start); the tally is frozen when the ship enters the exit and `scoring.stars.earned` turns it into the five stars
-
-## Design Patterns
-
-### Composition (Creatures)
-
-- **Enemy Behaviours**: a `Creature` is composed from a Body and Traits named in its catalogue entry; Traits talk to
-  each other and to the Body through `Controls` and events (`fired`, `hit`, `hit_wall`, `rammed`, `flinch`, `thrust`,
-  `sighted`, `launched`; the Body alone also hears `died`)
-- **Benefits**: behaviour is shared by naming a trait in another kind's entry, without a new class
-
-### Template Method Pattern
-
-- **GameEntity**: Base class defines structure, subclasses implement specifics
-- **GameState**: Base state class defines interface, concrete states implement behavior
-
-### Factory Pattern
-
-- **`SpawnManager`** (`game_handlers/spawn_manager.py`): Creates every enemy for a level from its enemy counts and spawn positions
-
-## Extension Points
-
-### Adding New Enemy Types
-
-1. Add an entry to `config/enemies.json`: its names, whether it is anchored or replays the player, its par weight,
-   the room it needs, the layer it is drawn on and its own `tuning`. The editor palette, level files, exit policies,
-   par, drawing and the names on screen all follow from the entry.
-2. If it can be made of traits that exist, give the entry a `body` (one of `creatures/registry.BODIES`), an
-   `allegiance` and its `traits` with their parameters, in the order they should run. That is all: `make_enemy` builds
-   it, the Encounter runs it and offers it shots, and the roster keeps it with every other enemy. A new behaviour is a
-   new `Trait` subclass in `creatures/traits/`, added to `TRAITS`; a new look is a new Body added to `BODIES`. Name
-   a trait for what it does, not for one kind, so other kinds can take it too.
-   A piloted kind uses the `pilot` trait with `mode` set to `rules` or `neural`; `hunterShip` supplies its look.
-3. For a generated level, add a count for it to `EnemyCounts` (`level_rules.py`)
-
-### Adding New Game States
-
-1. Create new state class inheriting from `GameState`
-2. Implement required methods: `enter()`, `exit()`, `update()`, `draw()`, `handle_event()`
-3. Add state transition logic in appropriate places
-
-### Modifying Scoring
-
-1. Update constants in `config.py` for penalty/bonus rates
-2. Modify `ScoreCalculator.calculate_score()` for calculation changes
-3. `ScoringSystem` handles tracking, `ScoreCalculator` handles calculation (SRP)
-
-## Dependencies
-
-- **Pygame**: Graphics, input handling, game loop
-- **Python Standard Library**: Math, typing, random, time
-
-## File Structure
-
-```
-/
-├── main.py                 # Entry point
-├── game.py                 # Main game coordinator
-├── config.py               # Configuration constants
-├── requirements.txt         # Python dependencies
-├── run.sh                   # Run script
-├── entities/                # Game entities
-│   ├── base.py
-│   ├── collidable.py
-│   ├── drawable.py
-│   ├── ship.py
-│   ├── urchin.py           # the Bodies of the Urchin, Crab and Jelly; squid.py the squids'
-│   ├── patrol_crab.py
-│   ├── jellyfish.py
-│   ├── egg.py              # ... and of the Egg, Anemone, Flocker and Flighthouse
-│   ├── anemone.py
-│   ├── flocker.py
-│   ├── flighthouse.py
-│   └── projectile.py
-├── creatures/               # Creature, Trait, Encounter, and the traits (see Creatures above)
-├── maze/                    # Maze generation
-│   └── generator.py
-├── scoring/                 # Scoring system
-│   ├── system.py
-│   ├── calculator.py
-│   ├── stars.py
-│   └── par.py
-├── rendering/               # Rendering system
-│   ├── renderer.py
-│   ├── ui_elements.py
-│   ├── star_row.py
-│   ├── stars.py
-│   ├── dial.py
-│   ├── fonts.py
-│   └── settings_menu.py
-├── states/                  # State management
-│   └── state_machine.py
-└── utils/                   # Utilities
-    └── math_utils.py
+# How Squiddler fits together
+
+Squiddler is a pygame game with one big idea in its code: **every creature is assembled, not programmed**. A Jelly, a Wallcrawler, a boss and even your hunter ally are each a *Body* (how it looks) plus a list of *Traits* (what it does). Some of those traits are hand-written behaviours. Others hand control to a trained neural network.
+
+```mermaid
+flowchart LR
+    Level[Level file or formulas] --> Maze[Cave generator]
+    Level --> Spawn[Spawn manager]
+    Catalogue[config/enemies.json] --> Spawn
+    Spawn --> Roster[Enemy roster]
+    Roster --> Encounter
+    Encounter --> Traits[Traits: scripted or neural brains, propulsion, guns, ...]
+    Brains[assets/neural/*.npz] --> Traits
+    Traits --> Body[Body draws it]
 ```
 
-## Future Improvements
+## A frame of the game
 
-1. **Complete State Machine**: Extract all state management from `game.py` to individual state classes
-2. **Physics Engine**: Extract common physics calculations to dedicated module
-3. **Collision System**: Centralize collision detection and response
-4. **Save System**: Add save/load functionality for game progress
-5. **Sound System**: Add sound effects and music
-6. **Particle Effects**: Add visual effects for explosions, thrust, etc.
+`main.py` opens the window and hands over to `Game` (`game.py`). Every frame, `Game`:
+
+1. reads input and flies the player's `Ship` (`entities/ship.py`);
+2. steps the **Encounter**, which runs every creature's traits in order;
+3. resolves shots, contacts and explosions (`game_handlers/collision_handler.py`);
+4. updates the score, the stars and the power gauge (`scoring/`);
+5. draws the cave, the creatures, the HUD and the effects (`rendering/`).
+
+## Levels and caves
+
+What's on a level comes from `level_config.py`: the level's file in `levels/` if it has one, otherwise the formulas in `level_rules.py` (see [levels/README.md](levels/README.md)). `maze/` turns that into a cave of rock blocks, drawn and collided as smooth curved walls, which shots can break a block at a time. `SpawnManager` builds each enemy and adds it to the `EnemyRoster`.
+
+## Creatures
+
+Each kind of creature is one entry in `config/enemies.json`. Here is the Belemnite, an exploding squid, assembled entirely from existing parts:
+
+```json
+"belemnite": {
+  "body": "belemnite",
+  "allegiance": "enemy",
+  "traits": {
+    "chase": {}, "drift": {"speed": "aggressive_speed"}, "bouncesOffWalls": {},
+    "ramsShip": {}, "takesHits": {"hitPoints": 3}, "dropsPickup": {},
+    "explodes": {"reach": 7.0, "damage": 3, "push": 7.0, "wallHits": 1, "fuse": 8.0},
+    "keepsApart": {"crowd": "chasers"}
+  }
+}
+```
+
+- A **Creature** (`creatures/creature.py`) holds what every creature has: position, velocity, hit points, allegiance, this frame's controls, and whatever state its traits keep. It does nothing by itself.
+- A **Trait** (`creatures/traits/`) is one behaviour, written to be reusable: a brain decides the controls, propulsion turns controls into motion, and combat traits handle guns, hits and explosions. Traits talk to each other and to the Body through the controls and through events such as `fired`, `hit` and `died`.
+- A **Body** (`entities/`) animates and draws the creature and plays its death. It never decides anything.
+- The **Encounter** (`creatures/encounter.py`) runs the creatures each frame, offers them the player's shots, and gives traits the world they act on: the ship, the hunter, the maze, and a way to spawn, kill and explode.
+
+`creatures/registry.py` checks the whole catalogue when the game starts, so a misspelt trait or a missing parameter stops the game immediately rather than mid-level.
+
+## Brains
+
+A brain is the trait that decides a creature's controls.
+
+- **Scripted brains** (`creatures/traits/brains.py`, `flock.py` and others) are plain code: chase, patrol, sit still, flock.
+- **Neural brains** drive the Jellies, Flockers, Wallcrawlers and Inchworms. At startup `Game` loads each trained network from `assets/neural/` (`utils/neural_policy.py` picks the file, and a `*_POLICY` variable can override it). The creature's adapter in `learning/adapters/` turns what the creature can sense into numbers, runs the network in NumPy (`learning/policy.py`), and turns the outputs back into controls. Each creature keeps its own memory, and creatures of a kind share the network.
+- **Pilots** fly hunter ships: the ally, the Vibers and the Terminator. `hunter/` holds the neural pilot and the hand-written rules pilot, and the `pilot` trait plugs them into a creature. Your ally runs as a `HunterFlight` (`hunter/flight.py`) with an encounter of its own.
+
+The physics the brains have to work with is real: `physics/` holds ship thrust, Flocker aerodynamics, gun recoil, the swinging gates and the Inchworm's jointed body (Pymunk).
+
+## Training
+
+Training reuses the game itself. A training scenario builds real creatures in real caves, lets the network fly them, and rewards what it should learn. The trainer (`tools/trainer/`, `./run-trainer.sh`) runs PPO in PyTorch and exports the result as a small NumPy `.npz`, which is all the game needs. See [Modular training system](docs/modular-training.md).
+
+## Everything else
+
+| Where | What |
+|---|---|
+| `scoring/` | Score, the five stars and par time |
+| `rendering/` | The HUD, menus, splash, curved rock and effects; all text goes through `rendering/fonts.py` |
+| `sounds/` | Procedurally generated sound effects |
+| `input/` | Keyboard and controller mapping |
+| `weapons/` | The weapon catalogue |
+| `editor/`, `rendering/level_editor.py` | The level editor |
+| `config/settings.json`, `config.py` | All tuning, loaded into typed settings |
+
+## Extending it
+
+- **A new enemy made of existing traits:** add an entry to `config/enemies.json`. The spawner, editor palette, level files and par time all pick it up.
+- **A new behaviour or look:** write a `Trait` in `creatures/traits/` or a Body in `entities/`, and register it in `creatures/registry.py`. Name a trait for what it does, not for one creature, so others can use it too.
+- **A new trained creature:** build its body and abilities in the game first, then give it an adapter and a training scenario and register the task. See [Adding or changing a task](docs/modular-training.md#adding-or-changing-a-task).
+
+The words used here are defined in [GLOSSARY.md](GLOSSARY.md).

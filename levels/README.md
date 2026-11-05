@@ -30,7 +30,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **wallcrawler**: A gun walking on twelve little legs along curved rock or square steel. Bullets and explosions knock it loose; it cannot fire during its 0.6-second stunned tumble or its flight to the nearest wall. It has four hit points. Campaign encounters begin with a crowd of five on level 11 and rise to eight by level 21; level 27 pairs six with explosive Belemnites. Layouts place it through the editor; generated levels accept an `enemies.wallcrawler` count. Levels without a file carry five to eight on every fourth level from 11, the ones built around them.
 - **inchworm**: A six-link worm that crawls on rock and steel on grips, rears up and bites. It eats everything alive except other inchworms: the player ship, hunters and every other creature, one hit point per bite. Layouts place it through the editor beside a wall; give it open floor (a 5x5 block with at most a few wall cells), because its arch jams in a narrow dead end. The campaign has two on levels 13, 16, 19, 22, 26 and 29, as a minority predator among the level's usual enemies; level 33 is the inchworm playtest. Without `assets/neural/inchworm.npz` it walks with the scripted stride.
 - **hunter**: `false` forbids an ally. `{"earned": true}` allows enemy kills to drop a beacon only after 65% of the starting enemies have been defeated (at least four kills). The usual 3% drop chance still applies after that threshold. No beacon starts on an earned level. An explicit `{"spawn_cell": [col, row]}` remains available for custom encounters.
-- **layout**: an exact, hand-made level, written by the level editor (see the main README). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
+- **layout**: an exact, hand-made level, written by the level editor (see the [developer guide](../docs/development.md#level-editor)). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
 
 Generated mazes carve a connected network of broad corridors with continuous wall runs.
 Complexity controls corridor density and the number of alternate routes; openings stay
@@ -55,7 +55,7 @@ ammo is unlimited, and there are no gates or allied beacons.
 }
 ```
 
-  **walls** are drawn as curved cave rock over their cells (see Walls in the main README); the cells still decide what is open. Seeded bulges may narrow passages; rock keeps gate swings clear and leaves the start, the exit, the beacon and each enemy as much room as square walls would.
+  **walls** are drawn as curved cave rock over their cells (see [Walls](../docs/gameplay.md#walls)); the cells still decide what is open. Seeded bulges may narrow passages; rock keeps gate swings clear and leaves the start, the exit, the beacon and each enemy as much room as square walls would.
 
   **strong_walls** (optional): wall blocks that no shot can destroy, drawn as riveted metal plate, and square (never curved). Use them where the player must not blast a way round, such as the walls of a pen whose only way in is its door. Everything that sees walls sees them; a shot at one strikes sparks and leaves no mark. A cell may be a wall or a strong wall, not both, and everywhere this page says "a wall" below, a strong wall counts too.
 
@@ -73,59 +73,40 @@ A level with at least one `split_boss`, `mother_boss` or `rules_hunter` is a bos
 
 - the exit is locked until every enemy on the level is dead, including the ships a boss leaves behind and anything that hatches;
 - ammo is infinite, so the level can always be finished;
-- no Jev beacon appears, so no hunter flies, unless the file places one.
+- no ally beacon appears, so no hunter flies, unless the file places one.
 
 The campaign introduces a single Split Boss at 12, two at 18, and a Mother at 24. Piloted hunter encounters also use clear-all exits and unlimited ammo. Level 30 introduces the Boss Viber with two Vibelets.
 
 ## The hunter
 
-The hunter is summoned by collecting a Jev beacon. Campaign levels 1–9 and the boss/duel encounters forbid allies. Other eligible campaign levels use `{"earned": true}`: first defeat 65% of the enemies present at the start, rounded up, with a minimum of four kills. Eligible kills can then drop one beacon at the normal 3% chance. It must still be collected to summon the ally.
-
-Levels without files also have no starting beacon and use this earned-kill threshold wherever allies are allowed. Existing explicit spawn overrides remain supported for editor-authored encounters.
+Collecting an ally beacon summons the hunter. Levels 1–9 and the boss and duel levels have no beacons. Elsewhere, levels use `{"earned": true}`: once you've killed 65% of the starting enemies (at least four), each kill has the usual 3% chance to drop a beacon. Levels without a file work the same way. A level file can also place a beacon outright with `{"spawn_cell": [col, row]}`.
 
 ## Campaign progression
 
-| First level | New threat | Introduction |
-| --- | --- | --- |
-| 1 | Urchin | Four passive targets |
-| 2 | Crab | One shooter among familiar enemies |
-| 3 | Jelly | One chaser |
-| 4 | Egg | One egg; introduces the Squidlets it can hatch |
-| 5 | Flocker | One flocker before mixed groups |
-| 7 | Anemone | One anchored hazard |
-| 8 | Squiddler | One tougher armed enemy |
-| 9 | Belemnite | One explosive chaser |
-| 10 | Flighthouse | One reinforcement spawner |
-| 11 | Wallcrawler | One wall gun; knock it loose with bullets or explosions |
-| 12 | Squiddler Boss | One boss with two flockers |
-| 19 | Vibelet | One fragile neural ship |
-| 21 | Viber | One full-sized neural ship |
-| 23 | Terminator | One Rules pilot, after the Viber introduction |
-| 24 | Mother | One Mother with a modest escort |
-| 30 | Boss Viber | One boss with two familiar Vibelets |
+Each level introduces at most one new creature:
 
-Level 6 is a practice arena. Level 18 repeats Split Boss combat with two bosses.
-Ordinary stages through 23 add only one starting enemy at a time, from four at
-level 1 to 24 at level 23, with no sudden introductory swarms. Existing maze
-walls, gates, starts and exits are retained except that the level 6 practice
-arena is enlarged to avoid a maze-size drop. Enemy placements are retuned to
-leave the opening clear. Counts in the file agree with its saved layout.
+| First level | New creature |
+| --- | --- |
+| 1 | Urchin |
+| 2 | Crab |
+| 3 | Jelly |
+| 4 | Egg, and the Squidlets it hatches |
+| 5 | Flocker |
+| 7 | Anemone |
+| 8 | Squiddler |
+| 9 | Belemnite |
+| 10 | Flighthouse |
+| 11 | Wallcrawler |
+| 12 | Squiddler Boss (boss level) |
+| 13 | Inchworm |
+| 19 | Vibelet |
+| 21 | Viber |
+| 23 | Terminator |
+| 24 | Mother (boss level) |
+| 30 | Boss Viber (boss level) |
+| 31 | Vibehouse |
 
-Wallcrawler practice continues after the introduction: one on level 13, two on
-levels 14–16, three on levels 17, 19 and 20, and four on levels 21–23. These replace
-up to two passive targets first, then Crabs, preserving each level's total roster
-and retaining at least one passive target in these mixed encounters. Boss
-arenas and specialist encounters keep their focused mixes. Explicit enemy blocks
-list only present types; omitted types stay absent instead of using formula counts.
-
-Level 25 remains a single-Terminator duel, and 26 a Viber encounter. Level 27's
-Belemnite population is reduced from 27 to ten. Levels 28 and 29 keep their
-specialist layouts and enemy mixes, with earned allies instead of starting
-beacons. Neural encounters need the installed model, as before.
-
-`tests/test_level_arc.py` checks the effective layouts, first appearances,
-introductory counts, gradual crowd sizes, and spawn clearance. Removing a layout
-restores the same enemy mix through its matching `enemies` block.
+Level 6 is a practice arena, level 18 brings two Squiddler Bosses, and level 25 is a one-on-one fight with a Terminator. Ordinary levels through 23 grow by one enemy at a time, from four on level 1 to 24 on level 23, so there are no sudden swarms. `tests/test_level_arc.py` checks the first appearances, the gradual growth and the clear space around the start.
 
 ## Levels without a file
 
@@ -170,15 +151,9 @@ reinforcement ribs preserve the winding route even when rock is blasted away.
 
 Ammo is unlimited and the exit is open: reaching it is the objective, rather
 than clearing every crawler. There are no other enemies, gates or hunter beacons.
-The 133-cell minimum route is over twice the entrance-to-exit Manhattan distance.
-The authored layout and generated fallback both specify only twenty crawlers.
 
 Start directly with `START_LEVEL=32 ./run.sh`. To try a particular trained actor,
 set `WALLCRAWLER_POLICY=/absolute/path/to/checkpoint.npz` on the same command.
-
-Authored crawler placements are resolved from their cells onto nearby clear wall
-surfaces during level setup. All twenty Silkgrave crawlers begin attached on the
-first frame, rather than spending the opening seconds flying toward the walls.
 
 ## Level 33: Inchworm playtest
 

@@ -1,6 +1,6 @@
-# ASTRO VOID
+# Squiddler glossary
 
-A momentum-based space shooter: the player flies a ship through procedurally generated mazes full of enemies, and can call in an allied ship to help.
+The names we use for things in the game. Use them in code, docs and conversation, so that one word always means one thing.
 
 ## Language
 
@@ -11,22 +11,18 @@ The human-flown ship.
 _Avoid_: user, ship (on its own, when the hunter is also present)
 
 **Hunter**:
-The allied ship that flies itself, summoned by collecting a Jev beacon. Its kills do not score for the player.
+The allied ship that flies itself, summoned by collecting an ally beacon. Its kills do not score for the player.
 _Avoid_: ally ship, bot, AI ship
 
 **Pilot**:
-Whatever decides how the hunter turns, thrusts and fires. One of three: Jev (a remote model), rules (the same criteria written as plain code), or neural (a small trained policy). It also flies the Terminator, the Vibers and any creature given the `pilot` trait.
+Whatever decides how a hunter ship turns, thrusts and fires: neural (a small trained network, the default) or rules (hand-written flying rules). It also flies the Terminator, the Vibers and any creature given the `pilot` trait.
 _Avoid_: agent, controller; "brain" is the wider term for whatever decides a Creature's controls
-
-**Craft** (retired after stage 5):
-The former private hunter ship a creature followed. Stage 6 removed it: propulsion, energy and weapons now act
-on the Creature itself.
 
 **Burst**:
 A queued group of rounds, scheduled by `burstFire`. A round is released when the gun is ready and aligned.
 
 **Volley**:
-The projectiles emitted together in one round: one projectile, or the upgraded three-way spread.
+The projectiles emitted together in one round: one projectile, or several from a weapon such as the Twin Blaster or Scattergun.
 
 **Hunter flight**:
 One hunter in play with its pilot, from the moment it is summoned until it dies, is replaced, or the level ends.
@@ -42,7 +38,7 @@ _Avoid_: snapshot, world state, entities
 A wall block that no shot can destroy, drawn as riveted metal plate. Only hand-made layouts have them.
 _Avoid_: steel wall, indestructible block, rim (the outer ring is a different thing)
 
-**Jev beacon**:
+**Ally beacon**:
 A pickup that summons the hunter. Only the player collects it; the hunter never perceives it as a pickup.
 _Avoid_: hunter powerup, summon crystal
 
@@ -77,20 +73,32 @@ An enemy that moves back and forth.
 _Code name_: patrol
 
 **Jelly**:
-An enemy that chases the player.
-_Code name_: aggressive
+A fragile enemy that hunts in packs, driven by a trained brain.
+_Code name_: aggressive (scripted) and neural_jelly (the campaign's)
 
 **Squiddler**:
 An enemy that flies the player's own recorded moves.
 _Code name_: replay
 
 **Flocker**:
-An enemy that moves in a flock.
+A bird that flies, aims and calls to others in a flock, driven by a trained brain.
 _Code name_: flocker
 
 **Flighthouse**:
-The flighthouse enemy.
+A lighthouse that sweeps a searchlight and launches Flockers at whatever it sees.
 _Code name_: flighthouse
+
+**Vibehouse**:
+A pink Flighthouse that launches Vibelets.
+_Code name_: vibehouse
+
+**Wallcrawler**:
+A gun on twelve legs that walks on walls and leaps between them, driven by a trained brain.
+_Code name_: wallcrawler
+
+**Inchworm**:
+A six-segment physical worm that crawls, rears and bites, and eats any creature except other inchworms. Driven by a trained brain.
+_Code name_: inchworm
 
 **Egg**:
 An enemy that hatches into squidlets.
@@ -101,7 +109,7 @@ An enemy hatched from an egg, or placed in a level.
 _Code name_: baby
 
 **Anemone**:
-The anemone enemy.
+A creature rooted to the rock that pulls the player's ship in.
 _Code name_: anemone
 
 **Squiddler Boss**:
@@ -154,7 +162,7 @@ One piece of a creature's behaviour, named and configured in its catalogue entry
 _Avoid_: component, behaviour, strategy
 
 **Brain**:
-A Trait that decides a creature's controls each frame: where it heads and when it fires (chase, patrol, still).
+A Trait that decides a creature's controls each frame: where it heads and when it fires. Either scripted (chase, patrol, still) or a trained neural network.
 _Avoid_: AI, strategy
 
 **Propulsion**:
