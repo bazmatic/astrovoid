@@ -1,10 +1,16 @@
 # Modular training system
 
-Astrovoid separates creature control, encounter design, numerical learning, and run management. The wallcrawler team uses the shared training lifecycle. Hunter training keeps its existing recorder, value model, checkpoint format, and CLI training path; its numeric environment adapter also supports the shared stepping interface. The `jelly_team` task trains the opt-in neural Jelly on the same lifecycle; see [Jelly training notes](notes/jelly-training.md). The sections below use the wallcrawler team as the worked example unless they say otherwise.
+Astrovoid separates creature control, encounter design, numerical learning, and run management. One trainer trains every creature. Each creature is a task registered in `learning/tasks.py`, and all of them ship a trained brain in `assets/neural/`:
 
-For crawler mechanics and the history of reward changes, see [Creature training](creature-training.md). This guide describes the implementation and extension points as of scenario 56 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
+| Task | Creature | Notes |
+| --- | --- | --- |
+| `hunter` | The hunter ship's neural pilot (ally, Vibers and Vibelets) | Keeps its own recorder, value model, checkpoint format and CLI path; its numeric adapter also supports the shared stepping interface. A run without a task is a hunter run |
+| `jelly_team` | Jellies | [Jelly training notes](notes/jelly-training.md) |
+| `flocker_team` | Flockers | [Flocker training notes](notes/flocker-training.md). The shipped brain (run196) was packaged by hand with `tools/promote_flocker.py --accept-without-gate` after its gate failed on cohesion and volleys |
+| `wallcrawler_team` | Wallcrawlers | [Wallcrawler training notes](notes/wallcrawler-training.md) |
+| `inchworm` | Inchworms | [How the body works](notes/inchworm-body.md); lessons and rewards in `learning/adapters/inchworm_scenario.py` |
 
-The `flocker_team` task adds continuous flight, articulated head aiming, learned local communication and wall perching; see [Flocker training notes](notes/flocker-training.md). A trained brain ships as `assets/neural/flocker.npz` (run196, packaged by hand with `tools/promote_flocker.py --accept-without-gate` after the deployment gate failed on cohesion and volleys); the gate remains advisory.
+The sections below use the wallcrawler team as the worked example unless they say otherwise. They describe the implementation and extension points as of scenario 56 and crawler policy schema 5. A saved run's `config.json` is the authority for that run's rules.
 
 ## Module map
 

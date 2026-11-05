@@ -35,4 +35,4 @@ Wallcrawlers first appear on level 11, as a gang of five. They return in growing
 
 Every crawler runs the same recurrent network (about 27,000 numbers in `assets/neural/wallcrawler.npz`) with its own memory. It decides 10 times a second whether to walk, aim, fire, leap, where to land and what to say. `WALLCRAWLER_POLICY=` (set empty) brings back the scripted crawler.
 
-How the training evolved, scenario by scenario, is in [Creature training](creature-training.md), and the training system itself is in [Modular training](modular-training.md).
+How the Wallcrawler task works is in [the Wallcrawler training notes](notes/wallcrawler-training.md), and the training system itself is in [Modular training](modular-training.md).

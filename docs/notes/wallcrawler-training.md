@@ -1,8 +1,6 @@
-# Creature training
+# Wallcrawler training
 
-For the current architecture, module contracts, run artifacts, operating commands, and extension workflow, see [Modular training system](modular-training.md).
-
-The trainer offers **Hunter** and **Wallcrawler team** tasks. Existing hunter commands, value heads, checkpoint formats, observation adapters and recorded replays retain their legacy behaviour. A run without a task is a hunter run. PyTorch is used only by training; deployed recurrent policies use NumPy.
+The trainer trains every creature: Hunter, Jelly team, Flocker team, Wallcrawler team and Inchworm (see [Modular training system](../modular-training.md) for all of them). This page covers the **Wallcrawler team** task.
 
 Start a fresh team from the trainer page's task selector and **Fresh weights**, or:
 
@@ -19,14 +17,14 @@ One run can be active or paused. Stop retains its checkpoints. Pause saves after
 
 Each run stores an immutable opponent checkpoint, arena definitions, tuning, versioned observation/action schema, scenario seeds, per-agent joint actions, contributions, PPO state, `best.npz` and `evaluation.json`. The final ten minutes of a two-hour budget are reserved for evaluation. Short smoke runs reserve one sixth of their budget. A hard wall-clock deadline terminates rollout workers; an incomplete evaluation is recorded as incomplete. Bootstrap and checkpoint selection count against the same budget.
 
-The current repeating schedule mixes stationary precision drills, moving-target tracking drills, and Jellyfish/neural-hunter battles. Aiming drills use two crawlers; battles use four. The current actor is schema 5 with continuous aiming, and scenario 56 adds terminal battle success and a performance-gated battle curriculum to the individual survival, death, and Jelly-kill rewards. See the [current curriculum and reward table](modular-training.md#current-crawler-curriculum) for the active rules.
+The current repeating schedule mixes stationary precision drills, moving-target tracking drills, and Jellyfish/neural-hunter battles. Aiming drills use two crawlers; battles use four. The current actor is schema 5 with continuous aiming, and scenario 56 adds terminal battle success and a performance-gated battle curriculum to the individual survival, death, and Jelly-kill rewards. See the [current curriculum and reward table](../modular-training.md#current-crawler-curriculum) for the active rules.
 
 ## Boundaries
 
 - `learning/policy.py` and `models.py` share recurrent inference and parameter conversion across creatures. Categorical head names and sizes come from `PolicySpec`; no three-control assumption belongs in the optimiser.
 - Creature adapters translate permitted local observations and legal intentions. `learning/adapters/wallcrawler.py` contains the crawler schema and scripted imitation labels. The gameplay driver keeps separate memories and random generators for each stable actor ID.
 - Scenario adapters construct actual encounters, opponents, rewards, curriculum and evaluation cases. `crawler_scenario.py` controls the production allied hunter with the frozen hunter checkpoint, using its normal senses, propulsion and gun. No exit, pickup, passive drain or opponent-death path runs in this scenario. Normal hunter projectile collision and damage immunity still apply. Accepted projectile damage restores the hunter’s health after accounting, so immortality does not bypass immunity or create extra rewards.
-- `Snapshot`/`Transition` in `learning/environment.py` provide seeded reset, joint action stepping, numeric observations, masks, shared reward and termination/truncation. Both real adapters support this interface. The hunter adapter additionally retains its full-episode recorder path for exact compatibility with existing hunter training and reward shaping.
+- `Snapshot`/`Transition` in `learning/environment.py` provide seeded reset, joint action stepping, numeric observations, masks, shared reward and termination/truncation. Every task's adapter supports this interface. The hunter adapter additionally retains its full-episode recorder path for exact compatibility with existing hunter training and reward shaping.
 - `training.py`, `ppo.py` and `run.py` own collection, sequence batching, recurrent PPO, horizon bootstrapping and lifecycle. Crawler actor losses exclude dead rows and irrelevant controls. Team value inputs remain training-only; they cannot affect deployed actor logits. Legacy hunter PPO retains its original value model and update behaviour.
 - Register an additional task in `learning/tasks.py`, providing its creature/scenario adapter, schema, task defaults/options and task-specific training/evaluation hooks. PPO, rollout workers and run management need no creature-specific branches. The trainer discovers registered tasks.
 
