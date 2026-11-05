@@ -343,7 +343,7 @@ def test_thrust_multiplier_is_a_bounded_parameter_that_matches_the_ship_default(
     assert 'thrust_multiplier' in BOUNDS
     low, high = BOUNDS['thrust_multiplier']
     assert low <= 0.25 <= high and high >= 1.5
-    assert HunterSettings().thrust_multiplier == 0.25   # tried 1.0, reverted: docs/experiments/008
+    assert HunterSettings().thrust_multiplier == 0.25   # tried 1.0, reverted (experiment 008)
     # The lab applies it to the hunter ship; the game uses HunterSettings. They must not drift apart
     # silently, or a lab-only gain would look like a real one.
     assert DEFAULT.thrust_multiplier == HunterSettings().thrust_multiplier

@@ -14,7 +14,7 @@ QUOTIENT_WEIGHT = 10.0
 
 @dataclass(frozen=True)
 class Weights:
-    # Chosen from the baseline run (docs/experiments/001-baseline.md); not changed during a comparison.
+    # Chosen from the baseline run (experiment 001); not changed during a comparison.
     wall: float = 3.4          # per wall hit: only the rules-pilot lab uses it; the score uses `quotient`
     quotient: float = QUOTIENT_WEIGHT
     hit: float = 3.5

@@ -15,7 +15,7 @@ Level files control where beacons may appear; see [levels/README.md](../levels/R
 - **`"neural"`** (default): a trained network that flies with the same controls you have. It decides every `game.neuralDecisionFrames` frames and turns at `game.neuralTurnRate` times your rate. Its weights are `assets/neural/hunter.npz`. The same pilot flies the enemy Vibers and Vibelets.
 - **`"rules"`**: hand-written flying rules in `hunter/rules_pilot.py`. No model or training is needed. The same pilot flies the enemy Terminator.
 
-The neural pilot began as a student of the rules pilot (`experiments.teach`, `tools.train_neural`, `experiments.dagger`; written up in [docs/experiments/](experiments/README.md)) and was then trained further with reinforcement learning through the training manager.
+The neural pilot began as a student of the rules pilot (`experiments.teach`, `tools.train_neural`, `experiments.dagger`) and was then trained further with reinforcement learning through the training manager.
 
 **Trying a pilot quickly:** `ASTROVOID_HUNTER_HOTKEY=1 ./run.sh`, then press **H** during a level to collect a waiting beacon or call the hunter in beside you. Add `ASTROVOID_OBSERVER=1` to become an invisible, invulnerable spectator.
 

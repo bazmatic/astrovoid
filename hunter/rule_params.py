@@ -57,7 +57,7 @@ class RuleParams:
 
 
 DEFAULT = RuleParams()
-# The rules pilot's own defaults: DEFAULT plus what experiments have adopted (docs/experiments):
+# The rules pilot's own defaults: DEFAULT plus what experiments have adopted:
 # the investigate rule (004), faster, longer-sighted wall-following (007) and a faster turn (010; the
 # game builds the rules pilot's hunter that way, see hunter/settings_for.py) and hunting before following
 # the player while any enemy remains (011). Jev keeps DEFAULT.

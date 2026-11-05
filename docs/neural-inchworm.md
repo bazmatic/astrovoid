@@ -53,4 +53,4 @@ Get near a head to make it rear and feed. Shoot or shove a worm to break its gri
 
 The brain is a small recurrent neural network with a short-term memory, about 23,000 numbers in `assets/neural/inchworm.npz`. It makes 10 decisions a second, from its own joint angles, grips, wall feelers and whatever it can see. `INCHWORM_POLICY=` (set empty) swaps in the old scripted walk.
 
-For the engineering detail, see [how the body works](notes/inchworm-body.md) and [the training log](notes/inchworm-training.md), lesson by lesson and run by run.
+For the engineering detail, see [how the body works](notes/inchworm-body.md). The lessons and rewards are defined in `learning/adapters/inchworm_scenario.py` and `learning/inchworm_rewards.py`.

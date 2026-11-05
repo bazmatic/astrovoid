@@ -9,7 +9,7 @@ another brain; `JELLY_POLICY=` (empty) gives the scripted chase; `SCRIPTED_JELLI
 Jellies again. The scripted kind is otherwise unchanged. Checkpoints from before the current observation schema
 (version 4, 58 inputs) no longer load.
 
-Design: `docs/superpowers/specs/2026-10-31-neural-jelly-design.md`. Trainer architecture: `docs/modular-training.md`.
+Trainer architecture: [Modular training system](../modular-training.md).
 
 ## Pieces
 

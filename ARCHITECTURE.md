@@ -109,8 +109,7 @@ The entity system provides a foundation for all game objects:
 ### Creatures (`creatures/`)
 
 Every enemy and the allied hunter is a **Creature**: a Body (how it looks) and a list of Traits (what it does), named in
-its `config/enemies.json` entry and run in the entry's order (see
-`docs/superpowers/specs/2026-10-20-creatures-and-traits-design.md`). A Creature is the only moving state; pilots and the lab use the same traits.
+its `config/enemies.json` entry and run in the entry's order. A Creature is the only moving state; pilots and the lab use the same traits.
 
 - **`creature.py`**: `Creature`, a `GameEntity` holding kind, position, velocity, hit points, allegiance, its
   `Controls` this frame (`turn`, `thrust`, `fire`, `heading`, `aim`), its Body and Traits, and the state its traits

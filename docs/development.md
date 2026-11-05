@@ -75,7 +75,7 @@ rendering/, sounds/     Drawing, HUD, menus and procedural sound
 scoring/                Score, stars and par
 editor/                 The level editor
 tools/                  Training manager, demo videos, replay viewer, build smoke test
-experiments/            Hunter-pilot experiments (written up in docs/experiments/)
+experiments/            The rules lab and the neural pilot's first lessons
 tests/                  pytest suite
 ```
 
