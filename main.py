@@ -180,7 +180,10 @@ def main():
                 or fit_window_size((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), desktop_size()))
         screen = pygame.display.set_mode(size, pygame.DOUBLEBUF)
     else:
-        screen = pygame.display.set_mode((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.FULLSCREEN | pygame.DOUBLEBUF)
+        # Fullscreen at the display's own size: asking for a size the display lacks makes SDL pick a nearby mode
+        # (1920x1200 on a 1080p TV) and the edge of the game falls off the screen
+        size = desktop_size() or (config.SCREEN_WIDTH, config.SCREEN_HEIGHT)
+        screen = pygame.display.set_mode(size, pygame.FULLSCREEN | pygame.DOUBLEBUF)
     
     pygame.display.set_caption("Squiddler - Space Navigation Game")
     
