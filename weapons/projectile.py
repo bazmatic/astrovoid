@@ -61,6 +61,16 @@ class WeaponProjectile(Projectile):
 
 
 class RailProjectile(WeaponProjectile):
+    BEAM_RADIUS = 14  # A wide beam for hitting creatures; walls still see the shot's own thin radius
+
+    def query_radius(self, dt, targets=()):
+        return super().query_radius(dt,targets)+self.BEAM_RADIUS
+
+    def target_contact(self, start, delta, target, segments):
+        if hasattr(target, 'projectile_contact'):
+            return target.projectile_contact(start, delta, self.BEAM_RADIUS)
+        return circle_time(start,delta,target.get_pos(),getattr(target,'hit_radius',target.radius)+self.BEAM_RADIUS)
+
     def hit_surface(self, normal, wall, maze, obstacles):
         if wall is not None and hasattr(wall, 'get_segment') and wall.destructible:
             if maze.damage_wall(wall, self.get_pos(), damage=max(1, wall.hit_points)):
@@ -77,9 +87,11 @@ class RailProjectile(WeaponProjectile):
         if not self.active:
             return
         speed = max(1e-6,math.hypot(self.vx,self.vy))
-        tail = (self.x-self.vx/speed*38,self.y-self.vy/speed*38)
-        pygame.draw.line(screen,self.definition.color,tail,self.get_pos(),4)
-        pygame.draw.line(screen,(255,240,255),tail,self.get_pos(),1)
+        tail = (self.x-self.vx/speed*60,self.y-self.vy/speed*60)
+        glow = tuple(c//3 for c in self.definition.color)
+        pygame.draw.line(screen,glow,tail,self.get_pos(),self.BEAM_RADIUS*2)
+        pygame.draw.line(screen,self.definition.color,tail,self.get_pos(),self.BEAM_RADIUS)
+        pygame.draw.line(screen,(255,240,255),tail,self.get_pos(),4)
 
 
 class SeekerProjectile(WeaponProjectile):

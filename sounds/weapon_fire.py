@@ -57,33 +57,45 @@ def _resonant_lowpass(signal, cutoff, rate, resonance):
     return out
 
 
+# The 'saw' profile's knobs.
+SAW_DETUNE=.004            # Each side's pitch offset (fraction); wider sounds bigger but blurrier.
+SAW_WAH_START_RATE=2     # Wah pulses per second at the start of the shot.
+SAW_WAH_END_RATE=0.1        # Wah pulses per second at the end.
+SAW_WAH_CURVE=1.5          # Higher keeps the wah slow for longer, then rushes at the end.
+SAW_WAH_LOW=450            # The wah's lowest cutoff, in Hz.
+SAW_WAH_HIGH=3600          # The wah's highest cutoff, in Hz.
+SAW_RESONANCE=.86          # How sharply the wah sings, from 0 to just under 1.
+SAW_DRIVE=4                # Overdrive; higher is harsher.
+
+
 def _saw(definition, rate):
-    """A huge stereo supersaw power chord: the zap dives in, a resonant filter roars open and slowly closes."""
+    """A raw, overdriven stereo sawtooth: the zap dives in, then a resonant wah snarls over it."""
     duration=definition.sound_duration
     t=np.arange(round(rate*duration))/rate
     # The pitch dives from two octaves up to the base note, a laser's zap settling into a drone.
     dive=1+3*np.exp(-t/.03)
-    # Seven voices spread a few percent apart and across the stereo field, on the root, fifth and octave below.
-    detunes=np.linspace(-.024,.024,7)
-    pans=np.linspace(-1,1,7)
-    left=np.zeros(len(t)); right=np.zeros(len(t))
-    for ratio,level in ((1,1),(1.5,.55),(.5,.8*definition.sound_body)):
-        for i,(d,pan) in enumerate(zip(detunes,pans)):
-            pitch=definition.sound_pitch*ratio*(1+d)*dive
-            increment=pitch/rate
-            voice=_polyblep_saw(np.cumsum(increment)+i*.137+ratio*.31,increment)*level
-            left+=voice*(1-pan)/2; right+=voice*(1+pan)/2
-    sub=definition.sound_body*.6*np.sin(math.tau*np.cumsum(definition.sound_pitch*.5*dive)/rate)
-    # The filter opens to a bright roar in the first 40 ms, then closes slowly with a ringing peak.
-    cutoff=700+9000*np.exp(-t/.09)*(1-np.exp(-t/.012))+1200*np.exp(-t/.5)
-    attack=1-np.exp(-t/.003)
-    envelope=attack*np.exp(-t*2.2/duration)
-    fade=np.minimum(1,(duration-t)/.03)
+    # One saw per side, barely detuned for width, over a saw an octave below; few voices keep the edge clean, not hissy.
     channels=[]
-    for side in (left,right):
-        filtered=_resonant_lowpass(side/7,cutoff,rate,.82)
-        channels.append(np.tanh((filtered*1.4+sub)*envelope*2.6)*.85*fade)
-    return np.stack(channels,axis=1)
+    for side,d in enumerate((-SAW_DETUNE,SAW_DETUNE)):
+        signal=np.zeros(len(t))
+        for ratio,level in ((1,1),(.5,.7*definition.sound_body)):
+            increment=definition.sound_pitch*ratio*(1+d)*dive/rate
+            signal+=_polyblep_saw(np.cumsum(increment)+side*.25,increment)*level
+        channels.append(signal)
+    sub=definition.sound_body*.5*np.sin(math.tau*np.cumsum(definition.sound_pitch*.5*dive)/rate)
+    # A wah: the resonant peak swings between its low and high cutoffs, starting wide open, its pulses quickening.
+    wah_rate=SAW_WAH_START_RATE+(SAW_WAH_END_RATE-SAW_WAH_START_RATE)*(t/duration)**SAW_WAH_CURVE
+    wah=.5+.5*np.cos(math.tau*np.cumsum(wah_rate)/rate)
+    cutoff=SAW_WAH_LOW*(SAW_WAH_HIGH/SAW_WAH_LOW)**wah
+    attack=1-np.exp(-t/.003)
+    envelope=attack*np.exp(-t*1.6/duration)
+    fade=np.minimum(1,(duration-t)/.03)
+    out=[]
+    for side in channels:
+        filtered=_resonant_lowpass(side/1.7,cutoff,rate,SAW_RESONANCE)
+        # Hard overdrive squares off the saw for a harsh, snarling edge.
+        out.append(np.tanh((filtered+sub)*envelope*SAW_DRIVE)*.8*fade)
+    return np.stack(out,axis=1)
 
 
 PROFILES={'tone':_tone,'blast':_blast,'saw':_saw}
@@ -91,3 +103,16 @@ PROFILES={'tone':_tone,'blast':_blast,'saw':_saw}
 
 def samples(definition, rate):
     return PROFILES[definition.sound_profile](definition,rate)
+
+
+if __name__ == '__main__':
+    # Audition a weapon's sound: python -m sounds.weapon_fire [weapon_id], default railgun.
+    import sys, time, pygame
+    from weapons.catalog import CATALOG
+    weapon=CATALOG[sys.argv[1] if len(sys.argv)>1 else 'railgun']
+    pygame.mixer.init(44100,-16,2)
+    pcm=(np.clip(samples(weapon,44100),-1,1)*32767).astype(np.int16)
+    if pcm.ndim==1:
+        pcm=np.repeat(pcm[:,None],2,axis=1)
+    pygame.sndarray.make_sound(pcm).play()
+    time.sleep(weapon.sound_duration+.1)
