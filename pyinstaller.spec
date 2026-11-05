@@ -56,7 +56,9 @@ A = Analysis(
     ],
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    # Training-only: gameplay loads the bundled .npz brains with numpy, so a build machine that also has the
+    # training requirements installed must not drag torch (about 450 MB) into the app.
+    excludes=["torch", "scipy"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=BLOCK_CIPHER,

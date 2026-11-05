@@ -26,3 +26,10 @@ def test_bundled_assets_keep_their_original_relative_paths():
     entries = namespace['collect_tree'](ROOT / 'assets', 'assets')
     source = ROOT / 'assets/fonts/ChakraPetch-Bold.ttf'
     assert (str(source), 'assets/fonts') in entries
+
+
+def test_the_bundle_leaves_out_the_training_libraries():
+    """A build machine that also trains has torch installed; the game runs its bundled brains on numpy alone, and
+    bundling torch took the app from about 150 MB to about 680 MB."""
+    spec = (Path(__file__).resolve().parents[1]/'pyinstaller.spec').read_text()
+    assert '"torch"' in spec and '"scipy"' in spec
