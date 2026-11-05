@@ -141,7 +141,7 @@ class InchwormEnvironment:
         walls = [WallSegment(point(*a),point(*b),1,destructible=False) for a,b in outlines]
         maze = SimpleNamespace(walls=walls,gate_segments=[],spatial_grid=None)
         self.world = SimpleNamespace(ship=None,hunter=None,maze=maze,roster=EnemyRoster(),
-            inchworm_policy=None,additional_targets=[],projectiles=[],worm_goal=None,
+            inchworm_policy=None,inchworm_posture=(0.,)*5,additional_targets=[],projectiles=[],worm_goal=None,
             sound_manager=SimpleNamespace(play_enemy_destroy=lambda:None),
             collision_handler=SimpleNamespace(drop_pickup=lambda *a:None),powerup_crystals=[],
             jev_beacon_allowed=lambda:False,command_recorder=None)

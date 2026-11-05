@@ -47,3 +47,32 @@ def test_inchworm_playtest_runs_in_real_game_loop(game):
     for _ in range(360):
         game.update(1.)
     assert all(c.active and c.x > pos[0]+10 for c, pos in zip(worms, positions))
+
+
+def test_the_inchworm_level_crawls_with_worms_that_all_hold_on(game):
+    game.level = 34
+    game.start_level()
+    game.state = config.STATE_PLAYING
+    game.player_has_moved = True
+    game.ship.game_started = True
+    worms = list(game.roster.of_kind('inchworm'))
+    assert len(worms) == 8 and len(list(game.roster.of_kind('wallcrawler'))) == 4
+    for _ in range(360):
+        game.update(1.)
+    assert all(c.active and c.worm_resets == 0 for c in worms)        # every perch has room for its arch
+
+
+def test_the_inchworm_levels_rock_passages_let_the_ship_through_without_blasting(monkeypatch):
+    import math
+    monkeypatch.setattr(config, 'SCREEN_WIDTH', 1352)
+    monkeypatch.setattr(config, 'SCREEN_HEIGHT', 878)
+    layout = level_config.get_level_layout(34)
+    maze = Maze(24, MazeComplexity.EMPTY, 34, layout=layout, seed=134, curved=True)
+    position = lambda cell: maze.position_calculator.grid_center_to_screen(*cell)
+    def clear_edge(a, b):
+        a, b = position(a), position(b)
+        steps = math.ceil(math.dist(a, b)/4)
+        return all(maze.is_open((a[0]+(b[0]-a[0])*i/steps, a[1]+(b[1]-a[1])*i/steps), config.SHIP_SIZE+1)
+                   for i in range(steps+1))
+    assert route(layout, layout.walls | layout.strong_walls, clear_edge) is not None
+    assert route(layout, layout.strong_walls) < route(layout, layout.walls | layout.strong_walls)   # blasting is a shortcut

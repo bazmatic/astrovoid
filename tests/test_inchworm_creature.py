@@ -12,10 +12,10 @@ from physics.inchworm import InchwormCommand
 from tests.creature_parts import encounter, open_maze, world
 
 
-def setting():
+def setting(**settings):
     c = creatures.build('inchworm', (400., 286.))
     wall = SimpleNamespace(start=(0., 300.), end=(1000., 300.), active=True)
-    enc = encounter(c, world_=world(maze=open_maze([wall])))
+    enc = encounter(c, world_=world(maze=open_maze([wall]), **settings))
     enc.ready()
     return c, enc
 
@@ -31,8 +31,18 @@ def test_reflex_controller_walks_using_alternating_surface_grips():
     assert len(c.worm_observation['joint_angles']) == 5
 
 
+def test_an_inchworm_appears_humped_away_from_its_wall_with_both_ends_down():
+    c, enc = setting()                            # floor at y=300, below the worm
+    links = c.worm_physics.links
+    ends = (links[0].position.y, links[-1].position.y)
+    assert ends[0] == pytest.approx(ends[1]) == pytest.approx(286.)                    # feet level, where they'd stand
+    assert all(links[i].position.y < min(ends)-5. for i in (2, 3))                      # the middle bows up off the floor
+    assert links[0].angle == pytest.approx(0., abs=1e-6) and links[-1].angle == pytest.approx(0., abs=1e-6)
+    enc.close()
+
+
 def test_external_neutral_command_completely_overrides_walking():
-    c, enc = setting()
+    c, enc = setting(inchworm_posture=(0.,)*5)    # straight, so nothing settles: a relaxing hump lands the head
     c.worm_command = InchwormCommand()
     enc.step(200.)
     assert c.get_pos() == pytest.approx((400., 286.))
@@ -198,6 +208,8 @@ def test_an_inchworm_whose_physics_blows_up_does_not_take_the_game_down(monkeypa
         enc.step(1.)                              # no exception escapes
     assert c.worm_resets >= 1
     assert not c.active                           # it keeps failing, so it dies instead of looping forever
+    for _ in range(int(c.body.DEATH_DURATION)):
+        c.update_death(1.)                        # and its death plays out without the physics
 
 
 def test_a_dying_inchworm_rolls_up_into_a_spiral():

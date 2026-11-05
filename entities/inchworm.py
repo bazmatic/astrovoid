@@ -22,25 +22,31 @@ class InchwormBody:
     def __init__(self, creature):
         self.chew = 0.
         self.coil = 0.
+        self.frozen = False   # the physics blew up while dying: hold the last pose and just fade
 
     def on_event(self, creature, name):
         if name == 'died':
             self.coil = 0.
+            self.frozen = False
 
     def update(self, creature, dt, target=None):
         self.chew = (self.chew+dt*.3) % math.tau
 
     def update_death(self, c, dt):
         p = getattr(c, 'worm_physics', None)
-        if p is not None:
+        if p is not None and not self.frozen:
             from creatures.traits.inchworm import snapshot
             from creatures.traits.wallcrawl import nearby
             from physics.inchworm import InchwormCommand
             walls = nearby(c.encounter.maze, p.centre, p.length*7+p.reach+math.hypot(*p.velocity)*dt)
             self.coil = min(1., self.coil+dt/SPIRAL_FRAMES)
             p.release()          # nothing holds on while it curls up
-            p.step(InchwormCommand(tuple(self.coil*v for v in SPIRAL)), dt, walls,
-                   getattr(c.encounter.maze, 'gate_segments', ()))
+            try:
+                p.step(InchwormCommand(tuple(self.coil*v for v in SPIRAL)), dt, walls,
+                       getattr(c.encounter.maze, 'gate_segments', ()))
+            except RuntimeError:
+                self.frozen = True
+                return
             snapshot(c)
 
     def collision_segments(self, c):

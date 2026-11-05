@@ -3,7 +3,7 @@ import logging
 import math
 
 from creatures.trait import Trait
-from creatures.inchworm_control import InchwormController
+from creatures.inchworm_control import REST_POSE, InchwormController
 from creatures.traits.rooted import wall_between
 from creatures.traits.wallcrawl import contact, nearby
 from physics.inchworm import InchwormCommand, InchwormPhysics
@@ -43,7 +43,9 @@ class Inchworms(Trait):
         if surface is not None and surface[3] <= c.radius+6:
             nx, ny = surface[2]
             angle = math.atan2(nx, -ny)
-        c.worm_physics = InchwormPhysics(c.get_pos(), c.radius, angle, (c.vx, c.vy))
+        # A world can name the posture worms appear in (training lessons start them straight).
+        c.worm_posture = getattr(enc.world, 'inchworm_posture', REST_POSE)
+        c.worm_physics = InchwormPhysics(c.get_pos(), c.radius, angle, (c.vx, c.vy), c.worm_posture)
         c.worm_controller = InchwormController(self.stride_frames)
         # None selects the reflex controller. Even an all-zero command overrides it.
         c.worm_command = None
@@ -88,8 +90,10 @@ class Inchworms(Trait):
             raise ValueError('inchworm dt must be finite and nonnegative')
         p = c.worm_physics
         # Preserve impulses and corrections from the game's circle/obstacle systems.
-        p.translate((c.x-p.centre[0], c.y-p.centre[1]))
-        p.impulse(((c.vx-p.velocity[0])*p.mass, (c.vy-p.velocity[1])*p.mass))
+        centre = p.centre
+        p.translate((c.x-centre[0], c.y-centre[1]))
+        velocity = p.velocity
+        p.impulse(((c.vx-velocity[0])*p.mass, (c.vy-velocity[1])*p.mass))
         c.prev_x, c.prev_y = c.x, c.y
         remaining = dt
         while remaining > 1e-8:
@@ -126,7 +130,7 @@ class Inchworms(Trait):
                     enc.kill(c)
                     return
                 p.release()
-                c.worm_physics = p = InchwormPhysics(c.get_pos(), c.radius, math.radians(c.angle))
+                c.worm_physics = p = InchwormPhysics(c.get_pos(), c.radius, math.radians(c.angle), posture=c.worm_posture)
                 c.worm_controller = InchwormController(self.stride_frames)
                 c.worm_bite = 0.
             snapshot(c)
@@ -156,8 +160,9 @@ class Inchworms(Trait):
         usual = nearest_friendly(c, enc.world.ship, enc.world.hunter)
         if usual is not None:
             candidates.append(usual)
+        centre, head = p.centre, p.head
         for t in sorted(candidates, key=lambda t: (t.x-c.x)**2+(t.y-c.y)**2):
-            if math.dist(p.centre, t.get_pos()) <= p.length*7+t.radius and not wall_between(p.head, t.get_pos(), enc.maze):
+            if math.dist(centre, t.get_pos()) <= p.length*7+t.radius and not wall_between(head, t.get_pos(), enc.maze):
                 return t
         return None
 

@@ -9,7 +9,6 @@ import math
 
 import pymunk
 
-from utils import get_closest_point_on_line
 
 MUSCLES = 5
 MAX_BEND = 1.8        # radians a joint can be commanded to bend; the hard stop sits .2 beyond
@@ -21,6 +20,25 @@ SNAP_RANGE = 2.5      # a foot asking to grip is drawn to a surface this many re
 SNAP_PULL = .2         # peak pull as a fraction of body mass (px/frame^2); grips hold up to 1.8, so it never yanks
 HEAD_ROLL_RATE = .25   # the head rolls belly-down faster than the other links so it is ready on arrival
 SPINE_COUPLING = .2   # fraction of the muscle spring's stiffness that ties each joint to its neighbours
+
+
+def _foot(x, y, rock):
+    """The point of a cached rock segment (see InchwormPhysics._rock) closest to (x, y), as utils.get_closest_point_on_line."""
+    x1, y1, dx, dy, length_sq = rock[0], rock[1], rock[2], rock[3], rock[4]
+    if length_sq < 1e-10:
+        return x1, y1
+    t = ((x-x1)*dx+(y-y1)*dy)/length_sq
+    if t > 1:
+        t = 1
+    elif t < 0:
+        t = 0
+    return x1+t*dx, y1+t*dy
+
+
+def _within(x, y, rock, distance):
+    """Whether (x, y) is inside the segment's bounding box grown by distance (and a pixel): a cheap first test."""
+    distance += 1.
+    return rock[5]-distance <= x <= rock[6]+distance and rock[7]-distance <= y <= rock[8]+distance
 
 
 @dataclass(frozen=True)
@@ -65,7 +83,9 @@ class InchwormPhysics:
     training. Wall objects need active/start/end. A target needs position, velocity
     and radius; health and allegiance are exclusively the creature trait's concern.
     """
-    def __init__(self, position, radius=14., angle=0., velocity=(0., 0.)):
+    def __init__(self, position, radius=14., angle=0., velocity=(0., 0.), posture=(0.,)*MUSCLES):
+        """posture: the muscle activations it starts in, already holding the body in that shape; its ends lie where a
+        straight body's would, along angle, about position."""
         self.radius = radius
         self.length = radius * .7
         self.skin = radius * .24
@@ -77,7 +97,7 @@ class InchwormPhysics:
         self.space.collision_slop = .05
         self.space.collision_bias = .1
         self.links, self.shapes, self.hinges = [], [], []
-        self.activation = [0.] * MUSCLES
+        self.activation = list(InchwormCommand(posture).muscles)
         self.roll = [0.] * 6
         self.roll_goal = [0.] * 6
         self.effort = 0.
@@ -88,18 +108,27 @@ class InchwormPhysics:
         self._block_front_reflex()
         self._front_blocked_for = -math.inf   # spawning beside a surface never counts as resting on it
         self.surfaces = {}
+        self._rock = []   # (x1, y1, dx, dy, length², left, right, top, bottom, wall) of each non-gate surface
         self.prey = self.prey_body = self.prey_shape = self.grab = None
         self.grab_load = self.grab_overload = self.grab_cooldown = 0.
         self.surface_contacts = [False] * 6
-        direction = pymunk.Vec2d(math.cos(angle), math.sin(angle))
-        centre = pymunk.Vec2d(*position)
+        # Chain the links along the posture's bends, then turn and move the chain so tail to head runs along angle.
+        headings, centres = [0.], [(0., 0.)]
+        for bend in self.activation:
+            headings.append(headings[-1]+bend*MAX_BEND)
+        for before, after in zip(headings, headings[1:]):
+            x, y = centres[-1]
+            centres.append((x+(math.cos(before)+math.cos(after))*self.length/2,
+                            y+(math.sin(before)+math.sin(after))*self.length/2))
+        turn = angle-math.atan2(centres[-1][1], centres[-1][0])
+        middle = ((centres[0][0]+centres[-1][0])/2, (centres[0][1]+centres[-1][1])/2)
         mass = self.mass / 6
         for i in range(6):
             a, b = (-self.length/2, 0.), (self.length/2, 0.)
             body = pymunk.Body(mass, pymunk.moment_for_segment(mass, a, b, self.skin))
-            body.position = centre + direction * ((i-2.5)*self.length)
+            body.position = pymunk.Vec2d(*position)+(pymunk.Vec2d(*centres[i])-middle).rotated(turn)
             body.velocity = velocity
-            body.angle = angle
+            body.angle = headings[i]+turn
             shape = pymunk.Segment(body, a, b, self.skin)
             shape.friction, shape.elasticity = .55, .1
             shape.collision_type = 1
@@ -115,15 +144,29 @@ class InchwormPhysics:
             limit.collide_bodies = False
             self.space.add(joint, limit)
             self.hinges.append(joint)
+        # Each muscle's spring (stiffness, damping, torque limit): the links never change, so these don't either.
+        self.springs = []
+        for a, b in zip(self.links, self.links[1:]):
+            inertia = a.moment*b.moment/(a.moment+b.moment)
+            stiffness = inertia*2.0
+            self.springs.append((stiffness, 2*math.sqrt(stiffness*inertia)*.9, self.mass*self.length*.25))
         self.space.on_collision(1, 2, post_solve=self._wall_contact)
 
     @property
     def centre(self):
-        return tuple(sum((b.position for b in self.links), pymunk.Vec2d(0, 0)) / 6)
+        return self._mean('position')
 
     @property
     def velocity(self):
-        return tuple(sum((b.velocity for b in self.links), pymunk.Vec2d(0, 0)) / 6)
+        return self._mean('velocity')
+
+    def _mean(self, attribute):
+        x = y = 0          # summed as plain floats: these are read several times a frame
+        for body in self.links:
+            vx, vy = getattr(body, attribute)
+            x += vx
+            y += vy
+        return (x/6, y/6)
 
     @property
     def head(self):
@@ -135,7 +178,8 @@ class InchwormPhysics:
 
     @property
     def heading(self):
-        return math.atan2(self.head[1]-self.tail[1], self.head[0]-self.tail[0])
+        (hx, hy), (tx, ty) = self.head, self.tail
+        return math.atan2(hy-ty, hx-tx)
 
     def pose(self):
         return tuple((tuple(b.local_to_world((-self.length/2, 0.))),
@@ -143,7 +187,8 @@ class InchwormPhysics:
 
     def observe(self):
         """Body-relative proprioception; no privileged target/controller state."""
-        forward = pymunk.Vec2d(math.cos(self.heading), math.sin(self.heading))
+        heading = self.heading
+        forward = pymunk.Vec2d(math.cos(heading), math.sin(heading))
         side = forward.perpendicular()
         velocity = pymunk.Vec2d(*self.velocity)
         return {
@@ -216,6 +261,11 @@ class InchwormPhysics:
             if key not in present or present[key] is not old:
                 self.space.remove(old[2])
         self.surfaces = present
+        self._rock = []
+        for wall, ((x1, y1), (x2, y2)), _, gate in present.values():
+            if not gate:
+                self._rock.append((x1, y1, x2-x1, y2-y1, (x2-x1)*(x2-x1)+(y2-y1)*(y2-y1),
+                                   min(x1, x2), max(x1, x2), min(y1, y2), max(y1, y2), wall))
 
     def _release_foot(self, index):
         grip = self.grips[index]
@@ -225,24 +275,26 @@ class InchwormPhysics:
 
     def _try_foot(self, index):
         body = self.links[0 if index == 0 else -1]
-        point = body.position
-        candidates = []
-        for wall, _, _, gate in self.surfaces.values():
-            if gate:
-                continue  # moving planks collide but cannot be anchored to
-            foot = get_closest_point_on_line(point, wall.start, wall.end)
-            delta = point-pymunk.Vec2d(*foot)
-            distance = delta.length
-            if self.skin-.1 <= distance <= self.reach:
-                normal = delta/distance
-                tangent = pymunk.Vec2d(-normal.y, normal.x)
-                belly = body.rotation_vector.perpendicular()*math.cos(self.roll[0 if index == 0 else -1])
-                parallel,facing = (FRONT_PARALLEL,FRONT_BELLY) if index == 1 else (.75,.65)
-                if abs(body.rotation_vector.dot(tangent)) > parallel and belly.dot(normal) < -facing:
-                    candidates.append((distance, wall, foot, normal))
-        if not candidates:
+        x, y = body.position
+        rx, ry = body.rotation_vector
+        roll = math.cos(self.roll[0 if index == 0 else -1])
+        parallel, facing = (FRONT_PARALLEL, FRONT_BELLY) if index == 1 else (.75, .65)
+        best = None
+        for rock in self._rock:              # gates are left out: moving planks collide but cannot be anchored to
+            if not _within(x, y, rock, self.reach):
+                continue
+            fx, fy = _foot(x, y, rock)
+            ox, oy = x-fx, y-fy
+            distance = math.sqrt(ox**2+oy**2)
+            if self.skin-.1 <= distance <= self.reach and (best is None or distance < best[0]):
+                nx, ny = ox/distance, oy/distance
+                # The link along the surface's tangent, and its rolled belly toward it (pymunk's vector maths,
+                # written out).
+                if abs(rx*-ny+ry*nx) > parallel and (-ry*roll)*nx+(rx*roll)*ny < -facing:
+                    best = (distance, rock[9], (fx, fy), pymunk.Vec2d(nx, ny))
+        if best is None:
             return
-        _, wall, foot, normal = min(candidates, key=lambda c: c[0])
+        _, wall, foot, normal = best
         # Planted legs support a resting height with bounded force and speed.
         # Only the surface normal is corrected; the tangential contact stays put.
         anchor = pymunk.Vec2d(*foot)+normal*self.radius*.85
@@ -264,17 +316,19 @@ class InchwormPhysics:
     def _snap_foot(self, index):
         """Pull an ungripped foot that is asking to grip toward the nearest surface; the grip itself still needs reach."""
         body = self.links[0 if index == 0 else -1]
-        nearest = None
-        for wall, _, _, gate in self.surfaces.values():
-            if gate:
+        x, y = position = body.position
+        nearest, closest = None, self.reach*SNAP_RANGE
+        for rock in self._rock:
+            if not _within(x, y, rock, closest):
                 continue
-            foot = get_closest_point_on_line(body.position, wall.start, wall.end)
-            delta = pymunk.Vec2d(*foot)-body.position
-            if self.reach < delta.length < self.reach*SNAP_RANGE and (nearest is None or delta.length < nearest.length):
-                nearest = delta
+            fx, fy = _foot(x, y, rock)
+            ox, oy = fx-x, fy-y
+            length = math.sqrt(ox**2+oy**2)
+            if self.reach < length < closest:
+                nearest, closest = (ox, oy), length
         if nearest is not None:
-            strength = self.mass*SNAP_PULL*(1-nearest.length/(self.reach*SNAP_RANGE))
-            body.apply_force_at_world_point(nearest.normalized()*strength, body.position)
+            strength = self.mass*SNAP_PULL*(1-closest/(self.reach*SNAP_RANGE))
+            body.apply_force_at_world_point((nearest[0]/closest*strength, nearest[1]/closest*strength), position)
 
     def _release_prey(self):
         if self.grab is not None:
@@ -325,9 +379,12 @@ class InchwormPhysics:
 
     def _front_within_reach(self):
         """Separation rearms attachment; rotating feet in place does not undo a release."""
-        point = self.links[-1].position
-        for wall, _, _, gate in self.surfaces.values():
-            if not gate and point.get_distance(get_closest_point_on_line(point, wall.start, wall.end)) <= self.reach:
+        x, y = self.links[-1].position
+        for rock in self._rock:
+            if not _within(x, y, rock, self.reach):
+                continue
+            fx, fy = _foot(x, y, rock)
+            if math.sqrt((x-fx)**2+(y-fy)**2) <= self.reach:
                 return True
         return (self.prey_body is not None and
                 math.dist(self.head, self.prey_body.position) <= self.prey.radius+self.skin+self.reach*.3)
@@ -343,18 +400,39 @@ class InchwormPhysics:
         This is a bounded torsional posture in the planar simulation, not a third
         spatial dimension. A foot cannot replant until its belly faces the wall.
         """
-        surfaces = [w for w, _, _, gate in self.surfaces.values() if not gate]
+        # Plain floats throughout: this runs for every link and wall on every substep, and pymunk's accessors
+        # dominated a level full of worms. Rock out of every link's range is dropped once, up front.
+        positions = [body.position for body in self.links]
+        span = self.reach*4
+        left, right = min(p.x for p in positions)-span, max(p.x for p in positions)+span
+        top, bottom = min(p.y for p in positions)-span, max(p.y for p in positions)+span
+        rock = [r for r in self._rock if r[5] <= right and r[6] >= left and r[7] <= bottom and r[8] >= top]
         for i, body in enumerate(self.links):
             if (i == 0 and self.grips[0]) or (i == 5 and self.grips[1]):
                 continue
-            nearest = None
-            for wall in surfaces:
-                foot = get_closest_point_on_line(body.position, wall.start, wall.end)
-                delta = body.position-pymunk.Vec2d(*foot)
-                if .1 < delta.length < self.reach*4 and (nearest is None or delta.length < nearest.length):
-                    nearest = delta
+            x, y = positions[i]
+            nearest, closest = None, span
+            for x1, y1, dx, dy, length_sq, wl, wr, wt, wb, _ in rock:
+                if x < wl-closest or x > wr+closest or y < wt-closest or y > wb+closest:
+                    continue                           # too far to be nearer than what we have
+                if length_sq < 1e-10:              # _foot, inlined
+                    fx, fy = x1, y1
+                else:
+                    t = ((x-x1)*dx+(y-y1)*dy)/length_sq
+                    if t > 1:
+                        t = 1
+                    elif t < 0:
+                        t = 0
+                    fx, fy = x1+t*dx, y1+t*dy
+                ox, oy = x-fx, y-fy
+                length = math.sqrt(ox*ox+oy*oy)
+                if .1 < length < closest:
+                    nearest, closest = (ox, oy), length
             if nearest is not None:
-                toward = body.rotation_vector.perpendicular().dot(-nearest.normalized())
+                # The belly's direction, dotted with the way to the wall (pymunk's perpendicular/normalized/dot,
+                # written out).
+                rx, ry = body.rotation_vector
+                toward = (-ry)*-(nearest[0]/closest) + rx*-(nearest[1]/closest)
                 if abs(toward) > (FRONT_BELLY if i == 5 else .6):
                     self.roll_goal[i] = 0. if toward > 0 else math.pi
             rate = HEAD_ROLL_RATE if i == 5 else .07
@@ -380,7 +458,12 @@ class InchwormPhysics:
         while remaining > 1e-9:
             # Bound travel per solve as well as duration: shots/blasts cannot tunnel
             # a thin link through a wall on a long game frame.
-            speed = max(b.velocity.length+abs(b.angular_velocity)*self.length for b in self.links)
+            speed = None
+            for b in self.links:
+                vx, vy = b.velocity
+                v = math.sqrt(vx**2+vy**2)+abs(b.angular_velocity)*self.length
+                if speed is None or v > speed:
+                    speed = v
             substeps += 1
             if not math.isfinite(speed) or speed > self.skin*.4*4096 or substeps > math.ceil(dt)*4096:
                 raise RuntimeError('inchworm physics exceeded its stable substep budget')
@@ -413,21 +496,23 @@ class InchwormPhysics:
                 self._release_prey()
             elif self.grab is None and self.grab_cooldown == 0:
                 self._try_prey()
-            bends = [b.angle-a.angle for a, b in zip(self.links, self.links[1:])]
-            for i, (a, b) in enumerate(zip(self.links, self.links[1:])):
+            # Read the links once: pymunk's accessors cost more than this arithmetic.
+            angles = [b.angle for b in self.links]
+            spins = [b.angular_velocity for b in self.links]
+            torques = [b.torque for b in self.links]
+            bends = [b-a for a, b in zip(angles, angles[1:])]
+            for i, (stiffness, damping, maximum) in enumerate(self.springs):
                 self.activation[i] += max(-.07*h, min(.07*h, command.muscles[i]-self.activation[i]))
-                error = self.activation[i]*MAX_BEND-(b.angle-a.angle)
-                inertia = a.moment*b.moment/(a.moment+b.moment)
-                stiffness = inertia*2.0
-                damping = 2*math.sqrt(stiffness*inertia)*.9
-                maximum = self.mass*self.length*.25
-                torque = max(-maximum, min(maximum, stiffness*error-damping*(b.angular_velocity-a.angular_velocity))) if powered else 0.
+                error = self.activation[i]*MAX_BEND-bends[i]
+                torque = max(-maximum, min(maximum, stiffness*error-damping*(spins[i+1]-spins[i]))) if powered else 0.
                 # Neighbouring joints pull toward each other, so a bend spreads into an arc instead of a kink.
                 neighbours = [bends[j] for j in (i-1, i+1) if 0 <= j < len(bends)]
                 torque += SPINE_COUPLING*stiffness*(sum(neighbours)/len(neighbours)-bends[i])
-                a.torque -= torque
-                b.torque += torque
+                torques[i] -= torque
+                torques[i+1] += torque
                 self.effort += abs(torque)/maximum*h/dt/MUSCLES
+            for body, torque in zip(self.links, torques):
+                body.torque = torque
             self.space.step(h)
             for i, grip in enumerate(self.grips):
                 if grip is None:

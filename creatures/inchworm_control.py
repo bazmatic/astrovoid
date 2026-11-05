@@ -9,6 +9,7 @@ ARCH = tuple(v*POSTURE_BEND/MAX_BEND for v in (-.8, .4, .8, .4, -.8))
 # the ground. With 1.8 rad joints the feet come to about 2.6 links apart (stretch ~0.44) before the rear plants.
 STRIDE_ARCH = (-1., .5, 1., .5, -1.)
 STRAIGHT_POSE = (-.156, .078, .156, .078, -.156)   # "straight" holds a very slight upward bend, never a drooping belly
+REST_POSE = tuple(v*.4 for v in STRIDE_ARCH)        # how a worm sits when it appears: a relaxed hump, feet down
 EXTEND_HEAD = None      # optional head-joint setpoint while the front is letting go (None: the straight pose's)
 FOLDED = .5             # stretch (head-tail distance / full length) at which the arch is tall enough: the rear plants
 STRAIGHT = .93          # stretch at which the body is straight again: the front plants

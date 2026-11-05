@@ -28,7 +28,7 @@ A file can exist for any level, and can state as much or as little as it likes. 
 - **neural_hunter**: Neural hunters on the level (the neural pilot's hunter ship as an enemy, in magenta, hostile only to the player). Like the Rules hunter it takes 12 hits and makes a boss level. Without an installed neural model (`assets/neural/hunter.npz`) the level starts without it.
 - **belemnite**: Belemnites on the level: spiky squids in pointed shells that chase the player as Jellies do, never overlapping one another. They have no guns, take 3 hits, and explode when they die, hurting the player, the hunter, nearby walls and other enemies (so one can set off the next).
 - **wallcrawler**: A gun walking on twelve little legs along curved rock or square steel. Bullets and explosions knock it loose; it cannot fire during its 0.6-second stunned tumble or its flight to the nearest wall. It has four hit points. Campaign encounters begin with a crowd of five on level 11 and rise to eight by level 21; level 27 pairs six with explosive Belemnites. Layouts place it through the editor; generated levels accept an `enemies.wallcrawler` count. Levels without a file carry five to eight on every fourth level from 11, the ones built around them.
-- **inchworm**: A six-link worm that crawls on rock and steel on grips, rears up and bites. It eats everything alive except other inchworms: the player ship, hunters and every other creature, one hit point per bite. Layouts place it through the editor beside a wall; give it open floor (a 5x5 block with at most a few wall cells), because its arch jams in a narrow dead end. The campaign has two on levels 13, 16, 19, 22, 26 and 29, as a minority predator among the level's usual enemies; level 33 is the inchworm playtest. Without `assets/neural/inchworm.npz` it walks with the scripted stride.
+- **inchworm**: A six-link worm that crawls on rock and steel on grips, rears up and bites. It eats everything alive except other inchworms: the player ship, hunters and every other creature, one hit point per bite. Layouts place it through the editor beside a wall; give it open floor (a 5x5 block with at most a few wall cells), because its arch jams in a narrow dead end. The campaign has two on levels 13, 16, 19, 22, 26 and 29, as a minority predator among the level's usual enemies; level 33 is the inchworm playtest and level 34 (Looper Garden) is built around eight of them, with four Wallcrawlers. Without `assets/neural/inchworm.npz` it walks with the scripted stride.
 - **hunter**: `false` forbids an ally. `{"earned": true}` allows enemy kills to drop a beacon only after 65% of the starting enemies have been defeated (at least four kills). The usual 3% drop chance still applies after that threshold. No beacon starts on an earned level. An explicit `{"spawn_cell": [col, row]}` remains available for custom encounters.
 - **layout**: an exact, hand-made level, written by the level editor (see the [developer guide](../docs/development.md#level-editor)). While it is present it replaces the generated maze, the random enemy positions and the `enemies` counts. Those are kept, untouched, so removing the layout restores the generated level. `beacon` takes the place of `hunter`. A layout that cannot be played (a cell out of range, an enemy on a wall, a missing start) is ignored with a warning and the level generates from its seed.
 
@@ -165,3 +165,23 @@ enemies or allied beacons. Authored inchworms are placed on nearby wall surfaces
 at setup so their first stride starts immediately.
 
 Start directly with `START_LEVEL=33 ./run.sh`.
+
+## Level 34: Looper Garden
+
+Eight inchworms and four Wallcrawlers in five rock-walled rooms. Each room
+has a permanent steel shelf with its inchworms: one on each corner shelf, four
+along the long centre shelf of the middle hall. Inchworms are expensive to
+simulate (about 0.6 ms a frame each), so the count stays low. The rooms connect
+through narrow passages in the rock, and the way from the northwest start to
+the southeast exit winds: down into the hall, along to its far west end, down
+into the southwest room and east to the exit. The rock is all destructible, so
+blasting through it shortens the route (48 cells to 38). The Wallcrawlers start
+in the corners and hall ends, away from the shelves the worms keep to, though a
+hungry worm will still eat one that wanders close.
+
+The exit is open from the start, so the worms are a gauntlet to get past, not a
+kill list; ammo is unlimited, and there are no gates or hunter beacons. The
+shelves are square steel because a worm's arch jams in tight curved rock. On very small screens (960x640) the rock bulges close the
+hall, and the way through has to be blasted.
+
+Start directly with `START_LEVEL=34 ./run.sh`.

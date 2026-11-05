@@ -76,7 +76,7 @@ def test_every_enemy_the_level_asks_for_is_placed_clear_of_the_start(game, level
         assert math.dist(enemy.get_pos(), game.maze.start_pos) >= config.ENEMY_START_CLEARANCE
 
 
-ACTIVE = ('patrol', 'aggressive', 'flocker', 'wallcrawler', 'replay', 'belemnite', 'vibelet', 'neural_hunter')
+ACTIVE = ('patrol', 'aggressive', 'flocker', 'wallcrawler', 'replay', 'belemnite', 'vibelet', 'neural_hunter', 'inchworm')
 
 
 def active_roster(level):
