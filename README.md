@@ -9,7 +9,7 @@ Fly a little ship through curved, destructible caves with Asteroids-style moment
 The caves are full of artificial life. Most of the creatures you'll meet aren't scripted. They're driven by **small neural networks that were trained, not written**. Each species was put through thousands of practice encounters and rewarded for catching prey, staying alive and working as a team, until its own ways of moving and fighting emerged. Nobody told the Jellies to flank you or the Inchworms how to walk. They worked it out.
 
 <p align="center">
-  <img src="docs/images/level-13.png" alt="Level 13: Jellies, Inchworms, an Anemone and a Flighthouse in a curved cave" width="820">
+  <img src="docs/images/level-13-inchworms.png" alt="Level 13: Jellies, Inchworms, an Anemone and a Flighthouse in a curved cave" width="820">
 </p>
 
 ## Meet the creatures
