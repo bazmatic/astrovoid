@@ -12,7 +12,15 @@ import pymunk
 from utils import get_closest_point_on_line
 
 MUSCLES = 5
-MAX_BEND = 1.4
+MAX_BEND = 1.8        # radians a joint can be commanded to bend; the hard stop sits .2 beyond
+POSTURE_BEND = 1.4    # the range the fixed postures (turn loop, ARCH) were tuned at: they keep their angles
+FRONT_PARALLEL = .4    # the head may land this close to (cosine of) parallel with the surface; rear feet need the usual .75
+FRONT_BELLY = .3       # and its belly need only face the surface this much; rear feet need .65
+FRONT_REARM = 24.      # a released head resting at the surface re-grips after this long, even without moving clear
+SNAP_RANGE = 2.5      # a foot asking to grip is drawn to a surface this many reaches away, like an electrostatic pull
+SNAP_PULL = .2         # peak pull as a fraction of body mass (px/frame^2); grips hold up to 1.8, so it never yanks
+HEAD_ROLL_RATE = .25   # the head rolls belly-down faster than the other links so it is ready on arrival
+SPINE_COUPLING = .2   # fraction of the muscle spring's stiffness that ties each joint to its neighbours
 
 
 @dataclass(frozen=True)
@@ -20,8 +28,10 @@ class InchwormCommand:
     """Signed joint setpoints (-1..1), rear/front grip requests, and jaw closure.
 
     Values outside the range are clipped; nonfinite values and wrong shapes fail.
-    A released grip stays released even beside a surface. Grips only engage within
-    leg reach, can slip under load, and do not supply propulsion on their own.
+    Front contact automatically latches a grip. Switching front_grip from True to
+    False deliberately releases it and inhibits the reflex until the head moves
+    clear or has rested at the surface for FRONT_REARM. Rear grips remain request-controlled. Grips only engage within reach,
+    can slip under load, and do not supply propulsion on their own.
     """
     muscles: tuple = (0.,) * MUSCLES
     rear_grip: bool = False
@@ -73,6 +83,10 @@ class InchwormPhysics:
         self.effort = 0.
         self.grips = [None, None]
         self.grip_cooldown = [0., 0.]
+        self._front_requested = False
+        # Arm on separation: spawning at rest beside a wall is not a new landing.
+        self._block_front_reflex()
+        self._front_blocked_for = -math.inf   # spawning beside a surface never counts as resting on it
         self.surfaces = {}
         self.prey = self.prey_body = self.prey_shape = self.grab = None
         self.grab_load = self.grab_overload = self.grab_cooldown = 0.
@@ -97,7 +111,7 @@ class InchwormPhysics:
             joint.collide_bodies = False
             joint.error_bias = .01
             joint.max_bias = 4.
-            limit = pymunk.RotaryLimitJoint(a, b, -1.6, 1.6)
+            limit = pymunk.RotaryLimitJoint(a, b, -MAX_BEND-.2, MAX_BEND+.2)
             limit.collide_bodies = False
             self.space.add(joint, limit)
             self.hinges.append(joint)
@@ -167,6 +181,7 @@ class InchwormPhysics:
             body.apply_impulse_at_world_point(impulse, point)
 
     def release(self):
+        self._block_front_reflex()
         for i in range(2):
             self._release_foot(i)
         self._release_prey()
@@ -222,7 +237,8 @@ class InchwormPhysics:
                 normal = delta/distance
                 tangent = pymunk.Vec2d(-normal.y, normal.x)
                 belly = body.rotation_vector.perpendicular()*math.cos(self.roll[0 if index == 0 else -1])
-                if abs(body.rotation_vector.dot(tangent)) > .75 and belly.dot(normal) < -.65:
+                parallel,facing = (FRONT_PARALLEL,FRONT_BELLY) if index == 1 else (.75,.65)
+                if abs(body.rotation_vector.dot(tangent)) > parallel and belly.dot(normal) < -facing:
                     candidates.append((distance, wall, foot, normal))
         if not candidates:
             return
@@ -244,6 +260,21 @@ class InchwormPhysics:
         rotation.error_bias = .01
         self.space.add(pivot, rotation)
         self.grips[index] = Grip(wall, tuple(foot), tuple(normal), pivot, rotation, tuple(anchor))
+
+    def _snap_foot(self, index):
+        """Pull an ungripped foot that is asking to grip toward the nearest surface; the grip itself still needs reach."""
+        body = self.links[0 if index == 0 else -1]
+        nearest = None
+        for wall, _, _, gate in self.surfaces.values():
+            if gate:
+                continue
+            foot = get_closest_point_on_line(body.position, wall.start, wall.end)
+            delta = pymunk.Vec2d(*foot)-body.position
+            if self.reach < delta.length < self.reach*SNAP_RANGE and (nearest is None or delta.length < nearest.length):
+                nearest = delta
+        if nearest is not None:
+            strength = self.mass*SNAP_PULL*(1-nearest.length/(self.reach*SNAP_RANGE))
+            body.apply_force_at_world_point(nearest.normalized()*strength, body.position)
 
     def _release_prey(self):
         if self.grab is not None:
@@ -288,6 +319,19 @@ class InchwormPhysics:
         self.grab = pivot
         self._release_foot(1)
 
+    def _block_front_reflex(self):
+        self._front_reflex_blocked = True
+        self._front_blocked_for = 0.
+
+    def _front_within_reach(self):
+        """Separation rearms attachment; rotating feet in place does not undo a release."""
+        point = self.links[-1].position
+        for wall, _, _, gate in self.surfaces.values():
+            if not gate and point.get_distance(get_closest_point_on_line(point, wall.start, wall.end)) <= self.reach:
+                return True
+        return (self.prey_body is not None and
+                math.dist(self.head, self.prey_body.position) <= self.prey.radius+self.skin+self.reach*.3)
+
     @property
     def mouth_contact(self):
         return (self.grab is not None and
@@ -311,9 +355,10 @@ class InchwormPhysics:
                     nearest = delta
             if nearest is not None:
                 toward = body.rotation_vector.perpendicular().dot(-nearest.normalized())
-                if abs(toward) > .6:
+                if abs(toward) > (FRONT_BELLY if i == 5 else .6):
                     self.roll_goal[i] = 0. if toward > 0 else math.pi
-            self.roll[i] += max(-.07*dt, min(.07*dt, self.roll_goal[i]-self.roll[i]))
+            rate = HEAD_ROLL_RATE if i == 5 else .07
+            self.roll[i] += max(-rate*dt, min(rate*dt, self.roll_goal[i]-self.roll[i]))
 
     def step(self, command, dt, walls=(), gates=(), target=None, can_grab=True, powered=True):
         if not math.isfinite(dt) or dt < 0:
@@ -322,29 +367,53 @@ class InchwormPhysics:
             return
         self._sync_surfaces(walls, gates)
         self._sync_prey(target)
+        if (self._front_requested and not command.front_grip) or not powered:
+            self._release_foot(1)
+            self._release_prey()
+            self._block_front_reflex()
+        self._front_requested = command.front_grip
         self.surface_contacts[:] = [False]*6
         initial_velocity = self.prey_body.velocity if self.prey_body is not None else None
         self.effort = 0.
         remaining = dt
+        substeps = 0
         while remaining > 1e-9:
             # Bound travel per solve as well as duration: shots/blasts cannot tunnel
             # a thin link through a wall on a long game frame.
             speed = max(b.velocity.length+abs(b.angular_velocity)*self.length for b in self.links)
-            h = min(.125, remaining, self.skin*.4/max(1., speed))
+            substeps += 1
+            if not math.isfinite(speed) or speed > self.skin*.4*4096 or substeps > math.ceil(dt)*4096:
+                raise RuntimeError('inchworm physics exceeded its stable substep budget')
+            # Avoid a tiny final remainder followed by a much larger step on the
+            # next frame: that jump destabilizes cached constraint impulses.
+            desired = min(.125, self.skin*.4/max(1., speed))
+            h = remaining / math.ceil(remaining / desired)
             if powered:
                 self._twist_reflex(h)
-            for i, requested in enumerate((command.rear_grip, command.front_grip)):
+                if self._front_reflex_blocked:
+                    self._front_blocked_for += h
+                    if self._front_blocked_for >= FRONT_REARM or not self._front_within_reach():
+                        self._front_reflex_blocked = False
+            # Automatic contact persists even if no request accompanied the landing.
+            # A falling request edge above is the deliberate release command.
+            front_requested = (command.front_grip or self.grips[1] is not None or self.grab is not None
+                               or (powered and not self._front_reflex_blocked))
+            for i, requested in enumerate((command.rear_grip, front_requested)):
                 self.grip_cooldown[i] = max(0., self.grip_cooldown[i]-h)
                 grip = self.grips[i]
                 if grip and (not requested or not grip.surface.active or id(grip.surface) not in self.surfaces):
                     self._release_foot(i)
                 if requested and self.grips[i] is None and self.grip_cooldown[i] == 0 and not (i == 1 and self.grab):
                     self._try_foot(i)
+            for i, asked in enumerate((command.rear_grip, command.front_grip)):   # the reflex alone never pulls the head down
+                if asked and self.grips[i] is None and self.grip_cooldown[i] == 0 and not (i == 1 and self.grab):
+                    self._snap_foot(i)
             self.grab_cooldown = max(0., self.grab_cooldown-h)
-            if not command.front_grip or not can_grab:
+            if not front_requested or not can_grab:
                 self._release_prey()
             elif self.grab is None and self.grab_cooldown == 0:
                 self._try_prey()
+            bends = [b.angle-a.angle for a, b in zip(self.links, self.links[1:])]
             for i, (a, b) in enumerate(zip(self.links, self.links[1:])):
                 self.activation[i] += max(-.07*h, min(.07*h, command.muscles[i]-self.activation[i]))
                 error = self.activation[i]*MAX_BEND-(b.angle-a.angle)
@@ -353,6 +422,9 @@ class InchwormPhysics:
                 damping = 2*math.sqrt(stiffness*inertia)*.9
                 maximum = self.mass*self.length*.25
                 torque = max(-maximum, min(maximum, stiffness*error-damping*(b.angular_velocity-a.angular_velocity))) if powered else 0.
+                # Neighbouring joints pull toward each other, so a bend spreads into an arc instead of a kink.
+                neighbours = [bends[j] for j in (i-1, i+1) if 0 <= j < len(bends)]
+                torque += SPINE_COUPLING*stiffness*(sum(neighbours)/len(neighbours)-bends[i])
                 a.torque -= torque
                 b.torque += torque
                 self.effort += abs(torque)/maximum*h/dt/MUSCLES

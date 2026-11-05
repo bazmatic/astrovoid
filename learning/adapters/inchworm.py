@@ -5,11 +5,13 @@ import numpy as np
 
 from creatures.traits.rooted import wall_between
 from learning.policy import PolicySpec, RecurrentPolicy
-from physics.inchworm import InchwormCommand
+from physics.inchworm import InchwormCommand, MUSCLES
 from utils import get_closest_point_on_line
 from weapons.geometry import segment_contact
 
 DECISION_FRAMES = 6
+# Gameplay and evaluation must execute the same learned action distribution.
+INFERENCE_ACTION_MODE = 'sample'
 SIGHT = 300.
 MOTOR_NAMES = tuple(f'bend{i}' for i in range(5))
 HEADS = tuple((n, 2) for n in MOTOR_NAMES) + (('rear_grip', 2), ('front_grip', 2), ('bite', 2))
@@ -35,25 +37,43 @@ def visible_target(c, enc):
     return target
 
 
+def bend_signs(p):
+    """+1 per joint while its links lie belly-down, -1 once the twist reflex has rolled them over.
+
+    A rolled worm bends the opposite way to arch. Mirroring the five bends by these signs, in what the policy
+    sees and in what it commands, makes a worm that has turned around look and act like one that has not,
+    so the crawl it already knows carries over.
+    """
+    return tuple(1. if math.cos((p.roll[i]+p.roll[i+1])/2) >= 0 else -1. for i in range(MUSCLES))
+
+
+def body_side(p):
+    """+1 belly-down in the body frame, -1 once the worm has rolled over: then the surface lies on the other side."""
+    return 1. if sum(math.cos(r) for r in p.roll) >= 0 else -1.
+
+
 def observe(c, enc):
     p = c.worm_physics
     o = p.observe()
+    signs = bend_signs(p)
+    side = body_side(p)
     f = p.heading
     cf, sf = math.cos(f), math.sin(f)
     def local(dx, dy, scale):
-        return ((dx*cf+dy*sf)/scale, (-dx*sf+dy*cf)/scale)
-    x = [v for group in ('joint_angles','joint_rates','activation','roll_sin','roll_cos') for v in o[group]]
-    x += [*o['velocity'], o['angular_velocity'], *o['grips'], *o['grip_loads'], *o['contacts'],
+        return ((dx*cf+dy*sf)/scale, side*(-dx*sf+dy*cf)/scale)
+    x = [v*(signs[i] if group in ('joint_angles','joint_rates','activation') else 1.)
+         for group in ('joint_angles','joint_rates','activation','roll_sin','roll_cos') for i,v in enumerate(o[group])]
+    x += [o['velocity'][0], side*o['velocity'][1], side*o['angular_velocity'], *o['grips'], *o['grip_loads'], *o['contacts'],
           o['grabbing'], o['effort'], c.worm_bite/max(1., c.worm_bite_interval), c.worm_stun/30.]
     previous = getattr(c, 'worm_last_command', InchwormCommand())
-    x += [*previous.muscles, previous.rear_grip, previous.front_grip, previous.bite]
+    x += [*(m*sign for m,sign in zip(previous.muscles,signs)), previous.rear_grip, previous.front_grip, previous.bite]
     grid = getattr(enc.maze, 'spatial_grid', None)
     walls = list(grid.get_nearby_walls(c.get_pos(), SIGHT+p.length*4) if grid else enc.maze.walls)
     walls += list(getattr(enc.maze, 'gate_segments', ()))
     walls = [w for w in walls if w.active and w.start != w.end]
     for origin in (p.tail, p.head):
         for i in range(8):
-            angle = f+math.tau*i/8
+            angle = f+side*math.tau*i/8
             delta = (math.cos(angle)*SIGHT, math.sin(angle)*SIGHT)
             hits = [hit[0] for w in walls if (hit := segment_contact(origin, delta, w.start, w.end, .1)) is not None]
             x.append(min(hits, default=1.))
@@ -87,16 +107,16 @@ def observe(c, enc):
     return np.clip(np.asarray(x,np.float32),-5.,5.), masks, ()
 
 
-def intention(action):
+def intention(action, signs=(1.,)*5):
     if len(action) != len(HEADS) or not np.isfinite(action).all():
         raise ValueError('inchworm action must contain eight finite values')
     if any(v not in (0,1) for v in action[5:]):
         raise ValueError('inchworm grip and bite actions must be binary')
-    return InchwormCommand(tuple(math.tanh(float(v)) for v in action[:5]), *(bool(v) for v in action[5:]))
+    return InchwormCommand(tuple(math.tanh(float(v))*sign for v,sign in zip(action[:5],signs)), *(bool(v) for v in action[5:]))
 
 
-def action_for(command):
-    return (*tuple(float(np.arctanh(np.clip(v,-.999,.999))) for v in command.muscles),
+def action_for(command, signs=(1.,)*5):
+    return (*tuple(float(np.arctanh(np.clip(v*sign,-.999,.999))) for v,sign in zip(command.muscles,signs)),
             int(command.rear_grip), int(command.front_grip), int(command.bite))
 
 
@@ -115,9 +135,14 @@ def load_policy(path):
 
 
 class InchwormDriver:
-    """Independent recurrent memory per creature; identical six-frame cadence in play and training."""
-    def __init__(self, policy):
+    """Independent memory and sampling stream; same action distribution as training.
+
+    An explicit episode seed reproduces agent zero's training actions. Gameplay
+    defaults to a fresh independent stream; recorded actions remain replayable.
+    """
+    def __init__(self, policy, seed=None):
         self.policy = policy
+        self.rng = np.random.default_rng(None if seed is None else np.random.SeedSequence([seed,0]))
         self.state = policy.initial_state()
         self.remaining = 0.
         self.command = InchwormCommand()
@@ -125,8 +150,9 @@ class InchwormDriver:
     def advance(self, c, enc, dt):
         if self.remaining <= 1e-8:
             x, masks, _ = observe(c, enc)
-            action, self.state = self.policy.choose(x,self.state,masks,greedy=True)
-            self.command = intention(action)
+            action, self.state = self.policy.choose(x,self.state,masks,
+                                                   greedy=INFERENCE_ACTION_MODE=='greedy',rng=self.rng)
+            self.command = intention(action, bend_signs(c.worm_physics))
             self.remaining = DECISION_FRAMES
         self.remaining -= dt
         return self.command

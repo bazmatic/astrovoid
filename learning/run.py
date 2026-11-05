@@ -31,7 +31,7 @@ def rollout_job(job):
         env.enable_training_limits()
     teacher = env.adapter.teacher_action if job['mode'] == 'teacher' else None
     case = dict(job['case']); seed = case.pop('seed')
-    labeller = (lambda env, i: env.adapter.teacher_action(env, i, None)) if (
+    labeller = (lambda env, i: getattr(env.adapter, 'label_action', env.adapter.teacher_action)(env, i, None)) if (
         job['mode'] == 'sample' and getattr(env, 'teacher_weight', 0)) else None
     try:
         return collect(env, policy, seed, case, greedy=job['mode'] != 'sample', teacher=teacher, labeller=labeller)
@@ -66,9 +66,11 @@ def make_jobs(args, weights, cases, mode='sample', muted=False):
                  case=case,mode=mode,muted=muted) for case in cases]
 
 
-def evaluate(pool, args, weights, cases, mode='greedy', muted=False):
+def evaluate(pool, args, weights, cases, mode=None, muted=False):
     from learning.tasks import task
     adapter = task(args.task).adapter()
+    if mode is None:
+        mode = getattr(adapter, 'EVALUATION_ACTION_MODE', 'greedy')
     flown = pool(make_jobs(args,weights,cases,mode,muted))
     rows = [dict(result[1],**case) for result,case in zip(flown,cases)]
     return dict(summary=adapter.metrics(rows),episodes=rows)
@@ -210,8 +212,10 @@ def train(args):
                 actions=[result[2] for result in demonstrated])))
             demonstrations=[e for result in demonstrated for e in result[0]]
             torch.save(demonstrations,demonstration_path)
-            clone_behaviour(net,demonstrations,dict(adapter.SPEC.heads),selected_heads=adapter.IMITATION_HEADS,
-                            epochs=bootstrap_epochs or getattr(adapter,'IMITATION_EPOCHS',4),balanced=getattr(adapter,'IMITATION_BALANCED',False))
+            # Cloning scripted play over a trained start policy destroys it; such a run only rehearses the demonstrations.
+            if not (args.start and not getattr(adapter,'IMITATION_CLONE_OVER_START',True)):
+                clone_behaviour(net,demonstrations,dict(adapter.SPEC.heads),selected_heads=adapter.IMITATION_HEADS,
+                                epochs=bootstrap_epochs or getattr(adapter,'IMITATION_EPOCHS',4),balanced=getattr(adapter,'IMITATION_BALANCED',False))
             rehearsal=build_rehearsal(demonstrations)
             policy = export(net, policy); current = 'bootstrap.npz'; policy.save(out/current)
             policy.save(best)
@@ -283,7 +287,7 @@ def train(args):
         policy.save(out/current)
         if not best.exists(): policy.save(best)
         gate_passed = note_selection()
-        reports = {mode: evaluate(pool, args, best, cases, mode='scripted' if mode=='scripted' else 'greedy',
+        reports = {mode: evaluate(pool, args, best, cases, mode='scripted' if mode=='scripted' else None,
                                   muted=mode=='muted') for mode in getattr(adapter, 'EVALUATION_MODES', ('trained','scripted','muted'))}
         if 'muted' in reports:
             reports['communication_effect'] = adapter.compare(reports['trained'],reports['muted'])

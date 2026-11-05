@@ -168,10 +168,16 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
     # DAgger: what the teacher would have done in each state the policy visited (episodes recorded with a labeller).
     labelled = torch.zeros(b, length, h, dtype=torch.bool)
     labels = torch.zeros(b, length, h)
+    phases = torch.zeros(b, length, dtype=torch.long)    # optional 9th label value: which phase of the task the label teaches
     for i, e in enumerate(episodes):
         for t, label in enumerate(e.get('teacher', ())):
             if label is not None and teacher_weight:
-                labels[i, t] = torch.as_tensor(np.asarray(label, np.float32)); labelled[i, t] = True
+                label = np.asarray(label, np.float32)
+                given = torch.as_tensor(label[:h])
+                labelled[i, t] = ~torch.isnan(given)      # NaN: this head is not taught in this state
+                labels[i, t] = torch.nan_to_num(given)
+                if len(label) > h:
+                    phases[i, t] = int(label[h])
         n = len(e['x']); valid[i, :n] = True
         x[i, :n] = torch.as_tensor(np.asarray(e['x']))
         critic[i, :n] = torch.as_tensor(np.asarray(e['critic']))
@@ -214,8 +220,16 @@ def update_team(net, optimiser, episodes, rng, epochs=3, gamma=0.99, lam=0.95, c
                     k = list(net.heads).index(name)
                     taught = labelled[i][..., k] & mask
                     if taught.any():
-                        error = logits[name][..., 0].tanh()-labels[i][..., k].tanh()
-                        teacher_loss = teacher_loss+error.square()[taught].mean()/len(teacher_heads)
+                        # Each phase present counts equally, however many decisions it spans (one phase: a plain mean).
+                        phase = phases[i][taught]
+                        counts = torch.bincount(phase)
+                        weight = 1/(counts[phase]*(counts > 0).sum())
+                        if name in getattr(net, 'continuous', ()):
+                            error = (logits[name][..., 0].tanh()-labels[i][..., k].tanh()).square()[taught]
+                        else:
+                            z = logits[name].masked_fill(~legal[name][i], -1e9)[taught]
+                            error = torch.nn.functional.cross_entropy(z, labels[i][..., k][taught].long(), reduction='none')
+                        teacher_loss = teacher_loss+(error*weight).sum()/len(teacher_heads)
             imitation = imitation+teacher_weight*teacher_loss
             loss = policy_loss+0.5*value_loss-0.01*ent+imitation
             if not torch.isfinite(loss):

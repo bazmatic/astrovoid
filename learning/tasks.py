@@ -53,7 +53,7 @@ class Task:
 
 TASKS = {
     'inchworm': Task('inchworm', 'learning.adapters.inchworm_scenario', 'Inchworm',
-        dict(horizon=45., workers=4, iterations=5000, episodes=24, bootstrap_episodes=40,
+        dict(horizon=120., workers=4, iterations=5000, episodes=24, bootstrap_episodes=80,
              bootstrap_epochs=4, lr=1e-4, gamma=.997, gae_lambda=.97, budget_seconds=7200, start='', seed=0),
         ('budget_seconds','bootstrap_episodes','bootstrap_epochs','seed') + INCHWORM_REWARD_SETTINGS,
         'learning.replay', 'learning.adapters.inchworm_replay', 'learning.adapters.inchworm_dashboard'),

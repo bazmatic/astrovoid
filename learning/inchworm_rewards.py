@@ -2,7 +2,8 @@
 import math
 
 DEFAULTS = dict(progress_reward=.04, bite_reward=2., success_reward=4., death_penalty=5.,
-                effort_cost=.03, airborne_cost=.08, time_cost=.002, action_change_cost=.01)
+                effort_cost=.03, airborne_cost=.08, time_cost=.002, action_change_cost=.01,
+                backward_cost=.04, turn_reward=3., dagger_weight=1., speed_bonus=4., crawl_time_cost=.05, about_face_time_cost=.05, end_pitch_cost=.3)
 SETTINGS = tuple('inchworm_'+n for n in DEFAULTS)
 
 

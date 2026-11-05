@@ -2,9 +2,17 @@
 from dataclasses import dataclass
 import math
 
-from physics.inchworm import InchwormCommand, MAX_BEND
+from physics.inchworm import InchwormCommand, MAX_BEND, POSTURE_BEND
 
-ARCH = (-.8, .4, .8, .4, -.8)
+ARCH = tuple(v*POSTURE_BEND/MAX_BEND for v in (-.8, .4, .8, .4, -.8))
+# The walking stride bends into a tall arch whose end bends cancel, so the tail and head links lie roughly parallel to
+# the ground. With 1.8 rad joints the feet come to about 2.6 links apart (stretch ~0.44) before the rear plants.
+STRIDE_ARCH = (-1., .5, 1., .5, -1.)
+STRAIGHT_POSE = (-.156, .078, .156, .078, -.156)   # "straight" holds a very slight upward bend, never a drooping belly
+EXTEND_HEAD = None      # optional head-joint setpoint while the front is letting go (None: the straight pose's)
+FOLDED = .5             # stretch (head-tail distance / full length) at which the arch is tall enough: the rear plants
+STRAIGHT = .93          # stretch at which the body is straight again: the front plants
+UNFOLDED = .35   # radians: no joint bent more than this counts as straight after a turn
 
 
 def reach_angles(physics, point):
@@ -55,7 +63,7 @@ class InchwormController:
                     +(target.y-physics.centre[1])*math.sin(physics.heading) < -physics.radius):
             self.request_turn(physics)
         if self.phase.startswith('turn_'):
-            loop = tuple(v*self.turn_sign for v in (-1., -1., -1., -.34/1.4, 1.3984/1.4))
+            loop = tuple(v/MAX_BEND*self.turn_sign for v in (-1.4, -1.4, -1.4, -.34, 1.3984))   # fixed angles, whatever the joint range
             if self.phase == 'turn_plant':
                 if physics.grips[0] is not None:
                     self.phase, self.elapsed = 'turn_loop', 0.
@@ -70,7 +78,9 @@ class InchwormController:
                 elif self.elapsed > 240.:
                     self.phase, self.elapsed = 'recover', 0.
                 return InchwormCommand(loop, True, True)
-            if self.elapsed > 240.:
+            # Unfold until the body is straight again (the setpoints take a few frames to relax), then walk on at once.
+            straight = max(abs(b.angle-a.angle) for a, b in zip(physics.links, physics.links[1:])) < UNFOLDED
+            if self.elapsed > 240. or (self.elapsed >= 20. and straight):
                 self.phase, self.elapsed, self.reverse = 'plant_front', 0., False
             return InchwormCommand((0.,)*5, False, True)
         arch = tuple(v*(1. if math.cos(physics.roll[0]) >= 0 else -1.) for v in ARCH)
@@ -99,29 +109,43 @@ class InchwormController:
             self.reverse = along < 0
         leading, trailing = ((0, 1) if self.reverse else (1, 0))
         requests = [False, False]
+        stretch = min(1., math.dist(physics.head, physics.tail)/(6*physics.length))
+        stride = tuple(v*(1. if math.cos(physics.roll[0]) >= 0 else -1.) for v in STRIDE_ARCH)
+        straight = tuple(v*(1. if math.cos(physics.roll[0]) >= 0 else -1.) for v in STRAIGHT_POSE)
         if self.phase == 'plant_front':
+            # 1. Body straight, front planted (and the rear too, from the last stride).
             requests[:] = [True, True]
             if physics.grips[leading] is not None:
                 self.phase, self.elapsed = 'contract', 0.
             elif self.elapsed > self.stride_frames/2 and physics.grips[trailing] is not None:
                 self.reverse = not self.reverse
                 self.elapsed = 0.
-            return InchwormCommand((0.,)*5, *requests)
+            return InchwormCommand(straight, *requests)
         if self.phase == 'contract':
+            # 2. Release the rear and arch the body until the tail is up beside the front foot.
             requests[leading] = True
-            if self.elapsed >= self.stride_frames/2:
+            if stretch <= FOLDED or self.elapsed >= self.stride_frames/2:
                 self.phase, self.elapsed = 'plant_rear', 0.
-            return InchwormCommand(arch, *requests)
+            return InchwormCommand(stride, *requests)
         if self.phase == 'plant_rear':
+            # 3. Plant the rear beside the front, holding the arch.
             requests[:] = [True, True]
             if physics.grips[trailing] is not None:
                 self.phase, self.elapsed = 'extend', 0.
             elif self.elapsed > self.stride_frames/2:
-                # An edge or obstruction: unfold on the supporting end and retry.
+                # The rear missed its landing (a bump, say): unfold on the supporting end and retry the same way.
                 self.phase, self.elapsed = 'recover', 0.
-                self.reverse = not self.reverse
-            return InchwormCommand(arch, *requests)
+            if EXTEND_HEAD is not None and physics.grips[trailing] is not None:
+                stride = self._head_up(stride, EXTEND_HEAD, physics)     # start lifting the head before the front lets go
+            return InchwormCommand(stride, *requests)
+        # 4. Release the front and straighten on the planted rear, pushing the head forward.
         requests[trailing] = True
-        if self.elapsed >= self.stride_frames/2:
+        if stretch >= STRAIGHT or self.elapsed >= self.stride_frames/2:
             self.phase, self.elapsed = 'plant_front', 0.
-        return InchwormCommand((0.,)*5, *requests)
+        if EXTEND_HEAD is not None:
+            straight = self._head_up(straight, EXTEND_HEAD, physics)
+        return InchwormCommand(straight, *requests)
+
+    def _head_up(self, pose, value, physics):
+        sign = 1. if math.cos(physics.roll[0]) >= 0 else -1.
+        return pose[:-1]+(sign*value,) if not self.reverse else (sign*value,)+pose[1:]

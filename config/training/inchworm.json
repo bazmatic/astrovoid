@@ -5,10 +5,10 @@
   "seed": 0,
   "workers": 4,
   "episodes": 24,
-  "horizon": 45.0,
+  "horizon": 120.0,
   "iterations": 5000,
   "budget_seconds": 7200,
-  "bootstrap_episodes": 40,
+  "bootstrap_episodes": 80,
   "bootstrap_epochs": 4,
   "lr": 0.0001,
   "gamma": 0.997,
@@ -20,5 +20,12 @@
   "inchworm_effort_cost": 0.03,
   "inchworm_airborne_cost": 0.08,
   "inchworm_time_cost": 0.002,
-  "inchworm_action_change_cost": 0.01
+  "inchworm_action_change_cost": 0.01,
+  "inchworm_backward_cost": 0.04,
+  "inchworm_turn_reward": 3.0,
+  "inchworm_dagger_weight": 1.0,
+  "inchworm_speed_bonus": 4.0,
+  "inchworm_crawl_time_cost": 0.05,
+  "inchworm_about_face_time_cost": 0.05,
+  "inchworm_end_pitch_cost": 0.3
 }
