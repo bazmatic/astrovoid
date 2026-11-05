@@ -48,6 +48,7 @@ button:hover:not(:disabled){border-color:var(--line)}
 button.primary{background:var(--line);border-color:var(--line);color:#fff}
 button.danger{color:var(--bad);border-color:var(--bad)}
 button.danger.armed{background:var(--bad);color:#fff}
+button.restart{float:right;font-size:12px;padding:3px 10px}
 button:disabled{opacity:.45;cursor:not-allowed}
 .msg{font-size:13px;color:var(--muted)}.msg.error{color:var(--bad)}
 .next{background:var(--panel);border:1px dashed var(--grid);border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:10px}

@@ -117,4 +117,5 @@ def status(root=RL_ROOT, processes=None):
     return {'state': run.state if active else 'idle', 'phase': phase, 'run': run.name,
             'iteration': int(last['iteration']) if 'iteration' in last else None, 'iterations': run.total,
             'seconds_per_iteration': (last['rollout_s'] + last['update_s']) if 'rollout_s' in last else None,
-            'started': started, 'latest': last, 'pid': run.pid}
+            'started': started, 'latest': last, 'pid': run.pid,
+            'workers': ((config_of(run.path) or {}).get('args') or {}).get('workers')}

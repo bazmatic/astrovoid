@@ -329,3 +329,48 @@ p.S.EDITS={flocker_hit_reward:5};
 p.form.fillFrom();await p.settle();
 assert.deepEqual(p.S.EDITS,{flocker_hit_reward:5});
 """, RUN1)
+
+
+def test_active_workers_control_requires_pause_and_preserves_input_on_poll():
+    run_js(r"""
+const p=await page();
+p.S.STATUS={run:'run197',state:'training',workers:8};p.runs.renderStatus();
+assert.match(p.el('status').innerHTML,/id="active-workers"[^>]*disabled/);
+assert.match(p.el('status').innerHTML,/Pause to change workers/);
+p.S.STATUS.state='paused';p.runs.renderStatus();
+assert.doesNotMatch(p.el('status').innerHTML,/id="active-workers"[^>]*disabled/);
+p.el('active-workers').value='10';p.runs.renderStatus();
+assert.equal(p.el('active-workers').value,'10');
+""")
+
+
+def test_resume_submits_active_worker_count_without_next_run_settings():
+    run_js(r"""
+const p=await page({routes:{'api/resume':{run:'run197'}}});
+p.S.STATUS={run:'run197',state:'paused',workers:8};
+p.el('active-workers').value='10';
+await p.runs.act({dataset:{act:'resume'},disabled:false});
+assert.deepEqual(p.posted('api/resume'),[{run:'run197',changes:{workers:10}}]);
+""")
+
+
+def test_invalid_active_workers_prevents_resume():
+    run_js(r"""
+const p=await page();p.S.STATUS={run:'run197',state:'paused',workers:8};
+p.el('active-workers').value='1.5';
+await p.runs.act({dataset:{act:'resume'},disabled:false});
+assert.deepEqual(p.posted('api/resume'),[]);
+assert.match(p.el('status-msg').textContent,/positive whole number/);
+""")
+
+
+def test_restart_button_posts_the_restart_and_shows_progress():
+    run_js(r"""
+const p=await page({routes:{'api/restart':{restarting:true}}});
+p.el('restart').textContent='Restart dashboard';
+p.runs.restartDashboard();
+await p.settle();
+assert.deepEqual(p.posted('api/restart'),[{}]);
+assert.equal(p.el('restart').textContent,'Restarting…');
+assert.equal(p.el('restart').disabled,true);
+""")

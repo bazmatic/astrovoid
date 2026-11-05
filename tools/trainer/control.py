@@ -198,7 +198,7 @@ def pause(root=RL_ROOT, processes=None):
 
 
 def _resume_setting_updates(path, base, changes):
-    """Validate editable Flocker settings and prepare checkpoint-consistent records."""
+    """Validate worker changes for any task and editable Flocker training settings."""
     import copy
     import math
     from types import SimpleNamespace
@@ -213,6 +213,13 @@ def _resume_setting_updates(path, base, changes):
     if not edits:
         return values,{}
     config = copy.deepcopy(config_of(path))
+    if all(key == 'workers' for key, _, _ in edits):
+        workers = values['workers'].value
+        if workers < 1:
+            raise TrainerError('workers must be positive')
+        config['args']['workers'] = workers
+        _record_resume_edits(path, config, edits)
+        return values, {path/'config.json': json.dumps(config, indent=2).encode()}
     if config.get('task')!='flocker_team' or not isinstance(config.get('manifest'),dict):
         raise TrainerError('Resume setting edits currently require a recorded Flocker run; use a new run for this task.')
     allowed = set(flocker_rewards.SETTINGS)|{'lr','workers','iterations','budget_seconds'}
@@ -244,13 +251,17 @@ def _resume_setting_updates(path, base, changes):
         output=io.BytesIO();torch.save(saved,output)
         updates[path/'resume.pt']=output.getvalue()
         config['manifest'].setdefault('training',{})['lr']=args['lr']
+    _record_resume_edits(path, config, edits)
+    updates[path/'config.json']=json.dumps(config,indent=2).encode()
+    return values,updates
+
+
+def _record_resume_edits(path, config, edits):
     state_path=path/'state.json'
     state=json.loads(state_path.read_text()) if state_path.exists() else {}
     config.setdefault('resume_settings_changes',[]).append(dict(
         time=time.time(),after_iteration=state.get('iteration'),
         changes=[dict(setting=key,previous=old,value=new) for key,old,new in edits]))
-    updates[path/'config.json']=json.dumps(config,indent=2).encode()
-    return values,updates
 
 
 def _atomic_bytes(path, data):

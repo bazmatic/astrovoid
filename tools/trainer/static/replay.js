@@ -1,5 +1,5 @@
 // Replays: an iteration's episodes, optionally flown again to see how each went, each one watchable.
-import {S,$,taskOf} from './state.js';
+import {S,$,taskOf,esc} from './state.js';
 import {post} from './api.js';
 import {currentTask,loadRuns,loadStatus} from './runs.js';
 import {setIters,snapIter} from './settings-form.js';
@@ -36,7 +36,7 @@ export function renderEpisodes(){
   let rows=S.EPISODES.filter(e=>level===''||e.level===+level);
   list.hidden=!S.EPISODES.length;
   list.innerHTML=`<table><thead><tr><th>Episode</th><th>Level</th><th>Stage</th><th></th></tr></thead><tbody>${rows.map(e=>
-    `<tr><td>${e.episode}</td><td>${e.level}</td><td>${e.practice_stage==='pursuit'?'Jellyfish pursuit':e.practice_stage==='dodge'?'Dodge / reposition':e.practice_stage==='shooting'?'Shooting':'—'}</td><td><button data-ep="${e.episode}">Watch</button></td></tr>`).join('')}</tbody></table>`;
+    `<tr><td>${e.episode}</td><td>${e.level}</td><td>${e.lesson?esc(e.lesson):e.practice_stage==='pursuit'?'Jellyfish pursuit':e.practice_stage==='dodge'?'Dodge / reposition':e.practice_stage==='shooting'?'Shooting':'—'}</td><td><button data-ep="${e.episode}">Watch</button></td></tr>`).join('')}</tbody></table>`;
   list.querySelectorAll('button[data-ep]').forEach(b=>b.onclick=()=>watchEpisode(+b.dataset.ep));
 }
 export async function watchEpisode(episode){

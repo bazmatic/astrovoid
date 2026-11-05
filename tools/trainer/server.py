@@ -1,6 +1,9 @@
 """The training manager's web app. Loopback by default; an explicit host can expose it on Tailscale."""
 import json
+import os
 import re
+import sys
+import threading
 import webbrowser
 from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -16,6 +19,7 @@ PAGE = Path(__file__).with_name('page.html')
 STATIC = Path(__file__).with_name('static').resolve()
 STATIC_PATH = re.compile(r'/static/([A-Za-z0-9_-]+\.(js|css))')
 STATIC_KINDS = {'js': 'text/javascript; charset=utf-8', 'css': 'text/css; charset=utf-8'}
+RESTARTED = 'TRAINER_RESTARTED'    # set across a restart so the new process does not open another browser tab
 RUN_PATH = re.compile(r'/api/runs/(run\d+)/(data|config|settings|rewards)')
 
 
@@ -123,6 +127,11 @@ def make_handler(root, processes, launch, allowed_hosts=()):
                 if path == '/api/resume':
                     return self.send(200, {'run': control.resume(body.get('run'), root=root, processes=processes(),
                                                                  launch=launch,changes=body.get('changes'))})
+                if path == '/api/restart':
+                    # Training is not a child of this server, so it carries on while the dashboard reloads its code.
+                    self.server.restart_requested = True
+                    threading.Thread(target=self.server.shutdown, daemon=True).start()
+                    return self.send(200, {'restarting': True})
                 if path == '/api/episodes':
                     if body.get('fly'):
                         return self.send(200, replay.fly(body.get('run'), body.get('iteration'), root=root))
@@ -163,7 +172,7 @@ def serve(port=8765, open_browser=True, root=runs.RL_ROOT, host='127.0.0.1', all
         print(f'port {port} is in use (the old dashboard?), so using {used}')
     url = f'http://{host}:{used}/'
     print(f'training manager: {url}  (ctrl-c to close it; training carries on)')
-    if open_browser:
+    if open_browser and not os.environ.get(RESTARTED):
         webbrowser.open(url)
     try:
         httpd.serve_forever()
@@ -171,3 +180,7 @@ def serve(port=8765, open_browser=True, root=runs.RL_ROOT, host='127.0.0.1', all
         pass
     finally:
         httpd.server_close()
+    if getattr(httpd, 'restart_requested', False):
+        # The dashboard's Restart button: start again as the same command, so edited code is picked up.
+        os.environ[RESTARTED] = '1'
+        os.execv(sys.executable, [sys.executable, *sys.orig_argv[1:]])

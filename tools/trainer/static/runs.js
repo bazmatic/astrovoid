@@ -26,13 +26,15 @@ export function renderStatus(){
   const started=s.started?new Date(s.started).toLocaleString([], {weekday:'short',hour:'numeric',minute:'2-digit'}):'-';
   const facts=s.run?`<span class="facts"><b>${esc(s.run)}</b> · ${esc(taskLabel(currentTask()))} · iteration ${iter}${s.iterations?` of ${s.iterations}`:''}${state==='idle'?'':` · started ${esc(started)}`}${s.seconds_per_iteration&&(state==='training'||state==='pausing')?` · last iteration ${s.seconds_per_iteration.toFixed(1)} s`:''}</span>`:'<span class="facts">No runs yet</span>';
   const buttons=(phase==='evaluating'||phase==='finished')?['stop']:({training:['pause','stop'],pausing:['stop'],paused:['resume','stop'],interrupted:['resume','stop'],idle:[]}[state]||[]);
+  const canResize=['paused','interrupted'].includes(state);
+  const workers=s.workers!=null&&state!=='idle'?`<label for="active-workers">Workers</label><input id="active-workers" class="iter" type="number" min="1" step="1" value="${esc(s.workers)}" ${canResize?'':'disabled'}><span class="msg">${canResize?'Applied when you resume.':'Pause to change workers.'}</span>`:'';
   const label={pause:'Pause',resume:'Resume',stop:'Stop'};
   const note=phase==='evaluating'?'Running final evaluation; the iteration count stays fixed.':phase==='finished'?'Training finished; shutting down workers.':{pausing:'Pausing after this iteration…',paused:'Paused: resume to carry on where it stopped.',interrupted:'Interrupted (it ended without a pause or stop): resume to carry on from its last iteration.'}[state]||'';
   // The 5 s refresh only updates the numbers: rebuilding the strip would undo an armed Stop and clear a message.
-  const key=`${state}|${phase}|${s.run}`;
+  const key=`${state}|${phase}|${s.run}|${s.workers}`;
   if(key!==S.STATUS_KEY){
     S.STATUS_KEY=key;
-    $('status').innerHTML=`<span class="badge ${state}">${phase==='evaluating'?'Evaluating':phase==='finished'?'Finishing':{training:'Training',pausing:'Pausing',paused:'Paused',interrupted:'Interrupted',idle:'Idle'}[state]}</span><span id="status-facts"></span>${note?`<span class="msg">${note}</span>`:''}<span class="msg" id="status-msg"></span><span class="actions">${buttons.map(b=>`<button data-act="${b}" class="${b==='stop'?'danger':''}">${label[b]}</button>`).join('')}</span>`;
+    $('status').innerHTML=`<span class="badge ${state}">${phase==='evaluating'?'Evaluating':phase==='finished'?'Finishing':{training:'Training',pausing:'Pausing',paused:'Paused',interrupted:'Interrupted',idle:'Idle'}[state]}</span><span id="status-facts"></span>${note?`<span class="msg">${note}</span>`:''}<span class="msg" id="status-msg"></span>${workers}<span class="actions">${buttons.map(b=>`<button data-act="${b}" class="${b==='stop'?'danger':''}">${label[b]}</button>`).join('')}</span>`;
     $('status').querySelectorAll('button').forEach(b=>b.onclick=()=>act(b));
   }
   $('status-facts').outerHTML=facts.replace('<span class="facts">','<span class="facts" id="status-facts">');
@@ -48,6 +50,14 @@ export async function act(button){
     if(what==='resume'&&Object.keys(S.EDITS).length){
       if($('from-run').value!==S.STATUS.run||$('task').value!==currentTask())throw new Error('Select the paused run as the settings source before resuming with edits.');
       body.changes={...S.EDITS};
+    }
+    if(what==='resume'&&S.STATUS.workers!=null){
+      const workers=Number($('active-workers').value);
+      if(!Number.isSafeInteger(workers)||workers<1)throw new Error('Workers must be a positive whole number.');
+      if(workers!==S.STATUS.workers){
+        if(body.changes?.workers!=null&&body.changes.workers!==workers)throw new Error('Worker counts differ between the run control and Edit settings. Choose the same count in both.');
+        body.changes={...body.changes,workers};
+      }
     }
     const r=await post(`api/${what}`,body);
     if(what==='resume')S.EDITS={};
@@ -67,6 +77,17 @@ export async function loadRuns(){
 }
 export function viewTask(){return taskOf(S.RUNS.find(r=>r.name===S.VIEW))}
 export function setView(run){if(run===S.VIEW)return;S.VIEW=run;S.VIEW_TASK=viewTask();S.D=[];S.CHART_START=savedChartStart(run);$('chart-start').value=String(S.CHART_START);$('rules').innerHTML='';$('rewards').innerHTML='';render();refresh();loadRules()}
+// Restart the dashboard server (training is separate and carries on): wait for it to go down and come back, then reload.
+export async function restartDashboard(){
+  const b=$('restart'),label=b.textContent,wait=ms=>new Promise(r=>setTimeout(r,ms));
+  b.disabled=true;b.textContent='Restarting…';
+  try{await post('api/restart')}catch(e){b.disabled=false;b.textContent='Restart failed';setTimeout(()=>b.textContent=label,3000);return}
+  const alive=async()=>{try{await api('api/status');return true}catch(e){return false}};
+  for(let i=0;i<20&&await alive();i++)await wait(250);          // the old server is still answering
+  for(let i=0;i<60;i++){await wait(500);if(await alive()){location.reload();return}}
+  b.disabled=false;b.textContent=label;
+}
 export function initRuns(){
+  $('restart').onclick=restartDashboard;
   $('view-run').onchange=()=>{const v=$('view-run').value;S.FOLLOW=!v;setView(v||S.STATUS?.run||null)};
 }

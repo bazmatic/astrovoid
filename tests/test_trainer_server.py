@@ -389,3 +389,14 @@ def test_a_new_task_plugs_in_without_changing_the_dashboard_or_trainer(setup, mo
         control.start('run60', root=setup['root'], processes=[], launch=FakeLaunch(), actor_scale=.5)
     assert post(setup, '/api/episodes', {'run': 'run60', 'iteration': 0}) == \
         (200, [{'episode': 0, 'level': 7, 'seed': 3}])
+
+
+def test_restart_answers_then_stops_the_server_so_serve_can_start_it_again(setup):
+    assert post(setup, '/api/restart') == (200, {'restarting': True})
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(setup['url'] + '/api/status', timeout=.2)
+        except (urllib.error.URLError, OSError):
+            return
+        threading.Event().wait(.1)
+    raise AssertionError('the server kept answering after a restart was requested')

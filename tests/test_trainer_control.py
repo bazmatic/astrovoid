@@ -255,3 +255,46 @@ def test_resume_rejects_invalid_flocker_reward_edits_without_mutating_run(root):
     with pytest.raises(TrainerError):
         resume('run52',root=root,processes=[],launch=FakeLaunch(),changes={'flocker_hit_reward':-1.})
     assert (path/'config.json').read_bytes()==before
+
+
+@pytest.mark.parametrize('task', ['inchworm', 'hunter', 'wallcrawler_team', 'flocker_team'])
+def test_resume_workers_preserves_learning_state_for_every_task(root, task):
+    path = root/'run52'
+    config = json.loads((path/'config.json').read_text())
+    config.update(task=task, manifest={'rules': 'unchanged'})
+    config['args'].update(task=task, workers=4)
+    (path/'config.json').write_text(json.dumps(config))
+    (path/'resume.pt').write_bytes(b'unchanged optimizer and policy')
+    (path/'state.json').write_text('{"state":"paused","iteration":2}')
+    launch = FakeLaunch()
+    resume('run52', root=root, processes=[], launch=launch, changes={'workers':8})
+    command = launch.commands[0]
+    assert command[command.index('--workers')+1] == '8'
+    updated = json.loads((path/'config.json').read_text())
+    assert updated['args']['workers'] == 8
+    assert updated['manifest'] == config['manifest']
+    assert (path/'resume.pt').read_bytes() == b'unchanged optimizer and policy'
+    assert updated['resume_settings_changes'][-1]['after_iteration'] == 2
+
+
+@pytest.mark.parametrize('workers', [0, -1, 1.5, 'nan'])
+def test_resume_rejects_invalid_worker_counts(root, workers):
+    path = root/'run52'
+    (path/'state.json').write_text('{"state":"paused","iteration":2}')
+    before = (path/'config.json').read_bytes()
+    launch = FakeLaunch()
+    with pytest.raises(TrainerError):
+        resume('run52', root=root, processes=[], launch=launch, changes={'workers':workers})
+    assert (path/'config.json').read_bytes() == before
+    assert not launch.commands
+
+
+def test_resume_worker_change_rolls_back_if_launch_fails(root):
+    path = root/'run52'
+    (path/'state.json').write_text('{"state":"paused","iteration":2}')
+    before = (path/'config.json').read_bytes()
+    def fail(*args):
+        raise OSError('launch failed')
+    with pytest.raises(OSError):
+        resume('run52', root=root, processes=[], launch=fail, changes={'workers':7})
+    assert (path/'config.json').read_bytes() == before
