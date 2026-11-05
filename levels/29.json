@@ -691,6 +691,20 @@
           28,
           5
         ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          10,
+          22
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          22,
+          10
+        ]
       }
     ],
     "beacon": null
@@ -700,6 +714,7 @@
     "patrol": 1,
     "aggressive": 9,
     "flighthouse": 2,
-    "belemnite": 2
+    "belemnite": 2,
+    "inchworm": 2
   }
 }

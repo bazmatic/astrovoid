@@ -14,7 +14,8 @@
     "egg": 1,
     "anemone": 1,
     "belemnite": 1,
-    "wallcrawler": 0
+    "wallcrawler": 0,
+    "inchworm": 2
   },
   "layout": {
     "walls": [
@@ -254,6 +255,20 @@
         "cell": [
           21,
           18
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          11,
+          12
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          4,
+          4
         ]
       }
     ],

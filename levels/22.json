@@ -16,7 +16,8 @@
     "vibelet": 0,
     "belemnite": 1,
     "wallcrawler": 0,
-    "static": 0
+    "static": 0,
+    "inchworm": 2
   },
   "exit_policy": {
     "type": "all_cleared"
@@ -1501,6 +1502,20 @@
         "cell": [
           23,
           22
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          24,
+          3
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          26,
+          25
         ]
       }
     ],

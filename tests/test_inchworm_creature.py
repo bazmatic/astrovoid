@@ -166,3 +166,50 @@ def test_shield_and_intervening_wall_prevent_grabbing_and_feeding():
     enc.step(100.)
     assert c.worm_prey is None
     enc.scoring.record_enemy_collision.assert_not_called()
+
+
+def test_an_inchworm_hunts_and_eats_other_enemies_but_never_another_inchworm():
+    from maze.wall_segment import WallSegment
+    c = creatures.build('inchworm', (400., 286.))
+    enc = encounter(c, world_=world(maze=open_maze([WallSegment((0., 300.), (1000., 300.), 1)])))
+    enc.ready()
+    victim = creatures.build('static', (470., 286.))        # an enemy-allegiance creature, on its own side
+    sibling = creatures.build('inchworm', (330., 286.))
+    enc.roster.add(victim)
+    enc.roster.add(sibling)
+    enc.ready()
+    assert victim.allegiance == c.allegiance
+    for _ in range(3000):
+        enc.step(1.)
+        if not victim.active:
+            break
+    assert not victim.active                      # eaten
+    assert c.active and sibling.active and sibling.hit_points == sibling.kind.tuning.get('hit_points', sibling.hit_points)
+    assert sibling.worm_prey is None
+
+
+def test_an_inchworm_whose_physics_blows_up_does_not_take_the_game_down(monkeypatch):
+    from physics.inchworm import InchwormPhysics
+    c, enc = setting()
+    def explode(self, *args, **kwargs):
+        raise RuntimeError('inchworm physics exceeded its stable substep budget')
+    monkeypatch.setattr(InchwormPhysics, 'step', explode)
+    for _ in range(10):
+        enc.step(1.)                              # no exception escapes
+    assert c.worm_resets >= 1
+    assert not c.active                           # it keeps failing, so it dies instead of looping forever
+
+
+def test_a_dying_inchworm_rolls_up_into_a_spiral():
+    c, enc = setting()
+    for _ in range(60):
+        enc.step(1.)
+    straight = sum(abs(b.angle-a.angle) for a, b in zip(c.worm_physics.links, c.worm_physics.links[1:]))
+    enc.kill(c)
+    for _ in range(int(c.body.DEATH_DURATION)):
+        c.update_death(1.)
+    bends = [b.angle-a.angle for a, b in zip(c.worm_physics.links, c.worm_physics.links[1:])]
+    assert all(v > 0 for v in bends) or all(v < 0 for v in bends)       # every joint curls the same way
+    assert abs(sum(bends)) > math.radians(300) > straight               # most of a full turn, from a body that was nearly straight
+    assert abs(bends[-1]) > abs(bends[0])                               # tightening toward the head
+    enc.close()

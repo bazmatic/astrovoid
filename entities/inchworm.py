@@ -6,15 +6,26 @@ import pygame
 import config
 
 
+JAW_LIFT = .6   # how far, in body radii, the jaw tips are raised toward the back
+
+
+# A dying inchworm rolls up into a tightening spiral, tail outermost and head curled in at the centre, as real ones do:
+# each joint's share of the full bend, from the tail joint to the head joint.
+SPIRAL = (.7, .8, .9, 1., 1.05)
+SPIRAL_FRAMES = 35.   # how long the coil takes to form; the rest of the death it holds, then fades
+
+
 class InchwormBody:
-    DEATH_DURATION = 60.
+    DEATH_DURATION = 90.
     DEATH_FRICTION = 1.
 
     def __init__(self, creature):
         self.chew = 0.
+        self.coil = 0.
 
     def on_event(self, creature, name):
-        pass
+        if name == 'died':
+            self.coil = 0.
 
     def update(self, creature, dt, target=None):
         self.chew = (self.chew+dt*.3) % math.tau
@@ -26,7 +37,10 @@ class InchwormBody:
             from creatures.traits.wallcrawl import nearby
             from physics.inchworm import InchwormCommand
             walls = nearby(c.encounter.maze, p.centre, p.length*7+p.reach+math.hypot(*p.velocity)*dt)
-            p.step(InchwormCommand(), dt, walls, getattr(c.encounter.maze, 'gate_segments', ()), powered=False)
+            self.coil = min(1., self.coil+dt/SPIRAL_FRAMES)
+            p.release()          # nothing holds on while it curls up
+            p.step(InchwormCommand(tuple(self.coil*v for v in SPIRAL)), dt, walls,
+                   getattr(c.encounter.maze, 'gate_segments', ()))
             snapshot(c)
 
     def collision_segments(self, c):
@@ -72,15 +86,17 @@ class InchwormBody:
             nx, ny = -dy/length*roll, dx/length*roll
             planted = feet[end]
             for leg in (-1, 0, 1):
-                root = ((a[0]+b[0])/2+dx*leg*.23, (a[1]+b[1])/2+dy*leg*.23)
+                # Three parallel legs per end: each root is spaced along the link and its tip stays directly below it.
+                root = ((a[0]+b[0])/2+dx*leg*.3, (a[1]+b[1])/2+dy*leg*.3)
                 if planted:
                     foot, normal = planted
-                    tip = (foot[0]-normal[1]*leg*skin*.9/scale,
-                           foot[1]+normal[0]*leg*skin*.9/scale)
+                    along = (-normal[1], normal[0])
+                    if along[0]*dx+along[1]*dy < 0:
+                        along = (-along[0], -along[1])
+                    tip = (foot[0]+along[0]*leg*length*.3, foot[1]+along[1]*leg*length*.3)
                 else:
-                    tip = (root[0]+nx*skin*1.9/scale+dx*leg*.15,
-                           root[1]+ny*skin*1.9/scale+dy*leg*.15)
-                knee = ((root[0]+tip[0])/2-dx*leg*.18, (root[1]+tip[1])/2-dy*leg*.18)
+                    tip = (root[0]+nx*skin*1.9/scale, root[1]+ny*skin*1.9/scale)
+                knee = ((root[0]+tip[0])/2+dx*.1, (root[1]+tip[1])/2+dy*.1)
                 pygame.draw.lines(screen, color((98, 145, 59)), False,
                                   [point(root), point(knee), point(tip)], max(1, round(skin*.45)))
                 pygame.draw.circle(screen, color((228, 211, 116) if planted else (154, 178, 81)),
@@ -117,9 +133,11 @@ class InchwormBody:
                    head[1]-ny*skin*roll+dy*skin*.45*side)
             pygame.draw.circle(screen, color((222, 235, 157)), eye, max(1, skin*.4))
             pygame.draw.circle(screen, color((24, 40, 29)), eye, max(1, skin*.23))
-            root = (head[0]+nx*skin*.8*side+dx*skin*.5,
-                    head[1]+ny*skin*.8*side+dy*skin*.5)
-            jaw = (head[0]+dx*skin*2+nx*skin*opening*side,
-                   head[1]+dy*skin*2+ny*skin*opening*side)
+            # The face is carried raised: the jaws angle up off the dorsal side so neither tip drags along the ground.
+            raise_x, raise_y = -nx*roll*skin*JAW_LIFT, -ny*roll*skin*JAW_LIFT
+            root = (head[0]+nx*skin*.8*side+dx*skin*.5+raise_x*.4,
+                    head[1]+ny*skin*.8*side+dy*skin*.5+raise_y*.4)
+            jaw = (head[0]+dx*skin*2+nx*skin*opening*side+raise_x,
+                   head[1]+dy*skin*2+ny*skin*opening*side+raise_y)
             pygame.draw.lines(screen, color((242, 166, 80) if eating else (215, 205, 125)), False,
                               [root, jaw, (jaw[0]-nx*side*skin*.5, jaw[1]-ny*side*skin*.5)], max(1, round(scale)))

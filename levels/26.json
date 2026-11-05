@@ -281,6 +281,20 @@
           20,
           26
         ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          12,
+          16
+        ]
+      },
+      {
+        "type": "inchworm",
+        "cell": [
+          24,
+          24
+        ]
       }
     ],
     "beacon": null
@@ -297,6 +311,7 @@
     "patrol": 6,
     "egg": 1,
     "anemone": 4,
-    "neural_hunter": 1
+    "neural_hunter": 1,
+    "inchworm": 2
   }
 }

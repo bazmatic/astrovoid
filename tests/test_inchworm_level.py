@@ -28,8 +28,11 @@ def test_playtest_inchworms_spawn_on_platforms_and_walk(monkeypatch, screen_size
     positions = [c.get_pos() for c in roster.alive()]
     enc.step(1.)
     assert all(c.worm_state == 'walking' and c.worm_front_grip for c in roster.alive())
-    enc.step(330.)
-    assert all(c.x > pos[0] for c, pos in zip(roster.alive(), positions))
+    furthest = [0.]*len(positions)
+    for _ in range(11):                 # they cross their platform, then turn back at its end: judge the way out
+        enc.step(30.)
+        furthest = [max(f, c.x-pos[0]) for f, c, pos in zip(furthest, roster.alive(), positions)]
+    assert all(f > 20. for f in furthest)
 
 
 def test_inchworm_playtest_runs_in_real_game_loop(game):

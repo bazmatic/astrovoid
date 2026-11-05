@@ -1,4 +1,5 @@
 """World adapter for articulated locomotion, grip interruption and feeding."""
+import logging
 import math
 
 from creatures.trait import Trait
@@ -47,6 +48,7 @@ class Inchworms(Trait):
         # None selects the reflex controller. Even an all-zero command overrides it.
         c.worm_command = None
         c.worm_bite = c.worm_stun = 0.
+        c.worm_resets = 0
         c.worm_state = 'seeking'
         c.worm_bite_interval = self.bite_frames
         c.worm_last_command = InchwormCommand()
@@ -92,7 +94,7 @@ class Inchworms(Trait):
         remaining = dt
         while remaining > 1e-8:
             h = min(1., remaining)
-            target = c.worm_prey if c.worm_prey is not None and c.worm_prey.active else enc.target_entity_for(c)
+            target = c.worm_prey if c.worm_prey is not None and c.worm_prey.active else self._prey(c, p, enc)
             valid = (target is not None and target.active
                      and not getattr(target, 'is_shield_active', lambda: False)()
                      and not wall_between(p.head, target.get_pos(), enc.maze))
@@ -103,7 +105,8 @@ class Inchworms(Trait):
             walls = list(nearby(enc.maze, p.centre, p.length*7+p.reach+math.hypot(*p.velocity)*h))
             neural = (c.worm_driver.advance(c, enc, h)
                       if c.worm_command is None and c.worm_driver is not None else None)
-            if c.worm_stun > 0:
+            stunned = c.worm_stun > 0
+            if stunned:
                 command = InchwormCommand()
                 c.worm_stun = max(0., c.worm_stun-h)
             else:
@@ -111,7 +114,21 @@ class Inchworms(Trait):
                 if command is None:
                     command = neural if neural is not None else c.worm_controller.command(p, h, target if valid else None)
             c.worm_last_command = command
-            p.step(command, h, walls, getattr(enc.maze, 'gate_segments', ()), target, can_grab=valid)
+            try:
+                p.step(command, h, walls, getattr(enc.maze, 'gate_segments', ()), target,
+                       can_grab=valid, powered=not stunned)
+            except RuntimeError:
+                # The solver blew up (a body jammed in rock too tight for it): stand the worm up again where it is, and
+                # if that keeps happening let it die rather than take the game down.
+                logging.getLogger(__name__).warning('Inchworm physics unstable at %s; resetting it', c.get_pos())
+                c.worm_resets += 1
+                if c.worm_resets > 3:
+                    enc.kill(c)
+                    return
+                p.release()
+                c.worm_physics = p = InchwormPhysics(c.get_pos(), c.radius, math.radians(c.angle))
+                c.worm_controller = InchwormController(self.stride_frames)
+                c.worm_bite = 0.
             snapshot(c)
             if command.bite and valid and p.mouth_contact:
                 c.worm_bite += h
@@ -128,6 +145,21 @@ class Inchworms(Trait):
                 c.worm_state = ('grabbing' if p.grab else 'rearing' if c.worm_controller.attacking
                                 else 'walking' if any(p.grips) else 'drifting')
             remaining -= h
+
+    @staticmethod
+    def _prey(c, p, enc):
+        """An inchworm eats everything alive except other inchworms, the player ship and hunters included: the
+        nearest of them that it can reach (in range, no wall between), else None."""
+        from game_handlers.combat_targets import nearest_friendly
+        candidates = [t for t in getattr(enc.world, 'additional_targets', ()) if t.active]
+        candidates += [o for o in enc.roster.alive() if o is not c and o.type != 'inchworm']
+        usual = nearest_friendly(c, enc.world.ship, enc.world.hunter)
+        if usual is not None:
+            candidates.append(usual)
+        for t in sorted(candidates, key=lambda t: (t.x-c.x)**2+(t.y-c.y)**2):
+            if math.dist(p.centre, t.get_pos()) <= p.length*7+t.radius and not wall_between(p.head, t.get_pos(), enc.maze):
+                return t
+        return None
 
     @staticmethod
     def _bite(target, enc):
