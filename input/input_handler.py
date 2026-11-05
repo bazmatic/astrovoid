@@ -5,10 +5,26 @@ input and maps them to game commands without side effects.
 """
 
 import pygame
-from typing import List, Optional
+from pygame._sdl2 import controller as sdl_controller
+from typing import Dict, List, Optional, Tuple
 from entities.command_recorder import CommandType
 import config
 
+# SDL's D-pad names, as the hat values pygame reports (y is +1 for up)
+_DPAD_HATS = {'dpup': (0, 1), 'dpdown': (0, -1), 'dpleft': (-1, 0), 'dpright': (1, 0)}
+# The common raw layout, for pads SDL can't name
+_FALLBACK_BUTTON_NAMES = {0: 'a', 1: 'b', 2: 'x', 3: 'y', 4: 'leftshoulder', 5: 'rightshoulder', 6: 'back', 7: 'start'}
+
+
+def menu_direction(event: 'pygame.event.Event') -> Tuple[int, int]:
+    """Where a D-pad or stick event points, as (dx, dy) with dy positive downward; (0, 0) for a stick at rest
+    or any other event."""
+    if event.type == pygame.JOYHATMOTION:
+        return event.value[0], -event.value[1]
+    if event.type == pygame.JOYAXISMOTION and event.axis in (0, 1, 2, 3) and abs(event.value) > config.CONTROLLER_DEADZONE:
+        step = 1 if event.value > 0 else -1
+        return (step, 0) if event.axis in (0, 2) else (0, step)
+    return 0, 0
 
 class InputHandler:
     """Handles keyboard and controller input and maps them to commands.
@@ -34,6 +50,7 @@ class InputHandler:
         
         # Track active controllers
         self.controllers: List[pygame.joystick.Joystick] = []
+        self._button_names_cache: Dict[int, Dict[int, str]] = {}
         self._initialize_controllers()
     
     def _initialize_controllers(self) -> None:
@@ -45,6 +62,65 @@ class InputHandler:
             joystick.init()
             self.controllers.append(joystick)
     
+    def _button_names(self) -> Dict[int, str]:
+        """Raw button number -> SDL's standard name ('a', 'start', 'dpup', ...) for the first controller.
+
+        Empty when SDL doesn't recognise the pad; callers then fall back to raw button numbers.
+        """
+        if not self.controllers:
+            return {}
+        joystick = self.controllers[0]
+        instance_id = joystick.get_instance_id()
+        if instance_id not in self._button_names_cache:
+            names = {}
+            try:
+                if not sdl_controller.get_init():
+                    sdl_controller.init()
+                mapping = sdl_controller.Controller.from_joystick(joystick).get_mapping()
+                names = {int(raw[1:]): name for name, raw in mapping.items()
+                         if raw.startswith('b') and raw[1:].isdigit()}
+            except (pygame.error, TypeError):
+                pass  # not a pad SDL can describe
+            self._button_names_cache[instance_id] = names
+        return self._button_names_cache[instance_id]
+
+    def dpad_button_as_hat(self, event: 'pygame.event.Event') -> 'pygame.event.Event':
+        """Turn a D-pad press from a pad that reports its D-pad as buttons into the hat event menus listen for."""
+        if event.type != pygame.JOYBUTTONDOWN:
+            return event
+        hat = _DPAD_HATS.get(self._button_names().get(event.button))
+        if hat is None:
+            return event
+        return pygame.event.Event(pygame.JOYHATMOTION, joy=event.joy, instance_id=event.instance_id, hat=0, value=hat)
+
+    def controller_button_name(self, button: int) -> Optional[str]:
+        """SDL's standard name for a raw button ('a', 'start', 'leftshoulder', ...), or None for an unknown button."""
+        if not self.controllers:
+            return None
+        names = self._button_names()
+        return names.get(button) if names else _FALLBACK_BUTTON_NAMES.get(button)
+
+    def held_direction(self) -> Tuple[int, int]:
+        """Where the first controller's D-pad or left stick is held right now, as (dx, dy) with dy positive downward."""
+        if not self.controllers:
+            return 0, 0
+        controller = self.controllers[0]
+        if controller.get_numhats():
+            x, y = controller.get_hat(0)
+            if x or y:
+                return x, -y
+        for raw, name in self._button_names().items():
+            if name in _DPAD_HATS and raw < controller.get_numbuttons() and controller.get_button(raw):
+                x, y = _DPAD_HATS[name]
+                return x, -y
+        if controller.get_numaxes() > 1:
+            x, y = controller.get_axis(0), controller.get_axis(1)
+            if max(abs(x), abs(y)) > config.CONTROLLER_DEADZONE:
+                if abs(x) >= abs(y):
+                    return (1 if x > 0 else -1), 0
+                return 0, (1 if y > 0 else -1)
+        return 0, 0
+
     def get_controllers(self) -> List[pygame.joystick.Joystick]:
         """Get list of active controllers.
         
@@ -65,15 +141,15 @@ class InputHandler:
             if joystick not in self.controllers:
                 self.controllers.append(joystick)
     
-    def remove_controller(self, joystick_id: int) -> None:
+    def remove_controller(self, instance_id: int) -> None:
         """Remove a disconnected controller.
-        
+
         Args:
-            joystick_id: The ID of the joystick to remove.
+            instance_id: The instance ID from the JOYDEVICEREMOVED event.
         """
         self.controllers = [
-            ctrl for ctrl in self.controllers 
-            if ctrl.get_id() != joystick_id
+            ctrl for ctrl in self.controllers
+            if ctrl.get_instance_id() != instance_id
         ]
     
     def process_controller_input(self) -> List[CommandType]:
@@ -221,6 +297,10 @@ class InputHandler:
         if not self.controllers:
             return False
         
+        names = self._button_names()
+        if names:
+            return names.get(button) in ('a', 'start')
+
         controller = self.controllers[0]
         num_buttons = controller.get_numbuttons()
         
@@ -246,6 +326,10 @@ class InputHandler:
         if not self.controllers:
             return False
         
+        names = self._button_names()
+        if names:
+            return names.get(button) in ('b', 'back')
+
         controller = self.controllers[0]
         num_buttons = controller.get_numbuttons()
         
@@ -261,6 +345,9 @@ class InputHandler:
     
     def is_controller_restart_pressed(self, button: int) -> bool:
         """Y (button 3) retries the current level."""
+        names = self._button_names()
+        if names:
+            return names.get(button) == 'y'
         return bool(self.controllers) and button == 3
 
     def is_controller_quit_pressed(self, button: int) -> bool:
@@ -275,6 +362,10 @@ class InputHandler:
         if not self.controllers:
             return False
         
+        names = self._button_names()
+        if names:
+            return names.get(button) == 'x'
+
         # Exclude squeeze/grip buttons (typically buttons 6+)
         # These should not trigger any actions
         if button >= 6:
@@ -302,13 +393,20 @@ class InputHandler:
         num_axes = controller.get_numaxes()
         num_buttons = controller.get_numbuttons()
         
-        # Check d-pad buttons (typically buttons 11-14, but varies by controller)
-        # Common mapping: 11=up, 12=down, 13=left, 14=right
-        if num_buttons >= 12:
-            if controller.get_button(11):  # D-pad up
-                return "up"
-            if controller.get_button(12):  # D-pad down
-                return "down"
+        # D-pad as a hat
+        for hat in range(controller.get_numhats()):
+            hat_y = controller.get_hat(hat)[1]
+            if hat_y:
+                return "up" if hat_y > 0 else "down"
+
+        # D-pad as buttons: SDL's layout when it knows the pad, else the common 11=up, 12=down
+        buttons = {name: raw for raw, name in self._button_names().items()}
+        up_button = buttons.get('dpup', 11)
+        down_button = buttons.get('dpdown', 12)
+        if up_button < num_buttons and controller.get_button(up_button):
+            return "up"
+        if down_button < num_buttons and controller.get_button(down_button):
+            return "down"
         
         # Check analog stick Y-axis (axis 1 for left stick, axis 3 for right stick)
         # Negative Y = up, positive Y = down

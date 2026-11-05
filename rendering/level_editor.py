@@ -1,7 +1,10 @@
 """The level editor screen: a level picker, then a cell-by-cell editor drawn with the game's own maze and sprites.
 
 Switched on by LEVEL_EDITOR (see config.editor_enabled). The rules live in editor.model, the files in editor.files;
-this screen only reads keys and draws.
+this screen only reads keys and controller buttons, and draws.
+
+On a controller the common edits have buttons (D-pad or left stick move, A place, X remove, LB/RB item, Y turn gate,
+B back) and Start opens a menu of the rest.
 """
 import json
 import math
@@ -11,6 +14,7 @@ import pygame
 
 import config
 import enemy_kinds
+from input.input_handler import menu_direction
 import level_config
 from editor import files
 from editor.generated import generated_layout
@@ -77,15 +81,21 @@ class LevelEditor:
         self._preview_key = None
         self._palette_font = None
         self._saved = False          # whether the level file holds a layout; read when it can change
+        self.menu_index = None       # the row chosen in the controller's action menu, None while it is shut
+        self.using_controller = False  # which hints to show: the last input's
+        self._pad_direction = None   # the D-pad or stick direction already acted on, until it is let go
         self._clear_held()
 
     def _scaled(self, value):
         return max(1, int(round(value * self.scale)))
 
     def _clear_held(self):
-        self._held = None
-        self._held_for = 0.0
+        self._held = None            # (direction, whether it is still held), repeating the cursor's move
         self._repeat_left = 0.0
+
+    def _hold(self, direction, still_held):
+        self.model.move(*direction)
+        self._held, self._repeat_left = (direction, still_held), REPEAT_DELAY
 
     def _say(self, text):
         self.flash, self.flash_left = text, FLASH_SECONDS
@@ -94,17 +104,20 @@ class LevelEditor:
     def open_picker(self):
         self.mode = 'picker'
         self.confirm = None
+        self.menu_index = None
         self.flash, self.flash_left = '', 0.0
         self._clear_held()
         self.with_layout = {level for level in range(1, LEVELS_SHOWN + 1)
                             if level_config.get_level_layout(level) is not None}
 
+    def _picker_move(self, dx, dy):
+        index = self.picker_index + dx + dy * self.PICKER_COLUMNS
+        if 0 <= index < LEVELS_SHOWN:
+            self.picker_index = index
+
     def _picker_key(self, event):
         if event.key in ARROWS:
-            dx, dy = ARROWS[event.key]
-            index = self.picker_index + dx + dy * self.PICKER_COLUMNS
-            if 0 <= index < LEVELS_SHOWN:
-                self.picker_index = index
+            self._picker_move(*ARROWS[event.key])
             return True
         if event.key in (pygame.K_RETURN, pygame.K_SPACE):
             self._open_level(self.picker_index + 1)
@@ -129,14 +142,40 @@ class LevelEditor:
         self._saved = self._saved_layout_exists()
         self.mode = 'edit'
         self.confirm = None
+        self.menu_index = None
         self._preview = self._preview_key = None
         self._clear_held()
+
+    def _place(self):
+        if not self.model.place():
+            self._say(f"{LABELS[self.model.selected]} can't go there")
+
+    def _turn_gate(self):
+        model = self.model
+        if not model.turn_gate():
+            self._say('No gate here' if model.contents(model.cursor) not in ('gate', 'motor_gate')
+                      else "Can't turn: a wall is in the way")
+
+    def _flip_gate(self):
+        if not self.model.flip_gate():
+            self._say('Motor gate only')
+
+    def _adjust_timer(self, step):
+        if not self.model.adjust_timer(step):
+            self._say('Timer only' if not isinstance(self.model.exit_policy, OpenAfterTime) else 'Shortest timer')
+
+    def _toggle_kill_type(self):
+        model = self.model
+        if not isinstance(model.exit_policy, TypeCleared):
+            self._say('Kill-type exit only')
+        elif not model.toggle_exit_type(model.selected):
+            self._say('Keep at least one type' if model.selected in model.exit_policy.enemy_types
+                      else f"{LABELS[model.selected]} isn't an enemy")
 
     def _edit_key(self, event):
         model = self.model
         if event.key in ARROWS:
-            model.move(*ARROWS[event.key])
-            self._held, self._held_for, self._repeat_left = event.key, 0.0, REPEAT_DELAY
+            self._hold(ARROWS[event.key], lambda key=event.key: pygame.key.get_pressed()[key])
             return True
         if event.key == pygame.K_TAB:
             model.step_palette(-1 if event.mod & pygame.KMOD_SHIFT else 1)
@@ -145,8 +184,7 @@ class LevelEditor:
             model.step_palette(-1 if event.key == pygame.K_LEFTBRACKET else 1)
             return True
         if event.key == pygame.K_SPACE:
-            if not model.place():
-                self._say(f"{LABELS[model.selected]} can't go there")
+            self._place()
             return True
         if event.key in (pygame.K_DELETE, pygame.K_BACKSPACE):
             model.remove()
@@ -158,24 +196,16 @@ class LevelEditor:
             model.cycle_ammo_policy()
             return True
         if event.key == pygame.K_r:
-            if not model.turn_gate():
-                self._say('No gate here' if model.contents(model.cursor) not in ('gate', 'motor_gate')
-                          else "Can't turn: a wall is in the way")
+            self._turn_gate()
             return True
         if event.key == pygame.K_f:
-            if not model.flip_gate():
-                self._say('Motor gate only')
+            self._flip_gate()
             return True
         if event.key in (pygame.K_MINUS, pygame.K_EQUALS):
-            if not model.adjust_timer(TIMER_STEP if event.key == pygame.K_EQUALS else -TIMER_STEP):
-                self._say('Timer only' if not isinstance(model.exit_policy, OpenAfterTime) else 'Shortest timer')
+            self._adjust_timer(TIMER_STEP if event.key == pygame.K_EQUALS else -TIMER_STEP)
             return True
         if event.key == pygame.K_t:
-            if not isinstance(model.exit_policy, TypeCleared):
-                self._say('Kill-type exit only')
-            elif not model.toggle_exit_type(model.selected):
-                self._say('Keep at least one type' if model.selected in model.exit_policy.enemy_types
-                          else f"{LABELS[model.selected]} isn't an enemy")
+            self._toggle_kill_type()
             return True
         if event.key == pygame.K_s:
             self._save()
@@ -185,6 +215,104 @@ class LevelEditor:
             return True
         if event.key == pygame.K_ESCAPE:
             self._ask_leave()
+            return True
+        return False
+
+    # --- the controller's action menu, for the edits without a button ---
+    def menu_rows(self):
+        """(label, what A does, what left and right do or None), top to bottom."""
+        model = self.model
+        shut = lambda action: lambda: (self._shut_menu(), action())
+        return [
+            ('Save', shut(self._save), None),
+            ('Revert to generated', shut(self._ask_revert), None),
+            (f'Exit: {model.exit_policy.label()}', model.cycle_exit_policy, None),
+            (f'Legacy ammo: {model.ammo_policy.label()}', model.cycle_ammo_policy, None),
+            ('Exit timer  (left / right)', lambda: self._adjust_timer(TIMER_STEP),
+             lambda step: self._adjust_timer(step * TIMER_STEP)),
+            (f'Kill type: {LABELS[model.selected]}', self._toggle_kill_type, None),
+            ('Flip motor gate', shut(self._flip_gate), None),
+            ('Back to editing', self._shut_menu, None),
+        ]
+
+    def _shut_menu(self):
+        self.menu_index = None
+
+    def _menu_direction(self, dx, dy):
+        rows = self.menu_rows()
+        if dy:
+            self.menu_index = (self.menu_index + dy) % len(rows)
+        elif rows[self.menu_index][2] is not None:
+            rows[self.menu_index][2](dx)
+
+    def _menu_choose(self):
+        self.menu_rows()[self.menu_index][1]()
+
+    # --- the controller ---
+    def handle_controller(self, event):
+        """Act on a controller button, D-pad or stick. True when the editor used it."""
+        if event.type == pygame.JOYBUTTONDOWN:
+            self.using_controller = True
+            return self._pad_button(self.game.input_handler.controller_button_name(event.button))
+        if event.type not in (pygame.JOYHATMOTION, pygame.JOYAXISMOTION) or not any(menu_direction(event)):
+            return False
+        # Read where the pad is held rather than the event, so a stick pushed diagonally settles on one direction
+        direction = self.game.input_handler.held_direction()
+        if not any(direction) or direction == self._pad_direction:
+            return False
+        self.using_controller = True
+        self._pad_direction = direction
+        if self.confirm is not None:
+            return False
+        if self.mode == 'picker':
+            self._picker_move(*direction)
+        elif self.menu_index is not None:
+            self._menu_direction(*direction)
+        else:
+            self._hold(direction, lambda: self.game.input_handler.held_direction() == direction)
+        return True
+
+    def _pad_button(self, name):
+        if self.confirm is not None:
+            if name == 'a':
+                self._answer_confirm()
+                return True
+            if name in ('b', 'back'):
+                self.confirm = None
+                return True
+            return False
+        if self.mode == 'picker':
+            if name in ('a', 'start'):
+                self._open_level(self.picker_index + 1)
+                return True
+            if name in ('b', 'back'):
+                self.game.state = config.STATE_MENU
+                return True
+            return False
+        if self.menu_index is not None:
+            if name == 'a':
+                self._menu_choose()
+                return True
+            if name in ('b', 'back', 'start'):
+                self._shut_menu()
+                return True
+            return False
+        model = self.model
+        actions = {
+            'a': self._place,
+            'x': model.remove,
+            'y': self._turn_gate,
+            'leftshoulder': lambda: model.step_palette(-1),
+            'rightshoulder': lambda: model.step_palette(1),
+            'b': self._ask_leave,
+            'back': self._ask_leave,
+        }
+        if name == 'start':
+            self.menu_index = 0
+            self._clear_held()
+            return True
+        if name in actions:
+            actions[name]()
             return True
         return False
 
@@ -234,15 +362,19 @@ class LevelEditor:
         else:
             self.open_picker()
 
+    def _answer_confirm(self):
+        action, self.confirm = self.confirm[0], None
+        if action == 'revert':
+            self._revert()
+        else:
+            self.open_picker()
+
     def handle_key(self, event):
         """Act on a key press. True when the editor used it."""
+        self.using_controller = False
         if self.confirm is not None:
             if event.key in CONFIRM_KEYS:
-                action, self.confirm = self.confirm[0], None
-                if action == 'revert':
-                    self._revert()
-                else:
-                    self.open_picker()
+                self._answer_confirm()
                 return True
             if event.key in CANCEL_KEYS:
                 self.confirm = None
@@ -250,6 +382,16 @@ class LevelEditor:
             return False
         if self.mode == 'picker':
             return self._picker_key(event)
+        if self.menu_index is not None:
+            if event.key in ARROWS:
+                self._menu_direction(*ARROWS[event.key])
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self._menu_choose()
+            elif event.key == pygame.K_ESCAPE:
+                self._shut_menu()
+            else:
+                return False
+            return True
         return self._edit_key(event)
 
     def update(self, dt):
@@ -258,14 +400,17 @@ class LevelEditor:
         seconds = dt / config.FPS
         self.phase = (self.phase + seconds * 4.0) % (2 * math.pi)
         self.flash_left = max(0.0, self.flash_left - seconds)
-        if self._held is None or self.mode != 'edit' or self.confirm is not None:
+        if self._pad_direction is not None and self.game.input_handler.held_direction() != self._pad_direction:
+            self._pad_direction = None
+        if self._held is None or self.mode != 'edit' or self.confirm is not None or self.menu_index is not None:
             return
-        if not pygame.key.get_pressed()[self._held]:
+        direction, still_held = self._held
+        if not still_held():
             self._clear_held()
             return
         self._repeat_left -= seconds
         while self._repeat_left <= 0.0:
-            self.model.move(*ARROWS[self._held])
+            self.model.move(*direction)
             self._repeat_left += REPEAT_INTERVAL
 
     # --- drawing ---
@@ -278,6 +423,8 @@ class LevelEditor:
             pill = render_pill(self.message_font, self.flash)
             self.screen.blit(pill, pill.get_rect(midtop=(config.UI_ZONE_WIDTH + (config.SCREEN_WIDTH - config.UI_ZONE_WIDTH) // 2,
                                                          self._scaled(18))))
+        if self.menu_index is not None and self.mode == 'edit':
+            self._draw_menu()
         if self.confirm is not None:
             self._draw_confirm()
 
@@ -322,7 +469,10 @@ class LevelEditor:
         legend = self.small_font.render('A dot marks a level with a hand-made layout', True, TEXT_LABEL)
         self.screen.blit(legend, legend.get_rect(center=(config.SCREEN_WIDTH // 2,
                                                          top + rows * (size[1] + gap) + self._scaled(10))))
-        self._draw_hints([('Arrows', 'choose'), ('Enter', 'edit'), ('Esc', 'back')])
+        if self.using_controller:
+            self._draw_hints([('D-pad', 'choose'), ('A', 'edit'), ('B', 'back')])
+        else:
+            self._draw_hints([('Arrows', 'choose'), ('Enter', 'edit'), ('Esc', 'back')])
 
     def _preview_scene(self):
         """The maze and sprites of the model as it is, rebuilt only when it changes."""
@@ -370,6 +520,10 @@ class LevelEditor:
             self._draw_sprite(kind, sprite)
         self._draw_cursor(maze)
         self._draw_palette()
+        if self.using_controller:
+            self._draw_hints([('D-pad', 'move'), ('LB RB', 'item'), ('A', 'place'), ('X', 'remove'),
+                              ('Y', 'turn gate'), ('Start', 'more'), ('B', 'back')])
+            return
         self._draw_hints([('Arrows', 'move'), ('Tab', 'item'), ('Space', 'place'), ('Del', 'remove'),
                           ('S', 'save'), ('X', 'revert'), ('Esc', 'back')])
         self._draw_hints([('E', f'Exit: {self.model.exit_policy.label()}'),
@@ -401,7 +555,7 @@ class LevelEditor:
         if here is None:
             return f'Empty  {model.cursor[0]},{model.cursor[1]}'
         if here in ('gate', 'motor_gate') and model.cursor in model.misfit_gates():
-            return f"{LABELS[here]} doesn't fit: R to turn"
+            return f"{LABELS[here]} doesn't fit: {'Y' if self.using_controller else 'R'} to turn"
         return LABELS[here]
 
     def _fitting_font(self, width):
@@ -449,7 +603,8 @@ class LevelEditor:
         shade.fill((0, 0, 0, 150))
         self.screen.blit(shade, (0, 0))
         text = self.message_font.render(self.confirm[1], True, (235, 240, 255))
-        hints = render_hint_row(self.hint_font, [('Y', 'yes'), ('N', 'no')])
+        hints = render_hint_row(self.hint_font, [('A', 'yes'), ('B', 'no')] if self.using_controller
+                                else [('Y', 'yes'), ('N', 'no')])
         size = (max(text.get_width(), hints.get_width()) + self._scaled(80), text.get_height() + hints.get_height()
                 + self._scaled(70))
         panel = build_panel(size)
@@ -459,3 +614,26 @@ class LevelEditor:
         self.screen.blit(panel, rect)
         self.screen.blit(text, text.get_rect(midtop=(rect.centerx, rect.top + self._scaled(26))))
         self.screen.blit(hints, hints.get_rect(midbottom=(rect.centerx, rect.bottom - self._scaled(22))))
+
+    def _draw_menu(self):
+        shade = pygame.Surface((config.SCREEN_WIDTH, config.SCREEN_HEIGHT), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 150))
+        self.screen.blit(shade, (0, 0))
+        labels = [self.message_font.render(label, True, (255, 255, 255) if index == self.menu_index else TEXT_DIM)
+                  for index, (label, _, _) in enumerate(self.menu_rows())]
+        hints = render_hint_row(self.hint_font, [('A', 'choose'), ('B', 'close')])
+        row_height = max(label.get_height() for label in labels) + self._scaled(18)
+        width = max(max(label.get_width() for label in labels), hints.get_width()) + self._scaled(100)
+        size = (width, row_height * len(labels) + hints.get_height() + self._scaled(80))
+        panel = build_panel(size)
+        rect = panel.get_rect(center=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT // 2))
+        glow = build_panel_glow(size)
+        self.screen.blit(glow, glow.get_rect(center=rect.center))
+        self.screen.blit(panel, rect)
+        top = rect.top + self._scaled(30)
+        for index, label in enumerate(labels):
+            row = pygame.Rect(rect.left + self._scaled(24), top + index * row_height, width - self._scaled(48), row_height)
+            if index == self.menu_index:
+                pygame.draw.rect(self.screen, CURSOR_COLOR, row, 2, border_radius=row_height // 2)
+            self.screen.blit(label, label.get_rect(center=row.center))
+        self.screen.blit(hints, hints.get_rect(midbottom=(rect.centerx, rect.bottom - self._scaled(20))))

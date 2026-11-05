@@ -1,6 +1,7 @@
 # tests/test_level_editor.py
 import json
 import os
+from types import SimpleNamespace
 
 import pygame
 import pytest
@@ -255,3 +256,43 @@ def test_the_preview_shows_the_jev_beacon(editor):  # noqa: F811
     differ = [(i, j) for i in range(area.left, area.right, 2) for j in range(area.top, area.bottom, 2)
               if before.get_at((i, j)) != editor.screen.get_at((i, j))]
     assert len(differ) > 20
+
+
+def test_a_controller_opens_edits_and_saves_a_level(editor, monkeypatch):
+    names = {0: 'a', 1: 'b', 2: 'x', 5: 'rightshoulder', 7: 'start'}
+    held = [(0, 0)]
+    monkeypatch.setattr(editor.game, 'input_handler', SimpleNamespace(
+        controller_button_name=names.get, held_direction=lambda: held[0]), raising=False)
+
+    def button(name):
+        editor.handle_controller(pygame.event.Event(
+            pygame.JOYBUTTONDOWN, button={v: k for k, v in names.items()}[name]))
+
+    def dpad(dx, dy):
+        held[0] = (dx, dy)
+        editor.handle_controller(pygame.event.Event(pygame.JOYHATMOTION, value=(dx, -dy)))
+        held[0] = (0, 0)
+        editor.update(1.0)                                          # let go
+
+    editor.open_picker()
+    dpad(1, 0)
+    dpad(1, 0)
+    button('a')
+    assert editor.mode == 'edit' and editor.model.level == 3
+    model = editor.model
+    model.cursor = (1, model.cursor[1])                             # room to move right on any generated maze
+    start = model.cursor
+    dpad(1, 0)
+    assert model.cursor == (start[0] + 1, start[1])
+    button('rightshoulder')
+    button('rightshoulder')
+    assert model.selected == PALETTE[2]
+    button('x')
+    button('a')
+    assert model.contents(model.cursor) == PALETTE[2]
+
+    button('start')                                                 # the menu: its first row saves
+    button('a')
+    assert editor.menu_index is None
+    data = json.loads((editor.tmp / '3.json').read_text())
+    assert parse_layout(data['layout'], 12) == model.to_layout()

@@ -20,6 +20,8 @@ class ProfileSelectionMenu:
 
     CREATE_OPTION = "CREATE NEW PROFILE"
     MAX_NAME_LENGTH = 18
+    # What a controller can spell with, one letter at a time
+    PAD_CHARACTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -"
 
     def __init__(self, screen: pygame.Surface, profile_manager: ProfileManager):
         self.screen = screen
@@ -35,6 +37,10 @@ class ProfileSelectionMenu:
             self.prompt_font, [("ARROWS", "Move"), ("ENTER / A", "Select"), ("ESC / B", "Back")]
         )
         self.typing_hints = render_hint_row(self.prompt_font, [("ENTER", "Save"), ("ESC", "Cancel")])
+        self.pad_typing_hints = render_hint_row(
+            self.prompt_font,
+            [("UP / DOWN", "Letter"), ("A / RIGHT", "Add"), ("X / LEFT", "Delete"), ("START", "Save"), ("B", "Cancel")]
+        )
         self.menu_pulse_phase = 0.0
         self.profile_entries: List[Profile] = []
         self.options: List[str] = []
@@ -42,6 +48,8 @@ class ProfileSelectionMenu:
         self.selected_index = 0
         self.creating_profile = False
         self.new_profile_name = ""
+        # The letter being chosen on a controller, shown after the name but not yet part of it
+        self.pending_character: Optional[str] = None
         self.feedback_message: Optional[str] = None
         self.refresh_profiles()
 
@@ -80,17 +88,34 @@ class ProfileSelectionMenu:
             return None
         return self.options[self.selected_index]
 
-    def start_creating_profile(self) -> None:
-        """Begin the create-profile flow."""
+    def start_creating_profile(self, with_controller: bool = False) -> None:
+        """Begin the create-profile flow; on a controller the name is picked letter by letter."""
         self.creating_profile = True
         self.new_profile_name = ""
+        self.pending_character = self.PAD_CHARACTERS[0] if with_controller else None
         self.feedback_message = None
 
     def cancel_creating_profile(self) -> None:
         """Abort creating a profile."""
         self.creating_profile = False
         self.new_profile_name = ""
+        self.pending_character = None
         self.feedback_message = "Profile creation cancelled."
+
+    def step_pending_character(self, step: int) -> None:
+        """Move the controller's letter along PAD_CHARACTERS, wrapping round."""
+        if self.pending_character is None:
+            self.pending_character = self.PAD_CHARACTERS[0]
+            return
+        index = self.PAD_CHARACTERS.index(self.pending_character)
+        self.pending_character = self.PAD_CHARACTERS[(index + step) % len(self.PAD_CHARACTERS)]
+
+    def commit_pending_character(self) -> None:
+        """Add the controller's letter to the name; the next letter starts where this one was."""
+        if self.pending_character is None:
+            self.pending_character = self.PAD_CHARACTERS[0]
+            return
+        self.append_character(self.pending_character)
 
     def append_character(self, char: str) -> None:
         """Add a character to the active profile name."""
@@ -105,7 +130,10 @@ class ProfileSelectionMenu:
         self.new_profile_name = self.new_profile_name[:-1]
 
     def submit_new_profile(self) -> Optional[Profile]:
-        """Attempt to create a new profile using the current input."""
+        """Attempt to create a new profile using the current input, including a letter still being chosen."""
+        if self.pending_character is not None:
+            self.append_character(self.pending_character)
+            self.pending_character = None
         cleaned = self.new_profile_name.strip()
         if not cleaned:
             self.feedback_message = "Profile name cannot be empty."
@@ -118,6 +146,7 @@ class ProfileSelectionMenu:
 
         self.creating_profile = False
         self.new_profile_name = ""
+        self.pending_character = None
         self.feedback_message = f"Created profile '{profile.name}'."
         self.refresh_profiles()
         self.selected_index = self.options.index(profile.name)
@@ -130,10 +159,14 @@ class ProfileSelectionMenu:
         """Get the heading's rectangle."""
         return self.title.get_rect(center=(config.SCREEN_WIDTH // 2, int(config.SCREEN_HEIGHT * 0.14)))
 
+    def _hints(self) -> pygame.Surface:
+        if not self.creating_profile:
+            return self.browse_hints
+        return self.typing_hints if self.pending_character is None else self.pad_typing_hints
+
     def hints_rect(self) -> pygame.Rect:
         """Get the rectangle of the key hints at the bottom of the screen."""
-        hints = self.typing_hints if self.creating_profile else self.browse_hints
-        return hints.get_rect(midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(56)))
+        return self._hints().get_rect(midbottom=(config.SCREEN_WIDTH // 2, config.SCREEN_HEIGHT - self._scaled(56)))
 
     def _visible_range(self) -> Tuple[int, int, int]:
         """Work out which options fit on screen.
@@ -186,16 +219,36 @@ class ProfileSelectionMenu:
         
         if self.new_profile_name:
             typed = self.entry_font.render(self.new_profile_name, True, config.COLOR_TEXT)
-        else:
+        elif self.pending_character is None:
             typed = self.entry_font.render("TYPE A NAME", True, (90, 90, 120))
+        else:
+            typed = self.entry_font.render("", True, config.COLOR_TEXT)
         typed_rect = typed.get_rect(midleft=(rect.left + self._scaled(32), rect.centery))
         self.screen.blit(typed, typed_rect)
+        if self.pending_character is not None:
+            self._draw_pending_character(typed_rect.right + self._scaled(4), rect.centery)
+            return
         # Blinking caret
         if (pygame.time.get_ticks() // 450) % 2 == 0:
             caret_x = typed_rect.right + self._scaled(4) if self.new_profile_name else typed_rect.left - self._scaled(6)
             pygame.draw.rect(
                 self.screen, BUTTON_ACCENT_START,
                 (caret_x, rect.centery - self._scaled(18), max(2, self._scaled(3)), self._scaled(36))
+            )
+
+    def _draw_pending_character(self, left: int, centery: int) -> None:
+        """The controller's letter in a lit box, with arrows above and below for choosing it."""
+        letter = self.entry_font.render(self.pending_character, True, (255, 255, 255))
+        box = pygame.Rect(0, 0, max(letter.get_width(), self.entry_font.size("W")[0]) + self._scaled(12), self._scaled(52))
+        box.midleft = (left, centery)
+        pygame.draw.rect(self.screen, BUTTON_ACCENT_START, box, max(2, self._scaled(3)), border_radius=self._scaled(6))
+        self.screen.blit(letter, letter.get_rect(center=box.center))
+        size = self._scaled(7)
+        for direction, y in ((-1, box.top - self._scaled(8)), (1, box.bottom + self._scaled(8))):
+            pygame.draw.polygon(
+                self.screen, BUTTON_ACCENT_START,
+                [(box.centerx - size, y - direction * size // 2), (box.centerx + size, y - direction * size // 2),
+                 (box.centerx, y + direction * size // 2)]
             )
 
     def _draw_scroll_arrow(self, center: Tuple[int, int], direction: int) -> None:
@@ -238,7 +291,7 @@ class ProfileSelectionMenu:
             )
 
         hints_rect = self.hints_rect()
-        self.screen.blit(self.typing_hints if self.creating_profile else self.browse_hints, hints_rect)
+        self.screen.blit(self._hints(), hints_rect)
 
         if self.feedback_message:
             feedback_surface = self.prompt_font.render(self.feedback_message, True, (150, 255, 200))

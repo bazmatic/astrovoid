@@ -52,7 +52,7 @@ venv/bin/pip install -r requirements.txt
 | Restart level | R | Y |
 | Pause / quit | Esc | |
 
-Keys and buttons can be remapped in **Settings**. Clear 24 designed levels, then keep going in an endless game. Each level awards up to five stars. [How to play](docs/gameplay.md) covers weapons, stars, walls and the rest.
+A controller can be plugged in or unplugged at any time; the keyboard always works too. Keys and buttons can be remapped in **Settings**. Clear 24 designed levels, then keep going in an endless game. Each level awards up to five stars. [How to play](docs/gameplay.md) covers weapons, stars, walls and the rest.
 
 ## Develop
 

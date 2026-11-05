@@ -768,6 +768,7 @@ class Game:
     def handle_events(self) -> None:
         """Handle pygame events."""
         for event in pygame.event.get():
+            event = self.input_handler.dpad_button_as_hat(event)
             if event.type == pygame.QUIT:
                 self.running = False
             elif event.type == pygame.JOYDEVICEADDED:
@@ -775,7 +776,7 @@ class Game:
                 self.input_handler.add_controller(event.device_index)
             elif event.type == pygame.JOYDEVICEREMOVED:
                 # Controller disconnected
-                self.input_handler.remove_controller(event.device_index)
+                self.input_handler.remove_controller(event.instance_id)
             elif event.type == pygame.JOYBUTTONDOWN:
                 # Handle splash screen input
                 if self.state == config.STATE_SPLASH and self.splash_screen:
@@ -786,7 +787,7 @@ class Game:
                     handler.handle_controller(event, self)
             elif event.type == pygame.JOYHATMOTION or event.type == pygame.JOYAXISMOTION:
                 # Handle controller hat (d-pad) and axis (stick) events for menu navigation
-                if self.state in (config.STATE_MENU, config.STATE_PROFILE_SELECTION, config.STATE_LEVEL_SELECT, config.STATE_LEVEL_COMPLETE):
+                if self.state in (config.STATE_MENU, config.STATE_PROFILE_SELECTION, config.STATE_LEVEL_SELECT, config.STATE_LEVEL_COMPLETE, config.STATE_SETTINGS, config.STATE_FUN, config.STATE_QUIT_CONFIRM, config.STATE_EDITOR):
                     handler = self.state_handler_registry.get_handler(self.state)
                     handler.handle_controller(event, self)
             elif event.type == pygame.KEYDOWN:

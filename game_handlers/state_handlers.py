@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import pygame
 import time
 import config
+from input.input_handler import menu_direction
 if TYPE_CHECKING:
     from game import Game
     from rendering.profile_selection_menu import ProfileSelectionMenu
@@ -114,20 +115,17 @@ class MenuStateHandler(StateHandler):
                 elif selected_option == "QUIT":
                     game.running = False
                 return True
-            elif game.input_handler.is_controller_menu_cancel_pressed(event.button):
-                game.running = False
-                return True
         elif event.type == pygame.JOYHATMOTION:
             # Handle d-pad navigation
             hat_value = event.value
-            # hat_value is a tuple (x, y) where -1 = left/up, 0 = center, 1 = right/down
+            # hat_value is a tuple (x, y) where y is 1 for up and -1 for down
             current_time = time.time()
             if current_time - self.last_navigation_time >= self.navigation_debounce_interval:
-                if hat_value[1] == -1:  # D-pad up
+                if hat_value[1] == 1:  # D-pad up
                     game.main_menu.navigate_up()
                     self.last_navigation_time = current_time
                     return True
-                elif hat_value[1] == 1:  # D-pad down
+                elif hat_value[1] == -1:  # D-pad down
                     game.main_menu.navigate_down()
                     self.last_navigation_time = current_time
                     return True
@@ -188,6 +186,7 @@ class ProfileSelectionStateHandler(StateHandler):
         game: 'Game',
         menu: 'ProfileSelectionMenu'
     ) -> bool:
+        menu.pending_character = None  # the keyboard takes over from a controller's letter picker
         if event.key == pygame.K_RETURN:
             profile = menu.submit_new_profile()
             if profile:
@@ -207,11 +206,11 @@ class ProfileSelectionStateHandler(StateHandler):
 
         return False
 
-    def _select_profile(self, menu: 'ProfileSelectionMenu', game: 'Game') -> bool:
+    def _select_profile(self, menu: 'ProfileSelectionMenu', game: 'Game', with_controller: bool = False) -> bool:
         """Handle profile selection or creation entry."""
         selected = menu.get_selected_option()
         if selected == menu.CREATE_OPTION:
-            menu.start_creating_profile()
+            menu.start_creating_profile(with_controller)
             return True
 
         if selected:
@@ -227,32 +226,65 @@ class ProfileSelectionStateHandler(StateHandler):
         current_time = time.time()
 
         if menu.creating_profile:
-            if event.type == pygame.JOYBUTTONDOWN and game.input_handler.is_controller_menu_cancel_pressed(event.button):
-                menu.cancel_creating_profile()
-                return True
-            return False
+            return self._handle_creating_controller(event, game, menu)
 
         if event.type == pygame.JOYBUTTONDOWN:
             if game.input_handler.is_controller_menu_confirm_pressed(event.button):
-                return self._select_profile(menu, game)
+                return self._select_profile(menu, game, with_controller=True)
             if game.input_handler.is_controller_menu_cancel_pressed(event.button):
                 game.state = config.STATE_MENU
                 return True
             return False
 
-        if event.type in (pygame.JOYHATMOTION, pygame.JOYAXISMOTION):
-            if current_time - self.last_navigation_time < self.navigation_debounce_interval:
-                return False
-            direction = game.input_handler.get_controller_menu_navigation()
-            if direction == "up":
-                menu.navigate_up()
-                self.last_navigation_time = current_time
+        _, dy = menu_direction(event)
+        if not dy or current_time - self.last_navigation_time < self.navigation_debounce_interval:
+            return False
+        if dy < 0:
+            menu.navigate_up()
+        else:
+            menu.navigate_down()
+        self.last_navigation_time = current_time
+        return True
+
+    def _handle_creating_controller(
+        self,
+        event: 'pygame.event.Event',
+        game: 'Game',
+        menu: 'ProfileSelectionMenu'
+    ) -> bool:
+        """Spell the name a letter at a time: up and down choose it, A or right adds it, X or left deletes,
+        Start saves, B or Back cancels."""
+        if event.type == pygame.JOYBUTTONDOWN:
+            name = game.input_handler.controller_button_name(event.button)
+            if name == 'start':
+                if menu.submit_new_profile():
+                    game.reset_scoring_to_profile_state()
+                    game.state = config.STATE_MENU
                 return True
-            if direction == "down":
-                menu.navigate_down()
-                self.last_navigation_time = current_time
+            if name == 'a':
+                menu.commit_pending_character()
                 return True
-        return False
+            if name == 'x':
+                menu.backspace_character()
+                return True
+            if name in ('b', 'back'):
+                menu.cancel_creating_profile()
+                return True
+            return False
+        dx, dy = menu_direction(event)
+        if not (dx or dy):
+            return False
+        now = time.time()
+        if now - self.last_navigation_time < self.navigation_debounce_interval:
+            return False
+        self.last_navigation_time = now
+        if dy:
+            menu.step_pending_character(-dy)
+        elif dx > 0:
+            menu.commit_pending_character()
+        else:
+            menu.backspace_character()
+        return True
 
 
 class LevelSelectStateHandler(StateHandler):
@@ -396,7 +428,11 @@ class PlayingStateHandler(StateHandler):
 
 class QuitConfirmStateHandler(StateHandler):
     """Handler for quit confirmation state events."""
-    
+
+    def __init__(self):
+        self.last_navigation_time = 0.0
+        self.navigation_debounce_interval = 0.15  # 150ms between navigations
+
     def handle_keyboard(self, event: 'pygame.event.Event', game: 'Game') -> bool:
         """Handle keyboard events in quit confirm state."""
         if event.key in (pygame.K_LEFT, pygame.K_UP):
@@ -420,13 +456,25 @@ class QuitConfirmStateHandler(StateHandler):
     
     def handle_controller(self, event: 'pygame.event.Event', game: 'Game') -> bool:
         """Handle controller events in quit confirm state."""
-        if game.input_handler.is_controller_menu_confirm_pressed(event.button):
-            return self._apply_quit_selection(game)
-        elif game.input_handler.is_controller_menu_cancel_pressed(event.button):
-            game.state = config.STATE_PLAYING
-            game.reset_quit_confirmation_selection()
-            return True
-        return False
+        if event.type == pygame.JOYBUTTONDOWN:
+            if game.input_handler.is_controller_menu_confirm_pressed(event.button):
+                return self._apply_quit_selection(game)
+            if game.input_handler.is_controller_menu_cancel_pressed(event.button):
+                game.state = config.STATE_PLAYING
+                game.reset_quit_confirmation_selection()
+                return True
+            return False
+        # D-pad or stick, any direction: up/left picks the first choice, down/right the second
+        dx, dy = menu_direction(event)
+        step = dx or dy
+        if not step:
+            return False
+        now = time.time()
+        if now - self.last_navigation_time < self.navigation_debounce_interval:
+            return False
+        self.last_navigation_time = now
+        game.quit_confirmation_selection = min(1, max(0, game.quit_confirmation_selection + step))
+        return True
 
     def _apply_quit_selection(self, game: 'Game') -> bool:
         if game.quit_confirmation_selection == 0:
@@ -657,7 +705,7 @@ class EditorStateHandler(StateHandler):
         return game.level_editor.handle_key(event)
 
     def handle_controller(self, event, game):
-        return False
+        return game.level_editor.handle_controller(event)
 
 
 class StateHandlerRegistry:
