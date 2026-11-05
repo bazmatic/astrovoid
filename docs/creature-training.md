@@ -58,7 +58,7 @@ venv/bin/python -m learning.evaluate .astrovoid-local/neural/rl/runN --workers 4
 
 The trainer's episode list, **Fly again** and **Watch** also support teams. Fly again executes recorded joint actions and checks metrics against the recording. Watch shows the real encounter, each crawler's attachment state, message and health. Replays reject incompatible current physics instead of silently showing a different experiment.
 
-Gameplay uses the explicitly deployed local model at `.astrovoid-local/neural/wallcrawler.npz` when launched through `run.sh`. Without that file, crawlers remain scripted. To select a different compatible team checkpoint:
+Gameplay uses the bundled brain at `assets/neural/wallcrawler.npz`. `WALLCRAWLER_POLICY=` (empty) gives the scripted crawler. To select a different compatible team checkpoint:
 
 ```sh
 WALLCRAWLER_POLICY=/absolute/path/to/best.npz ./run.sh

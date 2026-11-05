@@ -1,6 +1,6 @@
 # Neural Flockers
 
-Flockers support a shared recurrent neural brain through the `flocker_team` trainer task. Each bird has its own memory and controls; there is no commander or automatic volley scheduler. No trained Flocker checkpoint is bundled yet. Without weights the normal scripted flocking brain remains active.
+Flockers support a shared recurrent neural brain through the `flocker_team` trainer task. Each bird has its own memory and controls; there is no commander or automatic volley scheduler. A trained brain ships as `assets/neural/flocker.npz` (run196). Without weights the normal scripted flocking brain remains active.
 
 ## Flight and appearance
 

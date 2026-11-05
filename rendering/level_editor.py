@@ -35,7 +35,7 @@ FLASH_SECONDS = 2.0
 ARROWS = {pygame.K_LEFT: (-1, 0), pygame.K_RIGHT: (1, 0), pygame.K_UP: (0, -1), pygame.K_DOWN: (0, 1)}
 
 LABELS = {'wall': 'Wall', 'strong_wall': 'Strong wall', **{kind: enemy_kinds.name(kind) for kind in enemy_kinds.kinds()},
-          'start': 'Start', 'exit': 'Exit', 'beacon': 'Jev beacon', 'gate': 'Gate', 'motor_gate': 'Motor gate'}
+          'start': 'Start', 'exit': 'Exit', 'beacon': 'Ally beacon', 'gate': 'Gate', 'motor_gate': 'Motor gate'}
 
 # The chip beside each palette entry, in the colours the things have in play
 CHIPS = {'wall': (120, 130, 150), 'strong_wall': (176, 192, 214), 'static': (255, 90, 90), 'patrol': (255, 150, 70), 'aggressive': (255, 70, 140), 'neural_jelly': (255, 110, 170),
