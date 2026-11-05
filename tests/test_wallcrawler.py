@@ -165,7 +165,7 @@ def test_it_can_be_placed_in_the_editor_and_campaign_and_generated_levels():
     assert level_config.get_level_wallcrawler_count(8) == 0
     assert level_config.get_level_wallcrawler_count(9) == 0
     assert level_config.get_level_wallcrawler_count(11) == 5      # a crowd from their first level
-    counts = [level_config.get_level_wallcrawler_count(n) for n in range(34, 80)]
+    counts = [level_config.get_level_wallcrawler_count(n) for n in range(35, 80)]   # past the hand-built levels
     assert any(counts) and all(n == 0 or 5 <= n <= 8 for n in counts)
     from level_rules import EnemyCounts
     roster = EnemyRoster()
