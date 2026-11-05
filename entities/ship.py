@@ -19,6 +19,7 @@ from sounds import SoundManager
 
 
 OBSERVER_ALPHA = 50  # how much of an observer's ship shows through: barely there (255 is solid)
+LOW_POWER_THRESHOLD = 0.2  # At or below this share of full power the gauge pulses and the thruster sputters
 
 
 class Ship(RotatingThrusterShip):
@@ -58,6 +59,7 @@ class Ship(RotatingThrusterShip):
         self.damage_timer = 0
         self.glow_phase = 0.0  # For pulsing glow when damaged
         self.prev_thrusting = False  # Track previous frame's thrusting state for sound management
+        self.low_power = False  # The game sets this each frame from the power gauge
         self.sound_manager = SoundManager()  # Initialize sound manager
         self.shield_active = False
         self.observer = False  # observer mode: invulnerable (as if shielded), drawn faintly, unseen by enemies
@@ -88,7 +90,7 @@ class Ship(RotatingThrusterShip):
             self.fuel += config.FUEL_CONSUMPTION_PER_THRUST
             
             # Start thruster sound (will only start if not already playing)
-            self.sound_manager.start_thruster()
+            self.sound_manager.start_thruster(sputtering=self.low_power)
         
         return result
     
@@ -678,7 +680,6 @@ class Ship(RotatingThrusterShip):
         GUN_UPGRADE_Y = GAUGE_START_Y + (GAUGE_SPACING * 2)  # Below all gauges
         if has_inventory:
             GUN_UPGRADE_Y = round(574 * hud_scale)
-        LOW_POWER_THRESHOLD = 0.2  # Power gauge pulses at or below this
         
         def draw_gauge(
             center_y: int,

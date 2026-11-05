@@ -330,17 +330,37 @@ class SoundManager:
         stereo_int16 = (stereo * 16383).astype(np.int16)
         return pygame.sndarray.make_sound(stereo_int16)
     
-    def start_thruster(self) -> None:
-        """Start playing thruster sound in a loop.
-        
-        If sound is already playing, this does nothing.
-        """
+    def _generate_sputter(self) -> pygame.mixer.Sound:
+        """The thruster running out of fuel: its noise cuts out and coughs back in at irregular moments."""
+        rate, _, channels = pygame.mixer.get_init()
+        rng = np.random.default_rng(451)  # Local, so gameplay randomness is untouched
+        duration = 1.2
+        noise = rng.uniform(-1, 1, round(rate*duration))
+        gate = np.empty(len(noise))
+        start = 0
+        while start < len(gate):
+            length = round(rate*rng.uniform(.02, .09))
+            # The loop starts and ends running, so it repeats without a click
+            running = start == 0 or start+length >= len(gate) or rng.random() > .4
+            gate[start:start+length] = rng.uniform(.75, 1) if running else .04
+            start += length
+        # A few milliseconds of smoothing softens each cut into a cough rather than a click
+        width = round(rate*.004)
+        gate = np.convolve(np.concatenate((gate[-width:], gate)), np.ones(width)/width, mode='valid')[:len(noise)]
+        pcm = (noise*gate*32767).astype(np.int16)
+        if channels > 1:
+            pcm = np.repeat(pcm[:, None], channels, axis=1)
+        return pygame.sndarray.make_sound(pcm)
+
+    def start_thruster(self, sputtering: bool = False) -> None:
+        """Play the thruster loop, sputtering when power is low; switches loops if the state changed."""
         if not _audible() or not self.thruster_sound or not self.thruster_channel:
             return
-        
-        # Only start if not already playing
-        if not self.thruster_channel.get_busy():
-            self.thruster_channel.play(self.thruster_sound, loops=-1)  # -1 = infinite loop
+        if sputtering and getattr(self, 'sputter_sound', None) is None:
+            self.sputter_sound = self._generate_sputter()
+        sound = self.sputter_sound if sputtering else self.thruster_sound
+        if not self.thruster_channel.get_busy() or self.thruster_channel.get_sound() is not sound:
+            self.thruster_channel.play(sound, loops=-1)  # -1 = infinite loop
     
     def stop_thruster(self) -> None:
         """Stop playing thruster sound."""

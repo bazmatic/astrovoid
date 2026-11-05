@@ -12,7 +12,7 @@ from utils.neural_policy import neural_policy_path
 from rendering.fonts import get_font
 from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
-from entities.ship import Ship
+from entities.ship import Ship, LOW_POWER_THRESHOLD
 from maze.generator import Maze
 from physics.obstacle_world import ObstacleWorld
 from rendering.gates import draw_gate
@@ -1144,7 +1144,8 @@ class Game:
         )
         potential_score = potential['potential_score']
         self._update_critical_warning(potential_score)
-        
+        self.ship.low_power = potential['score_percentage'] <= LOW_POWER_THRESHOLD
+
         # When score reaches zero, freeze all action and start fade
         if potential_score <= 0 and not self.game_frozen and self.autoplay is None:
             self.game_frozen = True
