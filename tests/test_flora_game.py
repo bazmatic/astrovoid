@@ -1,11 +1,15 @@
 """Living weed in the game: off unless switched on, grown in every cave the player sees, never in training."""
+import math
 import random
 
 import pygame
 
 import config
+import level_config
 from experiments import harness
-from flora import Flora, Plant
+from flora import Flora, Plant, Spore
+from maze.generator import Maze
+from physics.obstacle_world import ObstacleWorld
 from rendering.flora_renderer import draw_flora
 from tests.test_fun_menu import to_fun
 from tests.test_replay_loop import game, key  # noqa: F401 - pytest fixture
@@ -84,3 +88,27 @@ def test_drawing_a_grown_plant_puts_green_by_the_rock():
     draw_flora(screen, flora, time_seconds=0.0)
     greens = [screen.get_at((x, y)) for x in range(30, 51) for y in range(55, 71)]
     assert any(c.g > 100 and c.g > c.r and c.g > c.b * 0.8 for c in greens)
+
+
+def gated_cave(level=17):
+    """A level's real cave with its gates, built the way Game.start_level builds it."""
+    layout = level_config.get_level_layout(level)
+    maze = Maze(level, complexity=level_config.get_maze_complexity(level),
+                grid_size=level_config.get_maze_grid_size(level), layout=layout, seed=level_config.get_level_seed(level))
+    maze.gate_segments = ObstacleWorld(maze, layout.gates).segments()
+    maze.flora = Flora.seeded(maze, seed=1)
+    return maze
+
+
+def test_a_spore_crossing_a_gate_is_gone_and_roots_nothing():
+    maze = gated_cave()
+    gate = next(segment for segment in maze.gate_segments if segment.active)
+    middle = ((gate.start[0] + gate.end[0]) / 2, (gate.start[1] + gate.end[1]) / 2)
+    length = math.dist(gate.start, gate.end)
+    normal = (-(gate.end[1] - gate.start[1]) / length, (gate.end[0] - gate.start[0]) / length)
+    flora = maze.flora
+    flora.plants = []
+    flora.spores = [Spore(x=middle[0] + normal[0] * 3, y=middle[1] + normal[1] * 3,
+                          vx=-normal[0] * 4, vy=-normal[1] * 4, age=0.0, life=1000.0)]
+    flora.step(2.0)
+    assert not flora.spores and not flora.plants

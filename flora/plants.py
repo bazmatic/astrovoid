@@ -227,7 +227,8 @@ class Flora:
                 self._land(touched, centre)
                 return False
             spore.clear = self._clearance(end)
-        if any(line_line_collision(start, end, a, b) for a, b in getattr(maze, 'gate_segments', ())):
+        if any(gate.active and line_line_collision(start, end, gate.start, gate.end)
+               for gate in getattr(maze, 'gate_segments', ())):
             return False
         spore.x, spore.y = end
         return (maze.offset_x <= spore.x <= maze.offset_x + maze.grid_width * maze.cell_size_x
