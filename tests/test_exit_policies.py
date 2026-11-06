@@ -36,6 +36,16 @@ def test_labels_for_the_editor():
            ['Always open', 'Timer 60s', 'Kill Eggs, Squidlets', 'Kill all']
 
 
+def test_missions_read_as_sentences():
+    assert AlwaysOpen().mission() is None
+    assert OpenAfterTime(90).mission() == 'The exit opens in 1:30'
+    assert OpenAfterTime(0).mission() is None
+    assert TypeCleared(('egg',)).mission() == 'Destroy every Egg to open the exit'
+    assert TypeCleared(('egg', 'baby')).mission() == 'Destroy every Egg and Squidlet to open the exit'
+    assert TypeCleared(('egg', 'baby', 'static')).mission() == 'Destroy every Egg, Squidlet and Urchin to open the exit'
+    assert AllCleared().mission() == 'Destroy every enemy to open the exit'
+
+
 @pytest.mark.parametrize('data', [{'type': 'always_open'}, {'type': 'timer', 'seconds': 60},
                                   {'type': 'type_cleared', 'enemy_types': ['egg', 'mother_boss']},
                                   {'type': 'all_cleared'}])

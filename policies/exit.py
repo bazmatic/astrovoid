@@ -33,6 +33,11 @@ class ExitPolicy(Protocol):
         """A one-line summary for the editor."""
         ...
 
+    def mission(self) -> Optional[str]:
+        """What the player must do for the exit to open, as a sentence announced when the level starts; None if
+        nothing."""
+        ...
+
     def to_json(self) -> Dict[str, Any]: ...
 
     @classmethod
@@ -59,6 +64,9 @@ class AlwaysOpen:
     def label(self) -> str:
         return 'Always open'
 
+    def mission(self) -> Optional[str]:
+        return None
+
     def to_json(self) -> Dict[str, Any]:
         return {'type': self.name}
 
@@ -81,11 +89,19 @@ class OpenAfterTime:
         return state.elapsed_seconds >= self.seconds
 
     def describe(self, state: ExitState) -> List[str]:
-        wait = max(0, math.ceil(self.seconds - state.elapsed_seconds))
-        return ['OPENS IN', f'{wait // 60}:{wait % 60:02d}']
+        return ['OPENS IN', self._clock(self.seconds - state.elapsed_seconds)]
 
     def label(self) -> str:
         return f'Timer {self._json_seconds()}s'
+
+    def mission(self) -> Optional[str]:
+        return f'The exit opens in {self._clock(self.seconds)}' if self.seconds > 0 else None
+
+    @staticmethod
+    def _clock(seconds: float) -> str:
+        """A wait as M:SS, rounded up."""
+        wait = max(0, math.ceil(seconds))
+        return f'{wait // 60}:{wait % 60:02d}'
 
     def to_json(self) -> Dict[str, Any]:
         return {'type': self.name, 'seconds': self._json_seconds()}
@@ -120,6 +136,11 @@ class TypeCleared:
     def label(self) -> str:
         return 'Kill ' + self._plurals()
 
+    def mission(self) -> Optional[str]:
+        names = [enemy_kinds.name(kind) for kind in self.enemy_types]
+        listed = names[0] if len(names) == 1 else ', '.join(names[:-1]) + ' and ' + names[-1]
+        return f'Destroy every {listed} to open the exit'
+
     def _plurals(self) -> str:
         return ', '.join(enemy_kinds.plural(kind) for kind in self.enemy_types)
 
@@ -151,6 +172,9 @@ class AllCleared:
 
     def label(self) -> str:
         return 'Kill all'
+
+    def mission(self) -> Optional[str]:
+        return 'Destroy every enemy to open the exit'
 
     def to_json(self) -> Dict[str, Any]:
         return {'type': self.name}

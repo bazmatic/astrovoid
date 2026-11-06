@@ -10,6 +10,7 @@ import config
 import enemy_kinds
 from utils.neural_policy import neural_policy_path
 from rendering.fonts import get_font
+from rendering.announcements import Announcer
 from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship, LOW_POWER_THRESHOLD
@@ -194,6 +195,7 @@ class Game:
         self.exit_explosion_time = 0.0  # Time since explosion started
         self.exit_explosion_pos: Optional[Tuple[float, float]] = None  # Exit position for explosion
         self.exit_policy: ExitPolicy = DEFAULT_EXIT_POLICY
+        self.announcer = Announcer()   # important news, in the middle of the playfield
         self.exit_opened = False  # Once the exit opens it stays open for the rest of the level
         self.play_seconds = 0.0  # Play time since the first move, which a timer exit counts
         self.star_animation: Optional[AnimatedStarRating] = None  # Animated star rating for level complete
@@ -385,6 +387,11 @@ class Game:
         # Reset gun upgrade state
         self.ship.reset_gun_upgrade()
         self.exit_policy = level_config.get_level_exit_policy(self.level)
+        # The mission is easy to miss in the side panel: announce it until the player starts flying
+        self.announcer = Announcer()
+        mission = self.exit_policy.mission()
+        if mission is not None:
+            self.announcer.show('MISSION', mission)
         self.ship.ammo_policy = level_config.get_level_ammo_policy(self.level)
         self.exit_opened = False
         self.play_seconds = 0.0
@@ -916,6 +923,9 @@ class Game:
         
         self.maze.update(dt)
         self._step_flora(dt)
+        if self.player_has_moved:
+            self.announcer.dismiss()
+        self.announcer.update(dt)
 
         if self.player_has_moved and not self.game_frozen:
             self.play_seconds += dt / config.FPS  # dt counts frames at config.FPS
@@ -1441,6 +1451,7 @@ class Game:
                 self.screen, [] if self.exit_opened else self.exit_policy.describe(self.exit_state()), self.exit_opened,
                 bottom=room)
             self._draw_hunter_energy(below=exit_panel.bottom)
+            self.announcer.draw(self.screen)
             if self.star_indicator.flags:
                 lit = self.star_indicator.star_count  # The row fills from the left, whichever goals are met
                 draw_star_row(self.screen, tuple(i < lit for i in range(5)), self.par_pulse(),
