@@ -414,6 +414,33 @@ class ObstacleSettings:
 
 
 @dataclass
+class FloraSettings:
+    # Living weed on the cave rock. Times are frames at FPS, distances px.
+    seedFrames: float = 300.0
+    growFrames: float = 1200.0
+    podFrames: float = 600.0  # a pod swelling until it bursts
+    restFrames: float = 600.0  # between one fruiting and the next
+    fruitingsMin: int = 2
+    fruitingsMax: int = 3
+    stalksMin: int = 1
+    stalksMax: int = 2
+    witherFrames: float = 300.0
+    lifeJitter: float = 0.2  # each stage lasts up to this share longer or shorter
+    sporesMin: int = 3  # per pod
+    sporesMax: int = 5
+    sporeSpeed: float = 0.6  # px per frame, as it leaves the pod
+    sporeDrag: float = 0.985  # speed kept each frame
+    sporeWander: float = 0.03  # px per frame per frame of random push
+    sporeFrames: float = 1200.0  # how long a spore drifts before it fades
+    sporeRadius: float = 1.5
+    plantSpacing: float = 14.0  # no spore takes root nearer a living plant than this
+    startDensity: float = 4.0  # plants per 1000 px of rock face, when a cave is new
+    startClear: float = 120.0  # kept clear of plants around the ship's start
+    maxPlants: int = 400
+    maxSpores: int = 300
+
+
+@dataclass
 class Settings:
     screen: ScreenSettings
     ship: ShipSettings
@@ -443,6 +470,7 @@ class Settings:
     hunterShip: HunterShipSettings = field(default_factory=HunterShipSettings)
     autoplay: AutoplaySettings = field(default_factory=AutoplaySettings)
     obstacles: ObstacleSettings = field(default_factory=ObstacleSettings)
+    flora: FloraSettings = field(default_factory=FloraSettings)
 
 
 def _load_settings_json() -> dict:
@@ -596,6 +624,7 @@ def load_settings() -> Settings:
         hunterShip=HunterShipSettings(**raw.get("hunterShip", {})),
         autoplay=AutoplaySettings(**raw.get("autoplay", {})),
         obstacles=ObstacleSettings(**raw.get("obstacles", {})),
+        flora=FloraSettings(**raw.get("flora", {})),
     )
 
 
@@ -666,6 +695,7 @@ MIN_PASSAGE_WIDTH = SETTINGS.maze.minPassageWidth
 WALL_HIT_POINTS = SETTINGS.maze.wallHitPoints
 SHIP_SPAWN_OFFSET = SETTINGS.maze.shipSpawnOffset
 CAVE = SETTINGS.maze.cave
+FLORA = SETTINGS.flora
 
 STATIC_ENEMY_SIZE = enemy_kinds.kind("static").tuning["size"]
 # The larger of the Crab and the Jelly

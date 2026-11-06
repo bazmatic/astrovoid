@@ -302,5 +302,29 @@
     "bulletImpulse": 300.0,
     "substeps": 8,
     "moverReachMargin": 24.0
+  },
+  "flora": {
+    "seedFrames": 300.0,
+    "growFrames": 1200.0,
+    "podFrames": 600.0,
+    "restFrames": 600.0,
+    "fruitingsMin": 2,
+    "fruitingsMax": 3,
+    "stalksMin": 1,
+    "stalksMax": 2,
+    "witherFrames": 300.0,
+    "lifeJitter": 0.2,
+    "sporesMin": 3,
+    "sporesMax": 5,
+    "sporeSpeed": 0.6,
+    "sporeDrag": 0.985,
+    "sporeWander": 0.03,
+    "sporeFrames": 1200.0,
+    "sporeRadius": 1.5,
+    "plantSpacing": 14.0,
+    "startDensity": 4.0,
+    "startClear": 120.0,
+    "maxPlants": 400,
+    "maxSpores": 300
   }
 }
