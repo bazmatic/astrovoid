@@ -16,7 +16,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14            # Apple Silicon
+          - os: macos-15            # Apple Silicon
             archive: Squiddler-macos-arm64.zip
           - os: windows-latest
             archive: Squiddler-windows-x64.zip
