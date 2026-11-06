@@ -253,6 +253,7 @@ def episode_frames(level, seed, params=DEFAULT, horizon=90.0, hide_player=True, 
         raise ValueError('unknown combat ruleset')
     game.combat_ruleset = combat_ruleset
     game.curved_walls = curved_walls
+    game.grows_flora = False                     # brains train in the caves they will play in: no living weed
     game.weapon_catalog = (WeaponCatalog(WeaponDefinition(**d) for d in weapon_tuning)
                            if weapon_tuning else default_catalog(combat_ruleset))
     game.start_level(maze_seed=seed if random_maze else None)

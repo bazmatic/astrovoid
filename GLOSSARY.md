@@ -50,6 +50,20 @@ _Avoid_: bullet (when allegiance matters)
 A powerup crystal the hunter may collect.
 _Avoid_: item, loot
 
+**Flora**:
+The living weed in one cave: every plant and spore in it. Off unless the `flora.enabled` setting is on; without it the
+rock shows painted weed instead. Never in training.
+_Avoid_: vegetation, greenery
+
+**Plant**:
+One living tuft of weed on breakable rock. It starts as a seed, grows, fruits pods that burst into spores, then
+withers and dies. It goes when its rock does. Not a creature: nothing targets it and shots pass through it.
+_Avoid_: weed (on its own, which also means the rock's painted tufts), seed (except for a plant's first stage)
+
+**Spore**:
+What a plant's pod bursts into. It drifts through open water and takes root as a seed where it touches breakable rock
+with no plant too near.
+
 ### Enemies
 
 **Roster**:

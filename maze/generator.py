@@ -22,6 +22,8 @@ from hunter.visibility import simplify_outline
 from maze.cave import CaveShape
 from utils.spatial_grid import SpatialGrid
 from entities.exit import ExitPortal
+from flora import Flora
+from rendering.flora_renderer import draw_flora
 from rendering.wall_renderer import WallRenderer
 from rendering.wall_debris import WallDebris
 
@@ -229,6 +231,7 @@ class Maze:
         self.converter = GridToWallsConverter(self.position_calculator, self.strong_cells)
         self.wall_renderer = WallRenderer()
         self.wall_debris = WallDebris()
+        self.flora: Optional[Flora] = None  # living weed, when the game grows it here
         # Spatial grid for efficient collision detection
         self.spatial_grid = SpatialGrid(
             config.SCREEN_WIDTH,
@@ -583,10 +586,14 @@ class Maze:
     
     def draw(self, screen: pygame.Surface) -> None:
         """Draw the maze."""
+        # Living weed takes the place of the rock's painted weed
         self.wall_renderer.draw(
-            screen, self.walls, blocks=self.block_fills, wounds=self.block_wounds, unbreakable=self.unbreakable_blocks,
-            strong=self.strong_blocks, territories=self.block_territories, strong_cells=self.strong_cells
+            screen, self.walls, animate=self.flora is None, blocks=self.block_fills, wounds=self.block_wounds,
+            unbreakable=self.unbreakable_blocks, strong=self.strong_blocks, territories=self.block_territories,
+            strong_cells=self.strong_cells
         )
+        if self.flora is not None:
+            draw_flora(screen, self.flora)
         self.wall_debris.draw(screen)
         
         # Draw exit marker

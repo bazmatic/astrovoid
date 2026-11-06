@@ -13,6 +13,7 @@ from rendering.fonts import get_font
 from rendering.exit_panel import draw_exit_panel
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship, LOW_POWER_THRESHOLD
+from flora import Flora
 from maze.generator import Maze
 from physics.obstacle_world import ObstacleWorld
 from rendering.gates import draw_gate
@@ -95,6 +96,7 @@ class Game:
         self.screen = screen
         from weapons.catalog import RULESET
         self.combat_ruleset = RULESET
+        self.grows_flora = config.FLORA.enabled     # living weed; training switches it off
         self.curved_walls = config.CAVE.enabled     # training runs recorded on square walls replay on square walls
         self.clock = pygame.time.Clock()
         self.font = get_font(36)
@@ -351,6 +353,7 @@ class Game:
         layout = level_config.get_level_layout(self.level)
         self.maze = Maze(self.level, complexity=maze_complexity, grid_size=maze_grid_size, layout=layout,
                          seed=seed, curved=getattr(self, 'curved_walls', None))
+        self._plant_flora(seed)
         self.obstacles = ObstacleWorld(self.maze, layout.gates) if layout is not None and layout.gates else None
         self.maze.gate_segments = self.obstacles.segments() if self.obstacles else []
         
@@ -711,6 +714,7 @@ class Game:
         self.maze = Maze(DUEL_MAZE_LEVEL, complexity=complexity, grid_size=game_settings.duelMazeGridSize, seed=seed,
                          curved=getattr(self, 'curved_walls', None))
         self.maze.exit.active = False            # nobody is flying out: do not draw the exit portal
+        self._plant_flora(seed)
         self.ship = Ship(self.maze.start_pos)
         from weapons import EquippedWeapon, WeaponInventory, RULESET
         from weapons.catalog import PICKUP_RULESETS, default_catalog
@@ -753,13 +757,26 @@ class Game:
         self.projectiles = []
         self.duel = TeamBattle(match, self.sound_manager, (self.flocker_policy, self.wallcrawler_policy))
         self.maze = self.duel.maze
+        self._plant_flora(match.seed)
         self.duel_banner_until = None
         self.state = config.STATE_DUEL
+
+    def _plant_flora(self, seed: Optional[int]) -> None:
+        """Grow living weed in the new cave, if the game grows it. It has its own randomness, so seeded caves and
+        enemies come out as they would without it."""
+        if seed is None:
+            seed = random.SystemRandom().randrange(2 ** 32)
+        self.maze.flora = Flora.seeded(self.maze, seed) if getattr(self, 'grows_flora', config.FLORA.enabled) else None
+
+    def _step_flora(self, dt: float) -> None:
+        if self.maze is not None and self.maze.flora is not None:
+            self.maze.flora.step(dt)
 
     def _update_duel(self, dt: float) -> None:
         if self.duel is None:
             return
         self.duel.update(dt)
+        self._step_flora(dt)
         if self.duel.result is not None:
             if self.duel_banner_until is None:
                 self.duel_banner_until = time.monotonic() + DUEL_BANNER_SECONDS
@@ -896,6 +913,7 @@ class Game:
             return
         
         self.maze.update(dt)
+        self._step_flora(dt)
 
         if self.player_has_moved and not self.game_frozen:
             self.play_seconds += dt / config.FPS  # dt counts frames at config.FPS

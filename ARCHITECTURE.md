@@ -71,6 +71,7 @@ Training reuses the game itself. A training scenario builds real creatures in re
 | Where | What |
 |---|---|
 | `scoring/` | Score, the five stars and par time |
+| `flora/` | Living weed: plants that grow on the rock and the spores they scatter (off unless `flora.enabled`) |
 | `rendering/` | The HUD, menus, splash, curved rock and effects; all text goes through `rendering/fonts.py` |
 | `sounds/` | Procedurally generated sound effects |
 | `input/` | Keyboard and controller mapping |
