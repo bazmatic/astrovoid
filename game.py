@@ -757,16 +757,17 @@ class Game:
         self.projectiles = []
         self.duel = TeamBattle(match, self.sound_manager, (self.flocker_policy, self.wallcrawler_policy))
         self.maze = self.duel.maze
-        self._plant_flora(match.seed)
+        self._plant_flora(match.seed, always=True)   # a long fight: weed has time to live its life
         self.duel_banner_until = None
         self.state = config.STATE_DUEL
 
-    def _plant_flora(self, seed: Optional[int]) -> None:
-        """Grow living weed in the new cave, if the game grows it. It has its own randomness, so seeded caves and
-        enemies come out as they would without it."""
+    def _plant_flora(self, seed: Optional[int], always: bool = False) -> None:
+        """Grow living weed in the new cave, if the game grows it (or `always`). It has its own randomness, so seeded
+        caves and enemies come out as they would without it."""
         if seed is None:
             seed = random.SystemRandom().randrange(2 ** 32)
-        self.maze.flora = Flora.seeded(self.maze, seed) if getattr(self, 'grows_flora', config.FLORA.enabled) else None
+        grows = always or getattr(self, 'grows_flora', config.FLORA.enabled)
+        self.maze.flora = Flora.seeded(self.maze, seed) if grows else None
 
     def _step_flora(self, dt: float) -> None:
         if self.maze is not None and self.maze.flora is not None:

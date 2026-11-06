@@ -51,8 +51,8 @@ A powerup crystal the hunter may collect.
 _Avoid_: item, loot
 
 **Flora**:
-The living weed in one cave: every plant and spore in it. Off unless the `flora.enabled` setting is on; without it the
-rock shows painted weed instead. Never in training.
+The living weed in one cave: every plant and spore in it. Always in the Flockers vs Wallcrawlers battle; elsewhere off
+unless the `flora.enabled` setting is on, and without it the rock shows painted weed instead. Never in training.
 _Avoid_: vegetation, greenery
 
 **Plant**:

@@ -44,8 +44,8 @@ def test_new_level_gets_fresh_flora(game):
     assert game.maze.flora is not first and game.maze.flora.maze is game.maze
 
 
-def test_the_battle_has_weed_that_grows(game):
-    game.grows_flora = True
+def test_the_battle_always_has_weed_that_grows(game):
+    assert not game.grows_flora   # off everywhere else
     to_fun(game)
     key(game, pygame.K_DOWN)
     key(game, pygame.K_RETURN)
