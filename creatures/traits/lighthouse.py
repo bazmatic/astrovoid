@@ -15,10 +15,10 @@ def _turn_by(diff: float) -> float:
 
 
 class Scans(Trait):
-    """Sweeps its beam round at `scanSpeed` degrees a second until it sees the player or an ally:
-    within `range`, within the `coneDegrees` cone of its heading, and with no wall or gate in the way. Then it turns
-    after the ship at `trackSpeed`. It keeps `sees_target`, and `sighted_at` (where the ship is) while it sees it, and
-    emits `sighted` when it first sees it. It keeps `scan_range` and `scan_cone` for its Body's beam."""
+    """Sweeps its beam round at `scanSpeed` degrees a second until it sees the player, an ally or one of its world's
+    additional targets: within `range`, within the `coneDegrees` cone of its heading, and with no wall or gate in the
+    way. Then it turns after the nearest at `trackSpeed`. It keeps `sees_target`, and `sighted_at` (where that is)
+    while it sees it, and emits `sighted` when it first sees it. It keeps `scan_range` and `scan_cone` for its Body's beam."""
     NAME = 'scans'
 
     def __init__(self, coneDegrees: float, range: float, scanSpeed: float, trackSpeed: float):
@@ -30,9 +30,10 @@ class Scans(Trait):
 
     def on_frame(self, c, enc, dt):
         seconds = dt / float(config.FPS)
-        visible = [ship.get_pos() for ship in (enc.ship, enc.hunter)
-                   if ship is not None and ship.active and not getattr(ship, 'observer', False)
-                   and self._sees(c, ship.get_pos(), enc.maze)]
+        targets = [enc.ship, enc.hunter] + list(getattr(enc.world, 'additional_targets', ()))
+        visible = [target.get_pos() for target in targets
+                   if target is not None and target.active and not getattr(target, 'observer', False)
+                   and self._sees(c, target.get_pos(), enc.maze)]
         goal = min(visible, key=lambda pos: math.dist(c.get_pos(), pos), default=None)
         seen = goal is not None
         if seen:
@@ -57,7 +58,7 @@ class Scans(Trait):
 class LaunchesFlock(Trait):
     """While it sees its target it launches a creature of kind `into` at it, from where it stands, at `speed` times
     that creature's top speed; then again each time the level's launch interval has passed. A fresh sighting launches
-    at once. It emits `launched`."""
+    at once. A creature's own `launch_interval` (seconds), when set, replaces the level's. It emits `launched`."""
     NAME = 'launchesFlock'
     REQUIRES = ('scans',)
 
@@ -82,5 +83,5 @@ class LaunchesFlock(Trait):
         top_speed = dict(enemy_kinds.kind(self.into).traits)['thrusters']['speedShare'] * config.SHIP_MAX_SPEED
         heading = math.radians(child.angle)
         child.vx, child.vy = math.cos(heading) * top_speed * self.speed, math.sin(heading) * top_speed * self.speed
-        c.launch_cooldown = level_rules.get_flighthouse_spawn_interval(c.level)
+        c.launch_cooldown = getattr(c, 'launch_interval', None) or level_rules.get_flighthouse_spawn_interval(c.level)
         c.emit('launched', enc)

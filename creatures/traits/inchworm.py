@@ -174,7 +174,8 @@ class Inchworms(Trait):
             from creatures.traits.energy import damage
             damage(target, enc)
         elif hasattr(target, 'hit_points'):
+            home = getattr(target, 'encounter', None) or enc    # prey from another encounter (a team battle) dies in its own
             target.hit_points -= 1
-            target.emit('hit', enc)
+            target.emit('hit', home)
             if target.hit_points <= 0:
-                enc.kill(target)
+                home.kill(target)

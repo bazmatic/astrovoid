@@ -41,6 +41,7 @@ from rendering.level_select_menu import LevelSelectMenu
 from rendering.fun_menu import FunMenu
 from rendering.level_editor import LevelEditor
 from rendering.duel_view import draw_duel
+from rendering.battle_view import draw_battle
 from rendering.quit_confirmation_menu import QuitConfirmationMenu
 from sounds import SoundManager
 from states.splash_screen import SplashScreenState
@@ -64,6 +65,7 @@ from hunter.spawn import resolve_hunter_spawn, nearest_hunter_spawn, place_jev_b
 from hunter.worker import PilotWorker
 from hunter.duel import build_duel
 from hunter.duel_enemies import DuelEnemies
+from creatures.team_battle import TeamBattle, load_match
 from game_handlers.combat_targets import nearest_friendly_pos
 from hunter.rules_pilot import RulesClient
 from maze.config import MazeComplexity
@@ -217,7 +219,7 @@ class Game:
         self.level_select_menu = LevelSelectMenu(screen, self.profile_manager)
         self.fun_menu = FunMenu(screen)
         self.level_editor = LevelEditor(self, screen)
-        self.duel = None                 # the pilot fight in progress (STATE_DUEL)
+        self.duel = None                 # the pilot fight or team battle in progress (STATE_DUEL)
         self.duel_worker = None
         self.duel_banner_until = None
         self.level_complete_menu = LevelCompleteMenu(screen)
@@ -588,6 +590,8 @@ class Game:
             self.start_duel()
         elif key == 'demo':
             self._start_autoplay()
+        elif key == 'team_battle':
+            self.start_team_battle()
 
     # How a Rules hunter's pilot worker is made. None: a threaded one answering on the real clock. The lab sets an
     # instance attribute to give a synchronous worker on its own clock.
@@ -734,6 +738,21 @@ class Game:
         enemies.spawn([side.hunter.get_pos() for side in self.duel.sides])
         self.duel.enemies = enemies
         self.duel_worker = worker
+        self.duel_banner_until = None
+        self.state = config.STATE_DUEL
+
+    def start_team_battle(self) -> None:
+        """Flockers vs Wallcrawlers: the two teams fight in the match file's arena, player watching."""
+        try:
+            match = load_match()
+        except ValueError as exc:
+            self.fun_menu.notice = f'Battle unavailable: {exc}'
+            self.state = config.STATE_FUN
+            return
+        self._close_hunter()
+        self.projectiles = []
+        self.duel = TeamBattle(match, self.sound_manager, (self.flocker_policy, self.wallcrawler_policy))
+        self.maze = self.duel.maze
         self.duel_banner_until = None
         self.state = config.STATE_DUEL
 
@@ -1273,7 +1292,7 @@ class Game:
             self.level_editor.draw()
         elif self.state == config.STATE_DUEL:
             if self.duel is not None:
-                draw_duel(self.screen, self.duel)
+                (draw_battle if isinstance(self.duel, TeamBattle) else draw_duel)(self.screen, self.duel)
         elif self.state == config.STATE_PLAYING:
             self.draw_game()
             if self.exit_explosion_active:
