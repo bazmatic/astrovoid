@@ -51,7 +51,8 @@ def load_match(path=MATCH_PATH):
         if sum(side.contender for side in sides.values()) < 2:
             raise ValueError('a battle needs two contender sides')
         return SimpleNamespace(seed=int(data.get('seed', 0)), level=int(data['level']), sides=sides,
-                               layout=layout, timeout_seconds=float(data['timeout_seconds']))
+                               layout=layout, timeout_seconds=float(data['timeout_seconds']),
+                               flora=bool(data['flora']) if 'flora' in data else None)  # None: the setting decides
     except (OSError, ValueError, KeyError, TypeError) as exc:
         raise ValueError(f'{path}: {exc}') from exc
 

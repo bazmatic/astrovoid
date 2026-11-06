@@ -2,6 +2,7 @@
   "seed": 77,
   "level": 20,
   "timeout_seconds": 180,
+  "flora": true,
   "sides": {
     "flockers": {
       "creatures": {

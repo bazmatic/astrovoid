@@ -99,3 +99,14 @@ def test_the_battle_plays_from_the_fun_list_and_returns_to_it(game, monkeypatch)
     game.draw()
     game.update(1.0)
     assert game.state == config.STATE_FUN and game.duel is None
+
+
+@pytest.mark.parametrize('flora', [True, False, None])
+def test_a_match_file_can_say_whether_the_arena_grows_living_weed(tmp_path, flora):
+    data = json.load(open(MATCH_PATH))
+    data.pop('flora', None)
+    if flora is not None:
+        data['flora'] = flora
+    path = tmp_path / 'match.json'
+    path.write_text(json.dumps(data))
+    assert load_match(str(path)).flora is flora   # None: the flora setting decides
