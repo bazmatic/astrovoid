@@ -39,7 +39,7 @@ it does not; no reseeding mechanism. (My call.)
 - The level starts with plants already there, at mixed stages, so the life cycle is visible at once.
 - Other code can ask for the plants and spores near a point, and remove one (the future eater's
   hook). Nothing calls this yet apart from tests.
-- Living weed replaces the decorative weed. The rock drawing stops making weed.
+- When flora is on, living weed replaces the decorative weed in that cave.
 
 ## Non-goals
 
@@ -70,10 +70,14 @@ it does not; no reseeding mechanism. (My call.)
   one is comparatively expensive. Plants and spores can number in the hundreds. So the flora is a
   separate, lightweight system owned by `Game`, stepped in the play update next to the encounter
   and drawn after the rock and before the creatures. (User agreed to this approach.)
-- **Weed everywhere by default.** Every cave the player sees gets living weed: normal levels, the
-  pilot duel and the Flockers vs Wallcrawlers team battle (both run in `STATE_DUEL`, through
-  `Game.start_duel`, `Game.start_team_battle` and `Game._update_duel`). The only places without it
-  are those that switch it off: training. (User's decision.)
+- **Off by default, switched on by a setting.** Flora is mainly useful in long-running scenarios,
+  so a `flora.enabled` setting (false by default) turns it on. When on, every cave the player sees
+  gets it: normal levels, the pilot duel and the Flockers vs Wallcrawlers team battle (both run in
+  `STATE_DUEL`, through `Game.start_duel`, `Game.start_team_battle` and `Game._update_duel`).
+  Training switches it off regardless. (User's decision, revised from "on everywhere".)
+- **The painted weed stays when flora is off.** The rock drawing keeps its decorative weed, and
+  stops drawing it only for a cave that has living flora, so caves are never bare. (User's
+  decision, revised from "replace the painted weed".)
 - **Soil is breakable rock.** Plants grow on rock walls and never on strong metal walls, the same
   rule today's weed follows. Unbreakable rock counts as soil. (My call, user did not object.)
 - **A plant goes with its wall.** When the rock a plant grows on is destroyed, the plant is gone

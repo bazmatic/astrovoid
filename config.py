@@ -416,6 +416,7 @@ class ObstacleSettings:
 @dataclass
 class FloraSettings:
     # Living weed on the cave rock. Times are frames at FPS, distances px.
+    enabled: bool = False  # mainly for long-running scenarios; otherwise the rock's painted weed is shown
     seedFrames: float = 300.0
     growFrames: float = 1200.0
     podFrames: float = 600.0  # a pod swelling until it bursts

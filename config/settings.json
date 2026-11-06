@@ -304,6 +304,7 @@
     "moverReachMargin": 24.0
   },
   "flora": {
+    "enabled": false,
     "seedFrames": 300.0,
     "growFrames": 1200.0,
     "podFrames": 600.0,

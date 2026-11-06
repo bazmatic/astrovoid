@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the decorative weed painted with the rock by living plants that grow from seeds on rock, fruit pods that burst into drifting spores, take root where spores land, and die of old age.
+**Goal:** Behind an off-by-default setting, replace the decorative weed painted with the rock by living plants that grow from seeds on rock, fruit pods that burst into drifting spores, take root where spores land, and die of old age.
 
-**Architecture:** A new `flora` package holds a lightweight ecosystem (`Flora`) of `Plant`s and `Spore`s, separate from the Creature/Encounter system. `Game` creates one for each cave it shows and hangs it on the maze (`maze.flora`); `Maze.draw` draws it after the rock, and `Game` steps it in the play update and the duel/battle update. The rock drawing (`WallRenderer`) stops making weed.
+**Architecture:** A new `flora` package holds a lightweight ecosystem (`Flora`) of `Plant`s and `Spore`s, separate from the Creature/Encounter system. `Game` creates one for each cave it shows and hangs it on the maze (`maze.flora`); `Maze.draw` draws it after the rock, and `Game` steps it in the play update and the duel/battle update. The rock drawing (`WallRenderer`) keeps its painted weed and skips it only for a cave that has flora.
 
 **Tech Stack:** Python 3, pygame, pytest.
 
@@ -16,9 +16,10 @@
 - Soil is breakable rock: an active `WallSegment` with a `cell` that is not in `maze.strong_cells`. Unbreakable (outer) rock is soil.
 - Plants and spores are not Creatures: not on any roster, not targeted, not hit by shots, not touched by ships. No sound.
 - The flora uses its own `random.Random`, never the `random` module's global state.
-- Flora is on by default everywhere a cave is shown (levels, pilot duel, team battle). It is off only where switched off: `Game.grows_flora = False`, set by `experiments/harness.py`. Creature training scenarios never create flora.
+- Flora is off by default: `FloraSettings.enabled = False`. When enabled it applies everywhere a cave is shown (levels, pilot duel, team battle). `Game.grows_flora` starts from `config.FLORA.enabled`; `experiments/harness.py` sets it False regardless. Creature training scenarios never create flora.
+- With flora off, the painted weed is drawn exactly as today.
 - Whole flora (plants and spores) well under 1 ms a frame on a typical level.
-- Tests cover behaviour, not internals. No compatibility shims for the old decorative weed.
+- Tests cover behaviour, not internals.
 - Names: the ecosystem is **Flora**, one living thing is a **Plant**, what drifts is a **Spore**, a seed is a Plant in its first stage. Add these to `GLOSSARY.md`.
 - Leave room for the "Later" idea in the spec (planting spots, neighbour effects): crowding lives in one method, `Flora.has_room(point)`.
 
@@ -43,7 +44,7 @@
 
 **Interfaces:**
 - Produces: `FloraSettings` dataclass fields, all in frames or px:
-  `seedFrames=300, growFrames=1200, podFrames=600, restFrames=600, fruitingsMin=2, fruitingsMax=3, stalksMin=1, stalksMax=2, witherFrames=300, lifeJitter=0.2, sporesMin=3, sporesMax=5, sporeSpeed=0.6, sporeDrag=0.985, sporeWander=0.03, sporeFrames=1200, sporeRadius=1.5, plantSpacing=14.0, startDensity=4.0` (plants per 1000 px of soil), `startClear=120.0` (px kept clear around the ship's start), `maxPlants=400, maxSpores=300`.
+  `seedFrames=300, growFrames=1200, podFrames=600, restFrames=600, fruitingsMin=2, fruitingsMax=3, stalksMin=1, stalksMax=2, witherFrames=300, lifeJitter=0.2, sporesMin=3, sporesMax=5, sporeSpeed=0.6, sporeDrag=0.985, sporeWander=0.03, sporeFrames=1200, sporeRadius=1.5, plantSpacing=14.0, startDensity=4.0` (plants per 1000 px of soil), `startClear=120.0` (px kept clear around the ship's start), `maxPlants=400, maxSpores=300`, and `enabled=False`.
 - Produces: `Plant` dataclass in `flora/plants.py`: `base: Point`, `direction: Point` (unit, away from the rock), `cell: Tuple[int, int]`, `age: float`, `fruitings: int`, `stalks: int`, `phase: float` (sway), `color: Color`, plus the frame each stage ends (rolled from the settings with ±`lifeJitter`). Properties: `stage -> str` (one of `'seed'`, `'growing'`, `'fruiting'`, `'withering'`), `growth -> float` (0 to 1 through `'growing'`), `pod_ripeness -> float` (0 to 1 while a pod is swelling, 0 while resting), `withered -> float` (0 to 1 through `'withering'`), `dead -> bool`.
 - Produces: `Plant.new(base, direction, cell, rng: random.Random, settings: FloraSettings, age: float = 0.0) -> Plant`
 - Produces: `Plant.advance(dt: float) -> int`, which ages the plant and returns how many pods burst during this step (0 normally; pods burst when a pod's swelling completes).
@@ -274,33 +275,37 @@ git commit -m "Spores drift from bursting pods and take root on rock"
 
 ---
 
-### Task 4: Draw it, wire it into the game, and retire the decorative weed
+### Task 4: Draw it and wire it into the game behind the setting
 
 **Files:**
 - Create: `rendering/flora_renderer.py`
-- Modify: `maze/generator.py` (`Maze.flora: Optional[Flora] = None` set in `__init__`; `Maze.draw` draws it after `wall_renderer.draw` and before `wall_debris`)
+- Modify: `maze/generator.py` (`Maze.flora: Optional[Flora] = None` set in `__init__`; `Maze.draw` passes `animate=self.flora is None` to `wall_renderer.draw`, so the painted weed is skipped when flora is on, then draws the flora before `wall_debris`)
 - Modify: `game.py` (`grows_flora`, `_plant_flora`, calls in `start_level`, `start_duel`, `start_team_battle`; `flora.step` in `update` after `self.maze.update(dt)` and in `_update_duel`)
 - Modify: `experiments/harness.py` (`game.grows_flora = False` before `game.start_level`)
-- Modify: `rendering/wall_renderer.py` (remove `Weed`, `WEED_*`, `weeds`, `_weed_by_segment`, `_draw_weeds`, the weed roll in `_paint_ridge`, and the now-unused `time_seconds`/`animate` parameters of `draw`; update the module docstring)
-- Modify: `tests/test_wall_renderer.py`, `tests/test_cave_renderer.py`, `tests/test_strong_walls.py`, `tests/test_outer_walls.py`, `tests/test_solid_blocks.py` (drop the weed tests and the `animate=False` arguments)
 - Modify: `GLOSSARY.md` (Flora, Plant, Spore under "Things in the maze"), `ARCHITECTURE.md` (a row for `flora/`)
 - Test: `tests/test_flora_game.py`
 
 **Interfaces:**
 - Consumes: `Flora.seeded`, `Flora.step`, `Plant` properties `stage`, `growth`, `pod_ripeness`, `withered`, `stalks`, `phase`, `color`, `base`, `direction`; `Spore.x/y/age/life` (Tasks 1–3).
 - Produces: `draw_flora(screen: pygame.Surface, flora: Flora, time_seconds: Optional[float] = None) -> None` in `rendering/flora_renderer.py`. Time defaults to `pygame.time.get_ticks() / 1000`.
-- Produces: `Game.grows_flora: bool = True` and `Game._plant_flora(seed: Optional[int]) -> None`, which sets `self.maze.flora = Flora.seeded(self.maze, seed)` when `grows_flora`, else `None`. The seed is the maze's seed when it has one, else a fresh random one from `random.SystemRandom`.
+- Produces: `Game.grows_flora: bool`, initially `config.FLORA.enabled`, and `Game._plant_flora(seed: Optional[int]) -> None`, which sets `self.maze.flora = Flora.seeded(self.maze, seed)` when `grows_flora`, else `None`. The seed is the maze's seed when it has one, else a fresh random one from `random.SystemRandom`.
 
 Look: a seed is a 1–2 px green dot. Growing: today's blades (keep `WEED_SWAY = 2.5` px and `WEED_SWAY_SPEED = 1.6` rad/s, blades 5–9 px), scaled by `growth`. Fruiting: `stalks` thin stalks rising past the blades, each with a pod that swells with `pod_ripeness` from 1 px to 3 px radius and pales toward yellow-green. A burst leaves nothing to draw; the spores show it. Withering: colour lerps to brown `(120, 95, 60)` and blades shorten with `withered`. Spores: 1 px pale dots `(200, 230, 170)`, fading over the last quarter of their life.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_a_level_has_living_weed(game):
+def test_flora_is_off_by_default(game):
+    game.start_level()
+    assert game.maze.flora is None
+
+def test_a_level_has_living_weed_when_switched_on(game):
+    game.grows_flora = True
     game.start_level()
     assert game.maze.flora is not None and game.maze.flora.plants
 
 def test_weed_grows_while_the_level_plays(game):
+    game.grows_flora = True
     game.start_level()
     plant = game.maze.flora.plants[0]
     age = plant.age
@@ -308,18 +313,20 @@ def test_weed_grows_while_the_level_plays(game):
     assert plant.age > age
 
 def test_new_level_gets_fresh_flora(game):
+    game.grows_flora = True
     game.start_level()
     first = game.maze.flora
     game.start_level()
     assert game.maze.flora is not first
 
-def test_training_switches_weed_off(game):
-    game.grows_flora = False
-    game.start_level()
-    assert game.maze.flora is None
+def test_training_switches_weed_off():
+    ...  # build the game the way experiments/harness.py does, with config.FLORA.enabled patched True: maze.flora is None
+
+def test_painted_weed_is_skipped_only_with_flora():
+    ...  # draw a maze with and without maze.flora set: wall_renderer draws its weed only without
 
 def test_the_duel_and_the_battle_have_weed(game):
-    ...  # start_team_battle (and start_duel where the test setup allows): maze.flora has plants, and it ages in _update_duel
+    ...  # grows_flora True; start_team_battle (and start_duel where the test setup allows): maze.flora has plants, and it ages in _update_duel
 
 def test_drawing_weed_puts_green_on_the_rock_edge():
     ...  # draw_flora onto a black surface for a flora with one grown plant: some pixel near its base is greenish
@@ -334,21 +341,18 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'rendering.flora_rende
 
 - [ ] **Step 3: Implement `draw_flora`, `Maze.flora` and `Maze.draw`, the `Game` wiring and the harness switch**
 
-- [ ] **Step 4: Remove the decorative weed from `WallRenderer` and its tests**
-
-- [ ] **Step 5: Run the whole suite**
+- [ ] **Step 4: Run the whole suite**
 
 Run: `venv/bin/pytest -q`
 Expected: all pass. Report any failure with its output; don't skip it.
 
-- [ ] **Step 6: Look at it on the real display**
+- [ ] **Step 5: Look at it on the real display**
 
-Run `./run.sh`, start a level, and leave it running for two minutes. Real fullscreen is 1352x878; don't rely on the dummy SDL driver. Check the following: plants are visible at every stage, spores drift visibly, and nothing grows on steel. After two minutes the walls are neither bare nor carpeted. Take a screenshot for the user.
+With `"enabled": true` in a local, uncommitted change to `config/settings.json`, run `./run.sh`, start a level, and leave it running for two minutes. Real fullscreen is 1352x878; don't rely on the dummy SDL driver. Check the following: plants are visible at every stage, spores drift visibly, and nothing grows on steel. After two minutes the walls are neither bare nor carpeted. Take a screenshot for the user.
 
-- [ ] **Step 7: Update `GLOSSARY.md` and `ARCHITECTURE.md`, then commit**
+- [ ] **Step 6: Update `GLOSSARY.md` and `ARCHITECTURE.md`, then commit**
 
 ```bash
-git add flora rendering/flora_renderer.py rendering/wall_renderer.py maze/generator.py game.py experiments/harness.py GLOSSARY.md ARCHITECTURE.md \
-  tests/test_flora_game.py tests/test_wall_renderer.py tests/test_cave_renderer.py tests/test_strong_walls.py tests/test_outer_walls.py tests/test_solid_blocks.py
-git commit -m "Living weed grows on the cave rock in place of the painted weed"
+git add flora rendering/flora_renderer.py maze/generator.py game.py experiments/harness.py GLOSSARY.md ARCHITECTURE.md tests/test_flora_game.py
+git commit -m "Living weed, switched on by a setting, grows in place of the painted weed"
 ```
