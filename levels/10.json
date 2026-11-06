@@ -372,6 +372,7 @@
   "exit_policy": {
     "type": "type_cleared",
     "enemy_types": [
+      "flighthouse",
       "egg"
     ]
   },

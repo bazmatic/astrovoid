@@ -275,15 +275,12 @@
     "beacon": null
   },
   "exit_policy": {
-    "type": "type_cleared",
-    "enemy_types": [
-      "egg"
-    ]
+    "type": "all_cleared"
   },
   "hunter": {
     "earned": true
   },
   "ammo_policy": {
-    "type": "limited"
+    "type": "unlimited"
   }
 }

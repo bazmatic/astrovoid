@@ -295,12 +295,9 @@
   },
   "hunter": false,
   "exit_policy": {
-    "type": "type_cleared",
-    "enemy_types": [
-      "egg"
-    ]
+    "type": "all_cleared"
   },
   "ammo_policy": {
-    "type": "limited"
+    "type": "unlimited"
   }
 }

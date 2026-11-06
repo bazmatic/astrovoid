@@ -2,7 +2,7 @@
 
 Fly from the start to the green exit portal before your power runs out. Thrust, hits and time all drain power. The ship keeps its momentum, so plan your braking.
 
-The exit is locked while any Egg is alive. On a boss level it stays locked until every enemy is destroyed, including whatever the bosses leave behind or hatch. The portal dims and powers down while it is locked, and brightens with a power-up sound when it opens.
+Most levels lock the exit until you complete their mission, which is announced as the level starts. On the early levels the mission is to destroy every Egg. Later missions ask for more: every Flighthouse, every Wallcrawler or every Flocker, and from level 9 most levels (and every boss level) stay locked until every enemy is destroyed, including whatever hatches or is left behind. A level that must be cleared of every enemy gives unlimited ammo. The portal dims and powers down while it is locked, and brightens with a power-up sound when it opens.
 
 The game opens with a five-second animated splash; any key skips it, and `ui.splashEnabled` in `config/settings.json` turns it off.
 
@@ -63,7 +63,7 @@ Creatures marked 🧠 are driven by a trained neural network (see the [README](.
 | Urchin | Sits still and fires when you're in range. Shots knock it about. |
 | Crab | Patrols and shoots. |
 | Jelly 🧠 | Fragile, fast chaser that hunts in teams. |
-| Egg | Grows, then hatches Squidlets. The exit stays locked while one is alive. |
+| Egg | Grows, then hatches Squidlets. On the early levels the exit stays locked while one is alive. Squidlets' guns grow stronger with the level, and past level 24 they take more hits, up to three. |
 | Flocker 🧠 | Flies and fires as a flock and perches on walls. **Flighthouses** sweep a searchlight and launch more when they see you. |
 | Anemone | Rooted to the rock; pulls your ship in. |
 | Squiddler | A purple ship that replays your previous attempt at the level. |
@@ -72,7 +72,7 @@ Creatures marked 🧠 are driven by a trained neural network (see the [README](.
 | Inchworm 🧠 | A physical six-link worm that crawls, rears and bites. It eats any creature except other inchworms. |
 | Vibelet, Viber 🧠 | Ships flown by the neural pilot. A **Vibehouse** launches Vibelets. |
 | Terminator | A ship flown by the hand-written rules pilot, hunting only you. |
-| Squiddler Boss, Mother, Boss Viber | Bosses. The Squiddler Boss splits when destroyed, and the Mother lays Eggs. |
+| Squiddler Boss, Mother, Boss Viber | Bosses. The Squiddler Boss splits when destroyed, and the Mother lays Eggs. Their guns grow stronger with the level like every other enemy's, and past level 24 they take more hits each level, as do the Squidlets they leave behind. |
 
 Every enemy kind has one entry in `config/enemies.json`.
 

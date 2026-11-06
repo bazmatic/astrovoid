@@ -302,7 +302,7 @@
   "exit_policy": {
     "type": "type_cleared",
     "enemy_types": [
-      "egg"
+      "wallcrawler"
     ]
   },
   "ammo_policy": {

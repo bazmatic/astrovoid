@@ -412,11 +412,13 @@
       },
       "ramsShip": {},
       "gun": {
-        "strengthLevel": 1,
         "startsLoaded": true
       },
       "takesHits": {
-        "hitPoints": 8
+        "hitPoints": 8,
+        "growth": 0.08,
+        "fromLevel": 24,
+        "maxHitPoints": 24
       },
       "splitsOnDeath": {
         "into": "baby",
@@ -452,7 +454,6 @@
       },
       "ramsShip": {},
       "gun": {
-        "strengthLevel": 1,
         "startsLoaded": true,
         "shotSpeed": 1.6,
         "impact": 1.4,
@@ -465,7 +466,10 @@
         "glowIntensity": 0.65
       },
       "takesHits": {
-        "hitPoints": 20
+        "hitPoints": 20,
+        "growth": 0.05,
+        "fromLevel": 24,
+        "maxHitPoints": 50
       },
       "laysEggs": {
         "interval": 180
@@ -773,11 +777,13 @@
       },
       "ramsShip": {},
       "gun": {
-        "strengthLevel": 1,
         "startsLoaded": true
       },
       "takesHits": {
-        "hitPoints": 1
+        "hitPoints": 1,
+        "growth": 0.05,
+        "fromLevel": 24,
+        "maxHitPoints": 3
       },
       "dropsPickup": {}
     }

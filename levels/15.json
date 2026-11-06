@@ -551,7 +551,7 @@
   "exit_policy": {
     "type": "type_cleared",
     "enemy_types": [
-      "egg"
+      "flocker"
     ]
   },
   "ammo_policy": {

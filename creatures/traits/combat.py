@@ -14,14 +14,19 @@ from utils.math_utils import apply_wall_collision_physics
 
 
 class TakesHits(Trait):
-    """Each friendly shot costs it a hit point; the last one kills it."""
+    """Each friendly shot costs it a hit point; the last one kills it. With `growth`, it has that share of `hitPoints`
+    more for each level past `fromLevel`, rounded, up to `maxHitPoints`."""
     NAME = 'takesHits'
 
-    def __init__(self, hitPoints: int):
-        self.hit_points = hitPoints
+    def __init__(self, hitPoints: int, growth: float = 0.0, fromLevel: int = 1, maxHitPoints: Optional[int] = None):
+        self.hit_points, self.growth, self.from_level, self.max_hit_points = hitPoints, growth, fromLevel, maxHitPoints
 
     def on_spawn(self, c, enc):
-        c.hit_points = c.max_hit_points = self.hit_points
+        c.hit_points = c.max_hit_points = self.hit_points_at(c.level)
+
+    def hit_points_at(self, level: int) -> int:
+        grown = round(self.hit_points * (1 + self.growth * max(0, level - self.from_level)))
+        return grown if self.max_hit_points is None else min(self.max_hit_points, grown)
 
     def on_shot(self, c, shot, enc):
         c.hit_points -= getattr(shot, 'creature_damage', 1.)

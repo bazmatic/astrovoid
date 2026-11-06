@@ -19,10 +19,7 @@
     "inchworm": 2
   },
   "exit_policy": {
-    "type": "type_cleared",
-    "enemy_types": [
-      "egg"
-    ]
+    "type": "all_cleared"
   },
   "layout": {
     "walls": [
@@ -476,6 +473,6 @@
     "earned": true
   },
   "ammo_policy": {
-    "type": "limited"
+    "type": "unlimited"
   }
 }

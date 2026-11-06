@@ -47,10 +47,16 @@ def test_a_generated_boss_level_must_be_cleared_with_unlimited_ammo(monkeypatch)
     assert policies(30) == (AllCleared(), UnlimitedAmmo())
 
 
-def test_a_generated_level_with_eggs_needs_the_eggs_dead(monkeypatch):
+def test_an_early_generated_level_with_eggs_needs_the_eggs_dead(monkeypatch):
+    file_says(monkeypatch, None)
+    level = next(n for n in range(1, level_rules.LAST_EGG_MISSION_LEVEL + 1) if has_generated_eggs(n))
+    assert policies(level) == (TypeCleared(('egg',)), LimitedAmmo())
+
+
+def test_a_later_generated_level_with_eggs_must_be_cleared_with_unlimited_ammo(monkeypatch):
     file_says(monkeypatch, None)
     level = next(n for n in range(27, 61) if not is_generated_boss_level(n) and has_generated_eggs(n))
-    assert policies(level) == (TypeCleared(('egg',)), LimitedAmmo())
+    assert policies(level) == (AllCleared(), UnlimitedAmmo())
 
 
 def test_a_generated_level_without_eggs_or_bosses_is_open(monkeypatch):

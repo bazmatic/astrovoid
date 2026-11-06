@@ -23,6 +23,23 @@ def test_the_catalogue_builds_both_bosses(kind, radius, hit_points):
     assert isinstance(boss.body, Squid) and boss.radius == radius and boss.max_hit_points == hit_points
 
 
+def built_at(kind, level):
+    boss = creatures.build(kind, POS, level, CommandRecorder())
+    encounter(boss, world_=world(ship=target((POS[0] + 2000.0, POS[1])))).step(1.0)
+    return boss
+
+
+@pytest.mark.parametrize('kind', ['split_boss', 'mother_boss', 'baby'])
+def test_a_squid_takes_more_hits_on_later_levels_up_to_a_limit(kind):
+    hits = [built_at(kind, level).max_hit_points for level in (12, 24, 36, 200, 300)]
+    assert hits[0] == hits[1] < hits[2] < hits[3] == hits[4]
+
+
+@pytest.mark.parametrize('kind', ['split_boss', 'mother_boss', 'baby'])
+def test_a_squids_gun_is_as_strong_as_the_level(kind):
+    assert built_at(kind, 30).gun_range > built_at(kind, 1).gun_range
+
+
 @pytest.mark.parametrize('kind', ['split_boss', 'mother_boss'])
 def test_a_boss_killed_by_the_hunter_still_splits(kind):
     scoring = Mock()

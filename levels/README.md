@@ -67,6 +67,10 @@ ammo is unlimited, and there are no gates or allied beacons.
 
 Every ordinary level has one dominant active enemy type (Crabs, Jellies, Flockers, Wallcrawlers or, in the late levels, Belemnites), at least half of what moves on it. Jellies, Flockers and Wallcrawlers come in numbers: a level has none of them or at least four. A flock of up to eight shows the Flockers' flocking, and the boss levels bring a flock of six or eight. Urchins, Anemones, Eggs and Flighthouses are scenery around the theme and do not count towards it. Levels without a file follow the same rule, turning through the types the player has met.
 
+## Missions
+
+Each level's `exit_policy` is its mission, announced as the level starts. Levels 4 to 8 ask the player to destroy every Egg. After that the missions get harder: level 10 asks for every Flighthouse and Egg, level 11 for every Wallcrawler, level 15 for every Flocker, and levels 9, 13, 14, 16, 17, 19 and 20 for every enemy. A level that must be cleared of every enemy has unlimited ammo, so it can always be finished. Levels without a file keep the Egg mission up to `LAST_EGG_MISSION_LEVEL` in `level_rules.py`; after it, a level with Eggs must be cleared of every enemy.
+
 ## Boss levels
 
 A level with at least one `split_boss`, `mother_boss` or `rules_hunter` is a boss level, whatever its number:

@@ -87,6 +87,9 @@ SUPPORT_ORDER = ('patrol', 'replay')
 ARC_END_MIX = {'static': 4, 'patrol': 3, 'aggressive': 4, 'replay': 3, 'flocker': 3,
                'flighthouse': 2, 'egg': 1, 'anemone': 4}
 
+# The last level whose mission is to destroy its Eggs; after it, a level with Eggs must be cleared of every enemy
+LAST_EGG_MISSION_LEVEL = 8
+
 
 def first_level(enemy_type: str) -> int:
     """Level an enemy type first appears on."""
@@ -102,7 +105,7 @@ def is_boss_level(level: int) -> bool:
 
 def generated_exit_policy(level: int) -> Optional[Dict]:
     """The exit policy of a level without a level file, as JSON, or None for the default."""
-    if is_boss_level(level):
+    if _must_clear_all(level):
         return {'type': 'all_cleared'}
     if get_enemy_counts(level).egg > 0:
         return {'type': 'type_cleared', 'enemy_types': ['egg']}
@@ -111,7 +114,12 @@ def generated_exit_policy(level: int) -> Optional[Dict]:
 
 def generated_ammo_policy(level: int) -> Optional[Dict]:
     """The ammo policy of a level without a level file, as JSON, or None for the default."""
-    return {'type': 'unlimited'} if is_boss_level(level) else None
+    return {'type': 'unlimited'} if _must_clear_all(level) else None
+
+
+def _must_clear_all(level: int) -> bool:
+    """Whether a level without a level file opens only when every enemy is dead (and so has unlimited ammo)."""
+    return is_boss_level(level) or (level > LAST_EGG_MISSION_LEVEL and get_enemy_counts(level).egg > 0)
 
 
 def get_boss_counts(level: int) -> Tuple[int, int]:
