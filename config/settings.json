@@ -322,10 +322,10 @@
     "sporeWander": 0.03,
     "sporeFrames": 1200.0,
     "sporeRadius": 1.5,
-    "plantSpacing": 14.0,
+    "plantSpacing": 50.0,
     "startDensity": 4.0,
     "startClear": 120.0,
     "maxPlants": 400,
-    "maxSpores": 300
+    "maxSpores": 200
   }
 }

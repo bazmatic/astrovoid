@@ -434,11 +434,11 @@ class FloraSettings:
     sporeWander: float = 0.03  # px per frame per frame of random push
     sporeFrames: float = 1200.0  # how long a spore drifts before it fades
     sporeRadius: float = 1.5
-    plantSpacing: float = 14.0  # no spore takes root nearer a living plant than this
+    plantSpacing: float = 50.0  # no spore takes root nearer a living plant than this
     startDensity: float = 4.0  # plants per 1000 px of rock face, when a cave is new
     startClear: float = 120.0  # kept clear of plants around the ship's start
     maxPlants: int = 400
-    maxSpores: int = 300
+    maxSpores: int = 200
 
 
 @dataclass
