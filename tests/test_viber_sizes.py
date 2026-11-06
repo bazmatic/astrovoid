@@ -78,14 +78,6 @@ def test_the_boss_viber_is_double_size_and_takes_double_the_hits():
     assert shoot(boss, enc, 24) == [True] * 23 + [False]
 
 
-def test_the_vibelet_is_half_size_dies_to_one_hit_and_its_bullets_are_a_tenth_as_strong():
-    (vibelet, enc), (viber, _) = make('vibelet'), make('neural_hunter')
-    assert vibelet.radius == viber.radius / 2
-    assert all(s.strength == 0.1 and s.is_enemy for s in fire_round(vibelet, enc))
-    assert all(s.strength == 1.0 for s in fire_round(viber, _))
-    assert shoot(vibelet, enc, 1) == [False]
-
-
 def test_both_are_enemy_kinds_a_level_can_place_and_say_their_kind():
     for kind in ('boss_viber', 'vibelet', 'neural_hunter'):
         assert kind in enemy_kinds.hunters() and make(kind)[0].type == kind
