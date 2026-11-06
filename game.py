@@ -12,6 +12,7 @@ from utils.neural_policy import neural_policy_path
 from rendering.fonts import get_font
 from rendering.announcements import Announcer
 from rendering.exit_panel import draw_exit_panel
+from rendering.last_enemy_ring import draw_last_enemy_ring
 from rendering.star_row import STAR_ROW_SIZE, STAR_ROW_Y, draw_star_row
 from entities.ship import Ship, LOW_POWER_THRESHOLD
 from flora import Flora
@@ -561,6 +562,13 @@ class Game:
     def exit_state(self) -> ExitState:
         """What the exit policy may look at this frame."""
         return ExitState(self.play_seconds, self.roster.counts())
+
+    def last_enemy(self):
+        """The one enemy still keeping the exit shut, or None while it waits for more than one, or for none."""
+        if self.exit_opened:
+            return None
+        waiting = [enemy for enemy in self.roster.alive() if self.exit_policy.waits_for(enemy.type)]
+        return waiting[0] if len(waiting) == 1 else None
 
     def jev_beacon_allowed(self) -> bool:
         """Whether a kill may drop a Jev beacon: only where one is allowed, and not while a hunter flies."""
@@ -1398,6 +1406,9 @@ class Game:
         
         # Draw enemies, each kind on its layer, then the death animations of those just killed, then any blasts
         self.roster.draw(self.screen)
+        last = self.last_enemy()
+        if last is not None:
+            draw_last_enemy_ring(self.screen, last.get_pos(), last.radius, self.play_seconds)
         self.collision_handler.explosions.draw(self.screen)
         
         if self.hunter is not None and self.hunter.active:

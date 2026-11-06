@@ -100,6 +100,20 @@ def test_all_cleared_holds_the_exit_until_every_enemy_is_dead(game, monkeypatch)
     assert game.maze.exit.is_activated
 
 
+def test_the_last_enemy_keeping_the_exit_shut_is_marked(game, monkeypatch):
+    eggs_only = {'exit_policy': {'type': 'type_cleared', 'enemy_types': ['egg']}}
+    monkeypatch.setattr(level_config, 'load_level_config', level_file(eggs_only, egg=2, static=2))
+    start(game, 3)
+    assert game.last_enemy() is None
+    first, last = game.roster.of_kind('egg')
+    kill([first])
+    game.update(1.0)
+    assert game.last_enemy() is last
+    kill([last])
+    game.update(1.0)
+    assert game.last_enemy() is None
+
+
 def test_type_cleared_needs_only_its_types_dead(game, monkeypatch):
     eggs_only = {'exit_policy': {'type': 'type_cleared', 'enemy_types': ['egg']}}
     monkeypatch.setattr(level_config, 'load_level_config', level_file(eggs_only, egg=2, static=2))

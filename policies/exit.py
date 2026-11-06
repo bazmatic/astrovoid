@@ -25,6 +25,10 @@ class ExitPolicy(Protocol):
 
     def is_open(self, state: ExitState) -> bool: ...
 
+    def waits_for(self, kind: str) -> bool:
+        """Whether an enemy of this kind, while alive, keeps the exit shut."""
+        ...
+
     def describe(self, state: ExitState) -> List[str]:
         """The EXIT panel's lines while the exit is shut."""
         ...
@@ -58,6 +62,9 @@ class AlwaysOpen:
     def is_open(self, state: ExitState) -> bool:
         return True
 
+    def waits_for(self, kind: str) -> bool:
+        return False
+
     def describe(self, state: ExitState) -> List[str]:
         return []
 
@@ -87,6 +94,9 @@ class OpenAfterTime:
 
     def is_open(self, state: ExitState) -> bool:
         return state.elapsed_seconds >= self.seconds
+
+    def waits_for(self, kind: str) -> bool:
+        return False
 
     def describe(self, state: ExitState) -> List[str]:
         return ['OPENS IN', self._clock(self.seconds - state.elapsed_seconds)]
@@ -130,6 +140,9 @@ class TypeCleared:
     def is_open(self, state: ExitState) -> bool:
         return state.left(self.enemy_types) == 0
 
+    def waits_for(self, kind: str) -> bool:
+        return kind in self.enemy_types
+
     def describe(self, state: ExitState) -> List[str]:
         return ['KILL ' + self._plurals().upper(), f'{state.left(self.enemy_types)} LEFT']
 
@@ -166,6 +179,9 @@ class AllCleared:
 
     def is_open(self, state: ExitState) -> bool:
         return state.left() == 0
+
+    def waits_for(self, kind: str) -> bool:
+        return True
 
     def describe(self, state: ExitState) -> List[str]:
         return ['KILL ALL', f'{state.left()} LEFT']
